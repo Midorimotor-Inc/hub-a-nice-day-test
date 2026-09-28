@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790558762962';
+    window.__APP_BUILD='build-1790561428048';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '2.99';
+const APP_VERSION = '3.00';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8450,6 +8450,20 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
     }
   };
 
+  // 編集画面に出す「既存予約」は、編集中の期間の前後60日と今日以降のものだけ（2026-09-28）。
+  //   この車の何年ぶんもの履歴を全部並べると、編集欄と更新ボタンが画面の外に出てしまう。
+  const nearRes=(all,form,resId)=>{
+    const ymd=v=>{const p=String(v||'').split('-').map(Number);return p.length===3?new Date(p[0],p[1]-1,p[2]).getTime():null;};
+    const f=ymd(form.startDate), t=ymd(form.endDate)||f;
+    const today=new Date();today.setHours(0,0,0,0);
+    const DAY=86400000;
+    const list=Object.values(all||{}).filter(r=>r&&r.id!==resId).map(r=>({r,
+      s:new Date(r.fy,r.fm,r.fd).getTime(), e:new Date(r.ty,r.tm,r.td).getTime()}));
+    const keep=list.filter(x=>(f!=null&&x.e>=f-60*DAY&&x.s<=t+60*DAY)||x.e>=today.getTime());
+    keep.sort((a,b)=>a.s-b.s);
+    return {rows:keep.map(x=>x.r), hidden:list.length-keep.length};
+  };
+
   // 編集保存：自分以外の予約と重複チェック
   const saveEdit=()=>{
     if(!editForm.user.trim()||!editForm.startDate||!editForm.endDate)return;
@@ -9038,7 +9052,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       {/* 編集モーダル（代車） */}
       {editModal&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:3000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setEditModal(null)}>
-          <div onClick={e=>e.stopPropagation()} className="modal-box" style={{background:'white',borderRadius:15,padding:'24px 28px',width:'min(420px,92vw)',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div onClick={e=>e.stopPropagation()} className="modal-box" style={{background:'white',borderRadius:15,padding:'24px 28px',width:'min(420px,92vw)',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <h2 style={{fontSize:16,fontWeight:800,color:'#7c2d12',margin:0}}>✎ 代車予約の編集 - {editModal.carName}</h2>
               <button onClick={()=>setEditModal(null)} style={{background:'#f3f4f6',border:'none',borderRadius:'50%',width:30,height:30,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={14}/></button>
@@ -9049,18 +9063,21 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                 <div><label style={LBL}>貸出日</label><input type="date" value={editForm.startDate} onChange={e=>setEditForm(p=>({...p,startDate:e.target.value}))} style={INP}/></div>
                 <div><label style={LBL}>返却日</label><input type="date" value={editForm.endDate} onChange={e=>setEditForm(p=>({...p,endDate:e.target.value}))} style={INP}/></div>
               </div>
-              {/* 他の予約状況ミニプレビュー */}
+              {/* 他の予約状況ミニプレビュー（近い分だけ・多い時はスクロール） */}
+              {(()=>{const n=nearRes(loanerRes[editModal.carId],editForm,editModal.resId);return(
               <div style={{background:'#f8fafc',borderRadius:6,padding:'8px 10px',fontSize:11,color:'#6b7280'}}>
-                <strong style={{color:'#374151'}}>📅 {editModal.carName} の既存予約：</strong>
-                {Object.values(loanerRes[editModal.carId]||{}).filter(r=>r.id!==editModal.resId).length===0
+                <strong style={{color:'#374151'}}>📅 {editModal.carName} の近い予約：</strong>
+                {n.rows.length===0
                   ?<span style={{marginLeft:6}}>なし</span>
-                  :Object.values(loanerRes[editModal.carId]||{}).filter(r=>r.id!==editModal.resId).map(r=>(
-                    <div key={r.id} style={{marginTop:3,color:'#dc2626'}}>
-                      🚫 {r.user}：{r.fm+1}/{r.fd}〜{r.tm+1}/{r.td}
-                    </div>
-                  ))
-                }
-              </div>
+                  :<div style={{maxHeight:120,overflowY:'auto',marginTop:2}}>
+                    {n.rows.map(r=>(
+                      <div key={r.id} style={{marginTop:3,color:'#dc2626'}}>
+                        🚫 {r.user}：{r.fm+1}/{r.fd}〜{r.tm+1}/{r.td}
+                      </div>
+                    ))}
+                  </div>}
+                {n.hidden>0&&<div style={{marginTop:4,color:'#94a3b8'}}>（ほかに古い予約が {n.hidden} 件あります）</div>}
+              </div>);})()}
             </div>
             <div style={{display:'flex',gap:8,marginTop:18}}>
               <button onClick={saveEdit} style={{flex:1,padding:'11px 0',background:'linear-gradient(135deg,#c2410c,#ea580c)',color:'white',border:'none',borderRadius:9,fontWeight:700,cursor:'pointer'}}>✓ 更新</button>
@@ -9074,7 +9091,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       {/* 編集モーダル（レンタカー） */}
       {rentalEditModal&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:3000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setRentalEditModal(null)}>
-          <div onClick={e=>e.stopPropagation()} className="modal-box" style={{background:'white',borderRadius:15,padding:'24px 28px',width:'min(420px,92vw)',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div onClick={e=>e.stopPropagation()} className="modal-box" style={{background:'white',borderRadius:15,padding:'24px 28px',width:'min(420px,92vw)',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <h2 style={{fontSize:16,fontWeight:800,color:'#065f46',margin:0}}>🔑 レンタカー予約の編集 - {rentalEditModal.carName}</h2>
               <button onClick={()=>setRentalEditModal(null)} style={{background:'#f3f4f6',border:'none',borderRadius:'50%',width:30,height:30,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={14}/></button>
@@ -9085,17 +9102,20 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                 <div><label style={LBL}>貸出日</label><input type="date" value={rentalEditForm.startDate} onChange={e=>setRentalEditForm(p=>({...p,startDate:e.target.value}))} style={INP}/></div>
                 <div><label style={LBL}>返却日</label><input type="date" value={rentalEditForm.endDate} onChange={e=>setRentalEditForm(p=>({...p,endDate:e.target.value}))} style={INP}/></div>
               </div>
+              {(()=>{const n=nearRes((rentalRes||{})[rentalEditModal.carId],rentalEditForm,rentalEditModal.resId);return(
               <div style={{background:'#f0fdf4',borderRadius:6,padding:'8px 10px',fontSize:11,color:'#6b7280'}}>
-                <strong style={{color:'#065f46'}}>📅 {rentalEditModal.carName} の既存予約：</strong>
-                {Object.values((rentalRes||{})[rentalEditModal.carId]||{}).filter(r=>r.id!==rentalEditModal.resId).length===0
+                <strong style={{color:'#065f46'}}>📅 {rentalEditModal.carName} の近い予約：</strong>
+                {n.rows.length===0
                   ?<span style={{marginLeft:6}}>なし</span>
-                  :Object.values((rentalRes||{})[rentalEditModal.carId]||{}).filter(r=>r.id!==rentalEditModal.resId).map(r=>(
-                    <div key={r.id} style={{marginTop:3,color:'#dc2626'}}>
-                      🚫 {r.user}：{r.fm+1}/{r.fd}〜{r.tm+1}/{r.td}
-                    </div>
-                  ))
-                }
-              </div>
+                  :<div style={{maxHeight:120,overflowY:'auto',marginTop:2}}>
+                    {n.rows.map(r=>(
+                      <div key={r.id} style={{marginTop:3,color:'#dc2626'}}>
+                        🚫 {r.user}：{r.fm+1}/{r.fd}〜{r.tm+1}/{r.td}
+                      </div>
+                    ))}
+                  </div>}
+                {n.hidden>0&&<div style={{marginTop:4,color:'#94a3b8'}}>（ほかに古い予約が {n.hidden} 件あります）</div>}
+              </div>);})()}
             </div>
             <div style={{display:'flex',gap:8,marginTop:18}}>
               <button onClick={saveEditRental} style={{flex:1,padding:'11px 0',background:'linear-gradient(135deg,#059669,#047857)',color:'white',border:'none',borderRadius:9,fontWeight:700,cursor:'pointer'}}>✓ 更新</button>
