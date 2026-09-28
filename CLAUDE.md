@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -99,6 +99,8 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - GASは**1プロジェクトに複数デプロイが存在しうる**。フロントが使う本番デプロイIDは `AKfycby...` で始まるもの（**2026-08-08に会社アカウント `hubaniceday.system@gmail.com` の新環境へ移行済み**。旧・個人アカウントの `AKfycbxy...` は稼働したまま残してあり、切り戻し先になる）。コード更新は「デプロイを管理 → 該当デプロイを編集 → 新バージョン」で行う（URLが変わると繋がらなくなる）。DriveApp を使う変更はドライブ権限の再承認＋再デプロイが必要。
 
 ### useShared（購読同期）
+**表示消失対策（v3.01・2026-09-28・Kyoshi承認のBLOCK-B変更）**：①最初の読み込みが済んだあと、Firestore が返す**手元の控え（fromCache）の値は画面に当てない**（回線が一瞬不安定になると古い写しが届き、その日の予定が丸ごと消えてリロードで戻る、が起きていた）。②サーバー由来でも**中身が4割以上減る値**は、その場で当てず `sGet`（source:server）で読み直し、本当に減っていれば当て、違えば捨てる。記録は `localStorage` の `STOR+poll-anomaly`（kind:loss）。検査は `node stale_snapshot_test.js`（にせ firebase の `__fakeFb.emit(key,値,{fromCache})` で再現）。mobile も同じく fromCache は当てない。
+
 `useShared(key, def, pollMs)` が各共有状態のフック。Firestore では onSnapshot で購読し（`pollMs` は GAS 版でだけ使う）、サーバーの変更が届くたびに反映する。**書き込み中（writeCount>0）は上書きせず、idベースマージ**でローカルの新しいエントリ（id大）を保持する。配列値（insp等）はマージせずサーバー版を採用。
 - **マージは「入れ子のオブジェクト」専用**（`mergeSharedObjects`・Kyoshi承認のBLOCK-B変更 2026-09-24）。値が数値・文字列などの時はサーバー値をそのまま使う。以前は `{...5}` が `{}` になり、車検台数制限（`inspLimits` = {日付:台数}）が空オブジェクトに化けて「制限が勝手に解除される」「その月を開くと画面が落ちる（React error #31）」が起きた。検査は `node merge_scalar_test.js`。
 

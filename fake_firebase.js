@@ -105,6 +105,14 @@
     get: (id, col) => { const d = store[key(col || 'kv', id)]; if (!d) return null; return (col && col !== 'kv') ? d : JSON.parse(d.v); },
     del: (id, col) => { delete store[key(col || 'kv', id)]; save(); notify(col || 'kv', id); },
     docs: col => Object.keys(store).filter(k => k.indexOf(col + '/') === 0).map(k => ({ id: k.slice(col.length + 1), data: store[k] })),
+    // 検査用：保存してある値は変えずに、購読中の画面へ「こういう値が届いた」だけを流す。
+    //   meta:{fromCache:true} で「回線が不安定な時の古い写し」を、既定（サーバー由来）で「本当に減った値」を再現する。
+    emit: (id, v, meta) => {
+      const k = key('kv', id);
+      const snap = { id, exists: true, data: () => ({ v: JSON.stringify(v), u: Date.now() }),
+        metadata: Object.assign({ fromCache: false, hasPendingWrites: false }, meta || {}) };
+      (listeners.get(k) || new Set()).forEach(fn => setTimeout(() => fn(snap), 0));
+    },
     sent: () => load('__fakeFbSent', []),
     user: () => auth._user ? { email: auth._user.email, uid: auth._user.uid } : null,
     signInAs: email => { if (!store['__acct/' + email]) { store['__acct/' + email] = { at: Date.now() }; save(); } auth._set({ email, uid: uidOf(email) }); },

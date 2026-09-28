@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790561428048';
+    window.__APP_BUILD='build-1790578697254';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.00';
+const APP_VERSION = '3.01';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3441,7 +3441,11 @@ const __hubPollRegister = s => {
           if (fromCache && !snap.exists) { markGasDown(); try { s.onInitial(null); } catch (e) {} return; }
           markGasUp(); try { s.onInitial(v); } catch (e) {} return;
         }
-        if (!fromCache) markGasUp();
+        // ★手元の控え（オフライン時の写し）は画面に当てない（2026-09-28 Kyoshi承認のBLOCK-B変更）。
+        //   回線が一瞬でも不安定になると Firestore は古い写しを fromCache で返す。それを当てていたため、
+        //   開いたままの画面でその日の予定が丸ごと消え、リロードで戻る…が起きていた。
+        if (fromCache) return;
+        markGasUp();
         try { s.onPoll(v); } catch (e) {}
       }, err => {
         console.error('[FB] 購読に失敗', s.key, err && err.message);
@@ -3478,6 +3482,7 @@ function useShared(key, def, pollMs=60000) {
   const writeCount   = useRef(0);
   const deferred     = useRef(null);   // 書き込み中に届いたサーバー値（終わってから当てる）
   const deferTimer   = useRef(null);
+  const verifying    = useRef(false);  // 「大きく減る値」をサーバーへ確かめている最中
 
   // ★形チェック: defと同種（配列/オブジェクト）でない応答は反映せず記録して無視する。
   //   GASの同時アクセス混線で異形のJSONが返るとタイムスケジュール等の表示が丸ごと消えるため
@@ -3492,6 +3497,25 @@ function useShared(key, def, pollMs=60000) {
       localStorage.setItem(lk,JSON.stringify(arr.slice(-20)));
     }catch{}
     console.warn('[useShared] 期待と異なる形の応答を無視しました:',key,v);
+  };
+
+  // ★「今出ている中身が大きく減る」値は、その場で当てずにサーバーへ直接読み直して確かめる
+  //   （2026-09-28 Kyoshi承認のBLOCK-B変更。10/4 のタイムスケジュールが全部消えた件）。
+  //   本当に減っていれば当てる（誰かが消した・復旧した）。読めない／減っていなければ当てない。
+  const leafCount = o => { let n = 0; for (const k in (o || {})) { const v = o[k]; n += (v && typeof v === 'object' && !Array.isArray(v)) ? Object.keys(v).length : (Array.isArray(v) ? v.length : 1); } return n; };
+  const looksLoss = (cur, next) => {
+    if (!isPlainObj(cur) || !isPlainObj(next)) return false;
+    const a = leafCount(cur), b = leafCount(next);
+    return a >= 5 && b < a * 0.6;     // 4割以上が一度に消える値は、まず疑う
+  };
+  const logLoss = (was, got, how) => {
+    try{
+      const lk = STOR + 'poll-anomaly';
+      const arr = JSON.parse(localStorage.getItem(lk) || '[]');
+      arr.push({ ts: new Date().toLocaleString('ja-JP'), key, kind: 'loss', how, was: leafCount(was), got: leafCount(got) });
+      localStorage.setItem(lk, JSON.stringify(arr.slice(-20)));
+    }catch{}
+    console.warn('[useShared] 中身が大きく減る値が届きました:', key, how);
   };
 
   // ★初回読み込みとポーリングは、まとめ読みポーラー（上）に登録して行う（Kyoshi承認のBLOCK-B変更・2026-09-17）。
@@ -3536,6 +3560,27 @@ function useShared(key, def, pollMs=60000) {
     // ポーリング／購読で届いた値を画面に当てる（従来の onPoll の本体）
     function applyPoll(v) {
         if (!shapeOk(v)) { logShapeAnomaly(v); return; } // 異形の応答は表示に反映しない
+        // ★大きく減る値は、サーバーへ直接読み直してから当てる（2026-09-28）
+        if (looksLoss(localRef.current, v)) {
+          if (verifying.current) return;                 // 確認中は重ねない
+          verifying.current = true;
+          const was = localRef.current;
+          (async () => {
+            try {
+              const fresh = await sGet(key);
+              if (!mounted.current) return;
+              if (fresh === null || !shapeOk(fresh)) { logLoss(was, v, 'サーバーを読めないので当てない'); return; }
+              logLoss(was, fresh, looksLoss(localRef.current, fresh) ? 'サーバーでも減っていたので当てる' : '古い写しだったので捨てた');
+              commitPoll(fresh);                         // サーバーの本当の値だけを当てる
+            } catch (e) { logLoss(was, v, '確認に失敗したので当てない'); }
+            finally { verifying.current = false; }
+          })();
+          return;
+        }
+        commitPoll(v);
+    }
+    // 受け取った値を実際に画面へ当てる（従来どおりの突き合わせ・マージ）
+    function commitPoll(v) {
         const cur  = JSON.stringify(localRef.current);
         const next = JSON.stringify(v);
         if (cur !== next) {
