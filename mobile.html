@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790430570974';
+  window.__APP_BUILD='build-1790558762962';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='2.98';
+const MOBILE_VERSION='2.99';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3041,7 +3041,15 @@ const HolidayView=({user,vsId,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pl
   const pendCount=Object.keys(pendDays).length;
   const stateOf=(dk)=>((offs[dk]||[]).includes(target)?'dayoff':(leaves[dk]||[]).includes(target)?'leave':'');
   const togglePend=(dk)=>{
-    setPendDays(p=>{const n={...p}; if(n[dk])delete n[dk]; else n[dk]=editType; return n;});
+    // ★すでに入っている日をもう一度タップしたら「解除」（2026-09-28 ユーザー指示）。
+    //   🏖 休日 のままでも、枠を使い切って自動で有給になった日を外せる。
+    setPendDays(p=>{
+      const n={...p};
+      if(n[dk]){delete n[dk];return n;}
+      const cur=stateOf(dk);
+      n[dk]=(editType==='dayoff'&&(cur==='dayoff'||cur==='leave'))||(editType==='leave'&&cur==='leave')?'clear':editType;
+      return n;
+    });
   };
   const startEdit=()=>{ if(!canEditHere||!targetInStore)return; setEditMode(true); setPendDays({}); setEditType('dayoff'); };
   const cancelEdit=()=>{ setEditMode(false); setPendDays({}); };
@@ -3061,8 +3069,11 @@ const HolidayView=({user,vsId,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pl
         const cur=stateOf(dk), want=pendDays[dk];
         if(want==='dayoff'){
           if(cur==='dayoff')continue;
-          if(quota!=null&&takenBy[mk]>=quota){ await onToggle(store,'leave',dk,target); auto.push(m1+'/'+d); }
-          else { await onToggle(store,'dayoff',dk,target); takenBy[mk]++; }
+          if(quota!=null&&takenBy[mk]>=quota){
+            if(cur==='leave')continue;                                     // すでに有給ならそのまま
+            await onToggle(store,'leave',dk,target); auto.push(m1+'/'+d);  // 枠を使い切っているので有給として入れる
+          }
+          else { await onToggle(store,'dayoff',dk,target); takenBy[mk]++; }  // 有給だった日は onToggle が外してくれる
           saved++;
         }else if(want==='leave'){
           if(cur==='leave')continue;

@@ -222,6 +222,12 @@ const signedInInit = ([k, me, stor]) => {
     t('自動有給：枠を使い切った後の D3 は休日ではなく有給に入る', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return (p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
     t('自動有給：「有給として入れました」のお知らせが出る', await seeText(page, '有給として入れました', 3000));
     t('自動有給：集計に 有1日 が出て、超過にならない', await page.evaluate(() => /有1日/.test(document.body.innerText) && !/超過/.test(document.body.innerText)), await summary());
+    // 2026-09-28：自動で有給になった日も「🏖 休日」のままもう一度押して解除できる（有給ボタンに切り替えなくてよい）
+    await clickDay(D3); await page.waitForTimeout(500);
+    t('自動有給：もう一度押すと（休日のまま）有給から外れる', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return !(p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
+    t('自動有給：外したあとは集計から 有 が消える', await page.waitForFunction(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el && !/有\d+日/.test(el.textContent); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await summary());
+    await clickDay(D3); await page.waitForTimeout(500);
+    t('自動有給：もう一度押すとまた有給として入る（行ったり来たりできる）', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; return (p[dk] || []).filter(n => n === '江川京志').length === 1; }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), await pleave(page));
     t('自動有給：JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
     await ctx.close();
   }
@@ -245,6 +251,11 @@ const signedInInit = ([k, me, stor]) => {
     await clickText(page, '休日を入力する'); await clickText(page, '🏖 休日'); await tapDay(page, D2); await clickText(page, '✅ 確定');
     t('スマホ自動有給：🏖 休日 を押しても有給（pleave）に入る', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return (p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK2], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
     t('スマホ自動有給：お知らせが出る', await seeText(page, '有給として入れました', 3000));
+    // 2026-09-28：🏖 休日 のまま、もう一度その日をタップすると「解除」になる
+    await clickText(page, '休日を入力する'); await clickText(page, '🏖 休日'); await tapDay(page, D2);
+    t('スマホ自動有給：もう一度タップすると「解除」と出る', await seeText(page, '解除', 4000), await page.evaluate(() => document.body.innerText.slice(0, 500)));
+    await clickText(page, '✅ 確定');
+    t('スマホ自動有給：確定すると有給から外れる', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return !(p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK2], { timeout: 10000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
     t('スマホ自動有給：JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
     await ctx.close();
   }
