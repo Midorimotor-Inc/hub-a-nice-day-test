@@ -94,7 +94,15 @@ const fullDay = () => { const o = {}; SLOTS.forEach((sl, i) => { o[sl] = { id: 1
   t('サーバーで消えた3件は画面からも消える', await goneText(page, NAMES[5], 12000), await page.evaluate(() => document.body.innerText.slice(0, 300)));
   t('残りの3件はそのまま出ている', await page.evaluate(n => document.body.innerText.includes(n), NAMES[0]));
 
-  console.log('\n■ ④ ふだんの更新（1件増える）はすぐ反映される');
+  console.log('\n■ ④ それでも消えた時：自動で取り直して戻す（見張り）');
+  // 購読も保存も通さず、画面の手元だけを空にする（原因不明の消え方を作る）
+  await page.evaluate(([k, dk]) => { window.__hubLastWriteTs = 0; window.__fakeFb.emit(k + 'honten-sched', {}, { fromCache: false }); }, [STOR, DK]);
+  await page.waitForTimeout(1200);
+  t('消えても自動で戻る', await seeText(page, NAMES[0], 20000), await page.evaluate(() => document.body.innerText.slice(0, 200)));
+  t('黄色い帯で知らせる', await seeText(page, '取り直して元に戻しました', 10000), await page.evaluate(() => document.body.innerText.slice(0, 200)));
+  t('サーバーにも記録が残る（diag-display）', await page.waitForFunction(k => { const a = window.__fakeFb.get(k + 'diag-display'); return Array.isArray(a) && a.some(x => x && x.kind === 'sched'); }, STOR, { timeout: 15000 }).then(() => true).catch(() => false), await page.evaluate(k => window.__fakeFb.get(k + 'diag-display'), STOR));
+
+  console.log('\n■ ⑤ ふだんの更新（1件増える）はすぐ反映される');
   await page.evaluate(([k, dk]) => {
     const cur = window.__fakeFb.get(k + 'honten-sched') || {};
     const day = Object.assign({}, cur[dk], { '16:00': { id: 2001, name: '木下', carType: 'タント', work: '点検', content: '12ヶ月' } });

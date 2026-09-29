@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790578697254';
+    window.__APP_BUILD='build-1790644461671';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.01';
+const APP_VERSION = '3.02';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3444,7 +3444,7 @@ const __hubPollRegister = s => {
         // ★手元の控え（オフライン時の写し）は画面に当てない（2026-09-28 Kyoshi承認のBLOCK-B変更）。
         //   回線が一瞬でも不安定になると Firestore は古い写しを fromCache で返す。それを当てていたため、
         //   開いたままの画面でその日の予定が丸ごと消え、リロードで戻る…が起きていた。
-        if (fromCache) return;
+        if (fromCache) { try { window.__hubCacheSkips = (window.__hubCacheSkips || 0) + 1; } catch (e) {} return; }
         markGasUp();
         try { s.onPoll(v); } catch (e) {}
       }, err => {
@@ -3473,6 +3473,37 @@ const __hubPollRegister = s => {
   return id;
 };
 const __hubPollUnregister = id => { const s = __hubPoll.subs.get(id); if (s) { s.dead = true; if (s.unsub) { try { s.unsub(); } catch (e) {} } } __hubPoll.subs.delete(id); };
+
+// ── 表示消失の記録（2026-09-29）────────────────────────────────
+//   「開いている日の予定が急にゼロになった」瞬間の状況を残す。端末（localStorage）と
+//   サーバー（kv の diag-display・最新50件）の両方。原因を後から追うためだけの記録で、
+//   予約データには一切触れない。
+const hubDiagRecord = async (entry) => {
+  let rec = {};
+  try {
+    rec = Object.assign({
+      ts: new Date().toLocaleString('ja-JP'),
+      ver: (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
+      build: (window.__APP_BUILD || ''),
+      cacheSkips: (window.__hubCacheSkips || 0),
+      gasDown: (window.__hubGasDown || 0) ? '応答待ち' : '正常',
+      online: navigator.onLine ? 'オンライン' : 'オフライン',
+      hidden: document.visibilityState,
+      ua: String(navigator.userAgent || '').slice(0, 90),
+    }, entry);
+  } catch (e) { rec = entry || {}; }
+  try {
+    const lk = STOR + 'diag-display';
+    const a = JSON.parse(localStorage.getItem(lk) || '[]');
+    a.push(rec); localStorage.setItem(lk, JSON.stringify(a.slice(-30)));
+  } catch (e) {}
+  try {
+    await writeVerified(STOR + 'diag-display',
+      base => { const a = Array.isArray(base) ? base : []; return [...a, rec].slice(-50); },
+      back => Array.isArray(back), 2);
+  } catch (e) {}
+  console.warn('[診断] 表示消失を記録しました', rec);
+};
 
 function useShared(key, def, pollMs=60000) {
   const [val, setVal] = useState(def);
@@ -3581,6 +3612,8 @@ function useShared(key, def, pollMs=60000) {
     }
     // 受け取った値を実際に画面へ当てる（従来どおりの突き合わせ・マージ）
     function commitPoll(v) {
+        // ★直前に購読／ポーリングの値を当てたか（表示消失の記録で「誰のせいか」を見分ける手掛かり）
+        try { window.__hubLastCommit = { key, ts: Date.now() }; } catch (e) {}
         const cur  = JSON.stringify(localRef.current);
         const next = JSON.stringify(v);
         if (cur !== next) {
@@ -3605,6 +3638,7 @@ function useShared(key, def, pollMs=60000) {
     localRef.current = next;
     setVal(next);
     writeCount.current += 1;
+    try { window.__hubLastWriteTs = Date.now(); } catch (e) {}   // 表示消失の見張りが自分の保存と区別するため
     // ★保存ごとに独立したタイマーで減算する。以前は直前のタイマーをclearしていたため、
     //   70秒以内に2回以上保存すると writeCount が減りきらず、そのキーのポーリング反映が
     //   リロードまで停止していた（2026-07-02 Kyoshi承認のBLOCK-B変更）
@@ -9936,6 +9970,42 @@ function AppInner() {
   },[justAdded]);
   // ★サーバーに繋がらない時の告知。読めない時に空の表を描くと「全部消えた」ように見えるので、
   //   はっきり知らせる（2026-08-26、実際に消失と誤解させてしまった）。データには触らない。
+  // ── 表示消失の見張り（2026-09-29）────────────────────────────
+  //   開いている日の「予定（整備）」「車検」が あった→ゼロ になったら、自分の保存直後を除き、
+  //   その場でサーバーを読み直す。サーバーに中身があれば画面を元に戻し、黄色い帯で知らせる。
+  //   どちらにしても記録を残す（kv の diag-display）。
+  const dispWatch=useRef({});
+  useEffect(()=>{
+    if(!selDate)return;
+    const dk=dateKey(selDate.getFullYear(),selDate.getMonth(),selDate.getDate());
+    const countOf=(kind,day)=>kind==='insp'
+      ?(Array.isArray(day)?day.filter(r=>r&&r.name&&r.bookingStatus!=='cancelled').length:0)
+      :Object.values(day||{}).filter(r=>r&&r.name).length;
+    const check=(kind,key,data,restore)=>{
+      const n=countOf(kind,(data||{})[dk]);
+      const id=kind+'|'+key+'|'+dk;
+      const prev=dispWatch.current[id];
+      dispWatch.current[id]=n;
+      if(!(prev>0&&n===0))return;
+      let sinceWrite=Infinity, busy=0;
+      try{ sinceWrite=Date.now()-(window.__hubLastWriteTs||0); busy=window.__hubWriteBusy||0; }catch(e){}
+      if(sinceWrite<30000||busy>0)return;   // 自分の保存・削除の直後は見張らない
+      (async()=>{
+        let server=null;
+        try{ server=await sGet(key); }catch(e){}
+        const sn=(server&&typeof server==='object'&&!Array.isArray(server))?countOf(kind,server[dk]):0;
+        if(sn>0){
+          restore(server);   // サーバーの中身で画面を戻す（保存はしない＝表示だけ直す）
+          try{ window.__hubDisplayHeal={ts:Date.now(),msg:dk+' の'+(kind==='insp'?'車検':'予定')+'が一瞬表示から消えました。サーバーから取り直して元に戻しました（'+sn+'件）。'}; }catch(e){}
+        }
+        let sinceCommit=null; try{ const lc=window.__hubLastCommit; if(lc&&lc.key===key)sinceCommit=Date.now()-lc.ts; }catch(e){}
+        hubDiagRecord({kind,key,dk,was:prev,got:n,server:sn,healed:sn>0,sinceCommit,src:(sinceCommit!=null&&sinceCommit<5000)?'サーバーの値を当てた直後':'当てていないのに消えた'});
+      })();
+    };
+    check('sched',storKey('sched',vsId),vsId==='honten'?schedDataH:schedDataS,v=>(vsId==='honten'?updateLocalSchedH:updateLocalSchedS)(v));
+    check('insp',STOR+'insp',hotInsp,v=>updateLocalInspData(v));
+  },[schedDataH,schedDataS,hotInsp,selDate,vsId]);
+
   const [gasDownSince,setGasDownSince]=useState(0);
   useEffect(()=>{
     const t=setInterval(()=>{
@@ -13516,7 +13586,31 @@ const GasDownBanner=()=>{
     </div>
   );
 };
-function App(){return <ErrorBoundary><GasDownBanner/><AppInner/></ErrorBoundary>;}
+// 表示が一瞬消えて自動で戻した時の知らせ（2026-09-29）。20秒で自然に消える。
+const DisplayHealBanner=()=>{
+  const [msg,setMsg]=useState('');
+  useEffect(()=>{
+    const t=setInterval(()=>{
+      let h=null; try{h=window.__hubDisplayHeal||null;}catch(e){}
+      if(!h){setMsg('');return;}
+      if(Date.now()-h.ts>20000){try{window.__hubDisplayHeal=null;}catch(e){}setMsg('');return;}
+      setMsg(prev=>prev===h.msg?prev:h.msg);
+    },1000);
+    return()=>clearInterval(t);
+  },[]);
+  if(!msg)return null;
+  return(
+    <div style={{position:'fixed',top:0,left:0,right:0,zIndex:2147483646,background:'#fef3c7',color:'#92400e',
+      padding:'9px 16px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
+      borderBottom:'2px solid #f59e0b',boxShadow:'0 2px 10px rgba(0,0,0,.2)',fontFamily:'system-ui,sans-serif'}}>
+      <span style={{fontSize:18,lineHeight:1}}>🔄</span>
+      <div style={{flex:1,minWidth:240,fontSize:13,fontWeight:800}}>{msg}</div>
+      <button onClick={()=>{try{window.__hubDisplayHeal=null;}catch(e){}}}
+        style={{background:'#92400e',color:'white',border:'none',borderRadius:7,padding:'5px 12px',fontWeight:800,fontSize:12,cursor:'pointer'}}>閉じる</button>
+    </div>
+  );
+};
+function App(){return <ErrorBoundary><GasDownBanner/><DisplayHealBanner/><AppInner/></ErrorBoundary>;}
 
 // - スタイル定数 -
 const NAV_S    ={background:'#c2410c',color:'white',border:'none',borderRadius:7,padding:7,cursor:'pointer',display:'flex',alignItems:'center'};
