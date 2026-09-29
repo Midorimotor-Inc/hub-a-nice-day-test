@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790644461671';
+    window.__APP_BUILD='build-1790652910404';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.02';
+const APP_VERSION = '3.03';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3505,6 +3505,37 @@ const hubDiagRecord = async (entry) => {
   console.warn('[診断] 表示消失を記録しました', rec);
 };
 
+// ── 「触った所だけ」をサーバーの最新値へ当てる（2026-09-29 Kyoshi承認のBLOCK-B変更）──
+//   これまで useShared の保存は、手元の中身をキーごと丸ごと書いていた。手元が欠けた状態
+//   （表示消失など）で1件でも保存すると、サーバー側の他の予定まで消える危険があった。
+//   before（保存前の手元）と after（保存後の手元）を見比べ、変わった所だけを base（サーバー最新値）
+//   に当てる。触っていない日・枠は base のまま残る＝他人の予定も、手元から消えていた予定も巻き添えにしない。
+//   ・1段目（日付・車ID など）で変化した所だけを見る
+//   ・2段目（枠・予約キー）も、両方が入れ子のオブジェクトなら中の項目だけを差し替える
+//   ・before にあって after に無い＝その人が消した、として base からも消す
+const _shDiffObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+const applySharedDiff = (base, before, after) => {
+  if (!_shDiffObj(after) || !_shDiffObj(before)) return after;      // 配列・数値などは従来どおりそのまま
+  const out = _shDiffObj(base) ? {...base} : {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const k of keys) {
+    const b = before[k], a = after[k];
+    if (JSON.stringify(b) === JSON.stringify(a)) continue;          // 触っていない
+    if (!(k in after)) { delete out[k]; continue; }                 // 消した
+    if (_shDiffObj(b) && _shDiffObj(a) && _shDiffObj(out[k])) {
+      const inner = {...out[k]};
+      const ik = new Set([...Object.keys(b), ...Object.keys(a)]);
+      for (const k2 of ik) {
+        const b2 = b[k2], a2 = a[k2];
+        if (JSON.stringify(b2) === JSON.stringify(a2)) continue;
+        if (!(k2 in a)) delete inner[k2]; else inner[k2] = a2;
+      }
+      out[k] = inner;
+    } else out[k] = a;
+  }
+  return out;
+};
+
 function useShared(key, def, pollMs=60000) {
   const [val, setVal] = useState(def);
   const mounted      = useRef(true);
@@ -3581,7 +3612,13 @@ function useShared(key, def, pollMs=60000) {
             if (!mounted.current || deferred.current === null) return;
             if (writeCount.current > 0 || (window.__hubWriteBusy||0) > 0) { deferTimer.current = setTimeout(tick, 1000); return; }
             const dv = deferred.current; deferred.current = null;
-            try { applyPoll(dv); } catch (e) {}
+            // ★取っておいた値は、当てる時にはもう古いことがある（自分の保存より前の写し）。
+            //   当てる直前にサーバーを読み直し、最新だけを当てる（2026-09-29）。読めなければ従来どおり。
+            (async () => {
+              let fresh = null;
+              try { fresh = await sGet(key); } catch (e) {}
+              try { applyPoll(fresh !== null ? fresh : dv); } catch (e) {}
+            })();
           }, 1000);
           return;
         }
@@ -3634,7 +3671,8 @@ function useShared(key, def, pollMs=60000) {
   }, [key, pollMs]);
 
   const update = useCallback((fn) => {
-    const next = typeof fn === 'function' ? fn(localRef.current) : fn;
+    const before = localRef.current;                              // 保存前の手元（差分の基準）
+    const next = typeof fn === 'function' ? fn(before) : fn;
     localRef.current = next;
     setVal(next);
     writeCount.current += 1;
@@ -3642,11 +3680,21 @@ function useShared(key, def, pollMs=60000) {
     // ★保存ごとに独立したタイマーで減算する。以前は直前のタイマーをclearしていたため、
     //   70秒以内に2回以上保存すると writeCount が減りきらず、そのキーのポーリング反映が
     //   リロードまで停止していた（2026-07-02 Kyoshi承認のBLOCK-B変更）
+    const release = ms => setTimeout(() => { writeCount.current = Math.max(0, writeCount.current - 1); }, ms);
+    // ★丸ごと上書きせず、触った所だけをサーバーの最新値へ当てる（2026-09-29 Kyoshi承認のBLOCK-B変更）。
+    //   手元が欠けていても、触っていない日・枠は消えない。Firestore のときだけ（GAS版は従来どおり）。
+    if (FB_ON && _shDiffObj(before) && _shDiffObj(next)) {
+      writeVerified(key, base => applySharedDiff(base, before, next), () => true, 3)
+        .then(ok => { if (!ok) setTimeout(() => sSet(key, localRef.current).catch(() => {}), 1500); })
+        .catch(() => { setTimeout(() => sSet(key, localRef.current).catch(() => {}), 1500); })
+        .then(() => release(70000));
+      return;
+    }
     sSet(key, next).then(() => {
-      setTimeout(() => { writeCount.current = Math.max(0, writeCount.current - 1); }, 70000);
+      release(70000);
     }).catch(() => {
       setTimeout(() => sSet(key, localRef.current).catch(() => {}), 1500);
-      setTimeout(() => { writeCount.current = Math.max(0, writeCount.current - 1); }, 72000);
+      release(72000);
     });
   }, [key]);
 

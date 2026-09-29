@@ -113,6 +113,8 @@
         metadata: Object.assign({ fromCache: false, hasPendingWrites: false }, meta || {}) };
       (listeners.get(k) || new Set()).forEach(fn => setTimeout(() => fn(snap), 0));
     },
+    // 検査用：購読中の画面に知らせずに保存だけ変える（＝画面の手元とサーバーがずれた状態を作る）
+    setQuiet: (id, v) => { store[key('kv', id)] = { v: JSON.stringify(v), u: Date.now() }; save(); },
     sent: () => load('__fakeFbSent', []),
     user: () => auth._user ? { email: auth._user.email, uid: auth._user.uid } : null,
     signInAs: email => { if (!store['__acct/' + email]) { store['__acct/' + email] = { at: Date.now() }; save(); } auth._set({ email, uid: uidOf(email) }); },
