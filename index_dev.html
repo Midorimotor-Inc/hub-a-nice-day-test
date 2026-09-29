@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790672975279';
+    window.__APP_BUILD='build-1790675108188';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.04';
+const APP_VERSION = '3.05';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6751,10 +6751,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
         style={{background:'white',width:'clamp(360px,90vw,560px)',height:'100vh',overflowY:'auto',boxShadow:'8px 0 32px rgba(0,0,0,0.22)',borderRight:`3px solid ${isInsp?'#9a3412':'#0891b2'}`}}>
         {/* パネルヘッダー */}
         <div style={{background:isInsp?'linear-gradient(135deg,#9a3412,#ea580c)':'linear-gradient(135deg,#0e7490,#0891b2)',padding:'16px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:20}}>
-          <div>
+          <div style={{minWidth:0}}>
             <div style={{color:'white',fontWeight:800,fontSize:16}}>{isInsp?'🚗 車検予約カード':'📋 一般予約カード'}</div>
             <div style={{color:'rgba(255,255,255,0.75)',fontSize:12,marginTop:2,position:'relative'}}>
-              {(!isNew)?(<span onClick={()=>{if(!pickerMonth){const m=dateLabel.match(/(\d+)月(\d+)日/),now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}} style={{cursor:'pointer',borderBottom:'1px dashed rgba(255,255,255,0.6)',paddingBottom:1}} title="クリックで日付変更">{dateLabel}</span>):dateLabel}
+              {(!isNew)?(<span onClick={()=>{if(!pickerMonth){const m=dateLabel.match(/(\d+)月(\d+)日/),now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}} style={{cursor:'pointer',borderBottom:'1px dashed rgba(255,255,255,0.6)',paddingBottom:1}} title="クリックで日付変更">クリックで日付変更</span>):dateLabel}
               {timeSlot?` / ${timeSlot}`:''}
               {showDatePicker&&pickerMonth&&(
                 <div style={{position:'fixed',top:'100px',left:'20px',zIndex:9999,background:'white',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,0.25)',padding:12,minWidth:240}} onClick={e=>e.stopPropagation()}>
@@ -6772,7 +6772,28 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{background:'rgba(255,255,255,0.15)',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}><X size={16}/></button>
+          {/* ★日付・時刻を右の空いている所に大きく出す（2026-09-29 ユーザー要望・B案）。
+              札をクリックすると、今までどおり日付変更のカレンダーが開く（新規予約のときは開かない）。 */}
+          {(()=>{
+            const m=String(dateLabel||'').match(/(\d+)月(\d+)日/);
+            if(!m)return null;
+            const md=m[1]+'/'+m[2];
+            const w=(String(dateLabel).match(/（(.)）/)||[])[1]||'';
+            const tm=(isInsp?(form.time||''):(timeSlot||''))||'';
+            const canPick=!isNew;
+            return(
+              <div onClick={()=>{if(!canPick)return;if(!pickerMonth){const now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}}
+                title={canPick?'クリックで日付変更':''}
+                style={{flexShrink:0,marginLeft:'auto',marginRight:10,background:'white',borderRadius:12,padding:'6px 16px',textAlign:'center',lineHeight:1.05,
+                  boxShadow:'0 2px 8px rgba(0,0,0,0.18)',cursor:canPick?'pointer':'default'}}>
+                <div style={{fontSize:26,fontWeight:900,color:isInsp?'#9a3412':'#0e7490',whiteSpace:'nowrap'}}>
+                  {md}<span style={{fontSize:13,fontWeight:800,marginLeft:2,color:isInsp?'#c2410c':'#0891b2'}}>（{w}）</span>
+                </div>
+                {tm&&<div style={{fontSize:16,fontWeight:900,color:'#111827',marginTop:2}}>{tm}</div>}
+              </div>
+            );
+          })()}
+          <button onClick={onClose} style={{flexShrink:0,background:'rgba(255,255,255,0.15)',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}><X size={16}/></button>
         </div>
 
         {/* ── リストからの場合：仮予約/本予約ボタンを最上部に固定 ── */}
@@ -12271,7 +12292,16 @@ function AppInner() {
                   const NAV={boxSizing:'border-box',width:118,flex:'0 1 118px',minWidth:92,padding:'6px 12px',borderRadius:7,border:'none',
                     display:'flex',alignItems:'center',justifyContent:'center',gap:4,fontSize:12,fontWeight:700,
                     whiteSpace:'nowrap',cursor:'pointer',textDecoration:'none',position:'relative'};
-                  const RING='0 0 0 2px #1A3FA6';
+                  // ★選択中は黄色で反転（2026-09-29 ユーザー指示・B案）。マウスを乗せた時も色が変わる。
+                  const SEL={background:'#FFD166',color:'#7C2D12',fontWeight:900,boxShadow:'0 2px 10px rgba(0,0,0,.25)'};
+                  const navSty=(on,base)=>({...NAV,...base,...(on?SEL:{}),transition:'background .12s,box-shadow .12s,transform .12s'});
+                  // なぞった時：選択中は少し明るく、それ以外は薄い黄色に。離せば元に戻る
+                  const hov=(on)=>({
+                    onMouseEnter:e=>{const t=e.currentTarget;t.dataset.bg=t.style.background;t.dataset.cl=t.style.color;
+                      t.style.background=on?'#FFDC8C':'#FFF3D6';t.style.color=on?'#7C2D12':'#7C2D12';t.style.boxShadow='0 3px 12px rgba(0,0,0,.28)';t.style.transform='translateY(-1px)';},
+                    onMouseLeave:e=>{const t=e.currentTarget;t.style.background=t.dataset.bg||'';t.style.color=t.dataset.cl||'';
+                      t.style.boxShadow=on?'0 2px 10px rgba(0,0,0,.25)':'none';t.style.transform='none';},
+                  });
                   const ExtMark=()=>(<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.8}}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>);
                   const today=new Date();today.setHours(0,0,0,0);
                   const alertCnt=Array.isArray(vehicleData)?vehicleData.filter(v=>{
@@ -12283,35 +12313,35 @@ function AppInner() {
                     });
                   }).length:0;
                   return(<>
-                    <button onClick={()=>setView('calendar')}
-                      style={{...NAV,background:'#FFFFFF',color:'#1A2550',boxShadow:view==='calendar'?RING:'none'}}>
+                    <button onClick={()=>setView('calendar')} {...hov(view==='calendar')}
+                      style={navSty(view==='calendar',{background:'#FFFFFF',color:'#1A2550'})}>
                       <Calendar size={13}/>カレンダー
                     </button>
                     {selDate&&(
-                      <button onClick={()=>setView('schedule')}
-                        style={{...NAV,background:'#FFFFFF',color:'#1A2550',boxShadow:view==='schedule'?RING:'none'}}>
+                      <button onClick={()=>setView('schedule')} {...hov(view==='schedule')}
+                        style={navSty(view==='schedule',{background:'#FFFFFF',color:'#1A2550'})}>
                         <Clock size={13}/>スケジュール
                       </button>
                     )}
                     <button onClick={()=>{if(selDate)setLoanerMonth(new Date(selDate.getFullYear(),selDate.getMonth(),1));setPickMode(false);setView('loaner');}}
-                      style={{...NAV,background:'#FFFFFF',color:'#1A2550',boxShadow:view==='loaner'?RING:'none'}}>
+                      style={navSty(view==='loaner',{background:'#FFFFFF',color:'#1A2550'})} {...hov(view==='loaner')}>
                       <Car size={13}/>代車管理
                     </button>
-                    <button onClick={()=>setShowFind(true)}
-                      style={{...NAV,background:'#E8492E',color:'#FFFFFF'}}>
+                    <button onClick={()=>setShowFind(true)} {...hov(false)}
+                      style={navSty(false,{background:'#E8492E',color:'#FFFFFF'})}>
                       <Search size={13}/>検索
                     </button>
                     {/* 顧客リスト・料金表は別タブで開く（2026-09-24 ユーザー指示） */}
-                    <a href="./customers.html" target="_blank" rel="noopener noreferrer"
-                      style={{...NAV,background:'#3CB371',color:'#FFFFFF'}}>
+                    <a href="./customers.html" target="_blank" rel="noopener noreferrer" {...hov(false)}
+                      style={navSty(false,{background:'#3CB371',color:'#FFFFFF'})}>
                       <Users size={13}/>顧客リスト<ExtMark/>
                     </a>
-                    <a href="https://www.midori-m.com/syaken/" target="_blank" rel="noopener noreferrer"
-                      style={{...NAV,background:'#FFFFFF',color:'#1A2550'}}>
+                    <a href="https://www.midori-m.com/syaken/" target="_blank" rel="noopener noreferrer" {...hov(false)}
+                      style={navSty(false,{background:'#FFFFFF',color:'#1A2550'})}>
                       料金表<ExtMark/>
                     </a>
-                    <button onClick={()=>setView('vehicle')}
-                      style={{...NAV,background:'#F8CACA',color:'#8B2E2E',boxShadow:view==='vehicle'?RING:'none'}}>
+                    <button onClick={()=>setView('vehicle')} {...hov(view==='vehicle')}
+                      style={navSty(view==='vehicle',{background:'#F8CACA',color:'#8B2E2E'})}>
                       🔔 車両管理
                       {alertCnt>0&&<span style={{position:'absolute',top:-6,right:10,width:16,height:16,borderRadius:'50%',background:'#D6363B',color:'#FFFFFF',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{alertCnt}</span>}
                     </button>
