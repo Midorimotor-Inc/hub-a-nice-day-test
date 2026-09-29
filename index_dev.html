@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790652910404';
+    window.__APP_BUILD='build-1790672975279';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.03';
+const APP_VERSION = '3.04';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6457,7 +6457,25 @@ const InspCalendarPicker=memo(({form,setForm,bmInspData,bmClosedDays,bmClosedDat
   );
 });
 
-const BookingModal=memo(({isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
+// ── ① 納車日を備考へ自動で書く（2026-09-29 ユーザー要望）──────────────
+//   翌日以降の納車のときだけ、入庫日の予約の備考（整備は内容）の先頭に「【10/5 納車】」を入れる。
+//   当日納車に戻したら、その印は自動で消える。手で書いた文章はそのまま残す。
+//   ・入庫日 ＝ 事前入庫日（entryDate）があればその日、無ければその予約が乗っている日
+const DLV_NOTE_RE = /【\s*\d{1,2}\/\d{1,2}\s*納車\s*】\s*/g;
+const withDeliveryNote = (entry, dk, isInsp) => {
+  const e = Object.assign({}, entry || {});
+  const field = isInsp ? 'note' : 'content';
+  const base = String(e[field] || '').replace(DLV_NOTE_RE, '').replace(/^[ \u3000]+/, '');
+  const num = s => { const p = String(s || '').split('-').map(Number); return (p.length === 3 && p[0]) ? p[0] * 10000 + p[1] * 100 + p[2] : 0; };
+  const inDay = String(e.entryDate || dk || '');
+  const dlv = String(e.deliveryDate || '');
+  const later = !!(num(dlv) && num(inDay) && num(dlv) > num(inDay));
+  if (!later) { e[field] = base; return e; }
+  const p = dlv.split('-');
+  e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
+  return e;
+};
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
   const [form,setForm]=useState(initialData);
   const [staffInput,setStaffInput]=useState('');
   const [showStaff,setShowStaff]=useState(false);
@@ -6692,7 +6710,7 @@ const BookingModal=memo(({isOpen,onClose,type,initialData,isNew,dateLabel,timeSl
       if(!form.work){alert('作業内容を選択してください');workRef.current?.focus();return;}
     }
     if(!confirmLoanerMismatch())return; // ズレたまま保存の最終確認でキャンセル→中断
-    onSave({...form, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
   };
   // 顧客リストからの仮予約/本予約ボタン用
   const handleSaveAs=(status)=>{
@@ -6705,7 +6723,7 @@ const BookingModal=memo(({isOpen,onClose,type,initialData,isNew,dateLabel,timeSl
     // 本予約時のみ代車期間のズレを確認（仮予約は代車を確定しないためスキップ）
     if(status==='confirmed'&&!confirmLoanerMismatch())return;
     // 仮予約はモーダルを閉じない（_keepOpen フラグで制御）
-    onSave({...form, bookingStatus:status, _keepOpen: status==='provisional'});
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), bookingStatus:status, _keepOpen: status==='provisional'});
   };
   const handleDelete=()=>{onDelete();};
   const handleStaffBlur=()=>{const r=resolveStaff(staffInput);setStaffInput(r);setForm(p=>({...p,staff:r}));};
@@ -6873,10 +6891,10 @@ const BookingModal=memo(({isOpen,onClose,type,initialData,isNew,dateLabel,timeSl
           {isInsp&&(
             <div>
               <label style={LBL}>コース *</label>
-              <div data-kbkey="course" tabIndex={0} onFocus={()=>{setKbField('course');if(!form.course)setForm(p=>({...p,course:COURSES[0].id}));}} onBlur={()=>setKbField('')}
+              <div data-kbkey="course" tabIndex={0} onFocus={()=>{setKbField('course');if(!form.course)setForm(p=>({...p,course:(storeId==='sanda'?2:COURSES[0].id)}));}} onBlur={()=>setKbField('')}
                 onKeyDown={onCourseKb}
-                style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:7,outline:'none'}}>
-                {COURSES.map(c=>(
+                style={{display:'grid',gridTemplateColumns:(storeId==='sanda'&&form.course!==1)?'1fr 1fr':'1fr 1fr 1fr',gap:7,outline:'none'}}>
+                {COURSES.filter(c=>c.id!==1||storeId!=='sanda'||form.course===1).map(c=>(
                   <button key={c.id} tabIndex={-1} onClick={()=>{setForm({...form,course:c.id});}}
                     style={{padding:'10px 6px',borderRadius:9,
                       border:`2px solid ${form.course===c.id?c.color:'#e5e7eb'}`,
@@ -13274,7 +13292,7 @@ function AppInner() {
                                 :(r.rentalLabel||r.loaner||'');
                               // ★事前入庫（入庫日）がある予約は「入庫日 入庫 → 納車」で示す（2026-09-19 ユーザー要望。作業日を出すと予約日と読まれる）
                               const _el=(r.entryDate&&r.entryDate!==d.wdk)?r.entryDate.split('-'):null;
-                              const srcLabel=_el?`${_el[1]}/${_el[2]} 入庫`:`${wl[1]}/${wl[2]} ${d.kind==='insp'?'車検':'予定'}`;
+                              const srcLabel=_el?`${_el[1]}/${_el[2]} 入庫`:`${wl[1]}/${wl[2]} ${d.kind==='insp'?'車検':'入庫分'}`;
                               return(
                                 <tr key={'dl-'+d.kind+'-'+d.wdk+'-'+(d.ix??d.sk)+'-'+di}
                                   onClick={()=>d.kind==='insp'?handleOpenModal('insp',d.wdk,d.ix,null,false):handleOpenModal('sched',d.wdk,null,d.sk,false)}
@@ -13508,6 +13526,7 @@ function AppInner() {
         initialData={modalData} isNew={modalIsNew}
         savedModalData={savedModalData}
         dateLabel={dateLabel} timeSlot={modalSlot}
+        storeId={vsId}
         onSave={handleSaveModal} onDelete={handleDeleteModal} onDateChange={handleDateChangeModal}
         modalIdx={modalIdx} onOpenLoanerPicker={handleOpenLoanerPicker} pendingLoanerId={pendingLoanerId}
         pendingLoanerData={pendingLoanerData}

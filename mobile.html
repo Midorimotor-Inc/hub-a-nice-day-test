@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790652910404';
+  window.__APP_BUILD='build-1790672975279';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.03';
+const MOBILE_VERSION='3.04';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1716,6 +1716,24 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
 };
 
 // ══ 予約入力モーダル（新規/編集/削除 + 代車・レンタカー紐付け）══
+// ── ① 納車日を備考へ自動で書く（2026-09-29 ユーザー要望）──────────────
+//   翌日以降の納車のときだけ、入庫日の予約の備考（整備は内容）の先頭に「【10/5 納車】」を入れる。
+//   当日納車に戻したら、その印は自動で消える。手で書いた文章はそのまま残す。
+//   ・入庫日 ＝ 事前入庫日（entryDate）があればその日、無ければその予約が乗っている日
+const DLV_NOTE_RE = /【\s*\d{1,2}\/\d{1,2}\s*納車\s*】\s*/g;
+const withDeliveryNote = (entry, dk, isInsp) => {
+  const e = Object.assign({}, entry || {});
+  const field = isInsp ? 'note' : 'content';
+  const base = String(e[field] || '').replace(DLV_NOTE_RE, '').replace(/^[ \u3000]+/, '');
+  const num = s => { const p = String(s || '').split('-').map(Number); return (p.length === 3 && p[0]) ? p[0] * 10000 + p[1] * 100 + p[2] : 0; };
+  const inDay = String(e.entryDate || dk || '');
+  const dlv = String(e.deliveryDate || '');
+  const later = !!(num(dlv) && num(inDay) && num(dlv) > num(inDay));
+  if (!later) { e[field] = base; return e; }
+  const p = dlv.split('-');
+  e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
+  return e;
+};
 const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
   const isInsp=mode.type==='insp';
   // 休業日には入庫・納車を入れられない（選んだ時点で弾き、元の値に戻す）
@@ -1823,7 +1841,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
     setErr('');
     // 受付は即時（モーダルはonSave側で閉じる）。サーバー保存はバックグラウンドで継続し、
     // 結果は画面上部のバナーで通知される。ここで捕まえるのは事前チェック（入庫制限等）のみ。
-    try{onSave(form,loanerAction);}
+    try{onSave(withDeliveryNote(form,mode.dk,isInsp),loanerAction);}
     catch(e){setErr(String(e?.message||e));return;}
   };
   const doDelete=()=>{
@@ -1868,7 +1886,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
               <div>
                 <label style={LBL}>コース *</label>
                 <div style={{display:'flex',gap:6}}>
-                  {COURSES.map(c=>(
+                  {COURSES.filter(c=>c.id!==1||vsId!=='sanda'||Number(form.course)===1).map(c=>(
                     <button key={c.id} onClick={()=>setForm(p=>({...p,course:c.id}))}
                       style={{flex:1,padding:'10px 4px',borderRadius:10,fontWeight:800,fontSize:12,border:`2px solid ${Number(form.course)===c.id?c.color:'#e2e8f0'}`,background:Number(form.course)===c.id?c.bg:'white',color:Number(form.course)===c.id?c.color:'#64748b'}}>
                       {c.name}
