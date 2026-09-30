@@ -12,8 +12,17 @@ service cloud.firestore {
     function isAdmin() { return isAllowed() && entry().role == 'admin'; }
 
     // アプリのデータ（本番 hub-v8-* も DEV hub-v8-dev-* も同じ扱い）
+    // マイスケジュール（myprv-{スタッフuid}）は、その本人だけが読み書きできる（2026-09-30）。
+    //   スタッフuid は許可簿 meta/allowed のその人の uid。共有の端末はそもそも読みにいかないが、
+    //   ここで止めておけば「別の人が他人のマイスケジュールを覗く」こともできない。
+    function isMyPrivate(key) {
+      return isAllowed() && ('uid' in entry()) && entry().uid is string && entry().uid != ''
+        && key.matches('.*myprv-' + entry().uid);
+    }
     match /kv/{key} {
-      allow read, write: if isAllowed();
+      allow read, write: if key.matches('.*myprv-.*')
+        ? isMyPrivate(key)
+        : (isAllowed());
     }
     // 許可簿：読むのは許可された人、書くのは管理者
     match /meta/allowed {
@@ -36,7 +45,14 @@ service cloud.firestore {
     }
     match /snaps/{id} {
       allow read, write: if isAllowed();
-      match /kv/{key} {
+      // マイスケジュール（myprv-{スタッフuid}）は、その本人だけが読み書きできる（2026-09-30）。
+    //   スタッフuid は許可簿 meta/allowed のその人の uid。共有の端末はそもそも読みにいかないが、
+    //   ここで止めておけば「別の人が他人のマイスケジュールを覗く」こともできない。
+    function isMyPrivate(key) {
+      return isAllowed() && ('uid' in entry()) && entry().uid is string && entry().uid != ''
+        && key.matches('.*myprv-' + entry().uid);
+    }
+    match /kv/{key} {
         allow read, write: if isAllowed();
       }
     }

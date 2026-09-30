@@ -12,10 +12,21 @@ service cloud.firestore {
     function isAdmin() { return isAllowed() && entry().role == 'admin'; }
 
     // アプリのデータ（本番 hub-v8-* も DEV hub-v8-dev-* も同じ扱い）
+    // ★この決まりは Firebase コンソールに貼るまで効かない（2026-09-30 時点では未配備）。
+    //   貼るまでの間は、ログインできる人なら他人のマイスケジュールも読めてしまう。
+    // マイスケジュール（myprv-{スタッフuid}）は、その本人だけが読み書きできる（2026-09-30）。
+    //   スタッフuid は許可簿 meta/allowed のその人の uid。共有の端末はそもそも読みにいかないが、
+    //   ここで止めておけば「別の人が他人のマイスケジュールを覗く」こともできない。
+    function isMyPrivate(key) {
+      return isAllowed() && ('uid' in entry()) && entry().uid is string && entry().uid != ''
+        && key.matches('.*myprv-' + entry().uid);
+    }
     match /kv/{key} {
       // ★移行中（v2.45 の画面が残っている間）は DEV のキーだけ今までどおり誰でも読み書き可。
       //   全員が v2.46 でサインインしたら firestore.final.rules に差し替える（本番データを移す前に必ず）
-      allow read, write: if isAllowed() || key.matches('hub-v8-dev-.*');
+      allow read, write: if key.matches('.*myprv-.*')
+        ? isMyPrivate(key)
+        : (isAllowed() || key.matches('hub-v8-dev-.*'));
     }
     // 許可簿：読むのは許可された人、書くのは管理者
     match /meta/allowed {
@@ -38,7 +49,14 @@ service cloud.firestore {
     }
     match /snaps/{id} {
       allow read, write: if isAllowed();
-      match /kv/{key} {
+      // マイスケジュール（myprv-{スタッフuid}）は、その本人だけが読み書きできる（2026-09-30）。
+    //   スタッフuid は許可簿 meta/allowed のその人の uid。共有の端末はそもそも読みにいかないが、
+    //   ここで止めておけば「別の人が他人のマイスケジュールを覗く」こともできない。
+    function isMyPrivate(key) {
+      return isAllowed() && ('uid' in entry()) && entry().uid is string && entry().uid != ''
+        && key.matches('.*myprv-' + entry().uid);
+    }
+    match /kv/{key} {
         allow read, write: if isAllowed();
       }
     }

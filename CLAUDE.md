@@ -86,7 +86,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **スマホから（v2.95・2026-09-24）**：mobile.html も同じ置き方で読む（`cfLoadAll`。開いた時に1回・本番で4ファイル1,090件0.4MB）。予約でその人の行が変わる時は、サーバーの最新チャンクを読み直して**その1本だけ**書き戻す（`cfSaveRow`）。取り込み・削除・列の直しは PC のまま。リストからの予約はスケジュール（insp）・顧客ファイル・`custbk` の3つを揃えて書く（仮予約は insp に載せない＝PC と同じ）。
   - **削除（v2.79・2026-09-23）**：`cf-index` から名前を外すだけでなく、`cf-{name}-index` と全チャンクも `null` にする（`deleteFileOnServer`）。各画面は一覧に無いファイルを `pruneMissing` で下ろす（起動時・cf-index の購読・60秒ごとの拾い上げ）。取り込み直後10分は prune の対象外。検査は `node cust_delete_test.js`。
 - `${STOR}{store}-dayoff` / `-pleave` — スタッフ休日／有給 `{"YYYY-M-D":[氏名]}`。`{store}-offnote` — 休日メモ `{"YYYY-M-D::氏名":"メモ"}`。`mholidays` — 会社の月間休日数 `{"YYYY-M":N}`（繰り越し計算 `calcHolidayCarry` の元。**会社の休日数が未設定の月で繰越は途切れる**＝繰越は連続して設定した月の間だけ流れる。**枠を超えた分はマイナス繰越にせず有給扱い**：枠を使い切った後に休日を入れると PC・スマホとも自動で pleave に入る（v2.67）。**A案（v2.69）：繰り越した日数は翌月の一番早い休日から順に充て（`carried`）「○月繰り越し分」と表示、集計は「休日N（うち店休日X＋繰り越し休日Y）」、バッジは翌月へ回る分だけ「繰り越しN日」で使い切れば出さない**。index/mobile に同じコード）。
-- `${STOR}mysched` — マイスケジュール（公開予定）`{id:{dk,time,title,memo,owner,uid,at}}`。`${STOR}mysec-{スタッフuid}` — シークレット予定の**暗号化書庫**（`{hint,salt,iter,checkIv,check,iv,data}`。AES-GCM、鍵は「ヒントの答え」から PBKDF2。**答えを忘れると復元不能・運営も読めない**。共通コードは index/mobile 両方にある `HubSecret`/`useHubSecret`/`MySchedPanel`）。
+- `${STOR}mysched` — **共有スケジュール** `{id:{dk,time,title,memo,owner,uid,at}}`。全員が読める。直せるのは本人だけ。
+- `${STOR}myprv-{スタッフuid}` — **マイスケジュール**（v3.12・2026-09-30 で作り直し）`{id:{dk,time,title,memo,at}}`。暗号化はしない。
+  **端末の種類（`${STOR}auth-kind`）で扱いが変わる**：`own`（自分専用）＝読み書きでき、画面上部の「すべて表示／共有スケジュール／マイスケジュール」で切り替えられる。`shared`（店の共有）＝`useHubPrivate` が key を作らないので**購読も読み込みもしない**（画面に出ないだけでなく端末に降りてこない）。予約の追加も共有スケジュールだけになる。
+  以前の暗号書庫 `${STOR}mysec-{uid}` が残っている人には「持ってくる」案内を出し、答えを1回入れると myprv へ移して古い書庫を消す（`importOld`）。
+  共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
+  **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
 ### loanerRes / rentalRes は配列ではなくオブジェクト
 `loanerRes[carId]` / `rentalRes[carId]` は `{ key: 予約 }` のオブジェクト。`.filter`/`.map`/`.find` を直接呼ぶと `TypeError`。必ず `Object.values(loanerRes[carId]||{})` で配列化してから使う。各予約は日付フィールド `fy/fm/fd`（from）・`ty/tm/td`（to）で期間を表す（`fm`/`tm` は0始まりの月）。
