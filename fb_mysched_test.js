@@ -1,6 +1,8 @@
 // マイスケジュール（2026-09-30 作り直し）の検査。にせの firebase で本物には繋がない。
 //   ヒントと答え（暗号のシークレット）は廃止。予定は「共有スケジュール」と「マイスケジュール」の2つ。
 //   ・店の共有の端末：マイスケジュールは出さない・読み込まない。追加は共有だけ
+//   ・時間は「開始〜終了」と「終日」。終日は一番上に並ぶ
+//   ・色は共有＝水色（#cffafe）／マイ＝ピンク（#fce7f3）（2026-10-01・B案）
 //   ・自分専用の端末：共有／マイを選んで追加でき、「すべて表示／共有／マイ」で切り替えられる
 //   ・別の人には、他人のマイスケジュールは一切見えない
 //   ・以前の🔒シークレット予定の「持ってくる」案内は廃止（2026-09-30）。古い書庫があっても何も出さない
@@ -85,6 +87,15 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
   };
   const panelText = page => page.evaluate(() => { const m = document.querySelector('.modal-box'); return m ? m.innerText : ''; });
   // モーダル（日の予定）の中だけを押す。ヘッダーの絞り込みと同じ文字のボタンがあるため
+  // 件名を指定して、その行の「編集」を押す（一覧の一番上を押さないように）
+  const editRow = (page, title) => page.evaluate(t2 => {
+    const m = document.querySelector('.modal-box'); if (!m) return false;
+    const row = [...m.querySelectorAll('div')].find(e => e.style && e.style.borderRadius === '9px' && e.innerText.includes(t2));
+    if (!row) return false;
+    const b = [...row.querySelectorAll('button')].find(e => e.innerText.includes('編集'));
+    if (b) { b.click(); return true; }
+    return false;
+  }, title);
   const clickIn = (page, x) => page.evaluate(y => { const m = document.querySelector('.modal-box'); if (!m) return false; const b = [...m.querySelectorAll('button')].find(e => e.innerText.includes(y) && e.offsetParent !== null); if (b) { b.click(); return true; } return false; }, x);
 
   // ── 1. PC・江川・店の共有の端末：マイスケジュールは出ない ──
@@ -164,6 +175,51 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.keyboard.press('Escape'); await page.waitForTimeout(400);
     await clickText(page, 'すべて表示'); await page.waitForTimeout(600);
     t('切り替え「すべて」：カレンダーのセルに両方出る', await page.evaluate(() => { const c = [...document.querySelectorAll('div')].find(el => el.style && el.style.minHeight === '110px' && el.textContent.includes('本店会議')); return !!c && c.textContent.includes('歯医者') && c.textContent.includes('🙋'); }));
+
+    // ── 終了時刻・終日・色分け（2026-10-01 ユーザー指示・B案） ──
+    console.log('\\n■ 2-3. 終了時刻・終日・色分け');
+    await pickToday(page); await seeText(page, 'の予定', 5000);
+    // 終わりの時刻を入れて共有に足す
+    await clickIn(page, '＋ 予定を追加');
+    await page.waitForTimeout(300);
+    await page.fill('.modal-box input[placeholder*="件名"]', '打合せ');
+    let tms = await page.$$('.modal-box input[type="time"]');
+    t('時刻の欄が2つ（始まり・終わり）ある', tms.length === 2, tms.length);
+    await tms[0].fill('10:00'); await tms[1].fill('11:30');
+    await clickIn(page, '追加');
+    t('終わりの時刻が保存される', await page.waitForFunction(([k, dk]) => Object.values(window.__fakeFb.get(k + 'mysched') || {}).some(v => v.dk === dk && v.title === '打合せ' && v.time === '10:00' && v.end === '11:30' && v.allday === false), [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'mysched'));
+    t('一覧に「10:00」と「〜11:30」が出る', /10:00/.test(await panelText(page)) && /〜11:30/.test(await panelText(page)), await panelText(page));
+    // 終わりが始まりより前なら断る
+    t('「打合せ」の行の編集を押せた', await editRow(page, '打合せ'));
+    await page.waitForTimeout(300);
+    tms = await page.$$('.modal-box input[type="time"]');
+    await tms[1].fill('09:00');
+    await clickIn(page, '保存');
+    t('終わりが始まりより前だと断られる', await seeText(page, '終わりの時刻が始まりより前です', 5000));
+    await tms[1].fill('11:30'); await clickIn(page, '保存'); await page.waitForTimeout(800);
+    // 終日のマイ予定
+    await clickIn(page, '＋ 予定を追加');
+    await page.waitForTimeout(300);
+    await page.fill('.modal-box input[placeholder*="件名"]', '旅行');
+    await clickIn(page, '終日にする');
+    await page.waitForTimeout(300);
+    t('終日にすると時刻の欄が隠れる', (await page.$$('.modal-box input[type="time"]')).length === 0);
+    await clickIn(page, '🙋 マイスケジュール');
+    await clickIn(page, '追加');
+    t('終日のマイ予定が保存される', await page.waitForFunction(([k, dk]) => Object.values(window.__fakeFb.get(k + 'myprv-h7') || {}).some(v => v.dk === dk && v.title === '旅行' && v.allday === true && v.time === ''), [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'myprv-h7'));
+    const p4 = await panelText(page);
+    t('一覧に「終日」と出る', /終日/.test(p4), p4.slice(0, 400));
+    t('終日はその並びの一番上に来る（マイの中で：旅行→歯医者）', p4.indexOf('旅行') < p4.indexOf('歯医者'), p4.slice(0, 400));
+    // 色（B案）：共有＝水色／マイ＝ピンク
+    const cols = await page.evaluate(() => {
+      const m = document.querySelector('.modal-box'); if (!m) return null;
+      const row = t2 => { const d = [...m.querySelectorAll('div')].find(e => e.style && e.style.borderRadius === '9px' && e.innerText.includes(t2)); return d ? d.style.background : ''; };
+      return { pub: row('打合せ'), priv: row('旅行') };
+    });
+    const rgb = h => { const n = parseInt(h.slice(1), 16); return 'rgb(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ')'; };
+    t('共有は水色（#cffafe）', !!cols && cols.pub === rgb('#cffafe'), cols);
+    t('マイはピンク（#fce7f3）', !!cols && cols.priv === rgb('#fce7f3'), cols);
+    await page.keyboard.press('Escape'); await page.waitForTimeout(500);
     // 古い暗号書庫が残っていても、案内は出さない（2026-09-30 ユーザー指示で「持ってくる」を廃止）
     console.log('\\n■ 2-2. 古い暗号書庫があっても案内を出さない');
     await page.evaluate(([k]) => {

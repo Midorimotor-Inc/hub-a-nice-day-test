@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790774758335';
+  window.__APP_BUILD='build-1790803033208';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.13';
+const MOBILE_VERSION='3.14';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -2612,7 +2612,18 @@ const HubKvSub={
   },
 };
 // 予定の並び（時刻→作成順）
-const hubSchedSort=(a,b)=>((a.time||'99:99')<(b.time||'99:99')?-1:(a.time||'99:99')>(b.time||'99:99')?1:(a.at||0)-(b.at||0));
+// 予定の並び（終日を一番上に、あとは開始時刻→作った順）
+const hubSchedKey=x=>(x&&x.allday)?'':((x&&x.time)||'99:99');
+const hubSchedSort=(a,b)=>(hubSchedKey(a)<hubSchedKey(b)?-1:hubSchedKey(a)>hubSchedKey(b)?1:(a.at||0)-(b.at||0));
+// 予定の時間の書き方：終日／10:00〜11:30／10:00／—
+const hubSchedTime=x=>(x&&x.allday)?'終日':(x&&x.time?(x.end?(x.time+'〜'+x.end):x.time):'—');
+// 色（2026-10-01 ユーザー決定・B案）：共有＝水色／マイ＝ピンク／他の人の共有＝灰色
+const MS_COL={
+  priv:{bg:'#fce7f3',bd:'#f472b6',lf:'#be185d',tx:'#9d174d',chipBg:'#db2777',chipTx:'#ffffff'},
+  mine:{bg:'#cffafe',bd:'#22d3ee',lf:'#0e7490',tx:'#155e75',chipBg:'#0891b2',chipTx:'#ffffff'},
+  other:{bg:'#ffffff',bd:'#e5e7eb',lf:'#9ca3af',tx:'#6b7280',chipBg:'#f3f4f6',chipTx:'#6b7280'},
+};
+const msCol=(isPriv,isMine)=>isPriv?MS_COL.priv:isMine?MS_COL.mine:MS_COL.other;
 const hubSchedId=()=>'ms'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
 // ── マイスケジュールのフック（2026-09-30）。sGet/saveKv は各画面のデータ層。
@@ -2674,7 +2685,12 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
     if(!form)return;
     const title=String(form.title||'').trim().slice(0,40);
     if(!title){setMsg('件名を入れてください');return;}
-    const rec={dk,time:form.time||'',title,memo:String(form.memo||'').trim().slice(0,200)};
+    // 終日のときは時刻を持たない。終わりだけ入れて始まりが空、は無しにする
+    const allday=!!form.allday;
+    const st=allday?'':(form.time||'');
+    const en=(allday||!st)?'':(form.end||'');
+    if(!allday&&st&&en&&en<st){setMsg('終わりの時刻が始まりより前です');return;}
+    const rec={dk,time:st,end:en,allday,title,memo:String(form.memo||'').trim().slice(0,200)};
     setSaving(true);setMsg('');
     try{
       if(form.priv&&canPriv){
@@ -2701,25 +2717,30 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
       setForm(null);
     }finally{setSaving(false);}
   };
-  const Item=({it})=>(
+  const Item=({it})=>{
+    const c=msCol(!!it.priv,mine(it));
+    return(
     <div style={{display:'flex',alignItems:'flex-start',gap:7,padding:compact?'7px 9px':'8px 11px',marginBottom:4,borderRadius:9,
-      background:it.priv?'#f5f3ff':mine(it)?'#eff6ff':'white',border:`1.5px solid ${it.priv?'#c4b5fd':mine(it)?'#93c5fd':'#e5e7eb'}`,borderLeft:`4px solid ${it.priv?'#7c3aed':mine(it)?'#2563eb':'#9ca3af'}`}}>
-      <span style={{fontSize:11,fontWeight:800,color:it.priv?'#6d28d9':'#1d4ed8',width:42,flexShrink:0,marginTop:1}}>{it.time||'—'}</span>
+      background:c.bg,border:`1.5px solid ${c.bd}`,borderLeft:`4px solid ${c.lf}`}}>
+      <span style={{fontSize:11,fontWeight:800,color:c.tx,width:76,flexShrink:0,marginTop:1,lineHeight:1.35}}>
+        {it.allday
+          ?<span style={{display:'inline-block',borderRadius:4,padding:'0 5px',lineHeight:'16px',background:c.chipBg,color:c.chipTx,fontSize:10,fontWeight:800}}>終日</span>
+          :<>{it.time||'—'}{it.end&&<><br/>〜{it.end}</>}</>}
+      </span>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontWeight:800,fontSize:fs2,display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
           <span style={{wordBreak:'break-all'}}>{it.title}</span>
-          {it.priv
-            ?<span style={{fontSize:10,fontWeight:700,color:'#5b21b6',background:'#ede9fe',borderRadius:10,padding:'1px 7px'}}>🙋 マイ</span>
-            :<span style={{fontSize:10,fontWeight:700,color:mine(it)?'#1d4ed8':'#6b7280',background:mine(it)?'#dbeafe':'#f3f4f6',borderRadius:10,padding:'1px 7px'}}>{mine(it)?'自分':it.owner}</span>}
+          <span style={{fontSize:10,fontWeight:700,color:c.chipTx,background:c.chipBg,borderRadius:10,padding:'1px 7px'}}>{it.priv?'🙋 マイ':mine(it)?'自分':it.owner}</span>
         </div>
         {it.memo&&<div style={{fontSize:11,color:'#4b5563',marginTop:2,whiteSpace:'pre-wrap',wordBreak:'break-all'}}>{it.memo}</div>}
       </div>
       {(it.priv||mine(it))&&(
-        <button onClick={()=>{setForm({id:it.id,title:it.title,time:it.time||'',memo:it.memo||'',priv:!!it.priv,wasPriv:!!it.priv,wasPublic:!it.priv});setMsg('');}}
+        <button onClick={()=>{setForm({id:it.id,title:it.title,time:it.time||'',end:it.end||'',allday:!!it.allday,memo:it.memo||'',priv:!!it.priv,wasPriv:!!it.priv,wasPublic:!it.priv});setMsg('');}}
           style={{flexShrink:0,padding:'3px 8px',borderRadius:6,border:'1px solid #d1d5db',background:'white',fontSize:11,cursor:'pointer',color:'#374151'}}>編集</button>
       )}
     </div>
-  );
+    );
+  };
   const inputS={width:'100%',padding:compact?'8px 10px':'8px 11px',border:'1.5px solid #d1d5db',borderRadius:8,fontSize:14,boxSizing:'border-box',background:'white'};
   return(
     <div>
@@ -2736,9 +2757,20 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
         <div style={{marginTop:8,padding:'10px 12px',background:'#f8fafc',border:'1.5px solid #cbd5e1',borderRadius:10}}>
           <div style={{fontWeight:800,fontSize:12,color:'#334155',marginBottom:6}}>{form.id?'予定を編集':'予定を追加'}</div>
           <input style={{...inputS,marginBottom:6}} placeholder="件名（例：○○社と打合せ）" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} maxLength={40} autoFocus/>
-          <div style={{display:'flex',gap:6,marginBottom:6}}>
-            <input type="time" style={{...inputS,width:'auto',flex:'0 0 auto'}} value={form.time} onChange={e=>setForm({...form,time:e.target.value})}/>
-            {form.time&&<button onClick={()=>setForm({...form,time:''})} style={{padding:'0 10px',borderRadius:8,border:'1px solid #d1d5db',background:'white',fontSize:11,cursor:'pointer'}}>時刻なし</button>}
+          {/* ★時間：開始〜終了。終わりは空でもよい。「終日にする」を押すと時刻の欄は隠れる（2026-10-01） */}
+          <div style={{display:'flex',gap:6,marginBottom:6,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={()=>setForm({...form,allday:!form.allday})}
+              style={{padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',
+                border:`2px solid ${form.allday?'#475569':'#e5e7eb'}`,background:form.allday?'#f1f5f9':'white',color:form.allday?'#0f172a':'#6b7280'}}>終日にする</button>
+            {form.allday
+              ?<span style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>終日</span>
+              :<>
+                <input type="time" style={{...inputS,width:'auto',flex:'0 0 auto'}} value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/>
+                <span style={{fontSize:13,color:'#64748b',fontWeight:700}}>〜</span>
+                <input type="time" style={{...inputS,width:'auto',flex:'0 0 auto'}} value={form.end||''} onChange={e=>setForm({...form,end:e.target.value})}/>
+                {(form.time||form.end)&&<button onClick={()=>setForm({...form,time:'',end:''})} style={{padding:'0 10px',borderRadius:8,border:'1px solid #d1d5db',background:'white',fontSize:11,cursor:'pointer'}}>時刻なし</button>}
+                <span style={{fontSize:11,color:'#94a3b8'}}>終わりは空でもOK</span>
+              </>}
           </div>
           <textarea style={{...inputS,minHeight:52,marginBottom:6,resize:'vertical'}} placeholder="メモ（任意）" value={form.memo} onChange={e=>setForm({...form,memo:e.target.value})} maxLength={200}/>
           {/* ★どちらに入れるか。自分専用の端末でだけ選べる（共有の端末では共有スケジュールだけ） */}
@@ -2748,7 +2780,7 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
                 const on=(k==='priv')===!!form.priv;
                 return(
                   <button key={k} onClick={()=>setForm({...form,priv:k==='priv'})}
-                    style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${on?(k==='priv'?'#7c3aed':'#2563eb'):'#e5e7eb'}`,background:on?(k==='priv'?'#f5f3ff':'#eff6ff'):'white',color:on?(k==='priv'?'#5b21b6':'#1e40af'):'#6b7280',fontWeight:on?800:600,fontSize:12,cursor:'pointer'}}>
+                    style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${on?(k==='priv'?MS_COL.priv.lf:MS_COL.mine.lf):'#e5e7eb'}`,background:on?(k==='priv'?MS_COL.priv.bg:MS_COL.mine.bg):'white',color:on?(k==='priv'?MS_COL.priv.tx:MS_COL.mine.tx):'#6b7280',fontWeight:on?800:600,fontSize:12,cursor:'pointer'}}>
                     {l}<div style={{fontSize:9.5,fontWeight:400,opacity:.8}}>{sub}</div>
                   </button>
                 );
@@ -2762,14 +2794,14 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
           )}
           {msg&&<div style={{fontSize:11,color:'#b91c1c',fontWeight:700,marginBottom:6}}>{msg}</div>}
           <div style={{display:'flex',gap:6}}>
-            <button disabled={saving} onClick={submit} style={{flex:1,padding:'9px 0',borderRadius:8,border:'none',background:form.priv?'#7c3aed':'#2563eb',color:'white',fontWeight:800,fontSize:13,cursor:'pointer'}}>{saving?'保存中…':form.id?'保存':'追加'}</button>
+            <button disabled={saving} onClick={submit} style={{flex:1,padding:'9px 0',borderRadius:8,border:'none',background:form.priv?MS_COL.priv.chipBg:MS_COL.mine.chipBg,color:'white',fontWeight:800,fontSize:13,cursor:'pointer'}}>{saving?'保存中…':form.id?'保存':'追加'}</button>
             {form.id&&<button disabled={saving} onClick={()=>remove({id:form.id,title:form.title,priv:form.wasPriv})} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #fca5a5',background:'#fef2f2',color:'#b91c1c',fontWeight:700,fontSize:12,cursor:'pointer'}}>削除</button>}
             <button disabled={saving} onClick={()=>{setForm(null);setMsg('');}} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #d1d5db',background:'white',fontSize:12,cursor:'pointer'}}>やめる</button>
           </div>
         </div>
       ):(
-        <button onClick={()=>{setForm({title:'',time:'',memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
-          style={{marginTop:6,width:'100%',padding:'9px 0',borderRadius:9,border:'1.5px dashed #93c5fd',background:'#eff6ff',color:'#1e40af',fontWeight:800,fontSize:12,cursor:'pointer'}}>＋ 予定を追加</button>
+        <button onClick={()=>{setForm({title:'',time:'',end:'',allday:false,memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
+          style={{marginTop:6,width:'100%',padding:'9px 0',borderRadius:9,border:`1.5px dashed ${MS_COL.mine.bd}`,background:MS_COL.mine.bg,color:MS_COL.mine.tx,fontWeight:800,fontSize:12,cursor:'pointer'}}>＋ 予定を追加</button>
       )}
     </div>
   );
@@ -2815,11 +2847,13 @@ const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,v
                   <div style={{display:'flex',flexDirection:'column',gap:2}}>
                     {list.slice(0,4).map(it=>{
                       const mine=it.priv||it.uid===user.uid;
+                      const c=msCol(!!it.priv,mine);
+                      const tl=hubSchedTime(it);
                       return(
-                        <div key={it.id} title={`${it.time?it.time+' ':''}${it.title}${it.priv?'（マイスケジュール）':'（'+(it.owner||'')+'）'}${it.memo?'\n'+it.memo:''}`}
+                        <div key={it.id} title={`${tl!=='—'?tl+' ':''}${it.title}${it.priv?'（マイスケジュール）':'（'+(it.owner||'')+'）'}${it.memo?'\n'+it.memo:''}`}
                           style={{fontSize:10.5,padding:'2px 5px',borderRadius:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                            background:it.priv?'#f5f3ff':mine?'#eff6ff':'#f3f4f6',border:`1px solid ${it.priv?'#c4b5fd':mine?'#93c5fd':'#e5e7eb'}`,color:it.priv?'#5b21b6':mine?'#1e40af':'#374151',fontWeight:mine?700:500}}>
-                          {it.priv?'🙋':''}{it.time&&<span style={{fontWeight:800,marginRight:3}}>{it.time}</span>}{it.title}{!it.priv&&!mine&&<span style={{color:'#9ca3af',marginLeft:3}}>{String(it.owner||'').slice(0,2)}</span>}
+                            background:it.priv?c.bg:mine?c.bg:'#f3f4f6',border:`1px solid ${c.bd}`,color:it.priv||mine?c.tx:'#374151',fontWeight:mine?700:500}}>
+                          {it.priv?'🙋':''}{tl!=='—'&&<span style={{fontWeight:800,marginRight:3}}>{it.allday?'終日':it.time}</span>}{it.title}{!it.priv&&!mine&&<span style={{color:'#9ca3af',marginLeft:3}}>{String(it.owner||'').slice(0,2)}</span>}
                         </div>
                       );
                     })}

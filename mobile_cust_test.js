@@ -35,11 +35,23 @@ const signedInInit = ([k, me, stor]) => {
   localStorage.setItem(stor + 'auth-mine', JSON.stringify([{ uid: me.uid, name: me.name, store: me.store, email: me.email }]));
   localStorage.setItem(stor + 'auth-kind', 'own');
 };
-// 予約する日は「来月の10日」、休業日は「来月の11日」
+// 予約する日は「来月の10日から、休業日でない最初の日」。休業日は「来月の11日」。
+//   10日に固定していると、その日が第2火曜（会社の休業日・アプリに元から入っている決まり）に
+//   当たった月に落ちるため（2026年11月10日がそれ）。
 const now = new Date();
-const B = new Date(now.getFullYear(), now.getMonth() + 1, 10);
+const isSecondTue = (y, m, d) => { const dt = new Date(y, m, d); return dt.getDay() === 2 && d >= 8 && d <= 14; };
+const pickBookDay = () => {
+  const y = now.getFullYear(), m = now.getMonth() + 1;
+  for (let d = 10; d <= 25; d++) {
+    if (d === 11) continue;                   // 検査で休業日にする日
+    if (isSecondTue(y, m, d)) continue;       // 第2火曜は会社の休業日
+    return new Date(y, m, d);
+  }
+  return new Date(y, m, 10);
+};
+const B = pickBookDay();
 const BDK = `${B.getFullYear()}-${B.getMonth() + 1}-${B.getDate()}`;
-const BIN = `${B.getFullYear()}-${String(B.getMonth() + 1).padStart(2, '0')}-10`;
+const BIN = `${B.getFullYear()}-${String(B.getMonth() + 1).padStart(2, '0')}-${String(B.getDate()).padStart(2, '0')}`;
 const CLOSED = new Date(now.getFullYear(), now.getMonth() + 1, 11);
 const CLOSED_DK = `${CLOSED.getFullYear()}-${CLOSED.getMonth() + 1}-${CLOSED.getDate()}`;
 const CLOSED_IN = `${CLOSED.getFullYear()}-${String(CLOSED.getMonth() + 1).padStart(2, '0')}-11`;
