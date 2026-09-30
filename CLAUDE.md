@@ -65,7 +65,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 端末内の登録一覧（名前を選ぶログイン画面）は従来どおり `STOR+'auth-mine'`。
 - **スマホの QR 登録（v2.76・2026-09-22）**：PC の登録完了画面「スマホも登録しますか？」とログイン画面「📱 スマホを登録（QR）」で、サインイン中の人の引き継ぎの印を `mobile.html?hand=…&reg=1` の QR にする（qrcode-generator@1.4.4・CDN 版固定）。mobile 側は `HUB_HANDOFF_REG` なら `hubSignInByHandoff`（サインインだけ・BLOCK-B の hubTakeHandoff は使わない）→ `AuthAddScreen viaHandoff` で通常の登録の流れ（自分専用／共有 → 完了 → ホーム画面に追加）。PC でサインインしていない人は招待 URL（`?inv=1&e=`・要コード）の QR。
 - **招待 QR（v2.77）**：管理者コンソールで「招待を送る」を押すと、アドレス＋6桁を入れた `mobile.html?inv=1&e=…&code=…` の QR が出る（メールが届かない人向け。`showInviteQr`。URL コピーも可）。index/mobile は URL の `code` を登録欄に入れておく。コードが入った QR なので画面を他人に見せない運用。
-- ルールの配備はコンソールに貼る（Claude の自動モードでは `node fb_rules.js --deploy` がブロックされる）。文法確認だけなら Admin SDK の createRuleset で行える。
+- ルールの配備はコンソールに貼る（Claude の自動モードでは `node fb_rules.js --deploy` がブロックされる）。文法確認だけなら Admin SDK の createRuleset で行える。 手順書は `RULES_貼り付け手順.md`。**`firestore.rules` を編集する時は `match /kv/{key} {` が2か所ある（一番外側と snaps の中）ので、行の完全一致で一番外側だけを直すこと**（2026-09-30 に snaps 側まで書き換えて壊した）。**hub-verify の firebase-admin は 12 系を使う**（14 系は `admin.credential`/`admin.firestore()` の旧APIを廃止しており、fb_*.js・smoke_main.js が全部動かなくなる）。
 
 ### 時点保存／復旧（Firestore・2026-09-19）
 - `snaps/{id}`（要約・ready）＋ `snaps/{id}/kv/{キー}`（値の写し）、一覧は `snapidx/{prefix}`。GAS の snapXxx と同じ関数名（`snapList/snapRead/snapRestore/snapAddBack/snapRestoreStore`）が FB_ON なら Firestore 版（`fbSnapXxx`）に流れる。
