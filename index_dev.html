@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790675108188';
+    window.__APP_BUILD='build-1790732431004';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.05';
+const APP_VERSION = '3.06';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6707,6 +6707,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       if(!form.course){alert('コースを選択してください');return;}
       if(!form.time){alert('入庫時間を入力してください');timeRef.current?.focus();return;}
     }else{
+      if(isNew&&!timeSlot&&!form.time){alert('時間を選んでください');return;}
       if(!form.work){alert('作業内容を選択してください');workRef.current?.focus();return;}
     }
     if(!confirmLoanerMismatch())return; // ズレたまま保存の最終確認でキャンセル→中断
@@ -6928,6 +6929,17 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+              {/* ★時間が決まっていない新規の予定（畳んだ状態の「＋」から）だけ、ここで時間を選ぶ。
+                  未選択のままでは保存できない（2026-09-30 ユーザー指示）。 */}
+          {!isInsp&&isNew&&!timeSlot&&(
+            <div>
+              <label style={LBL}>時間 * <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>選ばないと保存できません</span></label>
+              <select value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})} style={{...INP,fontWeight:800}}>
+                <option value="">--:--</option>
+                {SCHED_SLOTS.map(sl=><option key={sl} value={sl}>{specialSlotLabel(sl)}</option>)}
+              </select>
             </div>
           )}
           {/* 作業（整備） */}
@@ -10203,7 +10215,19 @@ function AppInner() {
   const [showCalSettings,    setShowCalSettings]    = useState(false);
   const [showStaffCal,       setShowStaffCal]       = useState(false);
   const [calView,            setCalView]            = useState('insp'); // 'insp' | 'staff'
+  // ★スタッフカレンダーを開いた時は、まずログインしている人の休日だけを出す（「全員」ボタンで切替）
+  //   （2026-09-30 ユーザー要望）
+  const _calStaffInit=useRef(false);
   const [calStaffFilter,     setCalStaffFilter]     = useState(null);  // null=全員 or スタッフ名
+  // ★スタッフカレンダーを開いた時は、まずログインしている人だけを出す（「全員」ボタンでいつでも切替・2026-09-30 ユーザー要望）
+  useEffect(()=>{
+    if(calView!=='staff'){ _calStaffInit.current=false; return; }
+    if(_calStaffInit.current)return;
+    _calStaffInit.current=true;
+    const me=currentUser&&currentUser.name;
+    const list=(vsId==='honten'?dynStaffH:dynStaffS)||[];
+    setCalStaffFilter(me&&list.some(x=>x&&x.name===me)?me:null);
+  },[calView,currentUser,vsId,dynStaffH,dynStaffS]);
   // クイックアイテム（古いwork/content形式→text形式に自動変換）
   const [quickItemsRaw, setQuickItemsRaw] = useShared(STOR+'setItems', DEFAULT_SET_ITEMS);
   const setItems = useMemo(()=>{
@@ -11403,7 +11427,7 @@ function AppInner() {
       }
     }else{
       // 整備予約：入庫制限チェック
-      const newSlot=formData._slot||modalSlot;
+      const newSlot=formData._slot||modalSlot||getBaseSlot(formData.time||'')||'未定';
       const restriction=schedRestrictions[modalDk];
       
       if(restriction){
@@ -11917,10 +11941,14 @@ function AppInner() {
     setView('schedule');
     setTimeout(()=>window.scrollTo({top:0,behavior:'instant'}),50);
   };
+  // ★検索から選んだお客様は、顧客リストを別タブで開いてその方で絞り込む（2026-09-30 ユーザー指示）。
+  //   全画面で使っている時は fs=1 を付け、開いた先で「全画面」ボタンを光らせて1クリックで揃えられるようにする。
   const handleFindGoCust=(c)=>{
     setShowFind(false);
     try{ sessionStorage.setItem(STOR+'cust-find',JSON.stringify({q:c.name,file:c.file,ts:Date.now()})); }catch(e){}
-    setCustOverlay(true);
+    const fs=(document.fullscreenElement||document.webkitFullscreenElement)?'1':'0';
+    const url='./customers.html?find='+encodeURIComponent(c.name||'')+(c.file?('&file='+encodeURIComponent(c.file)):'')+'&fs='+fs;
+    try{ window.open(url,'_blank','noopener'); }catch(e){ setCustOverlay(true); }
   };
   // 空き枠検索 → 車検はemptyIdx（新規）で開く
   const handleSearchNavigate=(r)=>{
@@ -12332,7 +12360,7 @@ function AppInner() {
                       <Search size={13}/>検索
                     </button>
                     {/* 顧客リスト・料金表は別タブで開く（2026-09-24 ユーザー指示） */}
-                    <a href="./customers.html" target="_blank" rel="noopener noreferrer" {...hov(false)}
+                    <a href={'./customers.html?fs='+((document.fullscreenElement||document.webkitFullscreenElement)?'1':'0')} target="_blank" rel="noopener noreferrer" {...hov(false)}
                       style={navSty(false,{background:'#3CB371',color:'#FFFFFF'})}>
                       <Users size={13}/>顧客リスト<ExtMark/>
                     </a>
@@ -12394,9 +12422,15 @@ function AppInner() {
           if(wk.some(x=>x!==null))weeks.push([...wk]);
           // 月集計（承認済みの予約のみ）
           const cnt={1:0,2:0,3:0};
+          const byStore={honten:0,sanda:0};   // 店舗ごとの内訳（2026-09-30 ユーザー要望）
           for(let d=1;d<=daysInMonth;d++){
             const dkk=`${cy}-${cm+1}-${d}`;
-            (inspData[dkk]||[]).forEach(r=>{if(r&&r.name&&r.course&&!r.pendingApproval&&r.bookingStatus!=='cancelled')cnt[Number(r.course)]++;});
+            (inspData[dkk]||[]).forEach(r=>{
+              if(!(r&&r.name&&r.course&&!r.pendingApproval&&r.bookingStatus!=='cancelled'))return;
+              cnt[Number(r.course)]++;
+              const st=(r.store==='sanda'||r.store==='三田店')?'sanda':'honten';
+              byStore[st]++;
+            });
           }
           const total=cnt[1]+cnt[2]+cnt[3];
           return (
@@ -12414,7 +12448,11 @@ function AppInner() {
                         <span style={{fontWeight:800,color:c.color}}>{cnt[c.id]}台</span>
                       </span>
                     ))}
-                    <span style={{fontWeight:800,fontSize:13,color:'#059669'}}>合計 {total}台</span>
+                    <span style={{display:'flex',alignItems:'baseline',gap:6,marginLeft:2}}>
+                      <span style={{fontWeight:900,fontSize:17,color:'#111827'}}>合計 {total}台</span>
+                      <span style={{fontSize:11.5,fontWeight:700,color:'#2563eb'}}>本店 {byStore.honten}台</span>
+                      <span style={{fontSize:11.5,fontWeight:700,color:'#dc2626'}}>三田店 {byStore.sanda}台</span>
+                    </span>
                     {(cDays.length>0||cDates.length>0)&&<span style={{display:'flex',alignItems:'center',gap:3,color:'#6b7280',marginLeft:4}}><span style={{width:12,height:12,background:CLOSED_BG,boxShadow:'inset 3px 0 0 #f97316',display:'inline-block',borderRadius:2,border:'1px solid #fdba74'}}/>{CLOSED_LABEL}</span>}
                     <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:4}}>
                       <span style={{width:12,height:12,borderRadius:2,background:'#2563eb',color:'white',fontSize:7,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>本</span>
@@ -13223,7 +13261,7 @@ function AppInner() {
                           (_dlBySlot[s]=_dlBySlot[s]||[]).push({r,wdk,sk,kind:'sched'});
                         });
                       });
-                      return SCHED_SLOTS.map(slot=>{
+                      const _rows=SCHED_SLOTS.map(slot=>{
                         // baseSlotの全サブキーを取得（既存行 + 空の基本行）
                         const subKeys=getSchedSubKeys(dk,slot);
                         const displayKeys=subKeys.length>0?subKeys:[slot];
@@ -13368,6 +13406,25 @@ function AppInner() {
                           </React.Fragment>
                         );
                       }).filter(Boolean);
+                      // ★畳んでいる時は、ここに「まだ予定がありません」と「＋ 予定を追加」を出す
+                      //   （2026-09-30 ユーザー要望・C案）。時間はカードの中で選ぶ（未選択では保存できない）。
+                      if(schedCollapsed){
+                        _rows.push(
+                          <tr key="collapsed-foot">
+                            <td colSpan={7} style={{padding:'18px 10px',textAlign:'center',background:'white'}}>
+                              {_rows.length===0&&(
+                                <div style={{fontSize:21,fontWeight:800,color:'#9aa5b1',marginBottom:12}}>まだ予定がありません</div>
+                              )}
+                              <button onClick={()=>handleOpenModal('sched',dk,null,'',true)}
+                                style={{display:'inline-flex',alignItems:'center',gap:6,padding:'9px 20px',background:'#0891b2',color:'white',
+                                  border:'none',borderRadius:9,cursor:'pointer',fontSize:13.5,fontWeight:800,boxShadow:'0 2px 8px rgba(8,145,178,.35)'}}>
+                                ＋ 予定を追加
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return _rows;
                       })()}
                     </tbody>
                   </table>

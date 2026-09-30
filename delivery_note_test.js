@@ -45,6 +45,7 @@ const MD_N = `${nx.getMonth() + 1}/${nx.getDate()}`;
     [STOR + 'honten-sched']: { [DK]: { '10:00': { id: 11, name: '相原', carType: 'ワゴンR', work: 'オイル', content: '' } } },
     [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
+    [STOR + 'sanda-cdow-v2']: [], [STOR + 'sanda-cdate']: [],
     [STOR + 'sanda-staff-v2']: [{ uid: 's10', name: '藤原昭人', myNumber: 10, badge: 'inspector', store: 'sanda' }],
   };
   const server = http.createServer((req, res) => {
@@ -87,16 +88,24 @@ const MD_N = `${nx.getMonth() + 1}/${nx.getDate()}`;
   }, [day, nextMonth]).then(async ok => {
     if (!ok) return false;
     await new Promise(r => setTimeout(r, 400));
-    return page.evaluate(([d, nm]) => {
+    // 月をまたぐ時は先に「›」で翌月へ送り、描き直しを待ってから日を押す
+    if (nextMonth) {
+      await page.evaluate(() => {
+        const box = document.querySelector('.booking-modal-inner'); if (!box) return;
+        const pick = [...box.querySelectorAll('div')].find(e => e.style && e.style.zIndex === '9999'); if (!pick) return;
+        const nx = [...pick.querySelectorAll('button')].find(b => b.innerText.trim() === '›'); if (nx) nx.click();
+      });
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return page.evaluate(d => {
       const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
       const pick = [...box.querySelectorAll('div')].find(e => e.style && e.style.zIndex === '9999');
       if (!pick) return false;
-      if (nm) { const nx = [...pick.querySelectorAll('button')].find(b => b.innerText.trim() === '›'); if (nx) nx.click(); }
       const cells = [...pick.querySelectorAll('div')].filter(e => e.innerText.trim() === String(d) && e.style && e.style.cursor === 'pointer');
       const c = cells[cells.length - 1];
       if (!c) return false;
       c.click(); return true;
-    }, [day, nextMonth]);
+    }, day);
   });
   t('納車日を「翌日」に設定できた', await pickDelivery(nx.getDate(), nx.getMonth() !== M));
   await page.waitForTimeout(400);

@@ -173,8 +173,9 @@ const signedInInit = ([k, me, stor]) => {
     await page.waitForTimeout(1500);
     await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '休日' || (el.textContent.includes('休日') && el.textContent.length < 5)); if (b) b.click(); });
     await page.waitForTimeout(800);
-    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '江川京志'); if (b) b.click(); });
-    await page.waitForTimeout(800);
+    // ★2026-09-30 から、開いた時点でログインしている人（江川京志）が選ばれている（押すと解除になるので押さない）
+    t('PC：開いた時点でログインしている人が選ばれている', await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '江川京志'); return !!b && b.style.borderColor === 'rgb(194, 65, 12)'; }));
+    await page.waitForTimeout(500);
     t('PC：個人を選んでも他の日が薄くならない（opacity 0.28 のセルが無い）', await page.evaluate(() => ![...document.querySelectorAll('div')].some(el => el.style && (el.style.opacity === '0.28'))));
     t('PC：個人の集計に繰り越しの内訳とバッジが出る', await seeText(page, '繰り越し休日', 5000) && await page.evaluate(() => /繰り越し\d+日 →翌月へ/.test(document.body.innerText) && !/枠 \d+日/.test(document.body.innerText)), await page.evaluate(() => (document.body.innerText.match(/月の集計[^]{0,200}/) || [''])[0]));
     await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('設定') && el.textContent.length < 6 && el.offsetParent !== null); if (b) b.click(); });

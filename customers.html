@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790675108188';
+  window.__APP_BUILD='build-1790732431004';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.05'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.06'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -2260,7 +2260,16 @@ const App=()=>{
   const [search,setSearch]=useState('');
   const [filterStatus,setFilterStatus]=useState('all');
   // ★スケジュール画面の「検索」から開かれた時（2026-09-19）：sessionStorage の指示で、そのファイルを開いて名前で絞る
-  const findReqRef=useRef((()=>{try{const v=JSON.parse(sessionStorage.getItem(STOR+'cust-find')||'null');sessionStorage.removeItem(STOR+'cust-find');return(v&&v.q&&Date.now()-(v.ts||0)<60000)?v:null;}catch(e){return null;}})());
+  // ★検索から別タブで開かれた時は URL（?find=氏名&file=月）で絞り込む。
+  //   同じタブ内で開く従来の経路（sessionStorage）も残す（2026-09-30）。
+  const findReqRef=useRef((()=>{
+    try{
+      const sp=new URLSearchParams(location.search);
+      const q=sp.get('find')||'';
+      if(q)return{q,file:sp.get('file')||'',ts:Date.now()};
+    }catch(e){}
+    try{const v=JSON.parse(sessionStorage.getItem(STOR+'cust-find')||'null');sessionStorage.removeItem(STOR+'cust-find');return(v&&v.q&&Date.now()-(v.ts||0)<60000)?v:null;}catch(e){return null;}
+  })());
   useEffect(()=>{ const req=findReqRef.current; if(!req||!Array.isArray(files)||!files.length)return; const i=files.findIndex(f=>f&&f.name===req.file); if(i<0)return; findReqRef.current=null; setActiveIdx(i); setSearch(req.q); },[files]);
   const [gasOk,setGasOk]=useState(null);
   const [gasLoading,setGasLoading]=useState(true);
@@ -2317,7 +2326,11 @@ const App=()=>{
       };
       RESTORE_EVENTS.forEach(ev=>document.addEventListener(ev,restore,true));
     };
-    try{ arm(); }catch(e){}
+    // ★自動で全画面に入るのはやめた（2026-09-30 ユーザー指示）。
+    //   スケジュールを全画面にしてからこの画面を開くと、最初のクリックで不意に全画面へ入り、
+    //   意図しない動きに感じられたため。全画面にしたい時はヘッダーの「全画面」ボタンを押す。
+    //   （ブラウザの決まりで、開いた瞬間に自動で全画面にすることはできない）
+    // try{ arm(); }catch(e){}   ← 以前はここで待ち受けていた
     return()=>{
       fsDoc.removeEventListener('fullscreenchange',h);
       fsDoc.removeEventListener('webkitfullscreenchange',h);
@@ -2325,6 +2338,10 @@ const App=()=>{
       if(restore)RESTORE_EVENTS.forEach(ev=>document.removeEventListener(ev,restore,true));
     };
   },[]);
+  // ★スケジュールが全画面の時に開かれた（?fs=1）なら、「全画面」ボタンを数秒だけ光らせて、
+  //   押したい人が1クリックで画面を揃えられるようにする（勝手には入らない）。
+  const [fsHint,setFsHint]=useState(()=>{ try{ return new URLSearchParams(location.search).get('fs')==='1'; }catch(e){ return false; } });
+  useEffect(()=>{ if(!fsHint)return; const t=setTimeout(()=>setFsHint(false),6000); return()=>clearTimeout(t); },[fsHint]);
   const toggleFullscreen=useCallback(()=>{
     try{
       let fsDoc=document,fsEl=document.documentElement;
@@ -3515,8 +3532,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           <div style={{width:7,height:7,borderRadius:'50%',background:gasOk===true?'#4ade80':gasOk===false?'#f87171':'#fbbf24'}}/>
           <span style={{color:'rgba(255,255,255,.6)',fontSize:10}}>{gasOk===true?'GAS接続済':gasOk===false?'GAS接続エラー':'確認中'}</span>
         </div>
-        {<button data-fs-toggle="1" onClick={toggleFullscreen} title={isFullscreen?'全画面を終了して元のウインドウに戻す':'全画面表示（ブラウザのタブ・お気に入りバーを隠して大きく表示）'}
-          style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',background:'rgba(255,255,255,0.15)',border:'2px solid rgba(255,255,255,0.5)',borderRadius:8,cursor:'pointer',fontWeight:700,fontSize:11,color:'white',whiteSpace:'nowrap'}}
+        {<button data-fs-toggle="1" onClick={()=>{setFsHint(false);toggleFullscreen();}} title={isFullscreen?'全画面を終了して元のウインドウに戻す':'全画面表示（ブラウザのタブ・お気に入りバーを隠して大きく表示）'}
+          style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',background:(fsHint&&!isFullscreen)?'#fde047':'rgba(255,255,255,0.15)',border:(fsHint&&!isFullscreen)?'2px solid #facc15':'2px solid rgba(255,255,255,0.5)',borderRadius:8,cursor:'pointer',fontWeight:(fsHint&&!isFullscreen)?900:700,fontSize:11,color:(fsHint&&!isFullscreen)?'#7c2d12':'white',whiteSpace:'nowrap',boxShadow:(fsHint&&!isFullscreen)?'0 0 0 4px rgba(250,204,21,.35)':'none',transition:'all .15s'}}
           onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.3)'}
           onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.15)'}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
