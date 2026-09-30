@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790752616917';
+  window.__APP_BUILD='build-1790753899803';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.10'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.11'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -2215,6 +2215,14 @@ const CustomerRow=memo(({customer,onBook,onRevive,pending,flash})=>{
 
 // 入庫日をGASキー形式（ゼロなし）に変換
 const toDk=d=>{if(!d)return'';const p=String(d).split('-');return p.length===3?`${p[0]}-${parseInt(p[1])}-${parseInt(p[2])}`:d;};
+// ★同期チェックの見はじめ（2026-09-30 ユーザー指示）。
+//   スケジュールを使い始めたのが 2026/9/22。それより前の車検は当時スケジュールに入れていないので、
+//   同期チェックに出すと毎回「反映漏れ」として並んでしまう（本番で33件）。
+//   ここより前は数えない。顧客ファイルの中身（予約済の印・集計）は触らないので、
+//   この日付を戻せばまた出るようになる。
+const SYNC_FROM_DK='2026-9-22';
+const _dkNum=dk=>{const p=String(dk||'').split('-');return p.length<3?0:Number(p[0])*10000+Number(p[1])*100+Number(p[2]);};
+const inSyncRange=d=>{const dk=toDk(d);return !!dk&&_dkNum(dk)>=_dkNum(SYNC_FROM_DK);};
 
 // ═══════════════════════════════════════════
 // メインアプリ
@@ -3377,7 +3385,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       ]);
       const allFiles=await Promise.all(fileIndex.map(fi=>loadFileChunked(fi.name).catch(()=>null)));
       const allCusts=allFiles.filter(Boolean).flatMap(f=>f.customers||[]);
-      const confirmedWithDate=allCusts.filter(c=>c.status==='confirm'&&c.entryDate);
+      const confirmedWithDate=allCusts.filter(c=>c.status==='confirm'&&c.entryDate&&inSyncRange(c.entryDate));
       const notInInsp=c=>{
         const dk=toDk(c.entryDate);
         if(!dk)return false;
@@ -3397,6 +3405,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       const pushExtra=c=>{const k=c.custId||c.name;if(seen.has(k))return;seen.add(k);extra.push(c);};
       pendLoad().forEach(p=>{
         if(!p.dk||!p.row)return;
+        if(!inSyncRange(p.cust&&p.cust.entryDate||p.dk))return;   // 見はじめより前は数えない
         if(inspHasCust(latestInsp,p.dk,p.custId,p.name))return;
         pushExtra({...(p.cust||{}),custId:p.custId,name:p.name,no:p.no,carType:p.row.carType,
           course:p.row.course,store:p.row.store,staff:p.row.staff,tokuten:p.row.tokuten,note:p.row.note,
@@ -3406,6 +3415,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       try{custbk=(await sGet(STOR+'custbk'))||{};}catch(e){}
       Object.values(custbk).forEach(e=>{
         if(!e||e.status!=='confirmed'||!e.dk||!e.formData)return;
+        if(!inSyncRange(e.dk))return;                              // 見はじめより前は数えない
         const f=e.formData;
         if(inspHasCust(latestInsp,e.dk,f.custId,f.name))return;
         pushExtra({custId:f.custId,name:f.name,no:f.no,carType:f.carType,course:f.course,store:f.store,
@@ -3808,6 +3818,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               <>
                 <div style={{fontWeight:800,fontSize:18,color:'#16a34a'}}>✅ 問題ありません</div>
                 <div style={{fontSize:14,color:'#374151'}}>本予約・入庫日あり {syncDialog.total}件すべてがスケジュールに反映されています。</div>
+                <div style={{fontSize:12,color:'#9ca3af'}}>入庫日が {SYNC_FROM_DK.replace(/-/g,'/')} 以降の分を見ています（スケジュールを使い始めた日より前は数えません）。</div>
                 <button onClick={()=>setSyncDialog(null)}
                   style={{alignSelf:'flex-end',padding:'8px 24px',background:'#1d4ed8',color:'white',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer'}}>
                   閉じる
@@ -3817,6 +3828,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               <>
                 <div style={{fontWeight:800,fontSize:18,color:'#dc2626'}}>⚠️ {syncDialog.missing.length}件の反映漏れを検出</div>
                 <div style={{fontSize:13,color:'#6b7280'}}>入庫日あり・本予約ステータスだが、スケジュールへの反映が確認できない顧客です。（全{syncDialog.total}件中）</div>
+                <div style={{fontSize:12,color:'#9ca3af'}}>入庫日が {SYNC_FROM_DK.replace(/-/g,'/')} 以降の分を見ています（スケジュールを使い始めた日より前は数えません）。</div>
                 <div style={{overflowY:'auto',flex:1,border:'1px solid #e5e7eb',borderRadius:8}}>
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
                     <thead>
