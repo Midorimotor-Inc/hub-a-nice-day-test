@@ -3,7 +3,7 @@
 //   ・店の共有の端末：マイスケジュールは出さない・読み込まない。追加は共有だけ
 //   ・自分専用の端末：共有／マイを選んで追加でき、「すべて表示／共有／マイ」で切り替えられる
 //   ・別の人には、他人のマイスケジュールは一切見えない
-//   ・以前の🔒シークレット予定は、答えを一度入れればマイスケジュールへ持ってこられる
+//   ・以前の🔒シークレット予定の「持ってくる」案内は廃止（2026-09-30）。古い書庫があっても何も出さない
 //   実行: node fb_mysched_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -164,35 +164,21 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.keyboard.press('Escape'); await page.waitForTimeout(400);
     await clickText(page, 'すべて表示'); await page.waitForTimeout(600);
     t('切り替え「すべて」：カレンダーのセルに両方出る', await page.evaluate(() => { const c = [...document.querySelectorAll('div')].find(el => el.style && el.style.minHeight === '110px' && el.textContent.includes('本店会議')); return !!c && c.textContent.includes('歯医者') && c.textContent.includes('🙋'); }));
-    // 以前の🔒シークレット予定の引っ越し
-    console.log('\n■ 2-2. 以前の🔒予定を持ってくる');
-    const put0 = await page.evaluate(async ([k, dk]) => {
-      const b64 = u8 => { let x = ''; for (let i = 0; i < u8.length; i++) x += String.fromCharCode(u8[i]); return btoa(x); };
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      const km = await crypto.subtle.importKey('raw', new TextEncoder().encode('ポチ'), 'PBKDF2', false, ['deriveKey']);
-      const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-      const enc = async obj => { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj))); return { iv: b64(iv), data: b64(new Uint8Array(ct)) }; };
-      const chk = await enc({ ok: 1 });
-      const body = await enc({ old1: { dk, time: '15:00', title: '前の秘密の用事', memo: '', at: 1 } });
-      window.__fakeFb.set(k + 'mysec-h7', { hint: '初めて飼った犬の名前', salt: b64(salt), iter: 150000, checkIv: chk.iv, check: chk.data, iv: body.iv, data: body.data, u: Date.now() });
-      return true;
-    }, [STOR, DK]).catch(e => String(e));
-    t('検査の用意：以前の暗号書庫を置けた', put0 === true, put0);
+    // 古い暗号書庫が残っていても、案内は出さない（2026-09-30 ユーザー指示で「持ってくる」を廃止）
+    console.log('\\n■ 2-2. 古い暗号書庫があっても案内を出さない');
+    await page.evaluate(([k]) => {
+      window.__fakeFb.set(k + 'mysec-h7', { hint: '初めて飼った犬の名前', salt: 'c2FsdA==', iter: 150000, checkIv: 'aXY=', check: 'Yw==', iv: 'aXY=', data: 'ZA==', u: Date.now() });
+    }, [STOR]);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await seeText(page, 'スケジュール', 20000);
     await goCal(page);
     await pickToday(page); await seeText(page, 'の予定', 8000);
-    t('持ってくる案内が出る', await seeText(page, '持ってくる', 8000), await panelText(page));
-    await clickText(page, '持ってくる');
-    await page.waitForTimeout(400);
-    t('ヒントが出る', /初めて飼った犬の名前/.test(await panelText(page)));
-    await page.fill('input[placeholder="答え"]', 'ちがう');
-    await clickText(page, '持ってくる');
-    t('答えが違うと断られる', await seeText(page, '答えが違います', 8000));
-    await page.fill('input[placeholder="答え"]', 'ポチ');
-    await clickText(page, '持ってくる');
-    t('以前の🔒予定がマイスケジュールへ移る', await page.waitForFunction(k => { const v = window.__fakeFb.get(k + 'myprv-h7') || {}; return Object.values(v).some(x => x && x.title === '前の秘密の用事'); }, STOR, { timeout: 10000 }).then(() => true).catch(() => false), await kv(page, STOR + 'myprv-h7'));
-    t('古い暗号書庫は片付けられる', await page.waitForFunction(k => !window.__fakeFb.get(k + 'mysec-h7'), STOR, { timeout: 8000 }).then(() => true).catch(() => false));
+    await page.waitForTimeout(1200);
+    const p3 = await panelText(page);
+    t('「持ってくる」の案内は出ない', !/持ってくる/.test(p3), p3.slice(0, 400));
+    t('ヒントも出ない', !/初めて飼った犬の名前/.test(p3), p3.slice(0, 400));
+    t('マイ予定はこれまでどおり出る', /歯医者/.test(p3), p3.slice(0, 400));
+    t('古い書庫には触らない（残したまま）', await page.evaluate(k => !!window.__fakeFb.get(k + 'mysec-h7'), STOR));
     t('PC：JSエラーなし', errs.length === 0, errs.slice(0, 3));
     storeJson = await rawStore(page);
     await ctx.close();

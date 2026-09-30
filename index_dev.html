@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790755989045';
+    window.__APP_BUILD='build-1790774758335';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.12';
+const APP_VERSION = '3.13';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -414,30 +414,18 @@ const carryTitle=c=>c&&c.quota!=null?`会社の休日数 ${c.company}日 ＋ 前
 //   ★暗号はかけていない。Firestore を直接見られる人（管理者・運営）には中身が読める。
 //     「自分のPCを覗かれることはほとんどない」という前提で、簡単さを取った（2026-09-30 ユーザー判断）。
 //     人に知られて困ることは書かない運用。
-//   ・以前の暗号書庫（${STOR}mysec-{uid}）が残っている人には、一度だけ「持ってくる」案内を出す。
+//   ・以前の暗号書庫（${STOR}mysec-{uid}）は使わない。2026-09-30 に「持ってくる」案内もやめた
+//     （残っている書庫は読む手立てが無いので、Firestore に残っていても中身は開けない）。
 // ============================================
 // この端末は「自分専用」か（登録の時に決めたもの）。共有の端末ではマイスケジュールを扱わない。
 const HUB_OWN_DEVICE=()=>{try{return localStorage.getItem(STOR+'auth-kind')==='own';}catch(e){return false;}};
-// 以前の暗号書庫を読む道具＋予定の購読。新しく暗号をかけることはもう無い。
-const HubSecret={
-  ITER:150000,
-  norm:a=>String(a||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase(),
-  b64:u8=>{let s='';for(let i=0;i<u8.length;i++)s+=String.fromCharCode(u8[i]);return btoa(s);},
-  unb64:s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),
-  ok:()=>!!(window.crypto&&crypto.subtle&&crypto.getRandomValues),
-  async derive(answer,saltB64,iter){
-    const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(HubSecret.norm(answer)),'PBKDF2',false,['deriveKey']);
-    return crypto.subtle.deriveKey({name:'PBKDF2',salt:HubSecret.unb64(saltB64),iterations:iter||HubSecret.ITER,hash:'SHA-256'},km,{name:'AES-GCM',length:256},true,['encrypt','decrypt']);
-  },
-  async decrypt(key,ivB64,dataB64){
-    const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:HubSecret.unb64(ivB64)},key,HubSecret.unb64(dataB64));
-    return JSON.parse(new TextDecoder().decode(pt));
-  },
-  // 書庫の購読（PC・mobile 共通。Firestore の onSnapshot。手元キャッシュ由来の値は使わない）
+// 予定の入れ物の購読（PC・mobile 共通）。暗号はもう使っていない。
+const HubKvSub={
+  // Firestore の onSnapshot。手元キャッシュ由来の値は使わない
   subscribe:(k,cb)=>{
     if(typeof FB_ON==='undefined'||!FB_ON)return ()=>{};
     let un=null,dead=false;
-    const start=()=>{ if(dead||un)return; try{ un=fbDoc(k).onSnapshot({includeMetadataChanges:false},snap=>{ if(snap.metadata&&snap.metadata.fromCache&&!snap.exists)return; try{cb(fbParse(snap));}catch(e){} },err=>{ console.warn('[mysec] 購読に失敗',k,err&&err.message); }); }catch(e){} };
+    const start=()=>{ if(dead||un)return; try{ un=fbDoc(k).onSnapshot({includeMetadataChanges:false},snap=>{ if(snap.metadata&&snap.metadata.fromCache&&!snap.exists)return; try{cb(fbParse(snap));}catch(e){} },err=>{ console.warn('[予定] 購読に失敗',k,err&&err.message); }); }catch(e){} };
     if(typeof fbAuth!=='undefined'&&fbAuth)fbWhenUser(start); else start();
     return ()=>{dead=true;try{un&&un();}catch(e){}};
   },
@@ -453,14 +441,12 @@ function useHubPrivate(staffUid,sGetFn,saveKv){
   const key=(own&&staffUid)?STOR+'myprv-'+staffUid:null;
   const [items,setItems]=useState({});
   const [busy,setBusy]=useState(false);
-  const itemsRef=useRef({});
-  itemsRef.current=items;
   useEffect(()=>{
     setItems({});
     if(!key)return;
     let alive=true,got=false;
     sGetFn(key).then(v=>{if(alive&&!got&&v&&typeof v==='object')setItems(v);}).catch(()=>{});
-    const un=HubSecret.subscribe(key,v=>{if(!alive)return;got=true;setItems(v&&typeof v==='object'?v:{});});
+    const un=HubKvSub.subscribe(key,v=>{if(!alive)return;got=true;setItems(v&&typeof v==='object'?v:{});});
     return()=>{alive=false;un();};
   },[key]);
   const save=async next=>{
@@ -469,36 +455,7 @@ function useHubPrivate(staffUid,sGetFn,saveKv){
     try{const ok=await saveKv(key,()=>next);if(ok===false)return false;setItems(next);return true;}
     finally{setBusy(false);}
   };
-  // 以前の暗号書庫（mysec-{uid}）。持ってくる案内を出すためだけに読む
-  const [old,setOld]=useState(null);
-  useEffect(()=>{
-    setOld(null);
-    if(!own||!staffUid||!HubSecret.ok())return;
-    let alive=true;
-    sGetFn(STOR+'mysec-'+staffUid).then(v=>{if(alive&&v&&typeof v==='object'&&v.salt)setOld(v);}).catch(()=>{});
-    return()=>{alive=false;};
-  },[staffUid,own]);
-  // 答えを入れてもらって、中身をマイスケジュールへ移し、古い書庫は片付ける
-  const importOld=async answer=>{
-    if(!old||!key)return 'no';
-    setBusy(true);
-    try{
-      const k=await HubSecret.derive(answer,old.salt,old.iter);
-      let v=null;
-      try{v=await HubSecret.decrypt(k,old.iv,old.data);}catch(e){return 'ng';}   // 答えが違う
-      const next={...itemsRef.current};
-      Object.entries(v||{}).forEach(([id,it])=>{
-        if(!it||!it.dk||next[id])return;
-        next[id]={dk:it.dk,time:it.time||'',title:it.title||'',memo:it.memo||'',at:it.at||Date.now()};
-      });
-      if(await saveKv(key,()=>next)===false)return 'fail';
-      setItems(next);
-      try{await saveKv(STOR+'mysec-'+staffUid,()=>null);}catch(e){}
-      setOld(null);
-      return 'ok';
-    }finally{setBusy(false);}
-  };
-  return {enabled:!!key,items,busy,save,oldHint:old&&old.hint||'',hasOld:!!old,importOld};
+  return {enabled:!!key,items,busy,save};
 }
 
 // ── 公開予定（mysched）の読み：サーバー値をそのまま使う小さなフック（PC 用）──
@@ -511,7 +468,7 @@ function useHubKv(key,sGetFn){
     if(!key)return;
     let alive=true,got=false;
     sGetFn(key).then(v=>{ if(alive&&!got&&v&&typeof v==='object')setVal(v); }).catch(()=>{});
-    const un=HubSecret.subscribe(key,v=>{ if(!alive)return; got=true; setVal(v&&typeof v==='object'?v:{}); });
+    const un=HubKvSub.subscribe(key,v=>{ if(!alive)return; got=true; setVal(v&&typeof v==='object'?v:{}); });
     return ()=>{alive=false;un();};
   },[key]);
   return val;
@@ -525,7 +482,6 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
   const [form,setForm]=useState(null);           // {id?, title, time, memo, priv}
   const [msg,setMsg]=useState('');
   const [saving,setSaving]=useState(false);
-  const [mig,setMig]=useState({open:false,ans:'',msg:''});   // 以前の🔒予定の引っ越し
   useEffect(()=>{setForm(null);setMsg('');},[dk]);
   const pubList=(vw==='priv')?[]:Object.entries(pub||{}).filter(([,v])=>v&&v.dk===dk).map(([id,v])=>({...v,id})).sort(hubSchedSort);
   const prvList=(!canPriv||vw==='pub')?[]:Object.entries(priv.items||{}).filter(([,v])=>v&&v.dk===dk).map(([id,v])=>({...v,id,priv:true})).sort(hubSchedSort);
@@ -584,33 +540,6 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
     </div>
   );
   const inputS={width:'100%',padding:compact?'8px 10px':'8px 11px',border:'1.5px solid #d1d5db',borderRadius:8,fontSize:14,boxSizing:'border-box',background:'white'};
-  // 以前の🔒シークレット予定を持ってくる（一度だけ。持ってきたら案内は消える）
-  const migBox=()=>{
-    if(!canPriv||!priv.hasOld)return null;
-    if(!mig.open)return(
-      <div style={{marginTop:10,padding:'9px 11px',background:'#fffbeb',border:'1.5px solid #fcd34d',borderRadius:10,fontSize:11,color:'#92400e',lineHeight:1.7}}>
-        以前の🔒シークレット予定が残っています。答えを入れると<b>マイスケジュールへ移せます</b>（移した後は答えは要りません）。
-        <button onClick={()=>setMig({open:true,ans:'',msg:''})} style={{marginLeft:8,padding:'4px 10px',borderRadius:7,border:'1.5px solid #d97706',background:'white',color:'#92400e',fontWeight:800,fontSize:11,cursor:'pointer'}}>持ってくる</button>
-      </div>
-    );
-    return(
-      <div style={{marginTop:10,padding:'10px 12px',background:'#fffbeb',border:'1.5px solid #fcd34d',borderRadius:10}}>
-        <div style={{fontWeight:800,fontSize:12,color:'#92400e',marginBottom:6}}>以前の🔒シークレット予定を持ってくる</div>
-        <div style={{fontSize:11,color:'#92400e',marginBottom:6}}>ヒント：<b>{priv.oldHint||'（ヒントなし）'}</b></div>
-        <input style={{...inputS,marginBottom:6}} type="password" placeholder="答え" value={mig.ans} onChange={e=>setMig({...mig,ans:e.target.value})} autoComplete="off"/>
-        {mig.msg&&<div style={{fontSize:11,color:'#b91c1c',fontWeight:700,marginBottom:6}}>{mig.msg}</div>}
-        <div style={{display:'flex',gap:6}}>
-          <button disabled={priv.busy} onClick={async()=>{
-              const r=await priv.importOld(mig.ans);
-              if(r==='ok')setMig({open:false,ans:'',msg:''});
-              else setMig({...mig,msg:r==='ng'?'答えが違います':'持ってこられませんでした。もう一度お試しください'});
-            }}
-            style={{flex:1,padding:'9px 0',borderRadius:8,border:'none',background:'#d97706',color:'white',fontWeight:800,fontSize:13,cursor:'pointer'}}>{priv.busy?'処理中…':'持ってくる'}</button>
-          <button onClick={()=>setMig({open:false,ans:'',msg:''})} style={{padding:'9px 12px',borderRadius:8,border:'1px solid #d1d5db',background:'white',fontSize:12,cursor:'pointer'}}>やめる</button>
-        </div>
-      </div>
-    );
-  };
   return(
     <div>
       {!compact&&(
@@ -661,7 +590,6 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
         <button onClick={()=>{setForm({title:'',time:'',memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
           style={{marginTop:6,width:'100%',padding:'9px 0',borderRadius:9,border:'1.5px dashed #93c5fd',background:'#eff6ff',color:'#1e40af',fontWeight:800,fontSize:12,cursor:'pointer'}}>＋ 予定を追加</button>
       )}
-      {migBox()}
     </div>
   );
 };

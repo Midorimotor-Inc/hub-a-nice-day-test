@@ -89,7 +89,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `${STOR}mysched` — **共有スケジュール** `{id:{dk,time,title,memo,owner,uid,at}}`。全員が読める。直せるのは本人だけ。
 - `${STOR}myprv-{スタッフuid}` — **マイスケジュール**（v3.12・2026-09-30 で作り直し）`{id:{dk,time,title,memo,at}}`。暗号化はしない。
   **端末の種類（`${STOR}auth-kind`）で扱いが変わる**：`own`（自分専用）＝読み書きでき、画面上部の「すべて表示／共有スケジュール／マイスケジュール」で切り替えられる。`shared`（店の共有）＝`useHubPrivate` が key を作らないので**購読も読み込みもしない**（画面に出ないだけでなく端末に降りてこない）。予約の追加も共有スケジュールだけになる。
-  以前の暗号書庫 `${STOR}mysec-{uid}` が残っている人には「持ってくる」案内を出し、答えを1回入れると myprv へ移して古い書庫を消す（`importOld`）。
+  以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
