@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790732431004';
+    window.__APP_BUILD='build-1790743880461';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.06';
+const APP_VERSION = '3.07';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6707,7 +6707,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       if(!form.course){alert('コースを選択してください');return;}
       if(!form.time){alert('入庫時間を入力してください');timeRef.current?.focus();return;}
     }else{
-      if(isNew&&!timeSlot&&!form.time){alert('時間を選んでください');return;}
+      if(isNew&&!timeSlot&&!form._slot){alert('時間を選んでください');return;}
       if(!form.work){alert('作業内容を選択してください');workRef.current?.focus();return;}
     }
     if(!confirmLoanerMismatch())return; // ズレたまま保存の最終確認でキャンセル→中断
@@ -6850,17 +6850,22 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               ✅ 仮予約として保存しました。本予約確定を押すとスケジュールに登録されます。
             </div>
           )}
-          {/* 時間変更（整備スケジュールのみ） */}
-          {!isInsp&&(
+          {/* 時間変更（整備スケジュールのみ）。畳んだ状態の「＋」から開いた時は時間が決まっていないので、
+              --:-- から選ぶ必須の欄になる（2026-09-30 ユーザー指示：欄は1つだけにする） */}
+          {!isInsp&&(()=>{
+            const needPick=isNew&&!timeSlot;
+            return(
             <div>
-              <label style={LBL}>時間帯 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>変更する場合は選択</span></label>
-              <select value={getBaseSlot(form._slot||timeSlot)}
+              <label style={LBL}>{needPick?'時間 *':'時間帯'} <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>{needPick?'選ばないと保存できません':'変更する場合は選択'}</span></label>
+              <select value={needPick?(form._slot||''):getBaseSlot(form._slot||timeSlot)}
                 onChange={e=>setForm(p=>({...p,_slot:e.target.value}))}
-                style={{...INP,fontWeight:700,color:'#0891b2'}}>
+                style={{...INP,fontWeight:700,color:needPick&&!form._slot?'#9ca3af':'#0891b2'}}>
+                {needPick&&<option value="">--:--</option>}
                 {SCHED_SLOTS.map(s=><option key={s} value={s}>{specialSlotLabel(s)}</option>)}
               </select>
             </div>
-          )}
+            );
+          })()}
           {/* 氏名 */}
           <div>
             <label style={LBL}>氏名 *</label>
@@ -6929,17 +6934,6 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-              {/* ★時間が決まっていない新規の予定（畳んだ状態の「＋」から）だけ、ここで時間を選ぶ。
-                  未選択のままでは保存できない（2026-09-30 ユーザー指示）。 */}
-          {!isInsp&&isNew&&!timeSlot&&(
-            <div>
-              <label style={LBL}>時間 * <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>選ばないと保存できません</span></label>
-              <select value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})} style={{...INP,fontWeight:800}}>
-                <option value="">--:--</option>
-                {SCHED_SLOTS.map(sl=><option key={sl} value={sl}>{specialSlotLabel(sl)}</option>)}
-              </select>
             </div>
           )}
           {/* 作業（整備） */}
@@ -9774,7 +9768,12 @@ function AppInner() {
     const fsWanted=()=>{ try{ return (sessionStorage.getItem(STOR+'fs-pref2')||'on')!=='off'; }catch(e){ return true; } };
     const canFs=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen);
     let askTimer=null;
-    if(canFs&&fsWanted()&&!(document.fullscreenElement||document.webkitFullscreenElement)){
+    // ★案内を出すのは、そのタブで最初の1回だけ（2026-09-30 ユーザー指示）。
+    //   顧客リストを別タブで開くとブラウザが全画面を解除するため、戻るたびに聞かれて煩わしかった。
+    //   一度でも出した／答えた記録（fs-asked）があれば、もう出さない（「全画面」ボタンからはいつでも入れる）。
+    let _asked=false; try{ _asked=sessionStorage.getItem(STOR+'fs-asked')==='1'; }catch(e){}
+    if(canFs&&fsWanted()&&!_asked&&!(document.fullscreenElement||document.webkitFullscreenElement)){
+      try{ sessionStorage.setItem(STOR+'fs-asked','1'); }catch(e){}
       setFsAsk(true);
       askTimer=setTimeout(()=>setFsAsk(false),10000);   // 10秒さわらなければ自然に消える（画面を塞ぎ続けない）
     }
@@ -12448,17 +12447,14 @@ function AppInner() {
                         <span style={{fontWeight:800,color:c.color}}>{cnt[c.id]}台</span>
                       </span>
                     ))}
-                    <span style={{display:'flex',alignItems:'baseline',gap:6,marginLeft:2}}>
-                      <span style={{fontWeight:900,fontSize:17,color:'#111827'}}>合計 {total}台</span>
-                      <span style={{fontSize:11.5,fontWeight:700,color:'#2563eb'}}>本店 {byStore.honten}台</span>
-                      <span style={{fontSize:11.5,fontWeight:700,color:'#dc2626'}}>三田店 {byStore.sanda}台</span>
-                    </span>
+                    <span style={{fontWeight:900,fontSize:17,color:'#111827',marginLeft:2}}>合計 {total}台</span>
                     {(cDays.length>0||cDates.length>0)&&<span style={{display:'flex',alignItems:'center',gap:3,color:'#6b7280',marginLeft:4}}><span style={{width:12,height:12,background:CLOSED_BG,boxShadow:'inset 3px 0 0 #f97316',display:'inline-block',borderRadius:2,border:'1px solid #fdba74'}}/>{CLOSED_LABEL}</span>}
+                    {/* ★店舗の印と台数をひとまとめに（2026-09-30 ユーザー指示：同じ文字が重複していたため） */}
                     <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:4}}>
-                      <span style={{width:12,height:12,borderRadius:2,background:'#2563eb',color:'white',fontSize:7,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>本</span>
-                      <span style={{fontSize:10,color:'#6b7280'}}>本店</span>
-                      <span style={{width:12,height:12,borderRadius:2,background:'#dc2626',color:'white',fontSize:7,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center',marginLeft:3}}>三</span>
-                      <span style={{fontSize:10,color:'#6b7280'}}>三田店</span>
+                      <span style={{width:14,height:14,borderRadius:3,background:'#2563eb',color:'white',fontSize:8,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>本</span>
+                      <span style={{fontSize:12,fontWeight:800,color:'#2563eb'}}>本店 {byStore.honten}台</span>
+                      <span style={{width:14,height:14,borderRadius:3,background:'#dc2626',color:'white',fontSize:8,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center',marginLeft:6}}>三</span>
+                      <span style={{fontSize:12,fontWeight:800,color:'#dc2626'}}>三田店 {byStore.sanda}台</span>
                     </span>
                   </>
                 ):calView==='my'?(

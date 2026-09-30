@@ -103,7 +103,7 @@ const DK = `${Y}-${M + 1}-${D}`;
   t('②「＋ 予定を追加」が出る', await page.evaluate(() => [...document.querySelectorAll('button')].some(b => b.innerText.includes('＋ 予定を追加'))));
   await clickText(page, '＋ 予定を追加');
   t('② 予約カードが開く', await seeText(page, '一般予約カード', 8000));
-  t('② 時間は --:-- で始まる', await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); if (!box) return false; const sel = [...box.querySelectorAll('select')].find(s => [...s.options].some(o => o.text === '--:--')); return !!sel && sel.value === ''; }));
+  t('② 時間の欄は1つだけで、--:-- で始まる', await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); if (!box) return false; const sels = [...box.querySelectorAll('select')].filter(s => [...s.options].some(o => o.text === '--:--')); return sels.length === 1 && sels[0].value === ''; }));
   // 名前と作業だけ入れて保存 → 時間未選択で止まる
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
