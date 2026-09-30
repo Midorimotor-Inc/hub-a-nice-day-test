@@ -1,1 +1,61 @@
-以前の🔒シークレット予定が残っています。答えを入れるとマイスケジュールへ移せます（移した後は答えは要りません）。持ってくる
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 第2段階（2026-09-18）：Firebase Authentication（メールリンク）でサインインし、
+    //   許可簿 meta/allowed に載っていて active の人だけがデータ（kv）を読み書きできる。
+    //   管理者（role=admin）だけが許可簿を書き換え、端末の台帳（devices）を消せる。
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function ekey() { return request.auth.token.email.lower().replace('\\.', ','); }   // 項目名に '.' は使えないので ',' に
+    function allowedDoc() { return get(/databases/$(database)/documents/meta/allowed).data; }
+    function entry() { return allowedDoc()[ekey()]; }
+    function isAllowed() { return signedIn() && ekey() in allowedDoc() && entry().active == true; }
+    function isAdmin() { return isAllowed() && entry().role == 'admin'; }
+
+    // アプリのデータ（本番 hub-v8-* も DEV hub-v8-dev-* も同じ扱い）
+    // マイスケジュール（myprv-{スタッフuid}）は、その本人だけが読み書きできる（2026-09-30）。
+    //   スタッフuid は許可簿 meta/allowed のその人の uid（例 h7）。key は完全一致で見るので、
+    //   h1 の人が myprv-h10 を読むことはできない。共有の端末はそもそも読みにいかないが、
+    //   ここで止めておけば「別の人が他人のマイスケジュールを覗く」こともできない。
+    function isMyPrivate(key) {
+      return isAllowed() && ('uid' in entry()) && entry().uid is string && entry().uid != ''
+        && key.matches('.*myprv-' + entry().uid);
+    }
+    match /kv/{key} {
+      // ★移行中（v2.45 の画面が残っている間）は DEV のキーだけ今までどおり誰でも読み書き可。
+      //   全員が v2.46 でサインインしたら firestore.final.rules に差し替える（本番データを移す前に必ず）
+      allow read, write: if key.matches('.*myprv-.*')
+        ? isMyPrivate(key)
+        : (isAllowed() || key.matches('hub-v8-dev-.*'));
+    }
+    // 許可簿：読むのは許可された人、書くのは管理者
+    match /meta/allowed {
+      allow read: if isAllowed();
+      allow write: if isAdmin();
+    }
+    // 合言葉の控え（引き継ぎ・招待コード用）。本人が書く。読めるのは本人と管理者（管理者はコードで再招待する時に使う）
+    match /users/{uid} {
+      allow read: if (request.auth != null && request.auth.uid == uid) || isAdmin();
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    // 引き継ぎの印：作るのは許可された人。出すのは印（ランダムな符号）を知っている人。期限内だけ。一覧は不可
+    match /handoff/{code} {
+      allow create: if isAllowed();
+      allow get: if resource.data.exp > request.time.toMillis();
+    }
+    // 時点保存（バックアップ）：許可された人の画面が作り、復旧に使う。一覧 snapidx/{prefix}、本体 snaps/{id}/kv/{キー}
+    match /snapidx/{prefix} {
+      allow read, write: if isAllowed();
+    }
+    match /snaps/{id} {
+      allow read, write: if isAllowed();
+      match /kv/{key} {
+        allow read, write: if isAllowed();
+      }
+    }
+    // 端末の台帳：許可された人が自分の端末を記す。消せるのは管理者（取り消し）
+    match /devices/{id} {
+      allow read, create, update: if isAllowed();
+      allow delete: if isAdmin();
+    }
+  }
+}
