@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790745811526';
+    window.__APP_BUILD='build-1790748887577';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.08';
+const APP_VERSION = '3.09';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9817,6 +9817,9 @@ function AppInner() {
   // 全画面中の顧客リスト：ページ遷移すると全画面が強制解除されるため、遷移せず
   // iframeオーバーレイで重ねて表示する（全画面が一瞬も切れない）。通常時は従来どおり遷移。
   const [custOverlay,setCustOverlay]=useState(false);
+  const custMountedRef=useRef(false);
+  if(custOverlay)custMountedRef.current=true;   // 一度でも開いたら置いたままにする（次に開く時が速い）
+  const custMounted=custMountedRef.current;
 
   // 車検は両店舗共通。hot(insp)=今日以降＋直近。過去は保管箱(insp-arch)から合体して表示する。
   const [hotInsp,    setInspData, updateLocalInspData]  =useShared(STOR+'insp',{},15000);
@@ -11946,11 +11949,20 @@ function AppInner() {
   //   新しいタブをこちらから全画面にすることはブラウザの決まりでできないため、この形にしている。
   const isFsNow=()=>{ try{ return !!(document.fullscreenElement||document.webkitFullscreenElement); }catch(e){ return false; } };
   const openCustList=useCallback((find)=>{
-    // 絞り込みの指定は、同じタブ（iframe）でも別タブでも読めるように両方へ渡す
+    // ★いつでも同じタブの中で開く（2026-09-30 ユーザー指示）。別タブにすると、
+    //   タブを移るたびにブラウザが全画面を解除するため、画面の大きさが揃わなくなる。
+    //   同じタブなら、全画面でもふつうの大きさでも、行き来してもそのまま引き継がれる。
     if(find&&find.name){ try{ sessionStorage.setItem(STOR+'cust-find',JSON.stringify({q:find.name,file:find.file||'',ts:Date.now()})); }catch(e){} }
-    if(isFsNow()){ setCustOverlay(true); return; }
-    const q=find&&find.name?('?find='+encodeURIComponent(find.name)+(find.file?('&file='+encodeURIComponent(find.file)):'')):'';
-    try{ window.open('./customers.html'+q,'_blank','noopener'); }catch(e){ setCustOverlay(true); }
+    setCustOverlay(true);
+    // すでに開いている（隠してある）時は、中の画面へ絞り込みを知らせる
+    if(find&&find.name){
+      setTimeout(()=>{
+        try{
+          const ifr=document.querySelector('iframe[title="顧客リスト"]');
+          if(ifr&&ifr.contentWindow)ifr.contentWindow.postMessage({type:'hub-cust-find',q:find.name,file:find.file||''},location.origin);
+        }catch(e){}
+      },120);
+    }
   },[]);
   const handleFindGoCust=(c)=>{
     setShowFind(false);
@@ -12369,7 +12381,7 @@ function AppInner() {
                     {/* ★全画面のときは同じタブの中で開き、ふつうの大きさのときは別タブで開く（2026-09-30） */}
                     <button onClick={()=>openCustList(null)} {...hov(false)}
                       style={navSty(false,{background:'#3CB371',color:'#FFFFFF'})}>
-                      <Users size={13}/>顧客リスト{!isFullscreen&&<ExtMark/>}
+                      <Users size={13}/>顧客リスト
                     </button>
                     <a href="https://www.midori-m.com/syaken/" target="_blank" rel="noopener noreferrer" {...hov(false)}
                       style={navSty(false,{background:'#FFFFFF',color:'#1A2550'})}>
@@ -13482,8 +13494,9 @@ function AppInner() {
       </main>
 
       {/* -- 顧客リスト（全画面時のオーバーレイ表示。閉じるのはiframe内の「スケジュールに戻る」→postMessage） -- */}
-      {custOverlay&&(
-        <div style={{position:'fixed',inset:0,zIndex:100000,background:'white'}}>
+      {/* ★顧客リストは同じタブの中で開く。閉じた後も消さずに隠しておく（次に開く時が速い） */}
+      {custMounted&&(
+        <div style={{position:'fixed',inset:0,zIndex:100000,background:'white',display:custOverlay?'block':'none'}}>
           <iframe src="./customers.html" title="顧客リスト" allow="fullscreen" allowFullScreen style={{width:'100%',height:'100%',border:'none',display:'block'}}/>
         </div>
       )}
