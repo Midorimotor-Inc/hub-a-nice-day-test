@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790803033208';
+  window.__APP_BUILD='build-1790835138317';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.14';
+const MOBILE_VERSION='3.15';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1621,6 +1621,9 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
     });
   });
   const dow=new Date(y,m,d).getDay();
+  // ★予約がゼロの日は「✎ 予約・編集」を真ん中に大きく出す（2026-10-01 ユーザー指示。
+  //   右上の小さいボタンは気づきにくいという声があったため）。予約がある日は今までどおり右上。
+  const emptyDay=sorted.length===0&&sched.length===0&&dropoffs.length===0;
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:200,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
@@ -1629,7 +1632,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
             <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b'}}>{m+1}月{d}日（{DOW[dow]}）</div>
             <div style={{fontSize:11,color:'#94a3b8',marginTop:1}}>車検 {irows.length}台 / 整備 {sched.length}件</div>
           </div>
-          <button onClick={()=>onGoSchedule(y,m,d)} style={{padding:'6px 12px',borderRadius:8,background:sc,border:'none',color:'white',fontSize:11,fontWeight:800,flexShrink:0}}> ✎ 予約・編集 </button>
+          {!emptyDay&&<button onClick={()=>onGoSchedule(y,m,d)} style={{padding:'6px 12px',borderRadius:8,background:sc,border:'none',color:'white',fontSize:11,fontWeight:800,flexShrink:0}}> ✎ 予約・編集 </button>}
           <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0}}>✕</button>
         </div>
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px'}}>
@@ -1702,7 +1705,14 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
               {memos.map((m,i)=><div key={i} style={{padding:'8px 10px',marginBottom:4,background:'#faf5ff',borderRadius:10,border:'1px solid #e9d5ff',fontSize:12}}>{m.content||m.text||''}</div>)}
             </div>
           )}
-          {sorted.length===0&&sched.length===0&&dropoffs.length===0&&<div style={{textAlign:'center',color:'#94a3b8',padding:'18px 0',fontSize:13}}>この日の予約はありません</div>}
+          {emptyDay&&(
+            <div>
+              <div style={{textAlign:'center',color:'#94a3b8',padding:'10px 0 14px',fontSize:13}}>この日の予約はありません</div>
+              <button onClick={()=>onGoSchedule(y,m,d)}
+                style={{display:'block',width:'100%',padding:'16px 0',borderRadius:14,border:'none',background:sc,color:'white',fontSize:16,fontWeight:900,boxShadow:'0 3px 10px rgba(55,48,163,.3)'}}>✎ 予約・編集</button>
+              <div style={{textAlign:'center',fontSize:11,color:'#94a3b8',marginTop:8}}>タップすると、この日のスケジュール画面へ移ります</div>
+            </div>
+          )}
           {mySchedPanel&&(
             <div style={{marginTop:6,paddingTop:12,borderTop:'2px solid #ede9fe'}}>
               <div style={{fontWeight:800,fontSize:12,color:'#5b21b6',marginBottom:8}}>📝 マイスケジュール</div>
@@ -1759,6 +1769,10 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   const dkParts=mode.dk.split('-').map(Number);
   const defDate=`${dkParts[0]}-${String(dkParts[1]).padStart(2,'0')}-${String(dkParts[2]).padStart(2,'0')}`;
   // 代車選択: 'keep'=変更なし / 'none'=なし / 'loaner' / 'rental'
+  // ★整備は日にちと時間を変えられる（2026-10-01 ユーザー指示）。移り先をここで持つ。
+  const [mvDk,setMvDk]=useState(mode.dk);
+  const [mvSlot,setMvSlot]=useState(()=>getBaseSlot(mode.slot||'')||'');
+  const moved=!isInsp&&!mode.isNew&&(mvDk!==mode.dk||mvSlot!==(getBaseSlot(mode.slot||'')||''));
   const [carKind,setCarKind]=useState('keep');
   // ★限定＝この車でないとダメな予約。代車スケジュールの最適化で動かさない印。
   //   最初の予約から付けられるようにする（2026-08-27にユーザーが要望）。
@@ -1789,6 +1803,22 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   },[mode.dk,mode.idx,mode.slot,mode.type,loanerRes]);
   const bk=isInsp?`insp-${mode.dk}-${mode.idx}`:`sched-${mode.dk}-${mode.slot}`;
   const currentLoanerLbl=getLoanerLabel(loanerRes,mode.dk,initial?.name,initial?.bookingKey||bk,loanerCars);
+  // ★ボタンを「代車なし／代車あり／レンタカー」の3つにした（2026-10-01 ユーザー指示）。
+  //   「変更なし」は画面から消したが、中では今までどおり keep（＝まだ触っていない）を初期値に持つ。
+  //   開いた時は今の状態のボタンが光って出て、触らなければ代車も期間もそのまま動かない。
+  const findCid=(res)=>{
+    try{
+      const r0=res||{};
+      for(const cid of Object.keys(r0))for(const k of Object.keys(r0[cid]||{})){
+        const r=r0[cid][k]; if(r&&r.bookingKey===(initial?.bookingKey||bk))return String(cid);
+      }
+    }catch(e){}
+    return '';
+  };
+  const curCarId=findCid(loanerRes)||(initial&&initial.loanerId!=null?String(initial.loanerId):'');
+  const curRentalId=findCid(rentalRes)||(initial&&initial.rentalCarId!=null?String(initial.rentalCarId):'');
+  const curKind=((initial&&initial.rentalLabel)||curRentalId)?'rental':(currentLoanerLbl||curCarId)?'loaner':'none';
+  const shownKind=carKind==='keep'?curKind:carKind;
   const currentBinding=currentLoanerLbl?`🚗 ${currentLoanerLbl}`:(initial?.rentalLabel||'');
   // 代車期間チェック：スケジュール期間（入庫日→納車日）と代車の貸出期間の不一致を検出（PC版と同方針：アラートのみ・手動修正）。
   const loanerMismatch=(()=>{
@@ -1841,7 +1871,18 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
     setErr('');
     // 受付は即時（モーダルはonSave側で閉じる）。サーバー保存はバックグラウンドで継続し、
     // 結果は画面上部のバナーで通知される。ここで捕まえるのは事前チェック（入庫制限等）のみ。
-    try{onSave(withDeliveryNote(form,mode.dk,isInsp),loanerAction);}
+    // ★整備の移動：移り先を渡す。代車が付いたまま日を動かす時は、同じ車を新しい日付で付け替える
+    //   （付け替えないと、代車の予約だけ元の日に取り残される）
+    const outForm=isInsp?form:{...form,_dk:mvDk,_slot:mvSlot};
+    if(moved&&!loanerAction&&curKind!=='none'){
+      const cid=curKind==='rental'?curRentalId:curCarId;
+      if(cid){
+        const p=String(mvDk).split('-').map(Number);
+        const d1={y:p[0],m0:p[1]-1,d:p[2]};
+        loanerAction={kind:curKind,carId:cid,from:d1,to:d1,locked:carLocked};
+      }
+    }
+    try{onSave(withDeliveryNote(outForm,mvDk,isInsp),loanerAction);}
     catch(e){setErr(String(e?.message||e));return;}
   };
   const doDelete=()=>{
@@ -1936,6 +1977,24 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
             </React.Fragment>
           ):(
             <React.Fragment>
+              {/* ★日にち・時間（2026-10-01 ユーザー指示）。新規の時は選んだ枠のままなので出さない */}
+              {!mode.isNew&&(
+                <div style={{display:'flex',gap:8}}>
+                  <div style={{flex:1.3}}>
+                    <label style={LBL}>日にち</label>
+                    <input type="date" value={dkToInputDate(mvDk)}
+                      onChange={e=>{const v=inputDateToDk(e.target.value)||mode.dk;if(rejectIfClosed(v,'予約'))return;setMvDk(v);}}
+                      style={{...INP,...(moved?{border:'2px solid #0e7490',background:'#ecfeff',color:'#0e7490',fontWeight:800}:{})}}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <label style={LBL}>時間</label>
+                    <select value={mvSlot} onChange={e=>setMvSlot(e.target.value)}
+                      style={{...INP,...(moved?{border:'2px solid #0e7490',background:'#ecfeff',color:'#0e7490',fontWeight:800}:{})}}>
+                      {SCHED_SLOTS.map(t=><option key={t} value={t}>{specialSlotLabel(t)}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
               <div style={{display:'flex',gap:10}}>
                 <div style={{flex:1.4}}>
                   <label style={LBL}>作業内容 *</label>
@@ -1987,22 +2046,23 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
           </div>
           <div style={{border:'2px solid #e0f2fe',borderRadius:12,padding:'10px 12px',background:'#f8fdff'}}>
             <div style={{fontSize:12,fontWeight:800,color:'#0369a1',marginBottom:6}}>🔑 代車・レンタカー</div>
-            {currentBinding&&carKind==='keep'&&<div style={{fontSize:12,color:'#0c4a6e',marginBottom:6,fontWeight:700}}>現在: {currentBinding}</div>}
+            {currentBinding&&<div style={{fontSize:12,color:'#0c4a6e',marginBottom:6,fontWeight:700}}>現在: {currentBinding}</div>}
             {loanerMismatch&&(
               <div style={{margin:'0 0 8px',padding:'8px 10px',borderRadius:8,background:'#fffbeb',border:'2px solid #f59e0b',color:'#92400e',fontSize:11,lineHeight:1.5,fontWeight:700}}>
                 ⚠ 代車の期間がスケジュールと一致しません<br/>
                 スケジュール（入庫日→納車日）：{mmFmt(loanerMismatch.sf)}〜{mmFmt(loanerMismatch.st)} ／ 代車：{mmFmt(loanerMismatch.lf)}〜{mmFmt(loanerMismatch.lt)}<br/>
-                <span style={{fontWeight:500}}>「代車」を選び直すと期間が自動で揃います（不要なら「なし」／イレギュラーはこのまま保存OK）。</span>
+                <span style={{fontWeight:500}}>「代車あり」を選び直すと期間が自動で揃います（不要なら「代車なし」／イレギュラーはこのまま保存OK）。</span>
               </div>
             )}
             <div style={{display:'flex',gap:5,marginBottom:8}}>
-              {[['keep','変更なし'],['none','なし'],['loaner','代車'],['rental','レンタカー']].map(([k,label])=>(
-                <button key={k} onClick={()=>{setCarKind(k);setCarSel('');}}
-                  style={{flex:1,padding:'8px 2px',borderRadius:8,fontWeight:700,fontSize:11,border:`2px solid ${carKind===k?'#0284c7':'#e2e8f0'}`,background:carKind===k?'#e0f2fe':'white',color:carKind===k?'#0369a1':'#64748b'}}>
+              {[['none','代車なし'],['loaner','代車あり'],['rental','レンタカー']].map(([k,label])=>(
+                <button key={k} onClick={()=>{setCarKind(k);setCarSel(k===curKind?((k==='rental'?curRentalId:curCarId)||''):'');}}
+                  style={{flex:1,padding:'9px 2px',borderRadius:8,fontWeight:700,fontSize:11.5,border:`2px solid ${shownKind===k?'#0284c7':'#e2e8f0'}`,background:shownKind===k?'#e0f2fe':'white',color:shownKind===k?'#0369a1':'#64748b'}}>
                   {label}
                 </button>
               ))}
             </div>
+            {carKind==='keep'&&curKind!=='none'&&<div style={{fontSize:10.5,color:'#94a3b8',lineHeight:1.5,marginBottom:6}}>今の{curKind==='rental'?'レンタカー':'代車'}が選ばれています。触らなければそのままです。</div>}
             {(carKind==='loaner'||carKind==='rental')&&(
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 <div style={{fontSize:10,color:'#0369a1',fontWeight:700,lineHeight:1.4}}>
@@ -2095,6 +2155,12 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
   const dayLimit=(inspLimits||{})[dk];
   const inspActive=allRows.filter(r=>r&&r.name&&r.bookingStatus!=='cancelled').length;
   const inspLimitFull=dayLimit!=null&&inspActive>=dayLimit;
+  // ★「＋ 車検を追加」はゼロの時と一覧の下の2か所から呼ぶので、まとめ役にした（2026-10-01）
+  const addInspNew=()=>{
+    if(isHoliday){blockNew();return;}
+    if(inspLimitFull){alert(`🚫 ${m+1}/${d} は台数制限（最大${dayLimit}台）に達しているため、車検の予約はできません。`);return;}
+    onOpenEdit({type:'insp',dk,idx:newInspIdx,isNew:true});
+  };
   const blockNew=()=>alert(`🏖 ${m+1}月${d}日は休業日です。\nこの日には新規の予約を追加できません（休業日の設定はPC版で変更できます）。`);
   const restr=(schedRestrictions||{})[dk];
   const [showRestr,setShowRestr]=useState(false); // 入庫制限バッジをタップした時の内容ポップアップ
@@ -2188,14 +2254,18 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
             <span style={{fontWeight:900,fontSize:13,color:'#3730a3'}}>🚗 車検</span>
             <span style={{background:'#e0e7ff',color:'#3730a3',borderRadius:10,padding:'1px 8px',fontSize:11,fontWeight:700}}>{own.filter(({r})=>!r.pendingApproval).length}台</span>
             {dayLimit!=null&&<span style={{background:'#fee2e2',color:'#dc2626',border:'1px solid #fca5a5',borderRadius:10,padding:'1px 8px',fontSize:10,fontWeight:800}}>台数制限 最大{dayLimit}台</span>}
-            <button onClick={()=>{
-                if(isHoliday){blockNew();return;}
-                if(inspLimitFull){alert(`🚫 ${m+1}/${d} は台数制限（最大${dayLimit}台）に達しているため、車検の予約はできません。`);return;}
-                onOpenEdit({type:'insp',dk,idx:newInspIdx,isNew:true});
-              }}
-              style={{marginLeft:'auto',padding:'5px 12px',borderRadius:8,border:'none',background:(isHoliday||inspLimitFull)?'#cbd5e1':'#3730a3',color:'white',fontSize:11,fontWeight:800}}>{isHoliday?'休業日':inspLimitFull?'🚫 予約不可':'＋ 追加'}</button>
+            {(isHoliday||inspLimitFull)&&<span style={{marginLeft:'auto',padding:'3px 10px',borderRadius:8,background:'#cbd5e1',color:'white',fontSize:11,fontWeight:800}}>{isHoliday?'休業日':'🚫 予約不可'}</span>}
           </div>
-          {sorted.length===0?<div style={{background:'white',borderRadius:12,padding:14,textAlign:'center',color:'#94a3b8',fontSize:12,border:'1px solid #f1f5f9'}}>予約なし</div>:
+          {/* ★「＋ 追加」は右端の小さいボタンをやめ、中心部に大きく出す（2026-10-01 ユーザー指示）。
+              予約がゼロの時は箱の真ん中、予約がある時は予約済みのすぐ下。 */}
+          {sorted.length===0?(
+            <div style={{background:'white',borderRadius:12,padding:'12px 12px 14px',border:'1px solid #f1f5f9'}}>
+              <div style={{textAlign:'center',color:'#94a3b8',fontSize:12,padding:'8px 0 12px'}}>まだ予約がありません</div>
+              <button onClick={addInspNew} disabled={isHoliday||inspLimitFull}
+                style={{display:'block',width:'100%',padding:'16px 0',borderRadius:14,border:'none',background:(isHoliday||inspLimitFull)?'#cbd5e1':'#3730a3',color:'white',fontSize:16,fontWeight:900,boxShadow:(isHoliday||inspLimitFull)?'none':'0 3px 10px rgba(55,48,163,.3)'}}>
+                {isHoliday?'休業日です':inspLimitFull?'🚫 予約できません':'＋ 車検を追加'}</button>
+            </div>
+          ):
             sorted.map(({r,idx},i)=>{
               const c=COURSES.find(co=>co.id===Number(r.course));
               const isOther=normStore(r.store)&&normStore(r.store)!==vsId;
@@ -2230,6 +2300,13 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
                 </div>
               );
             })}
+          {sorted.length>0&&(
+            <button onClick={addInspNew} disabled={isHoliday||inspLimitFull}
+              style={{display:'block',width:'100%',marginTop:2,padding:'15px 0',borderRadius:14,background:'white',
+                border:`2.5px dashed ${(isHoliday||inspLimitFull)?'#cbd5e1':'#a5b4fc'}`,
+                color:(isHoliday||inspLimitFull)?'#94a3b8':'#3730a3',fontSize:15,fontWeight:900}}>
+              {isHoliday?'休業日です':inspLimitFull?'🚫 予約できません':'＋ 車検を追加'}</button>
+          )}
         </div>
         <div style={{margin:'12px 12px 0'}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,flexWrap:'wrap'}}>
@@ -4218,16 +4295,18 @@ const App=()=>{
 
   // 代車/レンタカーの紐付け反映。entryへのラベル書き込みと lres/rres の予約更新を行い、
   // 更新後のentryを返す（PC版 handleSaveModal の pendingLoanerData / pendingRental 処理と同じ結果になる）
-  const applyLoanerAction=async(entry,action,bkFinal,userName)=>{
+  const applyLoanerAction=async(entry,action,bkFinal,userName,bkOld)=>{
     if(!action)return entry; // 変更なし
     const lresKey=storKey('lres',vsId);
     const myLres=vsId==='honten'?loanerResH:loanerResS;
     const setMyLres=vsId==='honten'?setLoanerResH:setLoanerResS;
+    // ★整備を別の日・別の時間へ移した時は、古い印（bkOld）の予約も消す（2026-10-01）。
+    //   消さないと代車の予約だけ元の日に取り残される。
     const cleanOwn=res=>{
       const out={};
       for(const cid of Object.keys(res||{})){
         const days={...(res[cid]||{})};
-        Object.keys(days).forEach(k=>{if(days[k]?.bookingKey===bkFinal)delete days[k];});
+        Object.keys(days).forEach(k=>{const b=days[k]&&days[k].bookingKey;if(b===bkFinal||(bkOld&&b===bkOld))delete days[k];});
         out[cid]=days;
       }
       return out;
@@ -4344,33 +4423,41 @@ const App=()=>{
       const sdKey=storKey('sched',vsId);
       const sd=vsId==='honten'?schedDataH:schedDataS;
       const setSd=vsId==='honten'?setSchedDataH:setSchedDataS;
-      // 新規はサーバーの最新値で空きサブ枠を確定してから代車bookingKeyを発行する
+      // ★移り先（日にち・時間）。移していない時は今までどおり req のまま（2026-10-01）
+      const tDk=form._dk||req.dk, tSlot=form._slot||getBaseSlot(req.slot);
+      const isMove=!req.isNew&&((tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot)));
+      // 新規と移動はサーバーの最新値で空きサブ枠を確定してから代車bookingKeyを発行する
       let slotFinal=req.slot;
-      if(req.isNew){
+      if(req.isNew||isMove){
         const fresh=await sGet(sdKey);
-        const day=(isPlainObj(fresh)?fresh:sd)[req.dk]||{};
-        const baseSlot=getBaseSlot(req.slot);
+        const day=(isPlainObj(fresh)?fresh:sd)[tDk]||{};
+        const baseSlot=req.isNew?getBaseSlot(req.slot):tSlot;
         let sub=0,k=baseSlot;
-        while(day[k]&&day[k].name){sub++;k=makeSlotKey(baseSlot,sub);}
+        while(day[k]&&day[k].name&&!(tDk===req.dk&&k===req.slot)){sub++;k=makeSlotKey(baseSlot,sub);}
         slotFinal=k;
       }
-      const bkFinal=`sched-${req.dk}-${slotFinal}`;
-      const entry=await applyLoanerAction({...form},loanerAction,bkFinal,userName);
+      const bkFinal=`sched-${tDk}-${slotFinal}`;
+      const bkOld=`sched-${req.dk}-${req.slot}`;
+      const entry=await applyLoanerAction({...form},loanerAction,bkFinal,userName,isMove?bkOld:'');
       const placedId=Date.now();
       await writeShared(sdKey,sd,base=>{
-        const day={...(base[req.dk]||{})};
+        const out={...base};
+        // 移した時は元の枠を空ける（先に消してから入れる＝同じ日の中で動かしても取りこぼさない）
+        if(isMove){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        const day={...(out[tDk]||{})};
         // 直前に他端末で埋まった場合はさらに次の空きへ（自分の書き込み済みエントリ=placedIdは除外し、
         // 再試行時に二重登録しない。代車のbkとずれた場合もデータは壊れず表示は氏名フォールバックで追従）
-        if(req.isNew&&day[slotFinal]&&day[slotFinal].name&&day[slotFinal].id!==placedId){
+        if((req.isNew||isMove)&&day[slotFinal]&&day[slotFinal].name&&day[slotFinal].id!==placedId){
           const baseSlot=getBaseSlot(slotFinal);
           let sub=0,k=baseSlot;
           while(day[k]&&day[k].name&&day[k].id!==placedId){sub++;k=makeSlotKey(baseSlot,sub);}
           slotFinal=k;
         }
         day[slotFinal]={...entry,id:placedId};
-        return{...base,[req.dk]:day};
+        out[tDk]=day;
+        return out;
       },setSd,echo=>{
-        const r=(echo[req.dk]||{})[slotFinal];
+        const r=(echo[tDk]||{})[slotFinal];
         return !!r&&r.id===placedId;
       },true);
     }
@@ -4394,10 +4481,13 @@ const App=()=>{
     if(form.deliveryDate&&isClosedDk(form.deliveryDate))throw new Error(`🏖 納車日 ${dkLabel(form.deliveryDate)} は休業日です。別の日を選んでください`);
     // 入庫制限チェック（PC版handleSaveModalと同じルール。受付前に弾いてモーダル内に表示する）
     if(req.type!=='insp'){
-      const restriction=schedRestrictions[req.dk];
+      // ★整備の移動先（form._dk / form._slot）で見る。移動していない時は今までどおり req のまま
+      const _tDk=form._dk||req.dk, _tSlot=form._slot||getBaseSlot(req.slot);
+      if(_tDk!==req.dk&&isClosedDk(_tDk))throw new Error(`🏖 ${dkLabel(_tDk)} は休業日です。別の日を選んでください`);
+      const restriction=schedRestrictions[_tDk];
       if(restriction){
         const toMin=t=>{const[h,m]=String(t).split(':').map(Number);return h*60+m;};
-        const slotMin=toMin(getBaseSlot(req.slot));
+        const slotMin=toMin(_tSlot);
         if(slotMin>=toMin(restriction.startTime)&&slotMin<toMin(restriction.endTime)){
           const isExempt=restriction.exemptWorks&&restriction.exemptWorks.includes(form.work);
           if(!isExempt)throw new Error(`🚫 この時間帯（${restriction.startTime}〜${restriction.endTime}）は入庫制限中です。制限解除されている作業内容のみ予約可能です`);
@@ -4411,7 +4501,7 @@ const App=()=>{
     const lockHandle=detachLock();
 
     // ── 楽観オーバーレイの構築（予定表・代車表へ今すぐ反映）──
-    const bkOpt=req.type==='insp'?`insp-${req.dk}-${req.idx}`:`sched-${req.dk}-${req.slot}`;
+    const bkOpt=req.type==='insp'?`insp-${req.dk}-${req.idx}`:`sched-${form._dk||req.dk}-${form._slot||req.slot}`;
     const colorOf=name=>RES_COLORS[[...String(name||'')].reduce((a,c)=>a+c.charCodeAt(0),0)%RES_COLORS.length];
     let displayEntry={...form};
     const ovs=[];
@@ -4453,11 +4543,19 @@ const App=()=>{
     }else{
       const entryOpt={...displayEntry};
       const reflected=r=>r&&r.name===form.name&&(r.work||'')===(form.work||'')&&(r.content||'')===(form.content||'');
+      // ★移動した時は元の枠から消して移り先へ出す（2026-10-01）
+      const tDk=form._dk||req.dk, tSlot=form._slot||getBaseSlot(req.slot);
+      const movedOpt=(tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot));
       ovs.push({pid,key:storKey('sched',vsId),apply:data=>{
-        const day={...(data[req.dk]||{})};
-        if(Object.entries(day).some(([k,r])=>reflected(r)&&getBaseSlot(k)===getBaseSlot(req.slot)))return data;
-        day[req.slot]=entryOpt;
-        return{...data,[req.dk]:day};
+        const out={...data};
+        if(movedOpt){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        const day={...(out[tDk]||{})};
+        if(!movedOpt&&Object.entries(day).some(([k,r])=>reflected(r)&&getBaseSlot(k)===getBaseSlot(tSlot)))return data;
+        let k2=movedOpt?tSlot:req.slot,sub=0;
+        while(movedOpt&&day[k2]&&day[k2].name){sub++;k2=makeSlotKey(tSlot,sub);}
+        day[k2]=entryOpt;
+        out[tDk]=day;
+        return out;
       }});
     }
     addOverlays(ovs);
@@ -4505,7 +4603,10 @@ const App=()=>{
       const setSd=vsId==='honten'?setSchedDataH:setSchedDataS;
       const deletedId=req.initial?.id;
       await writeShared(sdKey,sd,base=>{
-        const day={...(base[req.dk]||{})};
+        const out={...base};
+        // 移した時は元の枠を空ける（先に消してから入れる＝同じ日の中で動かしても取りこぼさない）
+        if(isMove){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        const day={...(out[tDk]||{})};
         delete day[req.slot];
         return{...base,[req.dk]:day};
       },setSd,echo=>{
