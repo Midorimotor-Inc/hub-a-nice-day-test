@@ -54,7 +54,13 @@ const EMPTY_D = EMPTY.getDate();
 
 (async () => {
   const seed = {
-    [STOR + 'insp']: { [DK]: [{ name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' }] },
+    [STOR + 'insp']: { [DK]: [
+      { name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' },
+      { name: '稲木', carType: 'ワゴンR', no: '3311', course: 3, store: 'honten', seq: 2, time: '09:30', bookingStatus: 'confirmed', note: '' },
+      { name: '磯部', carType: 'セルボ', no: '8612', course: 2, store: 'honten', seq: 3, time: '10:00', bookingStatus: 'confirmed', note: '' },
+      { name: '佐野', carType: 'スイフト', no: '7879', course: 2, store: 'honten', seq: 4, time: '11:00', bookingStatus: 'confirmed', note: '' },
+      { name: '杉本', carType: 'ワゴンR', no: '88', course: 3, store: 'honten', seq: 5, time: '13:00', bookingStatus: 'confirmed', note: '' },
+    ] },
     [STOR + 'honten-sched']: { [DK]: { '10:00': { id: 11, name: '相原', carType: 'ワゴンR', work: 'オイル', content: '', shimi: '' } } },
     [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
@@ -104,10 +110,35 @@ const EMPTY_D = EMPTY.getDate();
 
   // 予約がある日は今までどおり右上に小さく
   await page.evaluate(d => { const c = [...document.querySelectorAll('div')].filter(el => el.style && el.style.borderRadius === '10px' && el.firstElementChild && el.firstElementChild.textContent === String(d))[0]; if (c) c.click(); }, D);
-  t('予約がある日は小さいボタンのまま', await page.waitForFunction(() => {
-    const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('予約・編集') && e.offsetParent !== null);
-    return !!b && getComputedStyle(b).fontSize === '11px';
-  }, null, { timeout: 10000 }).then(() => true).catch(() => false));
+  t('予約がある日（車検5台）は大きいボタンが下に固定で出る', await page.waitForFunction(() => {
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('車検・整備の予約を編集') && e.offsetParent !== null);
+    if (!b) return false;
+    const r = b.getBoundingClientRect();
+    return r.width > 250 && getComputedStyle(b).fontSize === '16px';
+  }, null, { timeout: 12000 }).then(() => true).catch(() => false), await page.evaluate(() => document.body.innerText.slice(0, 200)));
+  const barInfo = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('車検・整備の予約を編集') && e.offsetParent !== null);
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    const add = [...document.querySelectorAll('button')].find(e => e.innerText.includes('＋ 予定を追加') && e.offsetParent !== null);
+    const ar = add ? add.getBoundingClientRect() : null;
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), vh: window.innerHeight,
+             editH: Math.round(r.height), addH: ar ? Math.round(ar.height) : null,
+             addFs: add ? getComputedStyle(add).fontSize : null };
+  });
+  t('★スクロールしなくても画面の中に見えている（5台でも）', !!barInfo && barInfo.bottom <= barInfo.vh + 2 && barInfo.top > 0, barInfo);
+  t('右上の小さい「✎ 予約・編集」は無くなった', await page.evaluate(() => ![...document.querySelectorAll('button')].some(e => e.innerText.trim() === '✎ 予約・編集' && e.offsetParent !== null)));
+  t('マイスケジュールの「＋ 予定を追加」は予約のボタンより小さい', !!barInfo && barInfo.addH !== null && barInfo.addH < barInfo.editH && barInfo.addFs === '11.5px', barInfo);
+  t('マイスケジュールに役割の説明が出る', (await page.evaluate(() => document.body.innerText)).includes('自分用のメモ'));
+  // スクロールしても下に残る
+  await page.evaluate(() => { const sc = [...document.querySelectorAll('div')].find(e => e.style && e.style.overflowY === 'auto' && e.scrollHeight > e.clientHeight); if (sc) sc.scrollTop = sc.scrollHeight; });
+  await page.waitForTimeout(500);
+  t('一番下までスクロールしても残っている', await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('車検・整備の予約を編集') && e.offsetParent !== null);
+    if (!b) return false;
+    const r = b.getBoundingClientRect();
+    return r.bottom <= window.innerHeight + 2 && r.top > 0;
+  }));
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); });
   await page.waitForTimeout(500);
 

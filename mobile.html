@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790835138317';
+  window.__APP_BUILD='build-1790851159547';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.15';
+const MOBILE_VERSION='3.16';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1632,7 +1632,6 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
             <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b'}}>{m+1}月{d}日（{DOW[dow]}）</div>
             <div style={{fontSize:11,color:'#94a3b8',marginTop:1}}>車検 {irows.length}台 / 整備 {sched.length}件</div>
           </div>
-          {!emptyDay&&<button onClick={()=>onGoSchedule(y,m,d)} style={{padding:'6px 12px',borderRadius:8,background:sc,border:'none',color:'white',fontSize:11,fontWeight:800,flexShrink:0}}> ✎ 予約・編集 </button>}
           <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0}}>✕</button>
         </div>
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px'}}>
@@ -1713,13 +1712,23 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
               <div style={{textAlign:'center',fontSize:11,color:'#94a3b8',marginTop:8}}>タップすると、この日のスケジュール画面へ移ります</div>
             </div>
           )}
+          {/* ★マイスケジュールは薄紫の箱でくくる（2026-10-01 ユーザー指示）。
+              下の「予約を編集」と混同しないよう、見出しに役割も書く。 */}
           {mySchedPanel&&(
-            <div style={{marginTop:6,paddingTop:12,borderTop:'2px solid #ede9fe'}}>
-              <div style={{fontWeight:800,fontSize:12,color:'#5b21b6',marginBottom:8}}>📝 マイスケジュール</div>
+            <div style={{marginTop:16,padding:12,background:'#faf5ff',border:'1.5px solid #e9d5ff',borderRadius:12}}>
+              <div style={{fontWeight:800,fontSize:12,color:'#5b21b6',marginBottom:8}}>📝 マイスケジュール<span style={{fontWeight:400,color:'#a78bfa'}}> ／ 自分用のメモ</span></div>
               {mySchedPanel}
             </div>
           )}
         </div>
+        {/* ★C案（2026-10-01 ユーザー決定）：予約がある日は一番下に貼り付けて、
+            車検が何台あってもスクロールしても押せるようにする。予約ゼロの日は本文の真ん中に出す。 */}
+        {!emptyDay&&(
+          <div style={{flexShrink:0,padding:'10px 16px 14px',borderTop:'1px solid #e2e8f0',background:'rgba(255,255,255,.96)',boxShadow:'0 -4px 14px rgba(0,0,0,.08)'}}>
+            <button onClick={()=>onGoSchedule(y,m,d)}
+              style={{display:'block',width:'100%',padding:'16px 0',borderRadius:14,border:'none',background:sc,color:'white',fontSize:16,fontWeight:900,boxShadow:'0 3px 10px rgba(55,48,163,.3)'}}>✎ 車検・整備の予約を編集</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2878,7 +2887,7 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
         </div>
       ):(
         <button onClick={()=>{setForm({title:'',time:'',end:'',allday:false,memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
-          style={{marginTop:6,width:'100%',padding:'9px 0',borderRadius:9,border:`1.5px dashed ${MS_COL.mine.bd}`,background:MS_COL.mine.bg,color:MS_COL.mine.tx,fontWeight:800,fontSize:12,cursor:'pointer'}}>＋ 予定を追加</button>
+          style={{marginTop:6,width:'100%',padding:compact?'8px 0':'9px 0',borderRadius:9,border:`1.5px dashed ${MS_COL.mine.bd}`,background:MS_COL.mine.bg,color:MS_COL.mine.tx,fontWeight:800,fontSize:compact?11.5:12,cursor:'pointer'}}>＋ 予定を追加</button>
       )}
     </div>
   );
