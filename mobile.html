@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790927899876';
+  window.__APP_BUILD='build-1790983208997';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.23';
+const MOBILE_VERSION='3.24';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -902,6 +902,9 @@ const cfxChunkKey = i => STOR + 'cf-search-chunk-' + i;
 const cfxRow = (c, fileName) => ({
   n: String(c.name || ''), c: String(c.carType || ''), no: (c.no == null ? '' : c.no),
   p: [c.phoneMobile, c.phoneHome].map(v => String(v || '').trim()).filter(Boolean).join('/'),
+  // ★住所も索引に入れる（2026-10-02）。PC の検索は住所も見ていたのに索引に無く、
+  //   スマホだけ住所で引けなかった。索引は作り直せば増える（1行あたり十数文字）。
+  a: String(c.address || ''),
   e: String(c.expiry || ''), f: String(fileName || ''), i: String(c.custId || ''),
 });
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
@@ -937,12 +940,12 @@ const cfxBuild = async (files, sSet) => {
 //   数字だけを打った時は 電話と顧客No の数字で探す（電話の下4桁だけでも出る）
 const cfxSearch = (rows, q, limit) => {
   const raw = String(q || '').trim();
-  if (raw.length < 2) return [];
+  if (raw.length < 1) return [];   // ★1文字でも探す（2026-10-02。PC と揃えるため）
   const nq = cfxNorm(raw), dq = cfxDigits(raw);
   const numOnly = dq.length >= 2 && cfxNorm(raw) === dq;
   const hit = r => numOnly
     ? (cfxDigits(r.p).includes(dq) || cfxDigits(r.no).includes(dq))
-    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq));
+    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq) || cfxNorm(r.a).includes(nq));
   const groups = new Map();
   for (const r of rows) {
     if (!hit(r)) continue;
@@ -951,7 +954,7 @@ const cfxSearch = (rows, q, limit) => {
     if (!g) groups.set(k, { key: k, now: r, past: [] });
     else if (String(r.f) > String(g.now.f)) { g.past.unshift(g.now); g.now = r; }
     else g.past.push(r);
-    if (groups.size >= (limit || 200) && !groups.has(k)) break;
+    if (groups.size >= (limit || 600) && !groups.has(k)) break;
   }
   return [...groups.values()].sort((a, b) => String(b.now.f).localeCompare(String(a.now.f)));
 };
@@ -3520,7 +3523,10 @@ const FindSheet=({inspData,schedDataH,schedDataS,cfx,custBusy,onGo,onGoCust,onCl
     if(hit(r.name,r.carType,r.content,r.work))schedHits.push({dk,sk,r,store:st,n:_dkNum(dk)});
   });});});
   // 顧客は索引（24ヶ月ぶん）から。同じ人はまとめて一番新しい月を出す
-  const custHits=nq?cfxSearch(cfx||[],q,60):[];
+  const custHits=nq?cfxSearch(cfx||[],q,600):[];   // ★上限を上げて PC と揃える（2026-10-02）
+  // ★PC と同じ出し方：人数を主に、カッコで行数（同じ人が複数の月に居るぶん）（2026-10-02）
+  const custRows=custHits.reduce((a,g)=>a+1+((g.past&&g.past.length)||0),0);
+  const custLabel=nq?(custRows===custHits.length?String(custHits.length):custHits.length+'人（'+custRows+'件）'):'';
   const byDate=(a,b)=>b.n-a.n;
   inspHits.sort(byDate);schedHits.sort(byDate);
   const total=inspHits.length+schedHits.length+custHits.length;
@@ -3558,7 +3564,7 @@ const FindSheet=({inspData,schedDataH,schedDataS,cfx,custBusy,onGo,onGoCust,onCl
           <button onClick={()=>setTab('all')} style={CHIP(tab==='all')}>すべて {nq?total:''}</button>
           <button onClick={()=>setTab('insp')} style={CHIP(tab==='insp','#3730a3')}>車検 {nq?inspHits.length:''}</button>
           <button onClick={()=>setTab('sched')} style={CHIP(tab==='sched','#0e7490')}>整備 {nq?schedHits.length:''}</button>
-          <button onClick={()=>setTab('cust')} style={CHIP(tab==='cust','#047857')}>顧客 {nq?custHits.length:''}</button>
+          <button onClick={()=>setTab('cust')} style={CHIP(tab==='cust','#047857')}>顧客 {custLabel}</button>
         </div>
       </div>
       <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>

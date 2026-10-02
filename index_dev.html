@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790927899876';
+    window.__APP_BUILD='build-1790983208997';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.23';
+const APP_VERSION = '3.24';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5155,6 +5155,9 @@ const cfxChunkKey = i => STOR + 'cf-search-chunk-' + i;
 const cfxRow = (c, fileName) => ({
   n: String(c.name || ''), c: String(c.carType || ''), no: (c.no == null ? '' : c.no),
   p: [c.phoneMobile, c.phoneHome].map(v => String(v || '').trim()).filter(Boolean).join('/'),
+  // ★住所も索引に入れる（2026-10-02）。PC の検索は住所も見ていたのに索引に無く、
+  //   スマホだけ住所で引けなかった。索引は作り直せば増える（1行あたり十数文字）。
+  a: String(c.address || ''),
   e: String(c.expiry || ''), f: String(fileName || ''), i: String(c.custId || ''),
 });
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
@@ -5190,12 +5193,12 @@ const cfxBuild = async (files, sSet) => {
 //   数字だけを打った時は 電話と顧客No の数字で探す（電話の下4桁だけでも出る）
 const cfxSearch = (rows, q, limit) => {
   const raw = String(q || '').trim();
-  if (raw.length < 2) return [];
+  if (raw.length < 1) return [];   // ★1文字でも探す（2026-10-02。PC と揃えるため）
   const nq = cfxNorm(raw), dq = cfxDigits(raw);
   const numOnly = dq.length >= 2 && cfxNorm(raw) === dq;
   const hit = r => numOnly
     ? (cfxDigits(r.p).includes(dq) || cfxDigits(r.no).includes(dq))
-    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq));
+    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq) || cfxNorm(r.a).includes(nq));
   const groups = new Map();
   for (const r of rows) {
     if (!hit(r)) continue;
@@ -5204,7 +5207,7 @@ const cfxSearch = (rows, q, limit) => {
     if (!g) groups.set(k, { key: k, now: r, past: [] });
     else if (String(r.f) > String(g.now.f)) { g.past.unshift(g.now); g.now = r; }
     else g.past.push(r);
-    if (groups.size >= (limit || 200) && !groups.has(k)) break;
+    if (groups.size >= (limit || 600) && !groups.has(k)) break;
   }
   return [...groups.values()].sort((a, b) => String(b.now.f).localeCompare(String(a.now.f)));
 };
@@ -5228,7 +5231,9 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
       try{
         const r=await cfxLoad(sGet);
         if(r&&r.rows.length){
-          out=r.rows.map(x=>({name:x.n,carType:x.c,no:x.no,phoneMobile:(String(x.p||'').split('/')[0]||''),phoneHome:(String(x.p||'').split('/')[1]||''),expiry:x.e,custId:x.i,_file:x.f}));
+          // ★住所も索引から受け取る（2026-10-02）。以前は入れ忘れていて、索引がある環境では
+          //   PC だけ住所で引けなかった（スマホも索引に住所が無かったので両方引けなかった）。
+          out=r.rows.map(x=>({name:x.n,carType:x.c,no:x.no,phoneMobile:(String(x.p||'').split('/')[0]||''),phoneHome:(String(x.p||'').split('/')[1]||''),address:x.a||'',expiry:x.e,custId:x.i,_file:x.f}));
         }else{
           const safeName=n=>String(n).replace(/[^a-zA-Z0-9\u3000-\u9fff\u30a0-\u30ff\u3040-\u309f]/g,'_').slice(0,30);
           const idx=await sGet(STOR+'cf-index');
@@ -5265,12 +5270,17 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
   }); }); });
   // 顧客ファイル
   const custHits=nq?(cust||[]).filter(r=>hit(r.name,r.carType,r.no,r.phoneHome,r.phoneMobile,r.address)):[];
+  // ★数え方をスマホと揃える（2026-10-02 ユーザー指示）。
+  //   スマホは「同じ人をまとめた人数」、PC は「行数」で数えていたため、同じ言葉で探しても数が違った。
+  //   どちらも人数を主にし、カッコで行数も出す。まとめる鍵は cfxPersonKey と同じ規則。
+  const custPeople=(()=>{const set=new Set();custHits.forEach(r=>{set.add(r.no?('no:'+String(r.no)):(_hubNorm(r.name)+'|'+_hubNorm(r.carType)));});return set.size;})();
+  const custLabel=nq?(custHits.length===custPeople?String(custPeople):custPeople+'人（'+custHits.length+'件）'):'';
   const byDate=(a,b)=>b.n-a.n;
   inspHits.sort(byDate); schedHits.sort(byDate);
   const all=(tab==='all'||tab==='insp')?inspHits:[];
   const all2=(tab==='all'||tab==='sched')?schedHits:[];
   const all3=(tab==='all'||tab==='cust')?custHits:[];
-  const total=inspHits.length+schedHits.length+custHits.length;
+  const total=inspHits.length+schedHits.length+custPeople;   // ★顧客ファイルは人数で数える（スマホと同じ）
   const mark=text=>{
     const t=String(text==null?'':text); if(!nq||!t)return t;
     const i=_hubNorm(t).indexOf(nq); if(i<0)return t;
@@ -5296,7 +5306,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
           <span style={{alignSelf:'center',fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>{nq?total+'件':(custBusy?'顧客ファイル読込中…':'')}</span>
         </div>
         <div style={{display:'flex',gap:4,padding:'8px 12px 0',flexShrink:0}}>
-          <Tab id="all" label="すべて" n={nq?total:''}/><Tab id="insp" label="車検" n={nq?inspHits.length:''}/><Tab id="sched" label="整備" n={nq?schedHits.length:''}/><Tab id="cust" label="顧客ファイル" n={nq?custHits.length:''}/>
+          <Tab id="all" label="すべて" n={nq?total:''}/><Tab id="insp" label="車検" n={nq?inspHits.length:''}/><Tab id="sched" label="整備" n={nq?schedHits.length:''}/><Tab id="cust" label="顧客ファイル" n={custLabel}/>
         </div>
         <div style={{flex:1,overflowY:'auto',padding:'6px 0 12px'}}>
           {!nq&&<div style={{padding:'28px 16px',textAlign:'center',color:'#94a3b8',fontSize:13}}>2文字以上入れると、その場で絞り込まれます</div>}

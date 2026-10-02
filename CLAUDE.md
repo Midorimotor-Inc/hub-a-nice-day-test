@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -93,6 +93,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
+
+### PCとスマホで検索の結果を揃える（v3.24・2026-10-03）
+- 報告：「藤」で PC 70件／スマホ 12件、「藤明」で PC 4件／スマホ 0件。
+- **一番の原因は本番に索引（`cf-search-*`）が一度も作られていなかったこと**。スマホは索引しか見ないので顧客ファイルから0件、PC は索引が無い時だけ月ファイルを直読みするので出ていた。索引は `node fb_build_search_index.js --write` で作れる（`--dev` でテスト版）。**顧客ファイルを入れ替えたら作り直すこと**（PC の顧客リストの「🗂 索引を作り直す」でも同じ）。
+- 残っていた4つのズレも揃えた：
+  1. **1文字でも探す**（スマホは `raw.length < 2` で2文字未満を弾いていた）
+  2. **住所も探す**。索引の1行に `a`（住所）を追加し、PC 側も `cfxLoad` の結果を `address:x.a` で受け取る（**入れ忘れていた**ので索引がある環境では PC も住所で引けなかった）
+  3. **上限** 60人 → 600人（PC は元から上限なし）
+  4. **数え方を「人」で統一**。画面には「N人（M件）」と出す（同じ人が複数の月にいる分が M）。PC のタブ `custLabel`／スマホの顧客チップに同じ形で出す。
+- `cfxRow`/`cfxSearch` は index_dev・customers・mobile の**3つに同じものがある**ので、直す時は必ず3つとも直す（`fb_build_search_index.js` にも同じ `cfxRow` の写しがある＝4か所）。
+- 本番の顧客データは**住所が1件も入っていない**（2026-10-03 時点。月ファイル側が空）。住所で探せる仕組みは入ったが、データが無いので結果は出ない。
+- 検査は `node search_same_test.js`（同じ中身を PC とスマホに読ませて、出る数が一致するか）。
 
 ### 納車日の備考と、代車の長期ドラッグ（v3.22〜v3.23・2026-10-02）
 v3.23 で**画面の呼び名を「納車メモ」→「備考」に変更**（ユーザー指示）。データの名前は `deliveryNote` のまま。納車日の欄の中にあるので、ただ「備考」でも入庫時の備考と取り違えない（小さい字で「納車日の行に出ます」と添えてある）。**v3.23 でメインにも反映済み**。

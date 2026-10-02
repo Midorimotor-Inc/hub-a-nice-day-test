@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790927899876';
+  window.__APP_BUILD='build-1790983208997';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.23'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.24'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -165,6 +165,9 @@ const cfxChunkKey = i => STOR + 'cf-search-chunk-' + i;
 const cfxRow = (c, fileName) => ({
   n: String(c.name || ''), c: String(c.carType || ''), no: (c.no == null ? '' : c.no),
   p: [c.phoneMobile, c.phoneHome].map(v => String(v || '').trim()).filter(Boolean).join('/'),
+  // ★住所も索引に入れる（2026-10-02）。PC の検索は住所も見ていたのに索引に無く、
+  //   スマホだけ住所で引けなかった。索引は作り直せば増える（1行あたり十数文字）。
+  a: String(c.address || ''),
   e: String(c.expiry || ''), f: String(fileName || ''), i: String(c.custId || ''),
 });
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
@@ -200,12 +203,12 @@ const cfxBuild = async (files, sSet) => {
 //   数字だけを打った時は 電話と顧客No の数字で探す（電話の下4桁だけでも出る）
 const cfxSearch = (rows, q, limit) => {
   const raw = String(q || '').trim();
-  if (raw.length < 2) return [];
+  if (raw.length < 1) return [];   // ★1文字でも探す（2026-10-02。PC と揃えるため）
   const nq = cfxNorm(raw), dq = cfxDigits(raw);
   const numOnly = dq.length >= 2 && cfxNorm(raw) === dq;
   const hit = r => numOnly
     ? (cfxDigits(r.p).includes(dq) || cfxDigits(r.no).includes(dq))
-    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq));
+    : (cfxNorm(r.n).includes(nq) || cfxNorm(r.c).includes(nq) || cfxNorm(r.no).includes(nq) || cfxNorm(r.p).includes(nq) || cfxNorm(r.a).includes(nq));
   const groups = new Map();
   for (const r of rows) {
     if (!hit(r)) continue;
@@ -214,7 +217,7 @@ const cfxSearch = (rows, q, limit) => {
     if (!g) groups.set(k, { key: k, now: r, past: [] });
     else if (String(r.f) > String(g.now.f)) { g.past.unshift(g.now); g.now = r; }
     else g.past.push(r);
-    if (groups.size >= (limit || 200) && !groups.has(k)) break;
+    if (groups.size >= (limit || 600) && !groups.has(k)) break;
   }
   return [...groups.values()].sort((a, b) => String(b.now.f).localeCompare(String(a.now.f)));
 };
