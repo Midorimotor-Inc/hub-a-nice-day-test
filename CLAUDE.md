@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -93,6 +93,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
+
+### タイムスケジュールの自動追従スクロール（v3.19・2026-10-02）
+- 今日を開くと現在の1枠前まで自動で下がる（PC だけ。スマホには自動スクロールは無い）。
+- **自分でスクロールしたら、その日のあいだは追いかけない**（`userScrolledRef`）。指・ホイール・スクロールバー・キーの4つを「人が動かした合図」として見る（プログラムからの `scrollTo` は scroll イベントしか出さないので、この4つなら人の操作だと確実に分かる）。
+- 以前は ①1.5秒ごとの再試行が `scrollTop<=10` の間ずっと効く ②30秒ごとの見直し ③タブに戻った時の force の3経路で引き戻していた。今は3つとも `apply` の入口で止める。
+- 日を変える／画面を移る／畳む・開く で useEffect が作り直され、また自動追従に戻る。
+- 検査は `node sched_scroll_test.js`（修正前のファイルだと「タブに戻っても戻らない」で落ちることを確認済み）。
 
 ### スマホが勝手に拡大する（v3.18・2026-10-02）
 - iPhone は **文字が16px未満の入力欄**を触ると画面を自動で拡大し、そのまま戻らない。「切り替えたら拡大されている」の正体はこれ。

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790904619592';
+    window.__APP_BUILD='build-1790905526975';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.18';
+const APP_VERSION = '3.19';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -12005,11 +12005,13 @@ function AppInner() {
   // ★フックは必ずログイン判定(if(!currentUser)return)より前に置くこと（後ろに置くと
   //   ログイン⇄ログアウトでフック数が変わりReactがレンダリングエラーになる）。dkは内部で算出。
   const lastAutoSlotRef=useRef(null);
+  const userScrolledRef=useRef(false);   // ★自分でスクロールしたか（2026-10-02 ユーザー指示）
   useEffect(()=>{
     const _sd = selDate instanceof Date ? selDate
       : (selDate ? (()=>{const p=String(selDate).split('-').map(Number);return p.length===3?new Date(p[0],p[1]-1,p[2]):new Date(selDate);})() : null);
     const _dk = _sd?dateKey(_sd.getFullYear(),_sd.getMonth(),_sd.getDate()):null;
     lastAutoSlotRef.current=null;
+    userScrolledRef.current=false;   // 日を変えた・画面を移った時は自動追従に戻す
     if(!currentUser||view!=='schedule'||!_dk)return;
     const n0=new Date();
     // 今日以外は時間連動しない。前日で下にスクロールした位置が残らないよう先頭(09:00)へ戻す。
@@ -12025,6 +12027,8 @@ function AppInner() {
       return `${String(Math.floor(m/60)).padStart(2,'0')}:${m%60===0?'00':'30'}`;
     };
     const apply=(force)=>{
+      // ★自分でスクロールしたら、もう勝手に動かさない（バネのように戻るのをやめる）
+      if(userScrolledRef.current)return;
       const slot=targetSlot();
       if(!force&&lastAutoSlotRef.current===slot)return;
       const cont=document.getElementById(SEC_SCHED);
@@ -12044,17 +12048,37 @@ function AppInner() {
     };
     const onVis=()=>{if(document.visibilityState==='visible')apply(true);};
     document.addEventListener('visibilitychange',onVis);
+    // ★自分で動かした合図（指・ホイール・キー）。プログラムからのスクロールは scroll イベントしか出さないので、
+    //   この3つだけを見れば「人が動かした」と確実に分かる。
+    const markUser=()=>{userScrolledRef.current=true;};
+    const keyUser=e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key))markUser();};
+    const cont0=document.getElementById(SEC_SCHED);
+    const bind=el=>{
+      if(!el)return null;
+      el.addEventListener('wheel',markUser,{passive:true});
+      el.addEventListener('touchmove',markUser,{passive:true});
+      el.addEventListener('mousedown',markUser);     // スクロールバーをつかんだ時
+      el.addEventListener('keydown',keyUser);
+      return()=>{
+        el.removeEventListener('wheel',markUser);
+        el.removeEventListener('touchmove',markUser);
+        el.removeEventListener('mousedown',markUser);
+        el.removeEventListener('keydown',keyUser);
+      };
+    };
+    let unbind=bind(cont0);
     let attempts=0;
     const initIv=setInterval(()=>{
       attempts++;
       const cont=document.getElementById(SEC_SCHED);
+      if(!unbind)unbind=bind(cont);   // 描き直しで入れ物が後から出てきた時
       const stuck=cont&&cont.scrollTop>10;
-      if(stuck||attempts>20){clearInterval(initIv);return;}
+      if(userScrolledRef.current||stuck||attempts>20){clearInterval(initIv);return;}
       lastAutoSlotRef.current=null;
       apply(false);
     },1500);
     const iv=setInterval(()=>apply(false),30000);
-    return()=>{clearInterval(initIv);clearInterval(iv);document.removeEventListener('visibilitychange',onVis);};
+    return()=>{clearInterval(initIv);clearInterval(iv);document.removeEventListener('visibilitychange',onVis);if(unbind)unbind();};
   },[currentUser,view,selDate,schedCollapsed]);
 
   // 引き継ぎ中（?hand=）は、受け取りが済むまで何も描かない（登録画面を一瞬出さない）
