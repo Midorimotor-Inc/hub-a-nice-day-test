@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790851159547';
+    window.__APP_BUILD='build-1790903047713';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.16';
+const APP_VERSION = '3.17';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -201,6 +201,8 @@ const isHoliday = (y,m,d) => HOLIDAYS_2026.has(`${y}-${m+1}-${d}`);
 // ║  - DEFAULT_LOANERS（代車デフォルト定義）                        ║
 // ╚══════════════════════════════════════════════════════════════════╝
 
+// 店名の表記をそろえる（'本店'→'honten'）。予約カードとスケジュール行で共用
+const hubNormStore=s=>{if(!s)return'';if(s==='honten'||s==='本店')return'honten';if(s==='sanda'||s==='三田店')return'sanda';return s;};
 const STORES = [
   {id:'honten', name:'本店',  color:'#2563eb', bg:'#eff6ff', accent:'#1d4ed8'},
   {id:'sanda',  name:'三田店',color:'#dc2626', bg:'#fef2f2', accent:'#b91c1c'},
@@ -6377,6 +6379,10 @@ const withDeliveryNote = (entry, dk, isInsp) => {
 };
 const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
   const [form,setForm]=useState(initialData);
+  // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
+  //   三田店で予約したお客様が本店入庫に変わる、といった時に使う（めったに使わない）。
+  const [mvStore,setMvStore]=useState(()=>hubNormStore(initialData&&initialData.store)||storeId||'honten');
+  useEffect(()=>{setMvStore(hubNormStore(initialData&&initialData.store)||storeId||'honten');},[initialData,storeId]);
   const [staffInput,setStaffInput]=useState('');
   const [showStaff,setShowStaff]=useState(false);
   const nameRef=useRef(null);
@@ -6614,7 +6620,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       if(!form.work){alert('作業内容を選択してください');workRef.current?.focus();return;}
     }
     if(!confirmLoanerMismatch())return; // ズレたまま保存の最終確認でキャンセル→中断
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), store:mvStore, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
   };
   // 顧客リストからの仮予約/本予約ボタン用
   const handleSaveAs=(status)=>{
@@ -6627,7 +6633,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     // 本予約時のみ代車期間のズレを確認（仮予約は代車を確定しないためスキップ）
     if(status==='confirmed'&&!confirmLoanerMismatch())return;
     // 仮予約はモーダルを閉じない（_keepOpen フラグで制御）
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), bookingStatus:status, _keepOpen: status==='provisional'});
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
   };
   const handleDelete=()=>{onDelete();};
   const handleStaffBlur=()=>{const r=resolveStaff(staffInput);setStaffInput(r);setForm(p=>({...p,staff:r}));};
@@ -6688,7 +6694,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             return(
               <div onClick={()=>{if(!canPick)return;if(!pickerMonth){const now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}}
                 title={canPick?'クリックで日付変更':''}
-                style={{flexShrink:0,marginLeft:'auto',marginRight:10,background:'white',borderRadius:12,padding:'6px 16px',textAlign:'center',lineHeight:1.05,
+                style={{flexShrink:0,marginRight:10,background:'white',borderRadius:12,padding:'6px 16px',textAlign:'center',lineHeight:1.05,
                   boxShadow:'0 2px 8px rgba(0,0,0,0.18)',cursor:canPick?'pointer':'default'}}>
                 <div style={{fontSize:26,fontWeight:900,color:isInsp?'#9a3412':'#0e7490',whiteSpace:'nowrap'}}>
                   {md}<span style={{fontSize:13,fontWeight:800,marginLeft:2,color:isInsp?'#c2410c':'#0891b2'}}>（{w}）</span>
@@ -6697,6 +6703,17 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               </div>
             );
           })()}
+          {/* ★入庫店舗（2026-10-02 ユーザー決定・①案）。行を増やさないようタイトルと同じ段に置く */}
+          <div style={{flexShrink:0,marginLeft:'auto',marginRight:10,display:'flex',alignItems:'center',gap:5}}>
+            <span style={{fontSize:10,fontWeight:800,color:'rgba(255,255,255,.85)',lineHeight:1.2,textAlign:'center',whiteSpace:'nowrap'}}>入庫<br/>店舗</span>
+            <button onClick={()=>setMvStore(p=>p==='honten'?'sanda':'honten')}
+              title="押すと本店⇄三田店が入れ替わります"
+              style={{padding:'5px 12px',borderRadius:8,fontSize:12,fontWeight:800,whiteSpace:'nowrap',cursor:'pointer',
+                border:'2px solid white',background:'rgba(255,255,255,.95)',
+                color:mvStore==='sanda'?'#991b1b':'#1e40af'}}>
+              🏪 {mvStore==='sanda'?'三田店':'本店'} ▾
+            </button>
+          </div>
           <button onClick={onClose} style={{flexShrink:0,background:'rgba(255,255,255,0.15)',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}><X size={16}/></button>
         </div>
 
@@ -11029,8 +11046,9 @@ function AppInner() {
   useEffect(()=>{selDateRef.current=selDate;},[selDate]);
 
   const handleSaveModal=useCallback((formData)=>{
-    // _idx/_slot/_slotNewは内部管理フィールドなので保存データから除去
-    const {_idx,_slot,...cleanData}=formData;
+    // 内部管理フィールド（_idx/_slot/_targetDk/_originalDk/_keepOpen など）は保存データから除去。
+    //   ★頭が _ のものは全部落とす（2026-10-02。以前は _targetDk などが保存に残っていた）
+    const cleanData=Object.fromEntries(Object.entries(formData||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
 
     // ★日付変更時の配置先を事前計算（上書き消失防止）。
     //   従来は移動先でも rows[modalIdx] に書くため、移動先の同じ行番号に別の予約が
@@ -11155,7 +11173,8 @@ function AppInner() {
 
     if(!keepOpen) setModalOpen(false);
     if(modalType==='insp'){
-      const cleanWithStore={...cleanData,store:vsId};
+      // ★カードの「入庫店舗」で選んだ店を使う（2026-10-02）。無ければ今見ている店
+      const cleanWithStore={...cleanData,store:hubNormStore(cleanData.store)||vsId};
 
       if(fromCustList && cleanData.bookingStatus==='provisional'){
         // ── 仮予約：custBookingsのみ保存（スケジュールに書かない）──
@@ -11381,11 +11400,33 @@ function AppInner() {
       const _scTgtDk=formData._targetDk||modalDk;
       const _scBase=getBaseSlot(newSlot);
       // 移動先の現在の枠状況（同日移動なら自分=modalSlotを除外）から、base時刻の空きサブ枠を決定
-      const _scTgtNow={...(schedData[_scTgtDk]||{})};
-      if(_scOrigDk===_scTgtDk) delete _scTgtNow[modalSlot];
+      // ★入庫店舗を変えた時は、別の店のタイムスケジュールへ移す（2026-10-02 ユーザー指示）
+      const _scTgtSt=hubNormStore(cleanData.store)||vsId;
+      const _scStMoved=_scTgtSt!==vsId;
+      const _scTgtAll=_scStMoved?(_scTgtSt==='honten'?schedDataH:schedDataS):schedData;
+      const _scSetTgt=_scStMoved?(_scTgtSt==='honten'?setSchedDataH:setSchedDataS):setSchedData;
+      const _scTgtNow={...(_scTgtAll[_scTgtDk]||{})};
+      if(!_scStMoved&&_scOrigDk===_scTgtDk) delete _scTgtNow[modalSlot];
       let _scFinalSlot=_scBase, _scSub=0;
       while(_scTgtNow[_scFinalSlot]){ _scSub++; _scFinalSlot=makeSlotKey(_scBase,_scSub); }
-      setSchedData(prev=>{
+      if(_scStMoved){
+        // 元の店から消す
+        setSchedData(prev=>{
+          const next={...prev};
+          const oldDay={...(next[_scOrigDk]||{})};
+          delete oldDay[modalSlot];
+          next[_scOrigDk]=oldDay;
+          return next;
+        });
+        // 移り先の店へ入れる
+        _scSetTgt(prev=>{
+          const next={...prev};
+          const tgtDay={...(next[_scTgtDk]||{})};
+          tgtDay[_scFinalSlot]={...cleanData,store:_scTgtSt,id:Date.now()};
+          next[_scTgtDk]=tgtDay;
+          return next;
+        });
+      }else setSchedData(prev=>{
         const next={...prev};
         // 旧日付から旧スロットを削除
         const oldDay={...(next[_scOrigDk]||{})};
@@ -11413,7 +11454,7 @@ function AppInner() {
     setCurLockKey(null);
     setTimeout(()=>releaseLock(keyToRelease),200);
     setFromCustList(false);setCustModalMeta(null);
-  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
+  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
 
   const handleDeleteModal=useCallback(()=>{
     // bookingKeyを特定してloanerRes・rentalResも連動削除

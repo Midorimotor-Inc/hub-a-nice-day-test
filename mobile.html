@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790851159547';
+  window.__APP_BUILD='build-1790903047713';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -90,7 +90,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.16';
+const MOBILE_VERSION='3.17';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1778,6 +1778,9 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   const dkParts=mode.dk.split('-').map(Number);
   const defDate=`${dkParts[0]}-${String(dkParts[1]).padStart(2,'0')}-${String(dkParts[2]).padStart(2,'0')}`;
   // 代車選択: 'keep'=変更なし / 'none'=なし / 'loaner' / 'rental'
+  // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時は今その予約が入っている店。
+  //   車検は行の store を見る（1つのデータに両店が入っている）。整備は今開いている店がそのまま。
+  const [mvStore,setMvStore]=useState(()=>(isInsp?(normStore(initial&&initial.store)||vsId):vsId));
   // ★整備は日にちと時間を変えられる（2026-10-01 ユーザー指示）。移り先をここで持つ。
   const [mvDk,setMvDk]=useState(mode.dk);
   const [mvSlot,setMvSlot]=useState(()=>getBaseSlot(mode.slot||'')||'');
@@ -1882,7 +1885,9 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
     // 結果は画面上部のバナーで通知される。ここで捕まえるのは事前チェック（入庫制限等）のみ。
     // ★整備の移動：移り先を渡す。代車が付いたまま日を動かす時は、同じ車を新しい日付で付け替える
     //   （付け替えないと、代車の予約だけ元の日に取り残される）
-    const outForm=isInsp?form:{...form,_dk:mvDk,_slot:mvSlot};
+    const outForm=isInsp
+      ?{...form,store:mvStore}                         // 車検は行の store を入れ替える
+      :{...form,_dk:mvDk,_slot:mvSlot,_store:mvStore};  // 整備は移り先（日・時間・店）を渡す
     if(moved&&!loanerAction&&curKind!=='none'){
       const cid=curKind==='rental'?curRentalId:curCarId;
       if(cid){
@@ -1906,11 +1911,23 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:300,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={saving?undefined:onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:900,fontSize:16,color:sc}}>{isInsp?'🚗 車検':'⏰ 整備'}{mode.isNew?'の新規予約':'の編集'}</div>
-            <div style={{fontSize:11,color:'#94a3b8'}}>{dkParts[1]}月{dkParts[2]}日{!isInsp&&mode.slot?` ${getBaseSlot(mode.slot)}〜`:''}（{vsId==='honten'?'本店':'三田店'}）</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:900,fontSize:15.5,color:sc,whiteSpace:'nowrap'}}>{isInsp?'🚗 車検':'⏰ 整備'}{mode.isNew?'の新規予約':'の編集'}</div>
+            <div style={{fontSize:11,color:'#94a3b8',whiteSpace:'nowrap'}}>{dkParts[1]}月{dkParts[2]}日{!isInsp&&mode.slot?` ${getBaseSlot(mode.slot)}〜`:''}</div>
           </div>
-          <button onClick={onClose} disabled={saving} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b'}}>✕</button>
+          {/* ★入庫店舗（2026-10-02 ユーザー決定・①案）。めったに使わないので小さく、行は増やさない */}
+          <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:4}}>
+            <span style={{fontSize:9.5,fontWeight:800,color:'#64748b',lineHeight:1.15,textAlign:'center',whiteSpace:'nowrap'}}>入庫<br/>店舗</span>
+            <button onClick={()=>setMvStore(p=>p==='honten'?'sanda':'honten')} disabled={saving}
+              title="押すと本店⇄三田店が入れ替わります"
+              style={{padding:'4px 10px',borderRadius:7,fontSize:11.5,fontWeight:800,whiteSpace:'nowrap',
+                border:`2px solid ${mvStore==='sanda'?'#dc2626':'#1d4ed8'}`,
+                background:mvStore==='sanda'?'#fee2e2':'#dbeafe',
+                color:mvStore==='sanda'?'#991b1b':'#1e40af'}}>
+              🏪 {mvStore==='sanda'?'三田店':'本店'} ▾
+            </button>
+          </div>
+          <button onClick={onClose} disabled={saving} style={{width:30,height:30,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:15,color:'#64748b',flexShrink:0}}>✕</button>
         </div>
         {lockedBy&&<div style={{margin:'10px 16px 0',padding:'8px 12px',background:'#fff7ed',border:'1.5px solid #fed7aa',borderRadius:10,fontSize:12,color:'#92400e',fontWeight:700}}>🔒 {lockedBy}さんが編集中の可能性があります。保存は慎重に。</div>}
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px 4px',display:'flex',flexDirection:'column',gap:12}}>
@@ -2137,7 +2154,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   );
 };
 
-const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
+const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
   const today=new Date();
   const [ds,setDs]=useState({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()});
   useEffect(()=>{if(initDate)setDs(initDate);},[initDate]);
@@ -2320,7 +2337,7 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
         <div style={{margin:'12px 12px 0'}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,flexWrap:'wrap'}}>
             <span style={{fontWeight:900,fontSize:13,color:'#0e7490'}}>⏰ タイムスケジュール</span>
-            <span style={{fontSize:10,fontWeight:700,color:'#475569'}}>空き枠タップで追加</span>
+            <span style={{fontSize:10,fontWeight:700,color:'#475569'}}>{otherView?'他の店は閲覧のみ（車検は編集できます）':'空き枠タップで追加'}</span>
             {restr&&(
               <span onClick={()=>setShowRestr(true)}
                 style={{display:'flex',alignItems:'center',gap:3,padding:'2px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6,fontWeight:700,color:'#dc2626',fontSize:10}}>
@@ -2459,8 +2476,8 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
                       const w=WORKS.find(x=>x.id===r.work);
                       const loanerTxt=r.loaner||r.rentalLabel||'';
                       return(
-                        <div key={ki} onClick={()=>onOpenEdit({type:'sched',dk,slot:key,isNew:false})}
-                          style={{marginBottom:4,cursor:'pointer'}}>
+                        <div key={ki} onClick={()=>{if(otherView){alert('🏪 他の店のタイムスケジュールは閲覧のみです。\n直すには上の切り替えで自分の店に戻してください。\n（車検は他の店でも直せます）');return;}onOpenEdit({type:'sched',dk,slot:key,isNew:false});}}
+                          style={{marginBottom:4,cursor:otherView?'default':'pointer',opacity:otherView?0.75:1}}>
                           <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
                           {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                           {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
@@ -2470,14 +2487,14 @@ const ScheduleView=({inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerRe
                         </div>
                       );
                     })}
-                    <div onClick={()=>{
+                    {!otherView&&<div onClick={()=>{
                         if(isHoliday){blockNew();return;}
                         const free=subKeys.find(k=>!day[k]||!day[k].name)||makeSlotKey(slot,subKeys.length);
                         onOpenEdit({type:'sched',dk,slot:free,isNew:true});
                       }}
                       style={{color:restricted?'#dc2626':isHoliday?'#94a3b8':isEmpty?'#475569':'#0e7490',fontSize:11,cursor:'pointer',padding:'2px 0',fontWeight:restricted?700:600}}>
                       {isHoliday?'休業日（追加不可）':restricted?`🚫 入庫制限 ${restr.startTime}〜${restr.endTime}（制限解除の作業のみ）`:isEmpty?'＋ タップで追加':'＋ 同時刻に追加'}
-                    </div>
+                    </div>}
                   </div>
                 </div>
               );
@@ -3000,10 +3017,13 @@ const carryLabel=(c,long)=>{
 const offBreakdown=(closedN,c)=>{const p=[];if(closedN>0)p.push(`店休日 ${closedN}`);if(c&&c.carriedN>0)p.push(`繰り越し休日 ${c.carriedN}`);return p.length?`（うち${p.join('＋')}）`:'';};
 const carriedLabel=c=>c?`${c.fromM}月繰り越し分`:'';
 const carryTitle=c=>c&&c.quota!=null?`会社の休日数 ${c.company}日 ＋ 前月からの繰り越し ${c.carryIn}日 ＝ ${c.quota}日。取得 ${c.taken}日（店休日を含む・有給は数えない）。繰り越し分は今月の一番早い休日から充てます。使い切った後の休日は自動で有給になります`:'';
-const HolidayView=({user,vsId,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pleaveS,
+const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pleaveS,
   closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,monthlyHolidays,onToggle,offNoteH,offNoteS,onSaveNote})=>{
   const today=new Date();
-  const [store,setStore]=useState(vsId);
+  // ★表示する店はヘッダーの帯に合わせる（2026-10-02）。ボタンが2つ並んで紛らわしかったため
+  //   入力できるかの判定は今までどおり vsId（＝自分の店）で見る。
+  const [store,setStore]=useState(viewStore||vsId);
+  useEffect(()=>{setStore(viewStore||vsId);},[viewStore,vsId]);
   const [cur,setCur]=useState(new Date(today.getFullYear(),today.getMonth(),1));
   const [selDay,setSelDay]=useState(today.getDate());
   const [who,setWho]=useState(user.name);   // 設定する人（管理者だけ変えられる）
@@ -3120,14 +3140,11 @@ const HolidayView=({user,vsId,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pl
         </div>
         <button onClick={()=>{setCur(new Date(cy,cm+1,1));setSelDay(null);}} style={{width:36,height:36,borderRadius:10,border:'2px solid #e5e7eb',background:'white',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center'}}>&#8250;</button>
       </div>
-      {/* 店舗の切り替え＋今月の集計 */}
+      {/* 今月の集計（店の切り替えはヘッダーの帯に一本化した・2026-10-02） */}
       <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px 0'}}>
-        {[['honten','本店'],['sanda','三田店']].map(([id,l])=>(
-          <button key={id} onClick={()=>{setStore(id);}}
-            style={{padding:'5px 12px',borderRadius:8,border:`2px solid ${store===id?'#1d4ed8':'#e2e8f0'}`,background:store===id?'#dbeafe':'white',color:store===id?'#1e40af':'#64748b',fontWeight:store===id?800:600,fontSize:12}}>
-            {l}{id===vsId?'':'（閲覧）'}
-          </button>
-        ))}
+        <span style={{padding:'5px 12px',borderRadius:8,border:`2px solid ${store==='sanda'?'#dc2626':'#1d4ed8'}`,background:store==='sanda'?'#fee2e2':'#dbeafe',color:store==='sanda'?'#991b1b':'#1e40af',fontWeight:800,fontSize:12,whiteSpace:'nowrap'}}>
+          🏪 {store==='sanda'?'三田店':'本店'}{store===vsId?'':'（閲覧）'}
+        </span>
         <div style={{marginLeft:'auto',textAlign:'right',fontSize:10.5,color:'#475569',lineHeight:1.5}}>
           <div><b style={{color:'#ea580c'}}>{target}</b>：🏖 {mine.o}日{offBreakdown(mine.cN,carry)?<span style={{fontWeight:500,color:'#9a3412'}}>{offBreakdown(mine.cN,carry)}</span>:null}{mine.l?`・📋 有給 ${mine.l}日`:''}</div>
           {mhol!=null&&mhol!==''&&<div style={{color:'#94a3b8'}}>会社の{cm+1}月の休日 {mhol}日</div>}
@@ -3905,7 +3922,14 @@ const App=()=>{
     if(graceMs>0)setTimeout(()=>{overlaysRef.current=overlaysRef.current.filter(o=>o.pid!==pid);},graceMs);
     else overlaysRef.current=overlaysRef.current.filter(o=>o.pid!==pid);
   };
-  const vsId=user?.store||'honten';
+  // ★店舗の切り替え（2026-10-02 ユーザー指示）。
+  //   myStore＝自分の所属（権限の判定に使う）。vsId＝今見ている店（表示と色に使う）。
+  //   他店を見ている時、整備（タイムスケジュール）は閲覧のみ。車検は編集できる。
+  const myStore=user?.store||'honten';
+  const [viewStore,setViewStore]=useState(myStore);
+  useEffect(()=>{setViewStore(myStore);},[myStore]);   // 人が変わったら自分の店に戻す
+  const vsId=viewStore;
+  const otherView=vsId!==myStore;
   const cDays=vsId==='honten'?closedDaysH:closedDaysS;
   const cDates=vsId==='honten'?closedDatesH:closedDatesS;
   const isClosedDk=useCallback(dk=>dkIsClosed(dk,cDays,cDates,overrideOpen),[cDays,cDates,overrideOpen]);
@@ -4403,10 +4427,12 @@ const App=()=>{
 
   // サーバー保存の本体（読み返し検証つき）。handleSaveから切り離されてバックグラウンドで実行される
   const saveCore=async(req,form,loanerAction)=>{
+    // ★画面の中だけで使う印（_dk・_slot・_store）は保存しない（2026-10-02）
+    const clean=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
     const userName=form.name||user?.name||'';
     if(req.type==='insp'){
       const bkFinal=`insp-${req.dk}-${req.idx}`;
-      const entry=await applyLoanerAction({...form},loanerAction,bkFinal,userName);
+      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName);
       let placedPending=false,placedSeq=null;
       await writeShared(STOR+'insp',hotInsp,base=>{
         const rows=((base[req.dk]||[]).map(r=>r||blankInsp()));
@@ -4417,7 +4443,8 @@ const App=()=>{
         const editingActive=!!(prevRow&&prevRow.name&&prevRow.bookingStatus!=='cancelled');
         const seq=editingActive?(prevRow.seq!=null?prevRow.seq:Date.now()):Date.now();
         placedSeq=seq;
-        rows[req.idx]={...entry,store:normStore(prevRow?.store)||normStore(entry.store)||vsId,seq,bookingStatus:'confirmed'};
+        // ★カードの「入庫店舗」で選んだ店を優先する（2026-10-02）。以前は元の行の店が勝っていて変えられなかった
+        rows[req.idx]={...entry,store:normStore(entry.store)||normStore(prevRow?.store)||vsId,seq,bookingStatus:'confirmed'};
         const dayLimit=inspLimits[req.dk]??6;
         const wasPending=editingActive&&!!prevRow.pendingApproval;
         const recomputed=recomputeInspApproval(rows,dayLimit);
@@ -4429,12 +4456,18 @@ const App=()=>{
       },true);
       if(placedPending)alert('⚠️ 1日の上限を超えたため、本店承認が必要です（通常6台／レギュラー車検3台）。この予約は承認待ちになります。');
     }else{
-      const sdKey=storKey('sched',vsId);
-      const sd=vsId==='honten'?schedDataH:schedDataS;
-      const setSd=vsId==='honten'?setSchedDataH:setSchedDataS;
+      // ★移り先の店（2026-10-02）。店をまたぐ時は別のキーへ書き、元の店のキーからは消す
+      const tSt=form._store||vsId;
+      const stMoved=!req.isNew&&tSt!==vsId;
+      const sdKey=storKey('sched',tSt);
+      const sd=tSt==='honten'?schedDataH:schedDataS;
+      const setSd=tSt==='honten'?setSchedDataH:setSchedDataS;
+      const oldKey=storKey('sched',vsId);
+      const oldSd=vsId==='honten'?schedDataH:schedDataS;
+      const setOldSd=vsId==='honten'?setSchedDataH:setSchedDataS;
       // ★移り先（日にち・時間）。移していない時は今までどおり req のまま（2026-10-01）
       const tDk=form._dk||req.dk, tSlot=form._slot||getBaseSlot(req.slot);
-      const isMove=!req.isNew&&((tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot)));
+      const isMove=!req.isNew&&(stMoved||(tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot)));
       // 新規と移動はサーバーの最新値で空きサブ枠を確定してから代車bookingKeyを発行する
       let slotFinal=req.slot;
       if(req.isNew||isMove){
@@ -4447,12 +4480,13 @@ const App=()=>{
       }
       const bkFinal=`sched-${tDk}-${slotFinal}`;
       const bkOld=`sched-${req.dk}-${req.slot}`;
-      const entry=await applyLoanerAction({...form},loanerAction,bkFinal,userName,isMove?bkOld:'');
+      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName,isMove?bkOld:'');
       const placedId=Date.now();
       await writeShared(sdKey,sd,base=>{
         const out={...base};
         // 移した時は元の枠を空ける（先に消してから入れる＝同じ日の中で動かしても取りこぼさない）
-        if(isMove){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        //   店をまたいだ時は別のキーなので、ここでは消さない（下で元の店のキーから消す）
+        if(isMove&&!stMoved){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
         const day={...(out[tDk]||{})};
         // 直前に他端末で埋まった場合はさらに次の空きへ（自分の書き込み済みエントリ=placedIdは除外し、
         // 再試行時に二重登録しない。代車のbkとずれた場合もデータは壊れず表示は氏名フォールバックで追従）
@@ -4469,6 +4503,12 @@ const App=()=>{
         const r=(echo[tDk]||{})[slotFinal];
         return !!r&&r.id===placedId;
       },true);
+      // ★店をまたいだ時は、元の店のキーから消す（移り先に書けた後に消す＝途中で止まっても消えてなくならない）
+      if(stMoved){
+        await writeShared(oldKey,oldSd,base=>{
+          const out={...base};const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;return out;
+        },setOldSd,echo=>!((echo[req.dk]||{})[req.slot]),true);
+      }
     }
   };
 
@@ -4491,7 +4531,7 @@ const App=()=>{
     // 入庫制限チェック（PC版handleSaveModalと同じルール。受付前に弾いてモーダル内に表示する）
     if(req.type!=='insp'){
       // ★整備の移動先（form._dk / form._slot）で見る。移動していない時は今までどおり req のまま
-      const _tDk=form._dk||req.dk, _tSlot=form._slot||getBaseSlot(req.slot);
+      const _tDk=form._dk||req.dk, _tSlot=form._slot||getBaseSlot(req.slot), _tSt=form._store||vsId;
       if(_tDk!==req.dk&&isClosedDk(_tDk))throw new Error(`🏖 ${dkLabel(_tDk)} は休業日です。別の日を選んでください`);
       const restriction=schedRestrictions[_tDk];
       if(restriction){
@@ -4512,7 +4552,7 @@ const App=()=>{
     // ── 楽観オーバーレイの構築（予定表・代車表へ今すぐ反映）──
     const bkOpt=req.type==='insp'?`insp-${req.dk}-${req.idx}`:`sched-${form._dk||req.dk}-${form._slot||req.slot}`;
     const colorOf=name=>RES_COLORS[[...String(name||'')].reduce((a,c)=>a+c.charCodeAt(0),0)%RES_COLORS.length];
-    let displayEntry={...form};
+    let displayEntry=Object.fromEntries(Object.entries(form||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
     const ovs=[];
     const rmBkOv=res=>{const out={};for(const cid of Object.keys(res||{})){const days={...(res[cid]||{})};Object.keys(days).forEach(k=>{if(days[k]?.bookingKey===bkOpt)delete days[k];});out[cid]=days;}return out;};
     if(loanerAction&&loanerAction.kind==='none'){
@@ -4540,7 +4580,7 @@ const App=()=>{
       }});
     }
     if(req.type==='insp'){
-      const entryOpt={...blankInsp(),...displayEntry,store:vsId,bookingStatus:'confirmed'};
+      const entryOpt={...blankInsp(),...displayEntry,store:normStore(form.store)||vsId,bookingStatus:'confirmed'};
       const reflected=r=>r&&r.name===form.name&&r.time===(form.time||'')&&String(r.course)===String(form.course)&&(r.note||'')===(form.note||'');
       ovs.push({pid,key:STOR+'insp',apply:data=>{
         const rows=((data[req.dk]||[]).map(r=>r||blankInsp()));
@@ -4552,12 +4592,17 @@ const App=()=>{
     }else{
       const entryOpt={...displayEntry};
       const reflected=r=>r&&r.name===form.name&&(r.work||'')===(form.work||'')&&(r.content||'')===(form.content||'');
-      // ★移動した時は元の枠から消して移り先へ出す（2026-10-01）
-      const tDk=form._dk||req.dk, tSlot=form._slot||getBaseSlot(req.slot);
-      const movedOpt=(tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot));
-      ovs.push({pid,key:storKey('sched',vsId),apply:data=>{
+      // ★移動した時は元の枠から消して移り先へ出す（2026-10-01）。店をまたぐ時はキーも変わる（2026-10-02）
+      const tDk=form._dk||req.dk, tSlot=form._slot||getBaseSlot(req.slot), tSt=form._store||vsId;
+      const stMoved=tSt!==vsId;
+      const movedOpt=stMoved||(tDk!==req.dk)||(tSlot!==getBaseSlot(req.slot));
+      if(stMoved){
+        // 元の店のキーから消す
+        ovs.push({pid,key:storKey('sched',vsId),apply:data=>{const out={...data};const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;return out;}});
+      }
+      ovs.push({pid,key:storKey('sched',tSt),apply:data=>{
         const out={...data};
-        if(movedOpt){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        if(movedOpt&&!stMoved){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
         const day={...(out[tDk]||{})};
         if(!movedOpt&&Object.entries(day).some(([k,r])=>reflected(r)&&getBaseSlot(k)===getBaseSlot(tSlot)))return data;
         let k2=movedOpt?tSlot:req.slot,sub=0;
@@ -4614,7 +4659,8 @@ const App=()=>{
       await writeShared(sdKey,sd,base=>{
         const out={...base};
         // 移した時は元の枠を空ける（先に消してから入れる＝同じ日の中で動かしても取りこぼさない）
-        if(isMove){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
+        //   店をまたいだ時は別のキーなので、ここでは消さない（下で元の店のキーから消す）
+        if(isMove&&!stMoved){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
         const day={...(out[tDk]||{})};
         delete day[req.slot];
         return{...base,[req.dk]:day};
@@ -4716,7 +4762,7 @@ const App=()=>{
           <span style={{color:'white',fontSize:12,fontWeight:900,letterSpacing:'.5px',flexShrink:0,whiteSpace:'nowrap'}}>🚗 Hub</span>
           <span style={{color:'rgba(255,255,255,.45)',fontSize:9,fontWeight:700,padding:'1px 5px',border:'1px solid rgba(255,255,255,.25)',borderRadius:8}}>v{MOBILE_VERSION}</span>
           <div style={{width:6,height:6,borderRadius:'50%',background:gasOk===true?'#4ade80':gasOk===false?'#f87171':'#fbbf24',marginLeft:2}}/>
-          <span style={{color:'rgba(255,255,255,.55)',fontSize:10,fontWeight:700,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}（{vsId==='honten'?'本店':'三田店'}）</span>
+          <span style={{color:'rgba(255,255,255,.55)',fontSize:10,fontWeight:700,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}（{myStore==='honten'?'本店':'三田店'}）</span>
           <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6}}>
             <button onClick={()=>{setShowFind(true);loadCf();}} title="検索"
               style={{padding:'3px 9px',background:'rgba(255,255,255,.15)',border:'none',borderRadius:6,color:'white',fontSize:11,cursor:'pointer'}}> 🔍 </button>
@@ -4729,6 +4775,22 @@ const App=()=>{
             <button onClick={()=>{setAuthAutoOff(true);setUser(null);}}
               style={{padding:'3px 8px',background:'rgba(255,255,255,.1)',border:'none',borderRadius:6,color:'rgba(255,255,255,.7)',fontSize:10,cursor:'pointer'}}> ↩ </button>
           </div>
+        </div>
+        {/* ★店舗の切り替え（2026-10-02 ユーザー指示・A案）。バナーの色は uiTheme(vsId) が追従する */}
+        <div style={{display:'flex',alignItems:'center',gap:5,padding:'0 10px 7px'}}>
+          {[['honten','本店'],['sanda','三田店']].map(([id,l])=>{
+            const on=vsId===id;
+            return(
+              <button key={id} onClick={()=>setViewStore(id)}
+                style={{padding:'4px 12px',borderRadius:7,fontSize:11,fontWeight:800,
+                  border:`1.5px solid ${on?'white':'rgba(255,255,255,.35)'}`,
+                  background:on?'white':'rgba(255,255,255,.14)',
+                  color:on?TH.acc:'rgba(255,255,255,.75)'}}>
+                {on?'🏪 ':''}{l}
+              </button>
+            );
+          })}
+          {otherView&&<span style={{marginLeft:'auto',fontSize:9.5,fontWeight:800,color:'white',background:'rgba(0,0,0,.22)',borderRadius:6,padding:'2px 7px',whiteSpace:'nowrap'}}>👁 閲覧中</span>}
         </div>
         <div style={{display:'flex',alignItems:'flex-end',gap:2,padding:'0 8px',background:TH.tab}}>
           {TABS.map(t=>{
@@ -4779,7 +4841,7 @@ const App=()=>{
         </div>
       )}
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0}}>
-        {tab==='sched'&&<ScheduleView inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
+        {tab==='sched'&&<ScheduleView otherView={otherView} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
           loanerResH={loanerResH} loanerResS={loanerResS} loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId} initDate={schedInitDate} onOpenEdit={openEdit} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
           schedRestrictions={schedRestrictions}
           staffList={((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(s=>s.store===vsId)).filter(s=>s.badge!=='president'&&s.myNumber!==0)}
@@ -4794,7 +4856,7 @@ const App=()=>{
           cfx={cfx} cfxBusy={cfBusy&&!cfx} initCust={custSheet&&custSheet.cust||null} initMode={custSheet&&custSheet.mode||'find'}
           vsId={vsId} isClosedDk={isClosedDk} onNeedFile={needCfFile}
           onBook={bookFromCust} onTemp={tempFromCust} onReload={()=>loadCf(true)}/>}
-        {tab==='off'&&<HolidayView user={user} vsId={vsId} adminMode={canRestore(user)}
+        {tab==='off'&&<HolidayView user={user} vsId={myStore} viewStore={vsId} adminMode={canRestore(user)}
           staffH={staffH.length?staffH:DEFAULT_STAFF.filter(s=>s.store==='honten')} staffS={staffS.length?staffS:DEFAULT_STAFF.filter(s=>s.store==='sanda')}
           dayOffH={dayOffH} dayOffS={dayOffS} pleaveH={pleaveH} pleaveS={pleaveS}
           closedDaysH={closedDaysH} closedDaysS={closedDaysS} closedDatesH={closedDatesH} closedDatesS={closedDatesS} overrideOpen={overrideOpen}

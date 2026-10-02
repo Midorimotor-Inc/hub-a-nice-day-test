@@ -131,8 +131,10 @@ const signedInInit = ([k, me, stor]) => {
     await page.selectOption('select', '竹林直行');
     await clickText(page, '休日を入力する'); await clickText(page, '🏖 休日'); await tapDay(page, D2); await clickText(page, '✅ 確定');
     t('管理者が竹林の休日を入れられる', await page.waitForFunction(([k, dk]) => { const v = window.__fakeFb.get(k + 'honten-dayoff') || {}; return (v[dk] || []).includes('竹林直行') && (v[dk] || []).includes('見取大介'); }, [STOR, DK2], { timeout: 8000 }).then(() => true).catch(() => false), await dayoff(page));
-    // 他の店は閲覧のみ
-    await clickText(page, '三田店');
+    // 他の店は閲覧のみ（店の切り替えはヘッダーの帯に一本化した・2026-10-02。
+    //   同じ『三田店』の文字が休日タブにも出るので、ヘッダーの帯のボタンを押す）
+    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '三田店' && e.offsetParent !== null); if (b) b.click(); });
+    await page.waitForTimeout(900);
     await page.screenshot({ path: path.join(DIR, 'smoke-holiday.png'), fullPage: false });   // 見た目の控え
     t('三田店に切り替えると三田店の休日が出る（閲覧のみ）', await tapDay(page, D1) && await seeText(page, '藤原昭人', 5000) && await seeText(page, '他の店は閲覧のみ', 3000));
     t('JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
