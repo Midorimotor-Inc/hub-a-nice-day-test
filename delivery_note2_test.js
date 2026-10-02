@@ -1,6 +1,6 @@
-// 納車メモ（C案）と、代車の長期ドラッグの検査（2026-10-02 ユーザー決定）
-//   ① 納車日を入れると予約カードに「納車メモ」欄とスイッチが出る
-//   ② 納車メモは納車日の行に出る
+// 納車日の備考（C案）と、代車の長期ドラッグの検査（2026-10-02 ユーザー決定）
+//   ① 納車日を入れると予約カードに「備考」欄（納車日の中）とスイッチが出る
+//   ② 納車日の備考は納車日の行に出る
 //   ③ スイッチが入っている時だけ、入庫時の備考も納車日の行に出る（切ると出ない）
 //   ④ 代車管理：ドラッグ中に端へ行くと自動で横に送られる／確定の箱で日付を直せる
 //   実行: node delivery_note2_test.js
@@ -75,7 +75,7 @@ const WISO = `${W.getFullYear()}-${String(W.getMonth() + 1).padStart(2, '0')}-${
   await page.waitForTimeout(1200);
   const goDay = iso => page.evaluate(v => { const inp = [...document.querySelectorAll('input[type=date]')].find(e => e.offsetParent !== null); if (!inp) return false; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(inp, v); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); return true; }, iso);
 
-  // ── ① 予約カードに納車メモ欄 ──
+  // ── ① 予約カードの納車日の備考欄 ──
   console.log('\n■ ① 予約カードの納車メモ欄');
   await goDay(WISO);
   await page.waitForTimeout(1300);
@@ -84,17 +84,17 @@ const WISO = `${W.getFullYear()}-${String(W.getMonth() + 1).padStart(2, '0')}-${
   t('予約カードが開く', await seeText(page, '予約カード', 8000));
   const hasMemo = await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner'); if (!box) return null;
-    const lb = [...box.querySelectorAll('label')].find(e => e.innerText.includes('納車メモ'));
+    const lb = [...box.querySelectorAll('label')].find(e => e.innerText.trim().startsWith('備考'));
     const ta = lb && lb.parentElement ? lb.parentElement.querySelector('textarea') : null;
     const sw = [...box.querySelectorAll('button')].find(e => e.innerText.includes('も納車日に出す'));
     return { lb: !!lb, ta: !!ta, sw: !!sw };
   });
-  t('「納車メモ」の欄がある', !!hasMemo && hasMemo.lb && hasMemo.ta, hasMemo);
+  t('納車日の中に「備考」の欄がある', !!hasMemo && hasMemo.lb && hasMemo.ta, hasMemo);
   t('「入庫時の内容も納車日に出す」スイッチがある', !!hasMemo && hasMemo.sw, hasMemo);
   // 納車メモを入れて保存（スイッチは切ったまま）
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const lb = [...box.querySelectorAll('label')].find(e => e.innerText.includes('納車メモ'));
+    const lb = [...box.querySelectorAll('label')].find(e => e.innerText.trim().startsWith('備考'));
     const ta = lb.parentElement.querySelector('textarea');
     const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
     s.call(ta, '代車のガソリン確認　書類を渡す');
@@ -102,7 +102,7 @@ const WISO = `${W.getFullYear()}-${String(W.getMonth() + 1).padStart(2, '0')}-${
   });
   await page.waitForTimeout(300);
   t('保存できた', await saveCard(page));
-  t('★納車メモが保存される', await page.waitForFunction(([k, wdk]) => {
+  t('★納車日の備考が保存される', await page.waitForFunction(([k, wdk]) => {
     const r = ((window.__fakeFb.get(k + 'honten-sched') || {})[wdk] || {})['未定'];
     return !!r && r.deliveryNote === '代車のガソリン確認　書類を渡す' && r.noteToDelivery !== true;
   }, [STOR, WDK], { timeout: 20000 }).then(() => true).catch(() => false),
@@ -116,7 +116,7 @@ const WISO = `${W.getFullYear()}-${String(W.getMonth() + 1).padStart(2, '0')}-${
   await page.waitForTimeout(1500);
   const dlvRow = () => page.evaluate(() => { const r = [...document.querySelectorAll('tr')].find(x => x.innerText.includes('大山') && x.innerText.includes('納車')); return r ? r.innerText.replace(/\s+/g, ' ').trim() : null; });
   const row1 = await dlvRow();
-  t('★納車メモが納車日の行に出る', !!row1 && row1.includes('代車のガソリン確認'), row1);
+  t('★納車日の備考が納車日の行に出る', !!row1 && row1.includes('代車のガソリン確認'), row1);
   t('スイッチが切れている時は入庫の内容は出ない', !!row1 && !row1.includes('保険対応'), row1);
 
   // ── ③ スイッチを入れると入庫の内容も出る ──
@@ -129,7 +129,7 @@ const WISO = `${W.getFullYear()}-${String(W.getMonth() + 1).padStart(2, '0')}-${
   await page.waitForTimeout(2500);
   const row2 = await dlvRow();
   t('★入庫時の内容も納車日の行に出る', !!row2 && row2.includes('保険対応'), row2);
-  t('納車メモも出たまま', !!row2 && row2.includes('代車のガソリン確認'), row2);
+  t('納車日の備考も出たまま', !!row2 && row2.includes('代車のガソリン確認'), row2);
 
   // ── ④ 代車管理：ドラッグの自動スクロールと日付欄 ──
   console.log('\n■ ④ 代車管理：長い期間のドラッグ');

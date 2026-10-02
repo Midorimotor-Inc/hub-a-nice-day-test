@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790927196332';
+    window.__APP_BUILD='build-1790927899876';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.22';
+const APP_VERSION = '3.23';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7163,13 +7163,13 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               </div>
             )}
           </div>
-          {/* ★納車メモ（2026-10-02 ユーザー決定・C案）。納車日を入れた時だけ出す。
+          {/* ★納車日の備考（2026-10-02 ユーザー決定・C案）。納車日を入れた時だけ出す。
               納車日の行にはこのメモを出し、入庫時の備考もスイッチが入っていれば続けて出す。 */}
           {form.deliveryDate&&(
             <div>
-              <label style={LBL}>納車メモ <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>任意。納車日の行に出ます（例：代車のガソリン確認・保険の書類を渡す）</span></label>
+              <label style={LBL}>備考 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>任意。納車日の行に出ます（例：代車のガソリン確認・保険の書類を渡す）</span></label>
               <textarea value={form.deliveryNote||''} onChange={e=>setForm({...form,deliveryNote:e.target.value})}
-                rows={2} placeholder="納車の時に伝えたいこと"
+                rows={2} placeholder="納車の時に伝えたいこと（納車日の表に出ます）"
                 style={{...INP,minHeight:48,resize:'vertical',borderColor:'#6ee7b7',background:'#f0fdf4'}}/>
               <button onClick={()=>setForm({...form,noteToDelivery:!form.noteToDelivery})}
                 style={{marginTop:6,display:'inline-flex',alignItems:'center',gap:7,padding:'7px 11px',borderRadius:9,
@@ -13517,7 +13517,7 @@ function AppInner() {
                                       <span style={{fontSize:11,color:'#065f46',fontWeight:700,whiteSpace:'nowrap'}}>{srcLabel}</span>
                                       <span style={{color:'#6ee7b7',fontWeight:800,fontSize:12}}>→</span>
                                       <span style={{fontSize:10,fontWeight:800,color:'white',background:'#059669',borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>🏁 納車</span>
-                                      {/* ★納車メモ（濃い字）と、入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
+                                      {/* ★納車日の備考（濃い字）と、入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
                                       {r.deliveryNote&&<span style={{fontSize:12,color:'#064e3b',fontWeight:700}}>{r.deliveryNote}</span>}
                                       {r.noteToDelivery&&(d.kind==='insp'?r.note:r.content)&&
                                         <span title="入庫時の備考" style={{fontSize:12,color:'#374151',background:'#d1fae5',border:'1px solid #6ee7b7',borderRadius:6,padding:'1px 7px'}}>{(d.kind==='insp'?r.note:r.content)}</span>}

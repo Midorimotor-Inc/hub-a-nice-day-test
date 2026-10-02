@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790927196332';
+  window.__APP_BUILD='build-1790927899876';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.22';
+const MOBILE_VERSION='3.23';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -2076,10 +2076,10 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
                   </select>
                   {(()=>{const p=form.deliveryDate.split('-');return <div style={{fontSize:11,color:'#047857',marginTop:4,fontWeight:800}}>🏁 納車：{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')} {deliverySlotLabel(form.deliveryTime||'未定')}</div>;})()}
                 </div>
-                {/* ★納車メモ（2026-10-02 ユーザー決定・C案）。納車日の行に出る。
+                {/* ★納車日の備考（2026-10-02 ユーザー決定・C案）。納車日の行に出る。
                     入庫時の備考も出すかはスイッチで選ぶ。 */}
                 <div style={{marginTop:8}}>
-                  <label style={LBL}>納車メモ <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意。納車日の行に出ます</span></label>
+                  <label style={LBL}>備考 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意。納車日の行に出ます</span></label>
                   <textarea value={form.deliveryNote||''} onChange={e=>setForm(p=>({...p,deliveryNote:e.target.value}))}
                     rows={2} placeholder="例：代車のガソリン確認・保険の書類を渡す"
                     style={{...INP,resize:'none',border:'2px solid #6ee7b7',background:'#f0fdf4'}}/>
@@ -2464,7 +2464,7 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
                     <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
                     {r.carType&&<span style={{fontSize:11,color:'#64748b'}}>🚗{r.carType}</span>}
                     {loaner&&<span style={{fontSize:11,color:'#0284c7'}}>{!r.rentalLabel&&d.kind==='insp'&&getLoanerLocked(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`)&&'🔒 '}{loaner}</span>}
-                    {/* ★納車メモ（濃い字）と入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
+                    {/* ★納車日の備考（濃い字）と入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
                     {r.deliveryNote&&<span style={{fontSize:11,color:'#064e3b',fontWeight:700}}>{r.deliveryNote}</span>}
                     {r.noteToDelivery&&(d.kind==='insp'?r.note:r.content)&&
                       <span style={{fontSize:11,color:'#374151',background:'#d1fae5',border:'1px solid #6ee7b7',borderRadius:6,padding:'0 6px'}}>{(d.kind==='insp'?r.note:r.content)}</span>}
