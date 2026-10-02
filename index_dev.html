@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790922765413';
+    window.__APP_BUILD='build-1790924094312';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.20';
+const APP_VERSION = '3.21';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6575,7 +6575,18 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   // 代車期間チェック：スケジュール期間（入庫日→納車日）と代車の貸出期間の不一致を返す。
   // 一致・代車無し（代車削除でチェック解除）・レンタカーの場合は null。バナー表示と保存時確認で共用。
   const computeLoanerMismatch=()=>{
-    if(pendingRentalId!=null)return null; // レンタカーは対象外
+    // ★レンタカーも見る（2026-10-02）。以前はここで対象外にしていたため、
+    //   スケジュール（入庫→納車）と貸出期間がズレても何も言わずに保存できた。
+    if(pendingRentalId!=null){
+      const pr=pendingRentalRec;
+      if(!pr||pr.id==='restored'||pr.fy==null)return null;   // 期間の分からない記録は見比べられない
+      const rFrom=toNum(pr.fy,pr.fm,pr.fd), rTo=toNum(pr.ty??pr.fy,pr.tm??pr.fm,pr.td??pr.fd);
+      const _sf=(()=>{const d=form.entryDate||localTargetDkRef.current||modalDk;const p=String(d||'').split('-').map(Number);return (p.length===3&&!p.some(isNaN))?toNum(p[0],p[1]-1,p[2]):null;})();
+      const _st=(()=>{const d=form.deliveryDate||form.entryDate||localTargetDkRef.current||modalDk;const p=String(d||'').split('-').map(Number);return (p.length===3&&!p.some(isNaN))?toNum(p[0],p[1]-1,p[2]):null;})();
+      if(_sf==null||_st==null||rFrom==null||rTo==null)return null;
+      if(rFrom===_sf&&rTo===_st)return null;
+      return {schFrom:_sf,schTo:_st,loanFrom:rFrom,loanTo:rTo,isRental:true};
+    }
     const _idx=type==='insp'?(modalIdxProp??initialData?._idx??0):null;
     const curBk=type==='insp'?`insp-${modalDk}-${_idx}`:`sched-${modalDk}-${timeSlot}`;
     const origDk=originalDkRef.current;
@@ -6621,7 +6632,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     if(!mm)return true;
     // 日数も出す（「何日ズレているか」が一目で分かるように）。
     const _sd=spanDays(mm.schFrom,mm.schTo), _ld=spanDays(mm.loanFrom,mm.loanTo);
-    return window.confirm(`⚠ 代車の期間がスケジュールと一致していません。\n\nスケジュール（入庫日→納車日）：${_mmFmt(mm.schFrom)}〜${_mmFmt(mm.schTo)}（${_sd}日間）\n代車の貸出期間　　　　　　：${_mmFmt(mm.loanFrom)}〜${_mmFmt(mm.loanTo)}（${_ld}日間）\n\nこのまま保存しますか？\n（代車を合わせるには「選択」で選び直し、代車が不要なら「削除」で外してください）`);
+    const _nm=mm.isRental?'レンタカー':'代車';
+    return window.confirm(`⚠ ${_nm}の期間がスケジュールと一致していません。\n\nスケジュール（入庫日→納車日）：${_mmFmt(mm.schFrom)}〜${_mmFmt(mm.schTo)}（${_sd}日間）\n${_nm}の貸出期間　　　　　　：${_mmFmt(mm.loanFrom)}〜${_mmFmt(mm.loanTo)}（${_ld}日間）\n\nこのまま保存しますか？\n（合わせるには「変更」で期間を選び直し、不要なら外してください）`);
   };
 
   const handleSave=()=>{

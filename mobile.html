@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790922765413';
+  window.__APP_BUILD='build-1790924094312';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.20';
+const MOBILE_VERSION='3.21';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1837,19 +1837,26 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   // 代車期間チェック：スケジュール期間（入庫日→納車日）と代車の貸出期間の不一致を検出（PC版と同方針：アラートのみ・手動修正）。
   const loanerMismatch=(()=>{
     const dkToNum=s=>{const p=String(s||'').split('-').map(Number);return (p.length===3&&!p.some(isNaN))?toNum(p[0],p[1]-1,p[2]):null;};
-    let lf=null,lt=null;
+    // ★レンタカーも見る（2026-10-02）。以前は代車だけで、レンタカーは対象外だったため
+    //   「スケジュールは 9/6→10/4 なのにレンタカーは 9/6 の1日だけ」でも何も言わなかった。
+    let lf=null,lt=null,isRental=false;
     if(carKind==='loaner'){ lf=dkToNum(carFrom); lt=dkToNum(carTo); }
+    else if(carKind==='rental'){ lf=dkToNum(carFrom); lt=dkToNum(carTo); isRental=true; }
     else if(carKind==='keep'){
       for(const cid of Object.keys(loanerRes||{})){
         const hit=Object.values(loanerRes[cid]||{}).find(r=>r&&r.bookingKey===bk);
         if(hit){ lf=toNum(hit.fy,hit.fm,hit.fd); lt=toNum(hit.ty,hit.tm,hit.td); break; }
       }
+      if(lf==null)for(const cid of Object.keys(rentalRes||{})){
+        const hit=Object.values(rentalRes[cid]||{}).find(r=>r&&r.bookingKey===bk);
+        if(hit&&hit.fy!=null){ lf=toNum(hit.fy,hit.fm,hit.fd); lt=toNum(hit.ty??hit.fy,hit.tm??hit.fm,hit.td??hit.fd); isRental=true; break; }
+      }
     }
-    if(lf==null||lt==null)return null; // なし/レンタカー/代車未割当 → 対象外
+    if(lf==null||lt==null)return null; // なし／車が未割当 → 見比べられない
     const sf=dkToNum(form.entryDate||mode.dk), st=dkToNum(form.deliveryDate||mode.dk);
     if(sf==null||st==null)return null;
     if(lf===sf&&lt===st)return null; // 一致
-    return {sf,st,lf,lt};
+    return {sf,st,lf,lt,isRental};
   })();
   const mmFmt=n=>n==null?'—':`${Math.floor(n/100)%100}/${n%100}`;
   const parseD=s=>{const [y,m,d]=String(s).split('-').map(Number);return{y,m0:m-1,d};};
@@ -1881,7 +1888,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
       if(busy){setErr(`その期間は使用中です（${busy}）`);return;}
       loanerAction={kind:carKind,carId:carSel,from,to,locked:carLocked};
     }
-    if(loanerMismatch&&!window.confirm(`⚠ 代車の期間がスケジュールと一致していません。\n\nスケジュール（入庫日→納車日）：${mmFmt(loanerMismatch.sf)}〜${mmFmt(loanerMismatch.st)}\n代車の貸出期間　　　　　　：${mmFmt(loanerMismatch.lf)}〜${mmFmt(loanerMismatch.lt)}\n\nこのまま保存しますか？\n（代車を合わせるには「代車」を選び直し、不要なら「なし」にしてください）`))return;
+    if(loanerMismatch&&!window.confirm(`⚠ ${loanerMismatch.isRental?'レンタカー':'代車'}の期間がスケジュールと一致していません。\n\nスケジュール（入庫日→納車日）：${mmFmt(loanerMismatch.sf)}〜${mmFmt(loanerMismatch.st)}\n${loanerMismatch.isRental?'レンタカー':'代車'}の貸出期間　　　　　　：${mmFmt(loanerMismatch.lf)}〜${mmFmt(loanerMismatch.lt)}\n\nこのまま保存しますか？\n（合わせるには選び直し、不要なら「代車なし」にしてください）`))return;
     setErr('');
     // 受付は即時（モーダルはonSave側で閉じる）。サーバー保存はバックグラウンドで継続し、
     // 結果は画面上部のバナーで通知される。ここで捕まえるのは事前チェック（入庫制限等）のみ。
@@ -2077,8 +2084,8 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
             {currentBinding&&<div style={{fontSize:12,color:'#0c4a6e',marginBottom:6,fontWeight:700}}>現在: {currentBinding}</div>}
             {loanerMismatch&&(
               <div style={{margin:'0 0 8px',padding:'8px 10px',borderRadius:8,background:'#fffbeb',border:'2px solid #f59e0b',color:'#92400e',fontSize:11,lineHeight:1.5,fontWeight:700}}>
-                ⚠ 代車の期間がスケジュールと一致しません<br/>
-                スケジュール（入庫日→納車日）：{mmFmt(loanerMismatch.sf)}〜{mmFmt(loanerMismatch.st)} ／ 代車：{mmFmt(loanerMismatch.lf)}〜{mmFmt(loanerMismatch.lt)}<br/>
+                ⚠ {loanerMismatch.isRental?'レンタカー':'代車'}の期間がスケジュールと一致しません<br/>
+                スケジュール（入庫日→納車日）：{mmFmt(loanerMismatch.sf)}〜{mmFmt(loanerMismatch.st)} ／ {loanerMismatch.isRental?'レンタカー':'代車'}：{mmFmt(loanerMismatch.lf)}〜{mmFmt(loanerMismatch.lt)}<br/>
                 <span style={{fontWeight:500}}>「代車あり」を選び直すと期間が自動で揃います（不要なら「代車なし」／イレギュラーはこのまま保存OK）。</span>
               </div>
             )}
