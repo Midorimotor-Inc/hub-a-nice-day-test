@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790905526975';
+    window.__APP_BUILD='build-1790922765413';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.19';
+const APP_VERSION = '3.20';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6418,6 +6418,21 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const [pickerMonth,setPickerMonth]=useState(null);
   const localTargetDkRef=useRef('');
   const originalDkRef=useRef('');
+  // ★カードの日付は「その予約が乗っている日」(modalDk)から作る（2026-10-02 バグ修正）。
+  //   これまでは画面で見ている日（dateLabel）から作っていたため、納車・事前入庫の派生行から
+  //   別の日の予約を開くと、見ている日が出てしまい、日付変更の基準もそちらになっていた。
+  //   その状態で日付を変えると、元の予約が消えずに二重に残った。
+  const cardDk=String(modalDk||'');
+  const cardLabel=(()=>{
+    const p=cardDk.split('-').map(Number);
+    if(p.length===3&&p[0]&&p[1]&&p[2]){
+      const d=new Date(p[0],p[1]-1,p[2]);
+      return `${p[1]}月${p[2]}日（${['日','月','火','水','木','金','土'][d.getDay()]}）`;
+    }
+    return String(dateLabel||'');
+  })();
+  // 見ている日と違う予約を開いているか（納車・事前入庫の派生行から開いた時）
+  const otherDayEdit=!!(cardLabel&&dateLabel&&cardLabel!==dateLabel);
 
   // 同じ予約かどうかをキーで判定（代車ピッカー往復などでリセットしないため）
   const makeKey=(d)=>d?`${d._idx??'none'}|${d._slot??'none'}|${d.name??''}`:'';
@@ -6664,7 +6679,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           <div style={{minWidth:0}}>
             <div style={{color:'white',fontWeight:800,fontSize:16}}>{isInsp?'🚗 車検予約カード':'📋 一般予約カード'}</div>
             <div style={{color:'rgba(255,255,255,0.75)',fontSize:12,marginTop:2,position:'relative'}}>
-              {(!isNew)?(<span onClick={()=>{if(!pickerMonth){const m=dateLabel.match(/(\d+)月(\d+)日/),now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}} style={{cursor:'pointer',borderBottom:'1px dashed rgba(255,255,255,0.6)',paddingBottom:1}} title="クリックで日付変更">クリックで日付変更</span>):dateLabel}
+              {(!isNew)?(<span onClick={()=>{if(!pickerMonth){const m=cardLabel.match(/(\d+)月(\d+)日/),now=new Date();setPickerMonth({year:now.getFullYear(),month:m?parseInt(m[1])-1:now.getMonth()});}setShowDatePicker(p=>!p);}} style={{cursor:'pointer',borderBottom:'1px dashed rgba(255,255,255,0.6)',paddingBottom:1}} title="クリックで日付変更">クリックで日付変更</span>):cardLabel}
+              {otherDayEdit&&<span style={{marginLeft:6,fontSize:11,fontWeight:800,color:'white',background:'rgba(0,0,0,.25)',borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>{cardLabel.replace(/（.*/,'')} の予約を編集中</span>}
               {timeSlot?` / ${timeSlot}`:''}
               {showDatePicker&&pickerMonth&&(
                 <div style={{position:'fixed',top:'100px',left:'20px',zIndex:9999,background:'white',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,0.25)',padding:12,minWidth:240}} onClick={e=>e.stopPropagation()}>
@@ -6676,7 +6692,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                   <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:2}}>
                     {['日','月','火','水','木','金','土'].map((d,i)=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:i===0?'#ef4444':i===6?'#2563eb':'#9ca3af',padding:'2px 0'}}>{d}</div>)}
                   </div>
-                  {(()=>{const yr=pickerMonth.year,mo=pickerMonth.month,first=new Date(yr,mo,1).getDay(),days=new Date(yr,mo+1,0).getDate(),cells=[];for(let i=0;i<first;i++)cells.push(<div key={'e'+i}/>);for(let d=1;d<=days;d++){const dow=new Date(yr,mo,d).getDay(),dk2=`${yr}-${mo+1}-${d}`;cells.push(<div key={d} onClick={()=>{if(!originalDkRef.current){const m=dateLabel.match(/(\d+)月(\d+)日/),now=new Date();const y=now.getFullYear(),mo=m?parseInt(m[1]):now.getMonth()+1,d=m?parseInt(m[2]):now.getDate();originalDkRef.current=`${y}-${mo}-${d}`;}localTargetDkRef.current=dk2;onDateChange&&onDateChange(dk2);setShowDatePicker(false);}} style={{textAlign:'center',padding:'4px 2px',cursor:'pointer',fontSize:12,borderRadius:4,color:dow===0?'#ef4444':dow===6?'#2563eb':'#1f2937',fontWeight:600}} onMouseOver={e=>e.currentTarget.style.background='#f3f4f6'} onMouseOut={e=>e.currentTarget.style.background=''}>{d}</div>);}return <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1}}>{cells}</div>;})()}
+                  {(()=>{const yr=pickerMonth.year,mo=pickerMonth.month,first=new Date(yr,mo,1).getDay(),days=new Date(yr,mo+1,0).getDate(),cells=[];for(let i=0;i<first;i++)cells.push(<div key={'e'+i}/>);for(let d=1;d<=days;d++){const dow=new Date(yr,mo,d).getDay(),dk2=`${yr}-${mo+1}-${d}`;cells.push(<div key={d} onClick={()=>{if(!originalDkRef.current){originalDkRef.current=cardDk||(()=>{const m=cardLabel.match(/(\d+)月(\d+)日/),now=new Date();return `${now.getFullYear()}-${m?parseInt(m[1]):now.getMonth()+1}-${m?parseInt(m[2]):now.getDate()}`;})();}localTargetDkRef.current=dk2;onDateChange&&onDateChange(dk2);setShowDatePicker(false);}} style={{textAlign:'center',padding:'4px 2px',cursor:'pointer',fontSize:12,borderRadius:4,color:dow===0?'#ef4444':dow===6?'#2563eb':'#1f2937',fontWeight:600}} onMouseOver={e=>e.currentTarget.style.background='#f3f4f6'} onMouseOut={e=>e.currentTarget.style.background=''}>{d}</div>);}return <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1}}>{cells}</div>;})()}
                   <button onClick={()=>setShowDatePicker(false)} style={{marginTop:8,width:'100%',padding:'4px',background:'#f3f4f6',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,color:'#6b7280'}}>キャンセル</button>
                 </div>
               )}
@@ -6685,10 +6701,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           {/* ★日付・時刻を右の空いている所に大きく出す（2026-09-29 ユーザー要望・B案）。
               札をクリックすると、今までどおり日付変更のカレンダーが開く（新規予約のときは開かない）。 */}
           {(()=>{
-            const m=String(dateLabel||'').match(/(\d+)月(\d+)日/);
+            const m=String(cardLabel||'').match(/(\d+)月(\d+)日/);
             if(!m)return null;
             const md=m[1]+'/'+m[2];
-            const w=(String(dateLabel).match(/（(.)）/)||[])[1]||'';
+            const w=(String(cardLabel).match(/（(.)）/)||[])[1]||'';
             const tm=(isInsp?(form.time||''):(timeSlot||''))||'';
             const canPick=!isNew;
             return(
