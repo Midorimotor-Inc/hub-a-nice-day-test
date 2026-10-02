@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -93,6 +93,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
+
+### 納車メモと、代車の長期ドラッグ（v3.22・2026-10-02・テスト版のみ）
+**★ v3.22 はテスト版だけに入れてある。メインは v3.21 のまま**（ユーザー指示「C案でテスト版のみ」）。次にメインへ上げる時はこの分も一緒に移植される。
+- **納車メモ（C案）**：予約の中身に `deliveryNote`（納車日の行に出す文）と `noteToDelivery`（入庫時の備考も出すか）を追加。カードは**納車日を入れた時だけ**欄を出す。納車日の派生行には `deliveryNote` を濃い字、`noteToDelivery` が true の時だけ `note`（整備は `content`）を薄い緑の囲みで続けて出す。
+  それまで**納車の行には備考を出すコードが無く**、入庫時に書いたことが納車時に伝わらなかった（2026-10-02 のユーザー報告）。
+  PC・スマホの両方に欄と表示を入れてある。
+- **代車・レンタカーの長期ドラッグ**：表は元から約90日分（前月15日〜翌々月15日）あったが、**ドラッグ中に横スクロールできず**、画面に見えている4週間ほどしか引けなかった。
+  `edgeAutoScroll` で端（70px以内）に近づいたら自動で横に送る（端に近いほど速い）。窓全体の `mousemove`/`mouseup` も見るので、**表の外へ出ても打ち切らない**（以前は `onMouseLeave` で `setDrag(null)` していた）。
+  同じ直しを **顧客リスト専用の代車ピッカー（`CustLoanerDatePicker`）** にも入れた。
+  あわせて**確定の箱で貸出日・返却日を日付欄で直せる**ようにした（返却日が貸出日より前／既に使われている期間は弾く）。
+- 検査は `node delivery_note2_test.js`。
 
 ### 期間ズレの警告はレンタカーにも効かせる（v3.21・2026-10-02）
 - 代車／レンタカーの貸出期間が **スケジュール（入庫日→納車日）** と合っていない時の警告は、**代車（`lres`）だけ**に効いていた。コードにも「レンタカーは対象外」と書かれており、PC（`computeLoanerMismatch` の先頭で `pendingRentalId!=null` なら null）・スマホ（`loanerMismatch` が `carKind` が 'loaner'/'keep' のときだけ、しかも keep は `loanerRes` しか見ない）の両方。
