@@ -167,6 +167,32 @@ const DK = `${Y}-${M + 1}-${D}`;
   }, [STOR, DK], { timeout: 25000 }).then(() => true).catch(() => false),
     await page.evaluate(k => window.__fakeFb.get(k + 'honten-sched'), STOR));
 
+  // ── iPhone の自動拡大よけ：入力欄の文字が16px以上か ──
+  console.log('\n■ 画面が勝手に拡大しないか（入力欄の文字は16px以上）');
+  const small = await page.evaluate(() => {
+    const out = [];
+    document.querySelectorAll('input,select,textarea').forEach(e => {
+      if (e.offsetParent === null) return;
+      const fs2 = parseFloat(getComputedStyle(e).fontSize);
+      if (fs2 < 16) out.push({ tag: e.tagName, type: e.type || '', fs: fs2, ph: (e.placeholder || '').slice(0, 14) });
+    });
+    return out;
+  });
+  t('出ている入力欄すべてが16px以上', small.length === 0, small);
+  // 予約カードを開いた状態でも確かめる
+  await page.getByText('相原', { exact: false }).last().click({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(900);
+  const small2 = await page.evaluate(() => {
+    const out = [];
+    document.querySelectorAll('input,select,textarea').forEach(e => {
+      if (e.offsetParent === null) return;
+      const fs2 = parseFloat(getComputedStyle(e).fontSize);
+      if (fs2 < 16) out.push({ tag: e.tagName, fs: fs2 });
+    });
+    return out;
+  });
+  t('予約カードの入力欄も16px以上', small2.length === 0, small2);
+
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-mobile-store.png') });
   await ctx.close(); await browser.close(); server.close();

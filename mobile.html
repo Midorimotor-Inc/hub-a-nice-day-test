@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790903047713';
+  window.__APP_BUILD='build-1790904619592';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -82,7 +82,9 @@ html,body,#root{height:100%;width:100%;}
 body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:#f1f5f9;color:#1e293b;overflow:hidden;}
 ::-webkit-scrollbar{width:3px;height:3px;}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
 button{cursor:pointer;font-family:inherit;}
-input,select,textarea{font-family:inherit;font-size:16px;}
+/* ★iPhone の自動拡大よけ：入力欄の文字は必ず16px以上にする（2026-10-02）。
+   16px未満だと触った時に画面が拡大され、そのまま戻らない。インラインで小さく指定しても効かないよう !important */
+input,select,textarea{font-family:inherit;font-size:16px !important;}
 </style>
 </head>
 <body>
@@ -90,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.17';
+const MOBILE_VERSION='3.18';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -2844,7 +2846,9 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
     </div>
     );
   };
-  const inputS={width:'100%',padding:compact?'8px 10px':'8px 11px',border:'1.5px solid #d1d5db',borderRadius:8,fontSize:14,boxSizing:'border-box',background:'white'};
+  // ★文字は16px以上にする（2026-10-02）。iPhone は16px未満の入力欄を触ると画面を自動で拡大し、
+  //   そのまま戻らないため「切り替えたら勝手に拡大されている」ように見えていた。
+  const inputS={width:'100%',padding:compact?'8px 10px':'8px 11px',border:'1.5px solid #d1d5db',borderRadius:8,fontSize:16,boxSizing:'border-box',background:'white'};
   return(
     <div>
       {!compact&&(
@@ -3158,7 +3162,7 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
       {adminMode&&(
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px 0',fontSize:11,color:'#475569'}}>
           <span style={{fontWeight:700,flexShrink:0}}>設定する人</span>
-          <select value={who} onChange={e=>setWho(e.target.value)} style={{flex:1,padding:'6px 8px',borderRadius:8,border:'2px solid #e2e8f0',fontSize:13,background:'white'}}>
+          <select value={who} onChange={e=>setWho(e.target.value)} style={{flex:1,padding:'6px 8px',borderRadius:8,border:'2px solid #e2e8f0',fontSize:16,background:'white'}}>
             {[...new Set([user.name,...staffH.map(s=>s.name),...staffS.map(s=>s.name)])].filter(Boolean).map(n=><option key={n} value={n}>{n}</option>)}
           </select>
         </div>

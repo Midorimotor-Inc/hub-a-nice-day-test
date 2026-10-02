@@ -94,6 +94,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
+### スマホが勝手に拡大する（v3.18・2026-10-02）
+- iPhone は **文字が16px未満の入力欄**を触ると画面を自動で拡大し、そのまま戻らない。「切り替えたら拡大されている」の正体はこれ。
+- mobile.html は `input,select,textarea{font-size:16px !important}` にして、インラインで小さく指定しても効かないようにした。
+  見つかっていた例：マイスケジュールの `inputS`（14px）と メール宛先の select（13px）。**入力欄に16px未満を指定しないこと。**
+- 検査 `node mobile_store_test.js` が、画面に出ている入力欄すべてと予約カードの中の入力欄を 16px 以上か見ている。
+
 ### 店舗切替と入庫店舗（v3.17・2026-10-02）
 - **スマホに店舗切替を追加**：ヘッダーの下の帯（A案）。`myStore`＝自分の所属（権限判定）／`vsId`＝今見ている店（表示と色）。`uiTheme(vsId)` でバナー全体が店舗色になる（メインは本店＝青／三田店＝赤。**テスト版は両店ともオレンジが仕様**なので、色の切り替わりはメインでしか見えない）。自分の店でない時は「👁 閲覧中」。
 - **他店は整備（タイムスケジュール）が閲覧のみ**（`otherView`）：カードをタップしても開かず、「＋ タップで追加」も出さない。**車検は他店でも編集できる**（三田店で予約したお客様が本店入庫に変わる、があるため）。
