@@ -6,29 +6,33 @@
 //   実行: node insp_double_test.js
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, 'customers.html'), 'utf8');
+// 削除まわりの関数は スケジュール側（index_dev.html）に置いてあるので、そこからも取り出す
+const SRC_PC = fs.readFileSync(path.join(__dirname, 'index_dev.html'), 'utf8');
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 400)); } };
 const head = s => console.log(String.fromCharCode(10) + '■ ' + s);
 
 // customers.html から「const 名前 = …;」を1つ取り出す（中かっこの対応を数えて終わりを見つける）
-const grab = (name) => {
-  const m = SRC.indexOf(String.fromCharCode(10) + 'const ' + name);
+const grab = (name, src) => {
+  
+  const m = (src||SRC).indexOf(String.fromCharCode(10) + 'const ' + name);
   if (m < 0) throw new Error(name + ' が見つかりません');
   let i = m + 1, depth = 0, started = false;
-  for (; i < SRC.length; i++) {
-    const c = SRC[i];
+  const S=(src||SRC);
+  for (; i < S.length; i++) {
+    const c = S[i];
     if (c === '{' || c === '(' || c === '[') { depth++; started = true; }
     else if (c === '}' || c === ')' || c === ']') depth--;
-    else if (c === ';' && depth === 0 && started) return SRC.slice(m + 1, i + 1);   // 終わりは「深さ0の ;」だけで見る
+    else if (c === ';' && depth === 0 && started) return S.slice(m + 1, i + 1);   // 終わりは「深さ0の ;」だけで見る
   }
   throw new Error(name + ' の終わりが分かりません');
 };
 const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'archDropSameBooking', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
-  .map(grab).join(String.fromCharCode(10));
+  .map(n => grab(n)).join(String.fromCharCode(10)) + String.fromCharCode(10) + grab('archDropOneBooking', SRC_PC);
 const sandbox = {};
 new Function('exports', code + String.fromCharCode(10) +
-  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;exports.resDropForMove=resDropForMove;exports.archDropSameBooking=archDropSameBooking;')(sandbox);
-const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow, resDropForMove, archDropSameBooking } = sandbox;
+  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;exports.resDropForMove=resDropForMove;exports.archDropSameBooking=archDropSameBooking;exports.archDropOneBooking=archDropOneBooking;')(sandbox);
+const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow, resDropForMove, archDropSameBooking, archDropOneBooking } = sandbox;
 
 const D1 = '2026-10-24', D2 = '2026-10-31';
 const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902, custId: '202612__121__山東庸子__5902' };
@@ -99,6 +103,13 @@ t('行は詰めない（代車の紐付けを壊さない）', !!a8 && a8['2026-
 t('別人の過去の履歴は触らない', !!a8 && a8['2026-8-24'][0] && a8['2026-8-24'][0].custId === 'C', a8 && a8['2026-8-24']);
 t('移り先の日は触らない', archDropSameBooking({ '2026-9-2': [{ custId: 'A', name: 'x', bookingStatus: 'confirmed' }] }, 'A', '2026-9-2') === undefined);
 t('custId が無い時は何もしない', archDropSameBooking(arch, '', '2026-9-2') === undefined);
+
+head('⑨ 保管箱の予約を「削除」でも外せる（2026-10-04）');
+const arch9 = { '2026-8-26': [{ name: '辻井　崇詞', no: 1215, custId: 'A', seq: 11, bookingStatus: 'confirmed' }, { name: '別の人', custId: 'B', seq: 12, bookingStatus: 'confirmed' }] };
+const d9 = archDropOneBooking(arch9, '2026-8-26', { custId: 'A', seq: 11, name: '辻井　崇詞', no: 1215 });
+t('その予約だけ外れる', !!d9 && d9['2026-8-26'][0] === null && d9['2026-8-26'][1].custId === 'B', d9 && d9['2026-8-26']);
+t('custId が無い予約は seq で見つける', (()=>{const a={x:[{name:'手入力',seq:77,bookingStatus:'confirmed'}]};const r=archDropOneBooking(a,'x',{custId:'',seq:77,name:'手入力',no:''});return !!r&&r.x[0]===null;})());
+t('その日に無ければ何もしない', archDropOneBooking(arch9, '2026-9-2', { custId: 'A' }) === undefined);
 
 console.log(String.fromCharCode(10) + `結果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791000873678';
+  window.__APP_BUILD='build-1791002018625';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.31';
+const MOBILE_VERSION='3.32';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1025,6 +1025,23 @@ const cfSaveRow=async(fileName,cust)=>{
 //   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
 //   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
 //   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+// ★保管箱（insp-arch）の「その日」から、削除した予約だけを外す（2026-10-04）。
+//   削除は insp にしか書かないので、14日より前の予約は画面から消えても読み直すと戻っていた。
+//   本人確認は custId → seq → 氏名＋ナンバーの順（画面の削除と同じ規約）。行は詰めずに null。
+const archDropOneBooking=(arch,dk,tgt)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const rows=arch[dk];
+  if(!Array.isArray(rows)||!rows.length)return undefined;
+  const same=r=>{
+    if(!r||!r.name)return false;
+    if(tgt.custId)return r.custId===tgt.custId;
+    if(tgt.seq!=null&&r.seq!=null)return r.seq===tgt.seq;
+    return r.name===tgt.name&&String(r.no||'')===String(tgt.no||'');
+  };
+  let hit=false;
+  const next=rows.map(r=>same(r)?(hit=true,null):r);
+  return hit?{...arch,[dk]:next}:undefined;
+};
 const archDropSameBooking=(arch,custId,keepDk)=>{
   if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
   const out={};let hit=false;
@@ -4938,17 +4955,23 @@ const App=()=>{
         const r=(echo[req.dk]||[])[req.idx];
         return !r||!r.name||(deletedSeq!=null?r.seq!==deletedSeq:r.name!==deletedName);
       },true);
+      // ★保管箱（14日より前の分）にも同じ予約があれば外す（2026-10-04）。
+      //   外さないと、画面から消えても読み直すと戻ってくる。
+      try{
+        const _a=await sGet(STOR+'insp-arch');
+        const _n=archDropOneBooking(_a,req.dk,{custId:req.initial&&req.initial.custId,seq:deletedSeq,name:deletedName,no:req.initial&&req.initial.no});
+        if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
+      }catch(e){}
     }else{
       const sdKey=storKey('sched',vsId);
       const sd=vsId==='honten'?schedDataH:schedDataS;
       const setSd=vsId==='honten'?setSchedDataH:setSchedDataS;
       const deletedId=req.initial?.id;
+      // ★その日のその枠を空けるだけ（2026-10-04 に直した）。
+      //   以前は保存の処理から写した isMove / stMoved / tDk をそのまま参照していて、
+      //   この関数には無い変数なので実行時エラーになり、整備の削除が失敗していた。
       await writeShared(sdKey,sd,base=>{
-        const out={...base};
-        // 移した時は元の枠を空ける（先に消してから入れる＝同じ日の中で動かしても取りこぼさない）
-        //   店をまたいだ時は別のキーなので、ここでは消さない（下で元の店のキーから消す）
-        if(isMove&&!stMoved){const od={...(out[req.dk]||{})};delete od[req.slot];out[req.dk]=od;}
-        const day={...(out[tDk]||{})};
+        const day={...(((base&&base[req.dk])||{}))};
         delete day[req.slot];
         return{...base,[req.dk]:day};
       },setSd,echo=>{

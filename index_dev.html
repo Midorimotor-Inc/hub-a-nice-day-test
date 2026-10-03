@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791000873678';
+    window.__APP_BUILD='build-1791002018625';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.31';
+const APP_VERSION = '3.32';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2237,6 +2237,23 @@ const buildInspSave = (base, p)=>{
 //   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
 //   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
 //   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+// ★保管箱（insp-arch）の「その日」から、削除した予約だけを外す（2026-10-04）。
+//   削除は insp にしか書かないので、14日より前の予約は画面から消えても読み直すと戻っていた。
+//   本人確認は custId → seq → 氏名＋ナンバーの順（画面の削除と同じ規約）。行は詰めずに null。
+const archDropOneBooking=(arch,dk,tgt)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const rows=arch[dk];
+  if(!Array.isArray(rows)||!rows.length)return undefined;
+  const same=r=>{
+    if(!r||!r.name)return false;
+    if(tgt.custId)return r.custId===tgt.custId;
+    if(tgt.seq!=null&&r.seq!=null)return r.seq===tgt.seq;
+    return r.name===tgt.name&&String(r.no||'')===String(tgt.no||'');
+  };
+  let hit=false;
+  const next=rows.map(r=>same(r)?(hit=true,null):r);
+  return hit?{...arch,[dk]:next}:undefined;
+};
 const archDropSameBooking=(arch,custId,keepDk)=>{
   if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
   const out={};let hit=false;
@@ -11738,6 +11755,15 @@ function AppInner() {
         back=>!inspBookingPresent(back,modalDk,_delTgt),
         {name:cancelName,verb:'削除',dk:modalDk}
       );
+      // ★保管箱（14日より前の分）にある予約も外す（2026-10-04）。
+      //   ここを外さないと、画面から消えても読み直すと戻ってくる。
+      (async()=>{
+        try{
+          const _a=await sGet(STOR+'insp-arch');
+          const _n=archDropOneBooking(_a,modalDk,_delTgt);
+          if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
+        }catch(e){}
+      })();
       // ★顧客リストのステータスをcancelに連動。
       //   ただし custId が無い手入力の予約は、同名の予約が他にも残っている場合は通知しない
       //   （重複入力の片方を消しただけで、リスト発の予約までキャンセル扱いにしてしまうため）。

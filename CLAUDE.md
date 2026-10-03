@@ -94,6 +94,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
+### 保管箱の予約は「削除」も効いていなかった（v3.32・2026-10-04）
+- 日付変更だけでなく**削除も `insp` にしか書かない**ので、14日より前の予約は画面から消えても**読み直すと戻ってくる**（2026-10-04 に実データで確認：ユーザーが 8/26 を消したのに `insp-arch` にそのまま残っていた）。
+- 直し：`archDropOneBooking(arch,dk,tgt)` で、削除したその日の保管箱からもその予約を外す（PC・スマホ）。本人確認は **custId → seq → 氏名＋ナンバー**（画面の削除と同じ規約）。
+- 同時に、**スマホの整備の削除が実行時エラーで失敗していた**のを直した（`deleteCore` の中に保存側（`saveCore`）から写した `isMove`/`stMoved`/`tDk` が残っていた。v3.15 の写し間違い）。**同じ見た目のコードを2か所に写した時は、変数がその関数にあるか必ず確かめること。**
+- 検査は `node insp_double_test.js` の ⑨。
+
 ### 保管箱（insp-arch）に古い予約が残る（v3.31・2026-10-04・重要）
 - テスト版で「辻井さんが 8/26 と 9/2 の2件」。調べると **8/26 は `insp-arch`、9/2 は `insp`** に居た。
 - **14日より前の予約は `insp` → `insp-arch` に移してある**（`fbArchiveOldInsp`）。画面は3つとも `{...inspArch,...hotInsp}` で**合体して表示**するのに、**書き込み（日付変更・削除）は `insp` にしか効かない**。だから保管箱の古い行が残り、同じ人が2件出ていた。
