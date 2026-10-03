@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790986526477';
+  window.__APP_BUILD='build-1790990004033';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.25';
+const MOBILE_VERSION='3.26';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -155,7 +155,8 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   storKey('staff-v2','honten'),storKey('staff-v2','sanda'),
   storKey('pleave','honten'),storKey('pleave','sanda'),STOR+'mholidays',
   storKey('offnote','honten'),storKey('offnote','sanda'),   // 休日タブ（2026-09-19）・休日メモ（2026-09-20）
-  STOR+'mysched'];   // マイスケジュール（公開予定・2026-09-20）
+  STOR+'mysched',    // マイスケジュール（公開予定・2026-09-20）
+  STOR+'memoItems'];  // 備考・メモのクイック項目（PCで作った定型文・2026-10-03）
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -1629,7 +1630,63 @@ const CalendarView=({inspData,closedDays,closedDates,overrideOpen,vsId,onSelectD
   );
 };
 
-const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,arrivedOv,mySchedPanel})=>{
+// ============================================
+//  備考・メモの追加／編集（スマホ・2026-10-03）
+//   PC版と同じ {店}-memo の配列（1件 = {content}）に書く。
+//   クイック項目（PCの「⚙ クイック編集」で作った定型文）はタップで1行足す／外す。
+// ============================================
+const MemoSheet=({dateLabel,isNew,initContent,items,onSave,onDelete,onClose})=>{
+  const [content,setContent]=useState(initContent||'');
+  const [busy,setBusy]=useState(false);
+  const lines=String(content||'').split(String.fromCharCode(10));
+  const joinLines=a=>a.join(String.fromCharCode(10));
+  const empty=!String(content||'').trim();
+  const box={width:'100%',padding:'10px 12px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16,boxSizing:'border-box',minHeight:120,resize:'vertical',background:'white'};
+  return (
+    <div onClick={busy?undefined:onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3000,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 20px',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+          <div>
+            <div style={{fontWeight:900,fontSize:15,color:'#7c3aed'}}>📝 備考・メモ{isNew?'を追加':'を編集'}</div>
+            <div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{dateLabel}</div>
+          </div>
+          <button onClick={onClose} disabled={busy}
+            style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+        {(items||[]).length>0&&(
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+            {(items||[]).map((si,i)=>{
+              const on=!!(si.text&&lines.includes(si.text));
+              return (
+                <button key={si.id||i}
+                  onClick={()=>setContent(on?joinLines(lines.filter(l=>l!==si.text)):(String(content||'')?joinLines([String(content),si.text]):si.text))}
+                  style={{padding:'7px 13px',borderRadius:20,border:'2px solid '+(on?'#10b981':'#6ee7b7'),background:on?'#d1fae5':'#ecfdf5',color:on?'#065f46':'#059669',fontSize:13,fontWeight:700}}>
+                  {si.text}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <textarea style={box} value={content} onChange={e=>setContent(e.target.value)} maxLength={500}
+          placeholder="例：部品待ち・代車は午後返却"/>
+        <div style={{display:'flex',gap:8,marginTop:10}}>
+          {!isNew&&(
+            <button disabled={busy}
+              onClick={async()=>{ if(!window.confirm('この備考・メモを消しますか？'))return; setBusy(true); try{ await onDelete(); }finally{ setBusy(false); } }}
+              style={{flex:'0 0 92px',padding:'13px 0',borderRadius:12,border:'none',background:'#fee2e2',color:'#b91c1c',fontSize:14,fontWeight:800}}>🗑 削除</button>
+          )}
+          <button disabled={busy||empty}
+            onClick={async()=>{ setBusy(true); try{ await onSave(String(content)); }finally{ setBusy(false); } }}
+            style={{flex:1,padding:'13px 0',borderRadius:12,border:'none',background:'#7c3aed',color:'white',fontSize:15,fontWeight:800,opacity:(busy||empty)?0.5:1}}>
+            {busy?'保存中…':'✓ 保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,arrivedOv,mySchedPanel,onEditMemo})=>{
   const sc=vsId==='honten'?'#1d4ed8':'#dc2626';
   const irows=(inspData[dk]||[]).filter(r=>r&&r.name&&!r.pendingApproval&&r.bookingStatus!=='cancelled');
   const sorted=[...irows.filter(r=>normStore(r.store)===vsId),...irows.filter(r=>!normStore(r.store)),...irows.filter(r=>normStore(r.store)&&normStore(r.store)!==vsId)];
@@ -1723,10 +1780,23 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
               })}
             </div>
           )}
-          {memos.length>0&&(
+          {(memos.length>0||!!onEditMemo)&&(
             <div style={{marginBottom:14}}>
               <div style={{fontWeight:800,fontSize:12,color:'#7c3aed',marginBottom:8}}>📝 備考・メモ</div>
-              {memos.map((m,i)=><div key={i} style={{padding:'8px 10px',marginBottom:4,background:'#faf5ff',borderRadius:10,border:'1px solid #e9d5ff',fontSize:12}}>{m.content||m.text||''}</div>)}
+              {memos.map((mm,i)=>(
+                <div key={i} onClick={()=>{if(onEditMemo)onEditMemo(dk,i);}}
+                  style={{padding:'8px 10px',marginBottom:4,background:'#faf5ff',borderRadius:10,border:'1px solid #e9d5ff',fontSize:12,whiteSpace:'pre-wrap',display:'flex',gap:6,alignItems:'flex-start'}}>
+                  <span style={{flex:1}}>{mm.content||mm.text||''}</span>
+                  {onEditMemo&&<span style={{fontSize:11,color:'#a78bfa',fontWeight:800,flexShrink:0}}>✎</span>}
+                </div>
+              ))}
+              {/* ★スマホからも足せる・直せるようにした（2026-10-03 ユーザー報告） */}
+              {onEditMemo&&(
+                <div onClick={()=>onEditMemo(dk,null)}
+                  style={{marginTop:6,padding:'11px 0',textAlign:'center',borderRadius:12,border:'2px dashed #c4b5fd',background:'#faf5ff',color:'#6d28d9',fontWeight:800,fontSize:13}}>
+                  ＋ 備考・メモを追加
+                </div>
+              )}
             </div>
           )}
           {emptyDay&&(
@@ -2201,7 +2271,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   );
 };
 
-const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
+const ScheduleView=({onEditMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
   const today=new Date();
   const [ds,setDs]=useState({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()});
   useEffect(()=>{if(initDate)setDs(initDate);},[initDate]);
@@ -2555,7 +2625,20 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
         <div style={{margin:'12px 12px 20px'}}>
           <div style={{fontWeight:900,fontSize:13,color:'#7c3aed',marginBottom:6}}>📝 備考・メモ</div>
           {memos.length===0?<div style={{background:'white',borderRadius:12,padding:12,textAlign:'center',color:'#94a3b8',fontSize:12,border:'1px solid #f1f5f9'}}>なし</div>:
-            memos.map((m,i)=><div key={i} style={{background:'#faf5ff',borderRadius:10,padding:'8px 11px',marginBottom:4,border:'1px solid #e9d5ff',fontSize:12,color:'#374151'}}>{m.content||m.text||''}</div>)}
+            memos.map((mm,i)=>(
+              <div key={i} onClick={()=>{if(!otherView&&onEditMemo)onEditMemo(dk,i);}}
+                style={{background:'#faf5ff',borderRadius:10,padding:'8px 11px',marginBottom:4,border:'1px solid #e9d5ff',fontSize:12,color:'#374151',whiteSpace:'pre-wrap',display:'flex',gap:6,alignItems:'flex-start'}}>
+                <span style={{flex:1}}>{mm.content||mm.text||''}</span>
+                {!otherView&&onEditMemo&&<span style={{fontSize:11,color:'#a78bfa',fontWeight:800,flexShrink:0}}>✎</span>}
+              </div>
+            ))}
+          {/* ★備考・メモの追加／編集（2026-10-03 ユーザー報告。他店を見ている時は閲覧のみ） */}
+          {!otherView&&onEditMemo&&(
+            <div onClick={()=>onEditMemo(dk,null)}
+              style={{marginTop:6,padding:'12px 0',textAlign:'center',borderRadius:12,border:'2px dashed #c4b5fd',background:'#faf5ff',color:'#6d28d9',fontWeight:800,fontSize:13}}>
+              ＋ 備考・メモを追加
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -3859,6 +3942,8 @@ const App=()=>{
   const [schedDataS,setSchedDataS]=useState({});
   const [memoDataH,setMemoDataH]=useState({});
   const [memoDataS,setMemoDataS]=useState({});
+  const [memoItemsRaw,setMemoItemsRaw]=useState([]);   // 備考のクイック項目（PCで作った定型文・2026-10-03）
+  const [memoEdit,setMemoEdit]=useState(null);         // 備考・メモの追加／編集 {dk,idx}（idx=null で新規）
   const [loanerResH,setLoanerResH]=useState({});
   const [rentalCars,setRentalCars]=useState([]);
   const [rentalResData,setRentalResData]=useState({});
@@ -3999,7 +4084,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -4029,6 +4114,7 @@ const App=()=>{
       if(isPlainObj(onH))setOffNoteH(onH);
       if(isPlainObj(onS))setOffNoteS(onS);
       if(isPlainObj(msch))setMySched(msch);
+      if(Array.isArray(mitems))setMemoItemsRaw(mitems);
       setGasOk(FB_ON?!(window.__hubGasDown||0):true);   // Firestore では購読の失敗（fbDown）を接続状態に反映
     }catch{setGasOk(false);}
     finally{fetchBusyRef.current=false;}
@@ -4166,6 +4252,26 @@ const App=()=>{
   };
   // マイスケジュール（公開予定）の保存：サーバー最新値に対して自分の予定だけ足す／直す／消す
   const saveMySched=m=>writeShared(STOR+'mysched',{},m,v=>setMySched(v),null,true).then(()=>true).catch(()=>false);
+  // 備考・メモ（2026-10-03）：{店}-memo の その日の配列に 1件 {content} を足す／直す／消す（PC版と同じ形）
+  //   content が空なら その1件を消す。番号がずれている（他の端末が消した）時は足す扱いにする。
+  const saveDayMemo=async(dk,idx,content)=>{
+    const key=storKey('memo',vsId);
+    const set=vsId==='honten'?setMemoDataH:setMemoDataS;
+    const t=String(content||'').trim().slice(0,500);
+    try{
+      await writeShared(key,{},b=>{
+        const arr=Array.isArray(b[dk])?[...b[dk]]:[];
+        if(idx==null||idx<0||idx>=arr.length){ if(!t)return undefined; arr.push({content:t}); }
+        else if(!t){ arr.splice(idx,1); }
+        else { arr[idx]={...(arr[idx]||{}),content:t}; }
+        const n={...b}; if(arr.length)n[dk]=arr; else delete n[dk]; return n;
+      },v=>set(v),null,true);
+      setMemoEdit(null);
+    }catch(e){
+      alert('⚠️ 備考・メモの保存がサーバーに反映されていません。'+String.fromCharCode(10)+'もう一度お試しください。');
+      fetchAll(true);
+    }
+  };
   // 休日メモ（2026-09-20）：{店}-offnote の "dk::氏名" に文字列。空なら消す
   const saveOffNote=async(store,dk,name,text)=>{
     const key=storKey('offnote',store), k=dk+'::'+name, t=String(text||'').trim().slice(0,30);
@@ -4897,7 +5003,7 @@ const App=()=>{
         </div>
       )}
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0}}>
-        {tab==='sched'&&<ScheduleView otherView={otherView} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
+        {tab==='sched'&&<ScheduleView onEditMemo={(dk,idx)=>setMemoEdit({dk,idx})} otherView={otherView} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
           loanerResH={loanerResH} loanerResS={loanerResS} loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId} initDate={schedInitDate} onOpenEdit={openEdit} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
           schedRestrictions={schedRestrictions}
           staffList={((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(s=>s.store===vsId)).filter(s=>s.badge!=='president'&&s.myNumber!==0)}
@@ -4919,10 +5025,23 @@ const App=()=>{
           monthlyHolidays={monthlyHolidays} onToggle={toggleDayOff}
           offNoteH={offNoteH} offNoteS={offNoteS} onSaveNote={saveOffNote}/>}
       </div>
-      {dayDetail&&<DayDetailModal {...dayDetail} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
+      {dayDetail&&<DayDetailModal {...dayDetail} onEditMemo={otherView?null:(dk,idx)=>setMemoEdit({dk,idx})} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
         onClose={()=>setDayDetail(null)}
         mySchedPanel={<MySchedPanel compact dk={dayDetail.dk} user={{uid:user.uid,name:user.name}} pub={mySched} savePub={saveMySched} priv={myPriv}/>}
         onGoSchedule={(y,m,d)=>{setSchedInitDate({y,m,d});setTab('sched');setDayDetail(null);}}/>}
+      {memoEdit&&(()=>{
+        const arr=((vsId==='honten'?memoDataH:memoDataS)[memoEdit.dk])||[];
+        const isNew=memoEdit.idx==null;
+        const cur=isNew?null:arr[memoEdit.idx];
+        const p=String(memoEdit.dk||'').split('-').map(Number);
+        const lbl=(p.length===3&&p[0])?(p[1]+'月'+p[2]+'日'):String(memoEdit.dk||'');
+        const items=(Array.isArray(memoItemsRaw)?memoItemsRaw:[]).map(si=>({...si,text:si.text||si.content||si.label||''})).filter(si=>si.text);
+        return <MemoSheet dateLabel={lbl} isNew={isNew} items={items}
+          initContent={cur?(cur.content||cur.text||''):''}
+          onSave={c=>saveDayMemo(memoEdit.dk,memoEdit.idx,c)}
+          onDelete={()=>saveDayMemo(memoEdit.dk,memoEdit.idx,'')}
+          onClose={()=>setMemoEdit(null)}/>;
+      })()}
       {editMode&&<EditModal
         mode={editMode}
         initial={editMode.initial}
