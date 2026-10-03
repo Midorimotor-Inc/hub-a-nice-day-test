@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791002018625';
+    window.__APP_BUILD='build-1791004172272';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.32';
+const APP_VERSION = '3.33';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -11646,12 +11646,12 @@ function AppInner() {
       const restriction=schedRestrictions[modalDk];
       
       if(restriction){
-        // 制限時間帯かどうかをチェック
-        const toMin=(t)=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
-        const slotMin=toMin(newSlot);
-        // ★複数区間に対応（2026-10-03）。どれかの区間に入っていれば制限中
-        const isRestricted=slotMin>=startMin&&slotMin<endMin;
-        
+        // ★複数区間に対応（2026-10-03）。どれかの区間に入っていれば制限中。
+        //   ここは v3.25 で startMin/endMin（1区間だった頃の変数）を消し忘れており、
+        //   制限を掛けた日は【どの時間でも】保存が実行時エラーで落ちていた（2026-10-04 報告）。
+        //   必ず restrCovers を通すこと。中の形を直接見ないこと。
+        const isRestricted=restrCovers(restriction,newSlot);
+
         // 制限時間帯の場合、制限解除項目に含まれていないかチェック
         if(isRestricted){
           const workId=cleanData.work;
