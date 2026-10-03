@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791013461649';
+    window.__APP_BUILD='build-1791018438302';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.38';
+const APP_VERSION = '3.39';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -12501,6 +12501,20 @@ function AppInner() {
     setSelDate(d);
   };
   const dayMemos=dk?memoData[dk]||[]:[];
+  // ★備考の「終わった」印を付け外しする（2026-10-05 ユーザー指示）。誰が終わらせたかも残す。
+  //（この辺りはログイン前の早い return より後ろなので、ここでフックを足すと数が合わなくなる。ふつうの関数にする）
+  const toggleMemoDone=(i)=>{
+    setMemoData(p=>{
+      const rows=[...((p&&p[dk])||[])];
+      const m={...(rows[i]||{})};
+      const on=!m.done;
+      m.done=on;
+      m.doneBy=on?(currentUser?.name||''):'';
+      m.doneAt=on?Date.now():0;
+      rows[i]=m;
+      return {...p,[dk]:rows};
+    });
+  };
 
   return (
     <div style={{height:'100vh',overflow:'hidden',boxSizing:'border-box',paddingTop:(fsHint&&isFullscreen)?46:0,transition:'padding-top .2s ease',background:'linear-gradient(140deg,#7c2d12,#EA580C,#f97316)',fontFamily:'system-ui,-apple-system,sans-serif'}}>
@@ -13467,10 +13481,27 @@ function AppInner() {
                         }
                         acquireLock(mk,currentUser?.name);setCurLockKey(mk);
                         setMemoModal(i);
-                      }} style={{background:'#fffbeb',border:'2px solid #fcd34d',borderRadius:8,padding:'10px 14px',position:'relative',cursor:'pointer'}}
+                      }} style={{background:memo.done?'#fefce8':'#fffbeb',border:'2px solid '+(memo.done?'#fde68a':'#fcd34d'),borderRadius:8,padding:'10px 14px',position:'relative',cursor:'pointer',display:'flex',gap:10,alignItems:'flex-start'}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor='#f59e0b'}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor='#fcd34d'}>
-                        <div style={{fontSize:13,color:'#78350f',whiteSpace:'pre-wrap',paddingRight:24,minHeight:20}}>{memo.content||<span style={{color:'#d97706',fontStyle:'italic'}}>（空の備考）</span>}</div>
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=memo.done?'#fde68a':'#fcd34d'}>
+                        {/* ★やったら押す印（2026-10-05 ユーザー指示）。車検・整備の入庫済みチェックと同じ見た目 */}
+                        <span role="checkbox" aria-checked={!!memo.done}
+                          onClick={e=>{e.preventDefault();e.stopPropagation();toggleMemoDone(i);}}
+                          title={memo.done?'完了を取り消す':'終わったらクリック'}
+                          style={{width:20,height:20,flexShrink:0,marginTop:1,borderRadius:'50%',display:'inline-flex',alignItems:'center',justifyContent:'center',
+                            border:'2px solid '+(memo.done?'#dc2626':'#d97706'),background:memo.done?'#fde047':'white',cursor:'pointer'}}>
+                          {memo.done&&<span style={{color:'#dc2626',fontWeight:900,fontSize:14,lineHeight:1}}>✓</span>}
+                        </span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,color:memo.done?'#a16207':'#78350f',whiteSpace:'pre-wrap',paddingRight:24,minHeight:20,
+                            textDecoration:memo.done?'line-through':'none',opacity:memo.done?0.8:1}}>{memo.content||<span style={{color:'#d97706',fontStyle:'italic'}}>（空の備考）</span>}</div>
+                          {(memo.by||memo.doneBy)&&(
+                            <div style={{display:'flex',gap:10,flexWrap:'wrap',fontSize:10.5,color:'#a16207',marginTop:5}}>
+                              {memo.by&&<span>✍ {memo.by}</span>}
+                              {memo.done&&memo.doneBy&&<span style={{fontWeight:700,color:'#b45309'}}>✓ {memo.doneBy} 完了</span>}
+                            </div>
+                          )}
+                        </div>
                         <div style={{position:'absolute',top:7,right:7,fontSize:9,color:'#a16207'}}>✏️ 編集</div>
                       </div>
                     ))}
@@ -13873,9 +13904,11 @@ function AppInner() {
           dateLabel={dateLabel}
           onSave={(content)=>{
             if(isNew){
-              setMemoData(p=>({...p,[dk]:[...(p[dk]||[]),{content}]}));
+              // ★書いた人と日時を残す（2026-10-05）
+              setMemoData(p=>({...p,[dk]:[...(p[dk]||[]),{content,by:currentUser?.name||'',at:Date.now()}]}));
             } else {
-              setMemoData(p=>{const u=[...(p[dk]||[])];u[idx]={content};return{...p,[dk]:u};});
+              // 直した時は、書いた人と完了の印はそのまま引き継ぐ
+              setMemoData(p=>{const u=[...(p[dk]||[])];u[idx]={...(u[idx]||{}),content};return{...p,[dk]:u};});
             }
             releaseLock(curLockKey);setCurLockKey(null);
             setMemoModal(false);
