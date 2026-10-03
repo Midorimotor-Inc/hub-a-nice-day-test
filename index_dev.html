@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791004172272';
+    window.__APP_BUILD='build-1791007225277';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.33';
+const APP_VERSION = '3.34';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -12186,26 +12186,21 @@ function AppInner() {
     setView('schedule');
     setTimeout(()=>window.scrollTo({top:0,behavior:'instant'}),50);
   };
-  // ★顧客リストの開き方は、今の画面の大きさに合わせる（2026-09-30 ユーザー指示）。
-  //   ・全画面のとき   → 同じタブの中で開く（全画面のまま。「スケジュールに戻る」で元の画面へ戻っても全画面のまま）
-  //   ・ふつうのとき   → 別タブで開く（戻ってもふつうの大きさのまま）
-  //   新しいタブをこちらから全画面にすることはブラウザの決まりでできないため、この形にしている。
   const isFsNow=()=>{ try{ return !!(document.fullscreenElement||document.webkitFullscreenElement); }catch(e){ return false; } };
+  // ★顧客リストは【いつでも別タブ】で開く（2026-10-04 ユーザー決定）。
+  //   検索から選んだ時も、ナビの「顧客リスト」からも同じ規則。
+  //   絞り込みの指定は URL と sessionStorage の両方で渡す（どちらでも受け取れる）。
+  //   ※新しいタブをこちらから全画面にすることはブラウザの決まりでできないので、
+  //     スケジュールを全画面で使っていても、リストのタブは全画面にはならない（承知の上での選択）。
+  //     以前（v3.08〜v3.33）は大きさを揃えるために同じタブの中で開いていた。
   const openCustList=useCallback((find)=>{
-    // ★いつでも同じタブの中で開く（2026-09-30 ユーザー指示）。別タブにすると、
-    //   タブを移るたびにブラウザが全画面を解除するため、画面の大きさが揃わなくなる。
-    //   同じタブなら、全画面でもふつうの大きさでも、行き来してもそのまま引き継がれる。
-    if(find&&find.name){ try{ sessionStorage.setItem(STOR+'cust-find',JSON.stringify({q:find.name,file:find.file||'',ts:Date.now()})); }catch(e){} }
-    setCustOverlay(true);
-    // すでに開いている（隠してある）時は、中の画面へ絞り込みを知らせる
-    if(find&&find.name){
-      setTimeout(()=>{
-        try{
-          const ifr=document.querySelector('iframe[title="顧客リスト"]');
-          if(ifr&&ifr.contentWindow)ifr.contentWindow.postMessage({type:'hub-cust-find',q:find.name,file:find.file||''},location.origin);
-        }catch(e){}
-      },120);
-    }
+    const q=(find&&find.name)?String(find.name):'';
+    const file=(find&&find.file)?String(find.file):'';
+    if(q){ try{ sessionStorage.setItem(STOR+'cust-find',JSON.stringify({q,file,ts:Date.now()})); }catch(e){} }
+    const url='./customers.html'+(q?('?find='+encodeURIComponent(q)+(file?('&file='+encodeURIComponent(file)):'')):'');
+    const w=window.open(url,'hub-customers');   // 同じ名前のタブがあれば、そのタブを使い回す
+    if(w){ try{ w.focus(); }catch(e){} }
+    else alert('別のタブを開けませんでした。ブラウザのポップアップ設定をご確認ください。');
   },[]);
   const handleFindGoCust=(c)=>{
     setShowFind(false);

@@ -94,6 +94,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
+### 顧客リストは「いつでも別タブ」で開く（v3.34・2026-10-04・ユーザー決定）
+- ナビの「顧客リスト」も、🔍 検索から選んだ時も、**必ず新しいタブ**（`window.open(url,'hub-customers')`）。同じ名前のタブがあれば使い回す。
+  絞り込みは URL（`?find=氏名&file=月`）と sessionStorage の両方で渡す。
+- リストのタブの「スケジュールに戻る」は、**そのタブを閉じる**（`window.opener` があるので閉じられる。閉じられなかった時だけ ./index.html へ）。
+- **注意：新しいタブをこちらから全画面にすることはブラウザの決まりでできない。** スケジュールを全画面で使っていても、リストのタブは全画面にならない。これは承知の上での選択（2026-10-04）。
+  v3.08〜v3.33 は大きさを揃えるため同じタブ（iframe オーバーレイ）で開いていた。元に戻す時は `openCustList` と `custOverlay` を見ること（オーバーレイの部品はそのまま残してある）。
+- 検査は `node cust_open_mode_test.js`（別タブで開く／元のタブには開かない／戻るで閉じる／検索からは ?find= 付き）。
+
 ### 保管箱の予約は「削除」も効いていなかった（v3.32・2026-10-04）
 - 日付変更だけでなく**削除も `insp` にしか書かない**ので、14日より前の予約は画面から消えても**読み直すと戻ってくる**（2026-10-04 に実データで確認：ユーザーが 8/26 を消したのに `insp-arch` にそのまま残っていた）。
 - 直し：`archDropOneBooking(arch,dk,tgt)` で、削除したその日の保管箱からもその予約を外す（PC・スマホ）。本人確認は **custId → seq → 氏名＋ナンバー**（画面の削除と同じ規約）。

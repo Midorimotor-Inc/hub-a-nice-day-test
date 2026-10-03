@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1791004172272';
+  window.__APP_BUILD='build-1791007225277';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.33'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.34'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -3669,12 +3669,22 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       {/* ── ヘッダー ── */}
       <div style={{flexShrink:0,background:'linear-gradient(135deg,#1e1b4b,#1d4ed8)',padding:'10px 16px',display:'flex',alignItems:'center',gap:10}}>
         <a href="./index.html" onClick={e=>{
-            if(IS_EMBED){
+            // ★別タブで開かれた時（2026-10-04 から顧客リストはいつでも別タブ）は、
+            //   このタブを閉じてスケジュールのタブへ戻る。別のタブへ行くと全画面は解除されるが、
+            //   スケジュールのタブはそのままなので、戻れば元の大きさで続けられる。
+            const standalone=!IS_EMBED&&(()=>{try{return !!(window.opener&&!window.opener.closed);}catch(err){return false;}})();
+            if(IS_EMBED||standalone){
               e.preventDefault();
               // ★保存が終わるまで閉じない。オーバーレイ(iframe)を閉じると裏で走っている
               //   リスト本体・カレンダー枠・代車・他PCへの通知の保存がその場で死ぬ。
               //   （ページ遷移ではないので beforeunload の警告も出ない）
-              const close=()=>{try{window.parent.postMessage({type:'hub-close-customers'},location.origin);}catch(err){}};
+              const close=()=>{
+                if(IS_EMBED){try{window.parent.postMessage({type:'hub-close-customers'},location.origin);}catch(err){}return;}
+                try{ if(window.opener&&!window.opener.closed)window.opener.focus(); }catch(err){}
+                try{ window.close(); }catch(err){}
+                // 閉じられなかった時（ブラウザが拒むことがある）は今までどおり画面を戻す
+                setTimeout(()=>{ try{ if(!window.closed)location.href='./index.html'; }catch(err){} },400);
+              };
               if(savesInFlight()<=0){close();return;}
               let waited=0;
               setClosing('保存中です… 完了までお待ちください');

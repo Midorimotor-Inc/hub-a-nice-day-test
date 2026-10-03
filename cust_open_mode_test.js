@@ -1,8 +1,8 @@
-// 顧客リストの開き方が、今の画面の大きさに合うかの検査（2026-09-30 ユーザー指示）。
-//   顧客リストは いつでも同じタブの中 で開く。そうすると行き来しても画面の大きさが揃う。
-//   ・ふつうの大きさ → リストもふつう。リストの中で全画面にして戻れば、スケジュールも全画面。
-//   ・全画面         → リストも全画面。「スケジュールに戻る」で戻っても全画面のまま。
-//   検索から選んだ時も、ナビの「顧客リスト」からも同じ規則。
+// 顧客リストの開き方の検査（2026-10-04 ユーザー決定：いつでも別タブ）。
+//   ・ナビの「顧客リスト」も、検索から選んだ時も、新しいタブで開く。
+//   ・元のタブ（スケジュール）の中には開かない。
+//   ・検索から選んだ時は、そのお客様で絞り込まれた状態で開く（?find=）。
+//   ・リストのタブの「スケジュールに戻る」で、そのタブが閉じる。
 //   実行: node cust_open_mode_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -62,52 +62,54 @@ const signedInInit = ([me, stor]) => {
   await clickText(page, 'このまま使う');   // 全画面の案内は閉じる（＝ふつうの大きさで始める）
   await page.waitForTimeout(600);
 
-  // ── ふつうの大きさ：同じタブの中で開く（大きさが揃う） ──
-  console.log('\n■ ふつうの大きさの時');
-  let newTab0 = null;
-  ctx.once('page', p => { newTab0 = p; });
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.style.width === '118px' && e.innerText.includes('顧客リスト')); if (b) b.click(); });
+
+  // ── ナビの「顧客リスト」 ──
+  console.log(String.fromCharCode(10) + "■ ナビの「顧客リスト」");
+  const waitTab = () => new Promise(res => { const to = setTimeout(() => res(null), 8000); ctx.once("page", p => { clearTimeout(to); res(p); }); });
+  let tabP = waitTab();
+  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(e => e.style.width === "118px" && e.innerText.includes("顧客リスト")); if (b) b.click(); });
+  const tab1 = await tabP;
+  t("★新しいタブで開く", !!tab1, { tab: !!tab1 });
+  if (tab1) await tab1.waitForLoadState("domcontentloaded").catch(() => {});
+  t("開いたタブは顧客リスト", !!tab1 && /customers.html/.test(tab1.url()), tab1 && tab1.url());
+  t("元のタブの中には開かない", await page.evaluate(() => { const f = document.querySelector("iframe[title=\"顧客リスト\"]"); return !f || f.parentElement.style.display === "none"; }));
+  t("顧客リストの中身が出ている", !!tab1 && await tab1.waitForFunction(() => document.body.innerText.includes("顧客リスト"), null, { timeout: 20000 }).then(() => true).catch(() => false));
+
+  // ── リストのタブの「スケジュールに戻る」 ──
+  console.log(String.fromCharCode(10) + "■ スケジュールに戻る");
+  if (tab1) {
+    await tab1.evaluate(() => { const a = [...document.querySelectorAll("a")].find(e => e.innerText.includes("スケジュールに戻る")); if (a) a.click(); });
+    await page.waitForTimeout(2000);
+  }
+  t("★そのタブが閉じる", !!tab1 && tab1.isClosed(), { closed: tab1 && tab1.isClosed(), url: tab1 && !tab1.isClosed() ? tab1.url() : "" });
+
+  // ── 検索から選んだ時 ──
+  console.log(String.fromCharCode(10) + "■ 検索から選んだ時");
+  tabP = waitTab();
+  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(e => e.innerText.trim() === "検索" && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => {
+    const i = [...document.querySelectorAll("input")].find(e => e.offsetParent !== null && /セリエ/.test(e.placeholder || ""));
+    if (!i) return false;
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    s.call(i, "井上"); i.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  });
   await page.waitForTimeout(1500);
-  t('同じタブの中で顧客リストが開く', await page.evaluate(() => { const f = document.querySelector('iframe[title="顧客リスト"]'); return !!f && f.parentElement.style.display !== 'none'; }));
-  t('新しいタブは開かない', !newTab0, { newTab: !!newTab0 });
-  t('ふつうの大きさのまま', await page.evaluate(() => !(document.fullscreenElement || document.webkitFullscreenElement)));
-  const fr0 = page.frames().find(f => /customers.html/.test(f.url()));
-  t('顧客リストの中身が出ている', !!fr0 && await fr0.waitForFunction(() => document.body.innerText.includes('顧客リスト'), null, { timeout: 15000 }).then(() => true).catch(() => false));
-  if (fr0) {
-    await fr0.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('全画面') && !e.innerText.includes('元に戻す')); if (b) b.click(); });
-    await page.waitForTimeout(1000);
-  }
-  t('リストの中で全画面にできた（検査の前提）', await page.evaluate(() => !!(document.fullscreenElement || document.webkitFullscreenElement)));
-  if (fr0) {
-    await fr0.evaluate(() => { const a = [...document.querySelectorAll('a')].find(e => e.innerText.includes('スケジュールに戻る')); if (a) a.click(); });
-    await page.waitForTimeout(1500);
-  }
-  t('戻るとリストが閉じる', await page.evaluate(() => { const f = document.querySelector('iframe[title="顧客リスト"]'); return !f || f.parentElement.style.display === 'none'; }));
-  t('★リストで全画面にしたら、戻ったスケジュールも全画面', await page.evaluate(() => !!(document.fullscreenElement || document.webkitFullscreenElement)));
-  // ── 全画面：同じタブの中で開く ──
-  console.log('\n■ 全画面の時');
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes('全画面') && !e.innerText.includes('元に戻す')); if (b) b.click(); });
-  await page.waitForTimeout(800);
-  const isFs = await page.evaluate(() => !!(document.fullscreenElement || document.webkitFullscreenElement));
-  t('全画面に入れた（検査の前提）', isFs);
-  let newTab = null;
-  ctx.once('page', p => { newTab = p; });
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.style.width === '118px' && e.innerText.includes('顧客リスト')); if (b) b.click(); });
-  await page.waitForTimeout(1500);
-  t('同じタブの中で顧客リストが開く', await page.evaluate(() => !!document.querySelector('iframe[title="顧客リスト"]')));
-  t('新しいタブは開かない', !newTab, { newTab: !!newTab });
-  t('全画面のまま', await page.evaluate(() => !!(document.fullscreenElement || document.webkitFullscreenElement)));
-  // 「スケジュールに戻る」で閉じても全画面のまま
-  const frame = page.frames().find(f => /customers\.html/.test(f.url()));
-  t('顧客リストの中身が出ている', !!frame && await frame.waitForFunction(() => document.body.innerText.includes('顧客リスト'), null, { timeout: 15000 }).then(() => true).catch(() => false));
-  if (frame) {
-    await frame.evaluate(() => { const a = [...document.querySelectorAll('a')].find(e => e.innerText.includes('スケジュールに戻る')); if (a) a.click(); });
-    await page.waitForTimeout(1500);
-  }
-  t('戻ると顧客リストが閉じる', await page.evaluate(() => { const f = document.querySelector('iframe[title="顧客リスト"]'); return !f || f.parentElement.style.display === 'none'; }));
-  t('戻っても全画面のまま', await page.evaluate(() => !!(document.fullscreenElement || document.webkitFullscreenElement)));
-  t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
-  await ctx.close(); await browser.close(); server.close();
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'}  成功 ${pass} / 失敗 ${fail}`);
+  const clicked = await page.evaluate(() => {
+    const all = [...document.querySelectorAll("div")].filter(e => e.offsetParent !== null && /井上花子/.test(e.innerText || "") && /顧客/.test(e.innerText || ""));
+    const row = all.filter(e => !all.some(o => o !== e && e.contains(o)))[0] || all[all.length - 1];
+    if (!row) return false;
+    row.click(); return true;
+  });
+  const tab2 = clicked ? await tabP : null;
+  t("検索の顧客行を押せた", clicked);
+  t("★新しいタブで開く", !!tab2, { tab: !!tab2 });
+  if (tab2) await tab2.waitForLoadState("domcontentloaded").catch(() => {});
+  t("★その人で絞り込んだ形で開く（?find=）", !!tab2 && /find=/.test(tab2.url()), tab2 && tab2.url());
+  t("JSエラーなし", errs.length === 0, errs.slice(0, 3));
+
+  await browser.close(); server.close();
+  console.log(String.fromCharCode(10) + '結果: ' + pass + ' PASS / ' + fail + ' FAIL');
   process.exit(fail === 0 ? 0 : 1);
-})().catch(e => { console.error('検査が止まりました:', e); process.exit(1); });
+})().catch(e => { console.error("検査が止まりました:", e); process.exit(1); });
