@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791010739036';
+    window.__APP_BUILD='build-1791011524096';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.36';
+const APP_VERSION = '3.37';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7513,16 +7513,8 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
         {row.rentalLabel||loanerLabel||'—'}</span></td>
       <td style={TD}><span style={{fontSize:13,color:pending||isOverLimit||isCancelled?'#6b7280':'#374151'}}>{row.tokuten||'—'}</span></td>
       <td style={TD}>{(row.entryDate&&row.entryDate!==dk)?(()=>{const p=row.entryDate.split('-');const mmdd=String(p[1]).padStart(2,'0')+'/'+String(p[2]).padStart(2,'0');return <span title="事前入庫（入庫日）" style={{display:'inline-flex',flexDirection:'column',lineHeight:1.15}}><span style={{fontWeight:800,fontSize:12,color:pending||isOverLimit||isCancelled?'#9ca3af':'#c2410c',whiteSpace:'nowrap'}}>🚗{mmdd}</span>{row.time&&<span style={{fontSize:10,color:'#9ca3af'}}>{specialSlotLabel(row.time)}</span>}</span>;})():<span style={{fontWeight:600,fontSize:13,color:pending||isOverLimit||isCancelled?'#6b7280':'#374151'}}>{row.time||'—'}</span>}</td>
-      <td style={TD}>{row.note
-        ?<div style={{display:'flex',flexWrap:'wrap',gap:3,alignItems:'center'}}>
-           {row.note.split('\n').map((line,i)=>{
-             const m=noteQItems.find(si=>si.text&&si.text===line);
-             return m
-               ?<span key={i} style={{display:'inline-flex',alignItems:'center',padding:'1px 7px',background:'#ecfdf5',border:'1.5px solid #6ee7b7',borderRadius:20,fontSize:10,fontWeight:700,color:'#065f46',whiteSpace:'nowrap',opacity:pending||isOverLimit?0.5:1}}>{m.label}</span>
-               :<span key={i} style={{fontSize:13,color:pending||isOverLimit||isCancelled?'#6b7280':'#374151'}}>{line}</span>;
-           })}
-         </div>
-        :<span style={{color:pending||isOverLimit||isCancelled?'#6b7280':'#9ca3af'}}>—</span>}</td>
+      {/* ★備考は2行まで。なぞると全文が吹き出しで出る（2026-10-05・A案） */}
+      <td style={TD}><NoteCell text={row.note} items={noteQItems} dim={!!(pending||isOverLimit||isCancelled)} title="備考"/></td>
     </tr>
   );
 });
@@ -7562,6 +7554,64 @@ const RestrictionTip=({r,style,rect})=>{
           ))}
         </ul>}
       <div style={{marginTop:8,fontSize:10,color:'#6b7280'}}>上記以外（{ngCount}件）は入庫制限中です</div>
+    </div>
+  );
+};
+
+// ============================================
+//  備考（車検）／内容（整備）のセル（2026-10-05 ユーザー決定・A案）
+//   ・長い時は2行までに畳む（表が間延びしない）
+//   ・なぞると、そのすぐ下に全文の吹き出しを出す。短くて全部見えている時は出さない
+//   ・吹き出しは画面に対する固定位置。表の高さもスクロールも動かさない
+//   ★畳むための overflow:hidden は【中の箱】に掛ける。セルに掛けると吹き出しが切り取られる
+// ============================================
+const NOTE_FOLD_H=38;   // 2行ぶんの高さ
+const NoteCell=({text,items,dim,title})=>{
+  const [rect,setRect]=useState(null);
+  const [clipped,setClipped]=useState(false);
+  const boxRef=useRef(null);
+  const lines=String(text==null?'':text).split(String.fromCharCode(10));
+  const chip=(line,i,small)=>{
+    const m=(items||[]).find(si=>si.text&&si.text===line);
+    return m
+      ?<span key={i} style={{display:'inline-flex',alignItems:'center',padding:'1px 7px',marginRight:4,background:'#ecfdf5',border:'1.5px solid #6ee7b7',borderRadius:20,fontSize:small?10:11,fontWeight:700,color:'#065f46',whiteSpace:'nowrap',opacity:dim?0.5:1}}>{m.label}</span>
+      :<span key={i} style={{fontSize:13,marginRight:4,color:dim?'#6b7280':'#374151'}}>{line}</span>;
+  };
+  useEffect(()=>{
+    const el=boxRef.current;
+    if(!el){setClipped(false);return;}
+    setClipped(el.scrollHeight>el.clientHeight+1);
+  },[text]);
+  const onEnter=e=>{
+    if(!clipped)return;
+    try{const b=e.currentTarget.getBoundingClientRect();setRect({left:b.left,top:b.top,bottom:b.bottom,width:b.width});}catch(x){}
+  };
+  if(!text)return <span style={{color:dim?'#6b7280':'#9ca3af'}}>—</span>;
+  const W=Math.max(260,Math.min(380,typeof window!=='undefined'?window.innerWidth-24:360));
+  const pop=rect?(()=>{
+    const left=Math.max(8,Math.min(rect.left,(window.innerWidth||1200)-W-8));
+    const below=rect.bottom+4, fits=below+180<=(window.innerHeight||800)-8;
+    return fits?{position:'fixed',left,top:below}:{position:'fixed',left,bottom:Math.max(8,(window.innerHeight||800)-rect.top+4)};
+  })():null;
+  return (
+    <div onMouseEnter={onEnter} onMouseLeave={()=>setRect(null)} style={{position:'relative'}}>
+      {/* ★flex にすると長い1行が縮まず、横にはみ出したまま1行になってしまう（列が異常に広がる）。
+          ふつうの文章の箱にして折り返させる。 */}
+      {/* 幅も決めておく（決めないと列がどこまでも横に広がって、1行のまま畳まれない） */}
+      <div ref={boxRef} style={{maxWidth:300,maxHeight:NOTE_FOLD_H,overflow:'hidden',lineHeight:1.45,wordBreak:'break-word',whiteSpace:'normal'}}>
+        {lines.map((line,i)=>chip(line,i,true))}
+      </div>
+      {clipped&&<div style={{position:'absolute',right:0,bottom:-2,fontSize:11,fontWeight:800,color:'#0891b2',background:'linear-gradient(90deg,rgba(255,255,255,0),#fff 40%)',paddingLeft:10,pointerEvents:'none'}}>…</div>}
+      {rect&&(
+        <div style={{...pop,zIndex:9999,width:W,background:'white',border:'2px solid #0891b2',borderRadius:10,
+          boxShadow:'0 12px 32px rgba(0,0,0,0.22)',padding:'10px 12px',pointerEvents:'none',whiteSpace:'normal',
+          wordBreak:'break-word',boxSizing:'border-box',textAlign:'left'}}>
+          <div style={{fontSize:10.5,fontWeight:800,color:'#0e7490',marginBottom:5,letterSpacing:'.04em'}}>📝 {title||'備考'}（全文）</div>
+          <div style={{lineHeight:1.75,wordBreak:'break-word'}}>
+            {lines.map((line,i)=>chip(line,i,false))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -7639,16 +7689,8 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
         {loanerLocked&&!row.rentalLabel&&<span title="限定：この代車は最適化で動かしません" style={{marginRight:3,fontSize:11}}>🔒</span>}
         {row.rentalLabel||loanerLabel||'—'}</span></td>
       <td style={TD}><span style={{fontSize:13,color:'#374151'}}>{row.shimi||'—'}</span></td>
-      <td style={TD}>{row.content
-        ?<div style={{display:'flex',flexWrap:'wrap',gap:3,alignItems:'center'}}>
-           {row.content.split('\n').map((line,i)=>{
-             const m=contentQItems.find(si=>si.text&&si.text===line);
-             return m
-               ?<span key={i} style={{display:'inline-flex',alignItems:'center',padding:'1px 7px',background:'#ecfdf5',border:'1.5px solid #6ee7b7',borderRadius:20,fontSize:10,fontWeight:700,color:'#065f46',whiteSpace:'nowrap'}}>{m.label}</span>
-               :<span key={i} style={{fontSize:13,color:'#374151'}}>{line}</span>;
-           })}
-         </div>
-        :<span style={{color:'#9ca3af'}}>—</span>}</td>
+      {/* ★内容は2行まで。なぞると全文が吹き出しで出る（2026-10-05・A案） */}
+      <td style={TD}><NoteCell text={row.content} items={contentQItems} dim={false} title="内容"/></td>
     </tr>
   );
 });

@@ -18,7 +18,10 @@
   .badge{display:inline-block;font-size:10px;font-weight:800;border-radius:20px;padding:1px 8px;color:#fff;background:#c2410c}
   .badge.q{background:#0891b2}
   /* 備考セル（今：1行で切れる） */
-  .memo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+  /* ★セルそのものに overflow:hidden を掛けると、中に出した吹き出しまで切り取られて見えない。
+     文字を切るのは中の span（.cut）に任せ、セルは切らない（実装でも同じ作りにする）。 */
+  .memo{max-width:0}
+  .memo .cut{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .memo.hoverable{cursor:help;position:relative}
   .memo.hoverable:hover{background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d}
   /* A案：なぞった所の近くに吹き出し */
@@ -34,7 +37,8 @@
   .fixpanel .ttl{font-size:11px;font-weight:800;color:#0e7490;margin-bottom:6px}
   .fixpanel .body{font-size:13px;line-height:1.8;white-space:pre-wrap}
   /* C案：その場で広がる */
-  .expand{white-space:normal;background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d;line-height:1.7}
+  .expand .cut{white-space:normal;overflow:visible}
+  .expand{background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d;line-height:1.7}
   .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:8px;line-height:1.7}
   .pick{display:inline-block;font-size:12px;font-weight:800;color:#fff;background:#1d4ed8;border-radius:20px;padding:3px 12px;margin-left:8px}
   .cols{display:flex;gap:16px;flex-wrap:wrap}
@@ -53,9 +57,9 @@
     <colgroup><col style="width:34px"><col style="width:120px"><col style="width:110px"><col style="width:92px"><col></colgroup>
     <tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>備考</th></tr>
     <tr><td>1</td><td class="nm">中野　嘉久<div class="sub">見取大介</div></td><td>ロードスター<div class="sub">ナンバー 8808</div></td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</td></tr>
+      <td class="memo"><span class="cut">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</span></td></tr>
     <tr class="alt"><td>2</td><td class="nm">椿<div class="sub">舟田</div></td><td>セレナ</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</td></tr>
+      <td class="memo"><span class="cut">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</span></td></tr>
   </table>
   <div class="kome">👆 「…」で切れていて、全部を読むには予約カードを開くしかない状態です。</div>
 </div>
@@ -72,10 +76,10 @@
     <colgroup><col style="width:34px"><col style="width:110px"><col style="width:100px"><col></colgroup>
     <tr><th>No</th><th>氏名</th><th>コース</th><th>備考（なぞってください）</th></tr>
     <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo hoverable">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり
+      <td class="memo hoverable"><span class="cut">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</span>
         <span class="pop insp"><span class="ttl">📝 備考（全文）</span>ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</span></td></tr>
     <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo hoverable">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと
+      <td class="memo hoverable"><span class="cut">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</span>
         <span class="pop insp"><span class="ttl">📝 備考（全文）</span>店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</span></td></tr>
   </table>
   <div style="height:120px"></div>
@@ -83,10 +87,10 @@
     <colgroup><col style="width:62px"><col style="width:110px"><col style="width:86px"><col></colgroup>
     <tr><th class="s">時間</th><th class="s">氏名</th><th class="s">作業</th><th class="s">内容（なぞってください）</th></tr>
     <tr><td>10:00</td><td class="nm">瀧本</td><td><span class="badge q">試</span></td>
-      <td class="memo hoverable">10時15分来店　ハスラーとソリオの乗り比べ希望。奥様も同乗されるのでチャイルドシート付きの車両を用意すること
+      <td class="memo hoverable"><span class="cut">10時15分来店　ハスラーとソリオの乗り比べ希望。奥様も同乗されるのでチャイルドシート付きの車両を用意すること</span>
         <span class="pop"><span class="ttl">📝 内容（全文）</span>10時15分来店　ハスラーとソリオの乗り比べ希望。奥様も同乗されるのでチャイルドシート付きの車両を用意すること</span></td></tr>
     <tr class="alt"><td>13:30</td><td class="nm">大山</td><td><span class="badge q">Q</span></td>
-      <td class="memo hoverable">オイル・エレメント交換＋タイヤ付替（持込）。待ち時間に商談あり、応接の準備をお願いします
+      <td class="memo hoverable"><span class="cut">オイル・エレメント交換＋タイヤ付替（持込）。待ち時間に商談あり、応接の準備をお願いします</span>
         <span class="pop"><span class="ttl">📝 内容（全文）</span>オイル・エレメント交換＋タイヤ付替（持込）。待ち時間に商談あり、応接の準備をお願いします</span></td></tr>
   </table>
 </div>
@@ -103,9 +107,9 @@
     <colgroup><col style="width:34px"><col style="width:110px"><col style="width:100px"><col></colgroup>
     <tr><th>No</th><th>氏名</th><th>コース</th><th>備考</th></tr>
     <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo" style="background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー…</td></tr>
+      <td class="memo" style="background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d"><span class="cut">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー…</span></td></tr>
     <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で…</td></tr>
+      <td class="memo"><span class="cut">店長の知り合いの紹介　新規　見積は必ず電話で…</span></td></tr>
   </table>
   <div class="fixpanel">
     <div class="ttl">📝 中野　嘉久 さん／備考（全文）</div>
@@ -126,7 +130,7 @@
     <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
       <td class="memo expand">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</td></tr>
     <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
-      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で…</td></tr>
+      <td class="memo"><span class="cut">店長の知り合いの紹介　新規　見積は必ず電話で…</span></td></tr>
   </table>
   <div class="kome">👆 1行目が3行分になり、下の行が押し下げられています。マウスを外すと戻るので、行が上下に動きます。</div>
 </div>
