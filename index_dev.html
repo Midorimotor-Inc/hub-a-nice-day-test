@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791007225277';
+    window.__APP_BUILD='build-1791008340964';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.34';
+const APP_VERSION = '3.35';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -10360,7 +10360,13 @@ function AppInner() {
   const [inspSlots,      setInspSlots]      =useState(1);
   const [showAllInsp,    setShowAllInsp]    =useState(true);
   const [memoModal,      setMemoModal]      =useState(false); // 備考モーダル
-  const [schedRestrictions, setSchedRestrictions] = useShared('schedRestrictions', {}); // 入庫制限データ
+  // ★入庫制限は店舗ごと（2026-10-04 ユーザー指示）。タイムスケジュールの予定は店ごとに立てるため。
+  //   車検の台数制限（inspLimits）は今までどおり両店共通。
+  //   元の共通キー 'schedRestrictions' のデータは fb_split_restrictions.js で両店へ写してある。
+  const [schedRestrH, setSchedRestrH] = useShared('honten-schedRestrictions', {});
+  const [schedRestrS, setSchedRestrS] = useShared('sanda-schedRestrictions', {});
+  const schedRestrictions    = vsId==='honten'?schedRestrH:schedRestrS;
+  const setSchedRestrictions = vsId==='honten'?setSchedRestrH:setSchedRestrS;
   const [restrictionModal, setRestrictionModal] = useState(false); // 入庫制限モーダル
   const [restrTip, setRestrTip] = useState('');                    // 入庫制限バッジのホバー説明（表示中のdk）
   const [restrTipRect2, setRestrTipRect2] = useState(null);        // そのバッジの位置（画面固定で出すため・2026-10-03）

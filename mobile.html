@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791007225277';
+  window.__APP_BUILD='build-1791008340964';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.34';
+const MOBILE_VERSION='3.35';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -150,7 +150,7 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   storKey('cdate','honten'),storKey('cdate','sanda'),STOR+'override-open',
   STOR+'rentalcars',STOR+'rres',
   storKey('cars','honten'),storKey('cars','sanda'),
-  STOR+'inspLimits','schedRestrictions',
+  STOR+'inspLimits',storKey('schedRestrictions','honten'),storKey('schedRestrictions','sanda'),   // ★入庫制限は店舗ごと（2026-10-04）
   storKey('dayoff','honten'),storKey('dayoff','sanda'),
   storKey('staff-v2','honten'),storKey('staff-v2','sanda'),
   storKey('pleave','honten'),storKey('pleave','sanda'),STOR+'mholidays',
@@ -4009,7 +4009,10 @@ const App=()=>{
   const [loanerCarsH,setLoanerCarsH]=useState(LOANERS_H);
   const [loanerCarsS,setLoanerCarsS]=useState(LOANERS_S);
   const [inspLimits,setInspLimits]=useState({});
-  const [schedRestrictions,setSchedRestrictions]=useState({}); // 入庫制限（PC版と同じくSTORなしの共有キー）
+  // ★入庫制限は店舗ごと（2026-10-04 ユーザー指示）。車検の台数制限は今までどおり両店共通。
+  //   （vsId は下で決まるので、実際の選び分けはそこでする）
+  const [schedRestrH,setSchedRestrH]=useState({});
+  const [schedRestrS,setSchedRestrS]=useState({});
   const [dayOffH,setDayOffH]=useState({});
   const [dayOffS,setDayOffS]=useState({});
   const [pleaveH,setPleaveH]=useState({});          // 有給（PC版 pleave-honten / pleave-sanda）
@@ -4123,6 +4126,7 @@ const App=()=>{
   const [viewStore,setViewStore]=useState(myStore);
   useEffect(()=>{setViewStore(myStore);},[myStore]);   // 人が変わったら自分の店に戻す
   const vsId=viewStore;
+  const schedRestrictions=vsId==='honten'?schedRestrH:schedRestrS;   // ★見ている店の入庫制限（2026-10-04）
   const otherView=vsId!==myStore;
   const cDays=vsId==='honten'?closedDaysH:closedDaysS;
   const cDates=vsId==='honten'?closedDatesH:closedDatesS;
@@ -4137,7 +4141,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -4156,7 +4160,8 @@ const App=()=>{
       if(Array.isArray(carsH)&&carsH.length>0)setLoanerCarsH(carsH);
       if(Array.isArray(carsS)&&carsS.length>0)setLoanerCarsS(carsS);
       if(isPlainObj(limits))setInspLimits(limits);
-      if(isPlainObj(restr))setSchedRestrictions(restr);
+      if(isPlainObj(restr))setSchedRestrH(restr);
+      if(isPlainObj(restrS))setSchedRestrS(restrS);
       if(isPlainObj(doH))setDayOffH(doH);
       if(isPlainObj(doS))setDayOffS(doS);
       if(Array.isArray(stH))setStaffH(stH);

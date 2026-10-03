@@ -48,7 +48,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     [STOR + 'sanda-staff-v2']: [],
     // 一番下の方の時間を制限する（下端でのチラつきを見るため）
     // 2区画にする（時間の並びが長くなるので、枠からはみ出さないかも見る）
-    schedRestrictions: { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '17:00', endTime: '18:00' }], exemptWorks: ['B'] } },
+    'honten-schedRestrictions': { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '17:00', endTime: '18:00' }], exemptWorks: ['B'] } },
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');

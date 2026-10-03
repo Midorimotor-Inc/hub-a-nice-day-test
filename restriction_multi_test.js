@@ -39,7 +39,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
     // 今までの形（1区間）で置く＝そのまま読めるかを見る
-    schedRestrictions: { [DK]: { startTime: '10:00', endTime: '11:00', exemptWorks: ['B'] } },
+    'honten-schedRestrictions': { [DK]: { startTime: '10:00', endTime: '11:00', exemptWorks: ['B'] } },
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -104,13 +104,13 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   await page.waitForTimeout(400);
   t('保存を押せた', await page.evaluate(() => { const box = document.querySelector('.modal-box'); const b = [...box.querySelectorAll('button')].find(e => e.innerText.includes('保存') && !e.innerText.includes('解除')); if (b) { b.click(); return true; } return false; }));
   t('★{ranges:[2本],exemptWorks} の形で保存される', await page.waitForFunction(([k, dk]) => {
-    const v = (window.__fakeFb.get(k + 'schedRestrictions') || {})[dk];
+    const v = (window.__fakeFb.get(k + 'honten-schedRestrictions') || {})[dk];
     return !!v && Array.isArray(v.ranges) && v.ranges.length === 2
       && v.ranges[0].startTime === '10:00' && v.ranges[0].endTime === '11:00'
       && v.ranges[1].startTime === '14:00' && v.ranges[1].endTime === '15:00'
       && Array.isArray(v.exemptWorks) && v.exemptWorks.includes('B');
   }, [STOR, DK], { timeout: 20000 }).then(() => true).catch(() => false),
-    await page.evaluate(([k, dk]) => (window.__fakeFb.get(k + 'schedRestrictions') || {})[dk], [STOR, DK]));
+    await page.evaluate(([k, dk]) => (window.__fakeFb.get(k + 'honten-schedRestrictions') || {})[dk], [STOR, DK]));
 
   // ── ③ 上に2区間が並ぶ ──
   console.log('\n■ ③ 上に区間が並んで出る');
@@ -155,7 +155,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   t('★知らせが出て保存されない', await page.evaluate(() => { const box = document.querySelector('.modal-box'); return !!box && /終わりが始まりより後になっていません/.test(box.innerText); }),
     await page.evaluate(() => { const b = document.querySelector('.modal-box'); return b ? b.innerText.slice(0, 300) : null; }));
   t('データは前のまま（2区間）', await page.evaluate(([k, dk]) => {
-    const v = (window.__fakeFb.get(k + 'schedRestrictions') || {})[dk];
+    const v = (window.__fakeFb.get(k + 'honten-schedRestrictions') || {})[dk];
     return !!v && Array.isArray(v.ranges) && v.ranges.length === 2 && v.ranges[0].startTime === '10:00';
   }, [STOR, DK]));
 

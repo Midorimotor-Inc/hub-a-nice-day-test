@@ -72,7 +72,7 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
     [STOR + 'custbk']: { [`${CUST.name}::${D1.dk}`]: { status: 'confirmed', dk: D1.dk, idx: 0, savedAt: Date.now(), formData: { name: CUST.name, carType: CUST.carType, no: CUST.no, custId: '202612__121__山東庸子__5902', course: 2, store: 'honten' } } },
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
-    schedRestrictions: {},
+    'honten-schedRestrictions': {},
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -148,7 +148,7 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
 
   // ════════ ⑤ PC：制限の説明は表の行の上では出さない ════════
   const seed2dk = D1.dk;
-  seed.schedRestrictions = { [seed2dk]: { ranges: [{ startTime: '09:00', endTime: '11:00' }], exemptWorks: ['B'] } };
+  seed['honten-schedRestrictions'] = { [seed2dk]: { ranges: [{ startTime: '09:00', endTime: '11:00' }], exemptWorks: ['B'] } };
   const pctx = await mkCtx(false);
   const pp = await pctx.newPage();
   const perr = []; pp.on('pageerror', e => perr.push(String(e)));

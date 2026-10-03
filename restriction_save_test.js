@@ -42,7 +42,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
     // 本番 10/3 と同じ形：2区間・鈑金(B)ほかが制限解除
-    schedRestrictions: { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '14:00', endTime: '17:00' }], exemptWorks: ['保', '納', '試', '商', 'B'] } },
+    'honten-schedRestrictions': { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '14:00', endTime: '17:00' }], exemptWorks: ['保', '納', '試', '商', 'B'] } },
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -135,6 +135,18 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   const r3 = await addAt('13:00', 'クイック整備', 'あいだ三郎');
   t('★13:00 は保存できる', !!r3.saved, r3);
   t('JSエラーが出ていない（通し）', errs.length === 0, errs.slice(0, 2));
+
+  head('④ 入庫制限は店舗ごと（2026-10-04 ユーザー指示）');
+  t('本店では制限が出ている', await page.evaluate(() => /入庫制限/.test(document.body.innerText)));
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim().indexOf('三田店') === 0 && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(1800);
+  // 「🚫 入庫制限」は設定ボタンの名前でもあるので、時間が付いた帯（例：入庫制限 09:00〜11:00）で見る
+  const hasBand = () => page.evaluate(() => /入庫制限[s　]*[0-9]{1,2}:[0-9]{2}/.test(document.body.innerText));
+  t('★三田店に切り替えると制限は出ない（店ごとに分かれている）', !(await hasBand()), await page.evaluate(() => document.body.innerText.slice(0, 160)));
+  t('三田店では制限色の枠も無い', await page.evaluate(() => ![...document.querySelectorAll('tr')].some(r => getComputedStyle(r).backgroundColor === 'rgb(254, 226, 226)')));
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim().indexOf('本店') === 0 && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(1800);
+  t('本店に戻すと制限が出る', await hasBand());
 
   await page.screenshot({ path: path.join(DIR, 'smoke-restriction-save.png') });
   await browser.close(); server.close();
