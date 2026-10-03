@@ -171,6 +171,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   番号（idx）がずれている時（他の端末が先に消した）は足す扱いにする。
 - 検査は `node memo_tip_test.js`（ポップアップが fixed・表の高さとスクロール位置が動かない・乗せている間ずっと出たまま／スマホで備考を足す・直す・消す）。
 
+### 予約カードの時刻は基本の時刻だけを出す（v3.36・2026-10-04）
+- 同じ時刻に複数入れた整備は、内部では `09:00__1` のようなサブ枠の名前で持っている（`makeSlotKey`）。これが予約カードの見出しと日付の札にそのまま出ていた。
+- `specialSlotLabel(getBaseSlot(timeSlot))` を通して出すようにした。**画面に時刻を出す所では必ず getBaseSlot を通すこと**（内部の名前をそのまま出さない）。
+
 ### 入庫制限は店舗ごと（v3.35・2026-10-04・ユーザー指示）
 - タイムスケジュール（整備）の予定は店ごとに立てるので、**入庫制限も店ごと**。**車検の台数制限（`inspLimits`）は今までどおり両店共通**。
 - キー：`honten-schedRestrictions` / `sanda-schedRestrictions`（PC は `useShared('honten-schedRestrictions')` を2本、スマホは MOBILE_KEYS に2つ）。見ている店（`vsId`）で選び分ける。

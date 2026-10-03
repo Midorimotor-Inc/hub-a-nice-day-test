@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>モック：備考欄をなぞると全文が出る</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:22px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:13px;color:#475569;margin:0 0 18px;line-height:1.7}
+  h2{font-size:15px;margin:26px 0 6px;border-left:5px solid #ea580c;padding-left:8px}
+  .note{font-size:12.5px;color:#475569;margin:0 0 10px;line-height:1.7}
+  .good{color:#047857;font-weight:700}.bad{color:#b91c1c;font-weight:700}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:14px 16px;margin-bottom:16px}
+  table{border-collapse:collapse;width:100%;font-size:13px;table-layout:fixed}
+  th{background:#9a3412;color:#fff;font-size:11.5px;font-weight:800;padding:6px 8px;text-align:left;border:1px solid #c2410c}
+  th.s{background:#0e7490;border-color:#0891b2}
+  td{border:1px solid #e5e7eb;padding:6px 8px;vertical-align:top}
+  tr.alt td{background:#f8fafc}
+  .nm{font-weight:700}
+  .sub{font-size:11px;color:#64748b}
+  .badge{display:inline-block;font-size:10px;font-weight:800;border-radius:20px;padding:1px 8px;color:#fff;background:#c2410c}
+  .badge.q{background:#0891b2}
+  /* 備考セル（今：1行で切れる） */
+  .memo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+  .memo.hoverable{cursor:help;position:relative}
+  .memo.hoverable:hover{background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d}
+  /* A案：なぞった所の近くに吹き出し */
+  .pop{position:absolute;z-index:50;left:0;top:100%;margin-top:4px;width:320px;background:#fff;border:2px solid #0891b2;
+       border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:10px 12px;font-size:12.5px;line-height:1.75;
+       white-space:normal;color:#111827;display:none}
+  .memo.hoverable:hover .pop{display:block}
+  .pop .ttl{font-size:10.5px;font-weight:800;color:#0e7490;margin-bottom:5px;letter-spacing:.04em}
+  .pop.insp{border-color:#ea580c}.pop.insp .ttl{color:#9a3412}
+  /* B案：画面の決まった場所（右下）に大きく */
+  .fixpanel{position:relative;margin-top:10px;background:#fff;border:2px solid #0891b2;border-radius:12px;
+            box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px 14px;max-width:460px}
+  .fixpanel .ttl{font-size:11px;font-weight:800;color:#0e7490;margin-bottom:6px}
+  .fixpanel .body{font-size:13px;line-height:1.8;white-space:pre-wrap}
+  /* C案：その場で広がる */
+  .expand{white-space:normal;background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d;line-height:1.7}
+  .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:8px;line-height:1.7}
+  .pick{display:inline-block;font-size:12px;font-weight:800;color:#fff;background:#1d4ed8;border-radius:20px;padding:3px 12px;margin-left:8px}
+  .cols{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1;min-width:430px}
+</style></head><body>
+
+<h1>備考欄をマウスでなぞると、全文が出るようにする</h1>
+<p class="lead">
+  いまは備考が長いと途中で切れて読めません。<b>備考の欄だけ</b>なぞった時に全文を出します（車検・一般整備の両方）。<br>
+  3案つくりました。<b>実際にマウスを乗せると動きます。</b>どれが良いか教えてください。
+</p>
+
+<h2>いまの見え方（比較用）</h2>
+<div class="card">
+  <table>
+    <colgroup><col style="width:34px"><col style="width:120px"><col style="width:110px"><col style="width:92px"><col></colgroup>
+    <tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>備考</th></tr>
+    <tr><td>1</td><td class="nm">中野　嘉久<div class="sub">見取大介</div></td><td>ロードスター<div class="sub">ナンバー 8808</div></td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</td></tr>
+    <tr class="alt"><td>2</td><td class="nm">椿<div class="sub">舟田</div></td><td>セレナ</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</td></tr>
+  </table>
+  <div class="kome">👆 「…」で切れていて、全部を読むには予約カードを開くしかない状態です。</div>
+</div>
+
+<div class="cols">
+<div class="col">
+<h2>A案　なぞった所のすぐ下に吹き出し<span class="pick">おすすめ</span></h2>
+<p class="note">
+  備考の欄に乗せると、その場のすぐ下に全文が出ます。目を動かさずに読めます。<br>
+  <span class="good">○ 見ている行のそばに出るので分かりやすい　○ 表の高さは変わらない（行がズレない）</span>
+</p>
+<div class="card">
+  <table>
+    <colgroup><col style="width:34px"><col style="width:110px"><col style="width:100px"><col></colgroup>
+    <tr><th>No</th><th>氏名</th><th>コース</th><th>備考（なぞってください）</th></tr>
+    <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo hoverable">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり
+        <span class="pop insp"><span class="ttl">📝 備考（全文）</span>ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</span></td></tr>
+    <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo hoverable">店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと
+        <span class="pop insp"><span class="ttl">📝 備考（全文）</span>店長の知り合いの紹介　新規　見積は必ず電話で確認してから作業開始のこと</span></td></tr>
+  </table>
+  <div style="height:120px"></div>
+  <table>
+    <colgroup><col style="width:62px"><col style="width:110px"><col style="width:86px"><col></colgroup>
+    <tr><th class="s">時間</th><th class="s">氏名</th><th class="s">作業</th><th class="s">内容（なぞってください）</th></tr>
+    <tr><td>10:00</td><td class="nm">瀧本</td><td><span class="badge q">試</span></td>
+      <td class="memo hoverable">10時15分来店　ハスラーとソリオの乗り比べ希望。奥様も同乗されるのでチャイルドシート付きの車両を用意すること
+        <span class="pop"><span class="ttl">📝 内容（全文）</span>10時15分来店　ハスラーとソリオの乗り比べ希望。奥様も同乗されるのでチャイルドシート付きの車両を用意すること</span></td></tr>
+    <tr class="alt"><td>13:30</td><td class="nm">大山</td><td><span class="badge q">Q</span></td>
+      <td class="memo hoverable">オイル・エレメント交換＋タイヤ付替（持込）。待ち時間に商談あり、応接の準備をお願いします
+        <span class="pop"><span class="ttl">📝 内容（全文）</span>オイル・エレメント交換＋タイヤ付替（持込）。待ち時間に商談あり、応接の準備をお願いします</span></td></tr>
+  </table>
+</div>
+</div>
+
+<div class="col">
+<h2>B案　画面の決まった場所に大きく出す</h2>
+<p class="note">
+  どの行をなぞっても、<b>いつも同じ場所</b>（画面の右下など）に大きく出ます。長い文でも読みやすい大きさです。<br>
+  <span class="good">○ 文字が大きく読みやすい</span>　<span class="bad">△ 目線が行から離れる</span>
+</p>
+<div class="card">
+  <table>
+    <colgroup><col style="width:34px"><col style="width:110px"><col style="width:100px"><col></colgroup>
+    <tr><th>No</th><th>氏名</th><th>コース</th><th>備考</th></tr>
+    <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo" style="background:#fffbeb;box-shadow:inset 0 0 0 2px #fcd34d">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー…</td></tr>
+    <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で…</td></tr>
+  </table>
+  <div class="fixpanel">
+    <div class="ttl">📝 中野　嘉久 さん／備考（全文）</div>
+    <div class="body">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</div>
+  </div>
+  <div class="kome">※ 実際の画面では、この箱は画面の右下に浮いて出ます（表の外）。</div>
+</div>
+
+<h2>C案　その場で欄が広がって全文表示</h2>
+<p class="note">
+  なぞった行の備考欄が、その場で折り返して全部出ます。吹き出しは出ません。<br>
+  <span class="good">○ いちばん素直</span>　<span class="bad">△ 行の高さが変わるので、下の行が動いてしまう</span>
+</p>
+<div class="card">
+  <table>
+    <colgroup><col style="width:34px"><col style="width:110px"><col style="width:100px"><col></colgroup>
+    <tr><th>No</th><th>氏名</th><th>コース</th><th>備考</th></tr>
+    <tr><td>1</td><td class="nm">中野　嘉久</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo expand">ティッシュ15箱・代車は前日夕方に取りに来られます。バッテリー弱り気味とのことで要点検。雨の日は入庫が遅れる可能性あり</td></tr>
+    <tr class="alt"><td>2</td><td class="nm">椿</td><td><span class="badge">マッハ車検</span></td>
+      <td class="memo">店長の知り合いの紹介　新規　見積は必ず電話で…</td></tr>
+  </table>
+  <div class="kome">👆 1行目が3行分になり、下の行が押し下げられています。マウスを外すと戻るので、行が上下に動きます。</div>
+</div>
+</div>
+</div>
+
+<h2>どの案でも共通にすること</h2>
+<p class="note">
+  ・出すのは<b>備考（車検）／内容（整備）の欄だけ</b>。氏名や車種の上では出しません。<br>
+  ・備考が<b>短くて全部見えている時は出しません</b>（じゃまにならないように）。<br>
+  ・吹き出しは<b>画面に対して固定の位置</b>で出すので、表の高さやスクロールは動きません（入庫制限の説明で起きたチラつきの対策と同じ作り）。<br>
+  ・マウスを外すとすぐ消えます。クリックは今までどおり予約カードが開きます。
+</p>
+
+</body></html>
