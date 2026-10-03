@@ -23,12 +23,12 @@ const grab = (name) => {
   }
   throw new Error(name + ' の終わりが分かりません');
 };
-const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
+const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
   .map(grab).join(String.fromCharCode(10));
 const sandbox = {};
 new Function('exports', code + String.fromCharCode(10) +
-  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;')(sandbox);
-const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow } = sandbox;
+  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;exports.resDropForMove=resDropForMove;')(sandbox);
+const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow, resDropForMove } = sandbox;
 
 const D1 = '2026-10-24', D2 = '2026-10-31';
 const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902, custId: '202612__121__山東庸子__5902' };
@@ -73,6 +73,22 @@ const cancelled = { [D1]: [{ ...oldRow, bookingStatus: 'cancelled', custId: 'x' 
 t('キャンセル済みは尋ねる対象にしない', findOtherDayRows(cancelled, CUST, D2).length === 0);
 const r6 = applyBookingToInsp(cancelled, { customer: CUST, dkFormatted: D2, row, inspLimits: {}, movePerson: true });
 t('キャンセル済みの記録は消さない', ((r6.data[D1] || []).length === 1), r6.data[D1]);
+
+head('⑦ 変更前の代車を消す（2026-10-04 報告）');
+// 代車の形：{車ID:{キー:予約}}。8/24 から 8/28 まで借りていた予約
+const lres = {
+  car1: { '2026-7-24': { id: 1, bookingKey: `insp-${D1}-0`, user: '山東　庸子', custId: '202612__9__山東庸子__5902', fy: 2026, fm: 7, fd: 24, ty: 2026, tm: 7, td: 28 } },
+  car2: { '2026-7-24': { id: 2, bookingKey: 'insp-2026-8-24-1', user: '別の人', fy: 2026, fm: 7, fd: 24, ty: 2026, tm: 7, td: 26 } },
+};
+const dropped = resDropForMove(lres, { keys: [`insp-${D1}-0`], custId: CUST.custId, name: CUST.name, dks: [D1] });
+t('変更前の予約の代車が消える', !!dropped && Object.keys(dropped.car1 || {}).length === 0, dropped && dropped.car1);
+t('ほかの人の代車は残る', !!dropped && Object.keys(dropped.car2 || {}).length === 1, dropped && dropped.car2);
+// bookingKey がずれていても、その人＋その日の始まりで見つける
+const lres2 = { car1: { k: { id: 3, bookingKey: 'insp-ずれた-9', user: '山東 庸子', fy: 2026, fm: 9, fd: 24, ty: 2026, fd2: 0, td: 28, tm: 9 } } };
+const dropped2 = resDropForMove(lres2, { keys: [], custId: '', name: CUST.name, dks: ['2026-10-24'] });
+t('紐付けがずれていても、その人のその日の代車なら消える', !!dropped2 && Object.keys(dropped2.car1 || {}).length === 0, dropped2 && dropped2.car1);
+// 消すものが無ければ何も返さない（＝書き込みをしない）
+t('消すものが無い時は書き込まない', resDropForMove(lres2, { keys: [], custId: '', name: '誰か', dks: ['2026-10-24'] }) === undefined);
 
 console.log(String.fromCharCode(10) + `結果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

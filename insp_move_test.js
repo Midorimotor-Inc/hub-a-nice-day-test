@@ -67,7 +67,8 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
         custId: '202612__121__山東庸子__5902', bookingKey: `insp-${D1.dk}-0`,
       }],
     },
-    [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
+    [STOR + 'honten-sched']: { [D1.dk]: { '10:00': { name: '辻井', carType: 'ノート', work: 'A', content: 'オイル交換', id: 1, store: 'honten' } },
+      [D2.dk]: { '11:00': { name: '来月の人', carType: 'アルト', work: 'A', content: '点検', id: 2, store: 'honten' } } }, [STOR + 'sanda-sched']: {},
     [STOR + 'custbk']: { [`${CUST.name}::${D1.dk}`]: { status: 'confirmed', dk: D1.dk, idx: 0, savedAt: Date.now(), formData: { name: CUST.name, carType: CUST.carType, no: CUST.no, custId: '202612__121__山東庸子__5902', course: 2, store: 'honten' } } },
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
@@ -193,6 +194,60 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
   await pp.mouse.move(badge.x, badge.y);
   await pp.waitForTimeout(500);
   t('★バッジの上では説明が出る', await pp.evaluate(() => [...document.querySelectorAll('div')].some(e => /この時間帯に入庫できる作業/.test(e.innerText || '') && getComputedStyle(e).position === 'fixed')));
+  head('⑥ PC：日にち変更のカレンダー（2026-10-04 ユーザー報告）');
+  // 今日の整備カードを開く
+  await pp.evaluate(() => { const tr = [...document.querySelectorAll('tr')].find(r => /辻井/.test(r.innerText)); if (tr) tr.click(); });
+  await pp.waitForTimeout(800);
+  t('整備の予約カードが開く', await seeText(pp, '予約カード', 6000));
+  const openPicker = async () => {
+    await pp.evaluate(() => { const s = [...document.querySelectorAll('span')].find(e => e.innerText && e.innerText.trim() === 'クリックで日付変更' && e.offsetParent !== null); if (s) s.click(); });
+    await pp.waitForTimeout(500);
+    return pp.evaluate(() => {
+      const box = [...document.querySelectorAll('div')].find(e => getComputedStyle(e).position === 'fixed' && getComputedStyle(e).zIndex === '9999' && /年\d+月/.test(e.innerText || ''));
+      if (!box) return null;
+      const title = (box.innerText.match(/(\d+)年(\d+)月/) || []);
+      const grid = [...box.querySelectorAll('div')].filter(e => getComputedStyle(e).display === 'grid' && e.children.length > 20)[0];
+      const circled = grid ? [...grid.children].filter(c => /rgb\(239, 68, 68\)/.test(getComputedStyle(c).borderColor) && getComputedStyle(c).borderRadius === '50%').map(c => c.innerText.trim()) : [];
+      return { year: Number(title[1]), month: Number(title[2]), circled };
+    });
+  };
+  const p1 = await openPicker();
+  t('カレンダーが開く', !!p1, p1);
+  t('★その予約の月が出る', !!p1 && p1.year === Number(D1.dk.split('-')[0]) && p1.month === Number(D1.dk.split('-')[1]), { picker: p1, card: D1.dk });
+  t('★変更前の日付が赤まるで囲まれる', !!p1 && p1.circled.length === 1 && p1.circled[0] === String(Number(D1.dk.split('-')[2])), p1);
+  // 同じ月の別の日へ動かす（今日の2日後。休業日なら翌日）
+  const moveTo = await pp.evaluate(() => {
+    const box = [...document.querySelectorAll('div')].find(e => getComputedStyle(e).position === 'fixed' && getComputedStyle(e).zIndex === '9999' && /年\d+月/.test(e.innerText || ''));
+    const grid = [...box.querySelectorAll('div')].filter(e => getComputedStyle(e).display === 'grid' && e.children.length > 20)[0];
+    const today = new Date().getDate();
+    const cell = [...grid.children].find(c => c.innerText.trim() === String(today + 2));
+    if (!cell) return null;
+    cell.click(); return today + 2;
+  });
+  t('別の日を選べる', !!moveTo, moveTo);
+  await pp.waitForTimeout(600);
+  await pp.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /予約確定|保存/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); });
+  await pp.waitForTimeout(2500);
+  const sd = await pp.evaluate(k => JSON.parse(JSON.stringify(window.__fakeFb.get(k) || null)), STOR + 'honten-sched');
+  const movedDk = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${moveTo}`;
+  t('★その日へ移る', !!(sd && sd[movedDk] && Object.values(sd[movedDk]).some(r => r && r.name === '辻井')), sd && Object.keys(sd));
+  t('★元の日からは消える', !(sd && sd[D1.dk] && Object.values(sd[D1.dk] || {}).some(r => r && r.name === '辻井')), sd && sd[D1.dk]);
+
+  // 別の月の予約を開くと、その月のカレンダーが出る（前に開いた月を覚えたままにしない）
+  await pp.evaluate(v => {
+    const i = [...document.querySelectorAll('input[type=date]')].find(e => e.offsetParent !== null);
+    if (!i) return false;
+    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    s.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }, D2.input);
+  await pp.waitForTimeout(1500);
+  await pp.evaluate(() => { const tr = [...document.querySelectorAll('tr')].find(r => /来月の人/.test(r.innerText)); if (tr) tr.click(); });
+  await pp.waitForTimeout(800);
+  const p2 = await openPicker();
+  t('★次に開いた予約では、その予約の月が出る', !!p2 && p2.year === Number(D2.dk.split('-')[0]) && p2.month === Number(D2.dk.split('-')[1]), { picker: p2, card: D2.dk });
+  t('★そこでも変更前の日付が赤まる', !!p2 && p2.circled.length === 1 && p2.circled[0] === String(Number(D2.dk.split('-')[2])), p2);
+
   t('PC：JSエラーなし', perr.length === 0, perr.slice(0, 3));
   await pp.screenshot({ path: path.join(DIR, 'smoke-insp-move.png') });
 

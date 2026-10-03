@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790995058633';
+  window.__APP_BUILD='build-1790997037930';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.29'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.30'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -384,6 +384,25 @@ const findOtherDayRows=(insp,customer,dkFormatted)=>{
     });
   });
   return out;
+};
+// ★外した古い予約に紐づく代車・レンタカーを消す（2026-10-04）。
+//   bookingKey は行の位置で決まるので行がずれると空振りする。その人＋開始日でも照合する。
+const resDropForMove=(base,{keys,custId,name,dks})=>{
+  const src=(base&&typeof base==='object'&&!Array.isArray(base))?base:{};
+  const out={};let touched=false;
+  const startDk=r=>(r&&r.fy!=null)?(r.fy+'-'+(Number(r.fm)+1)+'-'+r.fd):'';
+  for(const cid of Object.keys(src)){
+    const days={...(src[cid]||{})};
+    Object.keys(days).forEach(k=>{
+      const r=days[k];if(!r)return;
+      const byKey=!!(r.bookingKey&&(keys||[]).includes(r.bookingKey));
+      const byWho=(!!custId&&r.custId===custId)||(!!name&&bkNorm(r.user)===bkNorm(name));   // 氏名のスペースの違いは気にしない
+      const byDay=byWho&&(dks||[]).includes(startDk(r));
+      if(byKey||byDay){delete days[k];touched=true;}
+    });
+    out[cid]=days;
+  }
+  return touched?out:undefined;
 };
 const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})=>{
   const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
@@ -3083,10 +3102,20 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     // ★同じ車の予約が別の日にも入っている時は、移すのか・両方残すのかを尋ねる（2026-10-04 現場報告）。
     //   custId が合う行はこれまでどおり黙って移す（同じ予約の入れ直しなので）。
     let movePerson=true;
+    const _oldSpots=[];   // 外す古い予約の場所（代車を消すのに使う）。by:'id'=custIdで一致、'person'=同じ車
     if(entryDate&&!isTemp){
       const _p=String(entryDate).split('-');
       const _dkF=_p.length===3?`${_p[0]}-${parseInt(_p[1])}-${parseInt(_p[2])}`:entryDate;
       const others=findOtherDayRows(hotInsp,customer,_dkF);
+      // custId で見つかる古い行（別の日）＝同じ予約の入れ直し。これは黙って外れる
+      Object.keys(hotInsp||{}).forEach(d=>{
+        if(d===_dkF||!Array.isArray(hotInsp[d]))return;
+        (hotInsp[d]||[]).forEach((r,i)=>{
+          if(!r||!r.name||r.bookingStatus==='cancelled')return;
+          if(customer.custId&&r.custId===customer.custId)_oldSpots.push({dk:d,idx:i,by:'id'});
+        });
+      });
+      others.forEach(o=>_oldSpots.push({dk:o.dk,idx:o.idx,by:'person'}));
       if(others.length>0){
         const _lab=d=>{const q=String(d).split('-').map(Number);const dd=new Date(q[0],q[1]-1,q[2]);
           return `${q[1]}/${q[2]}（${['日','月','火','水','木','金','土'][dd.getDay()]}）`;};
@@ -3203,6 +3232,28 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           alert(`⚠️ ${customer.name} の予約をスケジュールに反映できませんでした（サーバー混雑）。\n画面上部の「未反映の予約」バナーから再送できます。`);
         }
 
+        // ★変更前の代車・レンタカーを消す（2026-10-04 報告：日を変えても前の代車が残っていた）。
+        //   「両方残す」を選んだ時は、custId が同じ古い予約の分だけ消す（別予約の代車は触らない）。
+        {
+          const _spots=_oldSpots.filter(sp=>sp.dk!==dkFormatted&&(movePerson||sp.by==='id'));
+          if(_spots.length>0){
+            const _arg={keys:_spots.map(sp=>`insp-${sp.dk}-${sp.idx}`),
+              custId:customer.custId,name:customer.name,
+              dks:[...new Set(_spots.map(sp=>sp.dk))]};
+            [storKey('lres','honten'),storKey('lres','sanda'),STOR+'rres'].forEach(_k=>{
+              _bg.push(writeVerified(_k,
+                base=>resDropForMove(base,_arg),
+                back=>!resDropForMove(back,_arg),
+                2,{requireBase:true}
+              ).then(()=>sGet(_k).then(v=>{
+                if(!v||typeof v!=='object')return;
+                if(_k===storKey('lres','honten'))setLoanerResH(v);
+                else if(_k===storKey('lres','sanda'))setLoanerResS(v);
+                try{ if(IS_EMBED)window.parent.postMessage({type:'hub-reload-main'},location.origin); }catch(_e){}
+              }).catch(()=>{})).catch(()=>{}));
+            });
+          }
+        }
         // 4. custbk（カレンダー6枠）にも保存
         // キー形式: "氏名::2026-3-16"（ゼロなし）
         const bkKey=`${customer.name.trim()}::${dkFormatted}`;
