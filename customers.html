@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790992503153';
+  window.__APP_BUILD='build-1790995058633';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.28'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.29'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -366,16 +366,40 @@ const RES_COLORS=['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#
 // ── 予約1件を insp（サーバー最新値）に適用する純関数 ──
 // ★必ず「サーバーから読んだ最新値」を base に渡すこと。以前は保存開始時に一度読んだ値を
 //   使い回して全文を書き戻していたため、その間に他PCが入れた予約を巻き添えで消していた。
-const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits})=>{
+// ★同じ車の予約かどうか（2026-10-04）。custId はファイルを取り込み直すと変わるので、
+//   氏名＋ナンバー4桁＋車種でも照合する。
+const bkNorm=s=>String(s==null?'':s).normalize('NFKC').replace(/[\s　]/g,'').toLowerCase();
+const isSameVehicleRow=(r,c)=>!!r&&!!c&&bkNorm(r.name)===bkNorm(c.name)
+  &&String(r.no==null?'':r.no)===String(c.no==null?'':c.no)
+  &&bkNorm(r.carType)===bkNorm(c.carType);
+// その人の予約が「今から入れる日」以外の日にも入っているか（custId では見つからない分）
+const findOtherDayRows=(insp,customer,dkFormatted)=>{
+  const out=[];
+  Object.keys(insp||{}).forEach(d=>{
+    if(d===dkFormatted||!Array.isArray(insp[d]))return;
+    (insp[d]||[]).forEach((r,i)=>{
+      if(!r||!r.name||r.bookingStatus==='cancelled')return;
+      if(customer.custId&&r.custId===customer.custId)return;    // これは今までどおり自動で外れる
+      if(isSameVehicleRow(r,customer))out.push({dk:d,idx:i,row:r});
+    });
+  });
+  return out;
+};
+const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})=>{
   const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
   const recalc=new Set();
   let oldRow=null,oldDk=null;
   for(const d of Object.keys(data)){
     if(!Array.isArray(data[d]))continue;
     const before=data[d].length;
-    const hit=data[d].find(r=>r&&r.custId===customer.custId&&r.bookingStatus!=='cancelled');
+    // ★custId が一致する行に加えて、同じ車（氏名＋ナンバー＋車種）の行も外す（2026-10-04）。
+    //   movePerson が false の時は今までどおり custId だけ（利用者が「両方残す」を選んだ時）。
+    const sameBooking=r=>!!r&&(
+      (!!customer.custId&&r.custId===customer.custId)||
+      (movePerson&&r.bookingStatus!=='cancelled'&&isSameVehicleRow(r,customer)));
+    const hit=data[d].find(r=>sameBooking(r)&&r.bookingStatus!=='cancelled');
     if(hit){oldRow=hit;oldDk=d;}
-    data[d]=data[d].filter(r=>r&&r.custId!==customer.custId); // 入庫日変更に対応（旧行を除去）
+    data[d]=data[d].filter(r=>!sameBooking(r)); // 入庫日変更に対応（旧行を除去）
     if(data[d].length!==before)recalc.add(d);
   }
   const sameDay=!!(oldRow&&oldDk===dkFormatted);
@@ -3056,6 +3080,22 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     try{
     const{entryDate,store,bookingTime,course,tokuten,staff,note,isTemp,selCarId,selDays,selLocked,preEntry,deliveryDate,deliveryTime}=form;
     const status=isTemp?'temp':'confirm';
+    // ★同じ車の予約が別の日にも入っている時は、移すのか・両方残すのかを尋ねる（2026-10-04 現場報告）。
+    //   custId が合う行はこれまでどおり黙って移す（同じ予約の入れ直しなので）。
+    let movePerson=true;
+    if(entryDate&&!isTemp){
+      const _p=String(entryDate).split('-');
+      const _dkF=_p.length===3?`${_p[0]}-${parseInt(_p[1])}-${parseInt(_p[2])}`:entryDate;
+      const others=findOtherDayRows(hotInsp,customer,_dkF);
+      if(others.length>0){
+        const _lab=d=>{const q=String(d).split('-').map(Number);const dd=new Date(q[0],q[1]-1,q[2]);
+          return `${q[1]}/${q[2]}（${['日','月','火','水','木','金','土'][dd.getDay()]}）`;};
+        movePerson=window.confirm(
+          `${customer.name} 様（${customer.carType||''}）の車検予約が すでに ${others.map(o=>_lab(o.dk)).join('・')} に入っています。\n\n`+
+          `OK … その予約を消して ${_lab(_dkF)} へ移します（日にちの変更）\n`+
+          `キャンセル … 両方とも残します（2台ぶんの予約）`);
+      }
+    }
     // 予約1件の保存（insp／顧客ファイル）を1つのIDで追跡し、両方の反映が確認できるまで
     // localStorageの控え（pending）を消さない。消えていなければ起動時に「未反映の予約」として拾える。
     const pid=`${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
@@ -3148,7 +3188,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         let localInsp=null;
         const inspOk=await writeVerified(STOR+'insp',
           base=>{
-            const r=applyBookingToInsp(base,{customer,dkFormatted,row:rowBase,inspLimits});
+            const r=applyBookingToInsp(base,{customer,dkFormatted,row:rowBase,inspLimits,movePerson});
             bKey=r.bKey;localInsp=r.data;
             return r.data;
           },
@@ -3166,6 +3206,27 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         // 4. custbk（カレンダー6枠）にも保存
         // キー形式: "氏名::2026-3-16"（ゼロなし）
         const bkKey=`${customer.name.trim()}::${dkFormatted}`;
+        // ★前の日の控えは消す（2026-10-04）。残っていると同期チェックが「未反映の予約」と見なして、
+        //   消したはずの日に予約を作り直してしまう＝二重予約の作り直しになる。
+        _bg.push(writeVerified(STOR+'custbk',
+          base=>{
+            const b=(base&&typeof base==='object')?base:{};
+            const drop=Object.keys(b).filter(k=>{
+              if(k===bkKey)return false;
+              const e=b[k],f=e&&e.formData;
+              if(!e||!f||String(e.dk||'')===dkFormatted)return false;
+              return (!!customer.custId&&f.custId===customer.custId)||(movePerson&&isSameVehicleRow(f,customer));
+            });
+            if(drop.length===0)return undefined;
+            const n={...b};drop.forEach(k=>{delete n[k];});return n;
+          },
+          back=>!Object.keys(back||{}).some(k=>{
+            const e=back[k],f=e&&e.formData;
+            if(!e||!f||String(e.dk||'')===dkFormatted)return false;
+            return (!!customer.custId&&f.custId===customer.custId)||(movePerson&&isSameVehicleRow(f,customer));
+          }),
+          2,{requireBase:true}
+        ).catch(()=>{}));
         const custbkEntry={
           status:isTemp?'provisional':'confirmed',
           formData:{

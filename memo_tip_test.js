@@ -111,8 +111,22 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   });
   t('17:00 の行が画面の中に見えている', !!(box && box.top > 0 && box.h > 0), box);
 
+  // ★行の上では出さない（2026-10-04 ユーザー指示。なぞるたびに出て目障りだったため）
   const before = await page.evaluate(() => ({ sh: window.__sc.scrollHeight, st: window.__sc.scrollTop }));
   await page.mouse.move(box.x, box.y);
+  await page.waitForTimeout(400);
+  t('行の上をなぞっても説明は出ない', await page.evaluate(() => ![...document.querySelectorAll('div')].some(e => /この時間帯に入庫できる作業/.test(e.innerText || ''))));
+
+  // 説明は上のバッジ1か所。そこで出した時に、固定位置・枠内・表の高さそのままを見る
+  const badge = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('div,span')].filter(e => e.offsetParent !== null && /入庫制限/.test(e.innerText || '') && /09:00〜11:00/.test(e.innerText || ''));
+    const inner = all.filter(e => !all.some(o => o !== e && e.contains(o)));
+    const d = inner[0]; if (!d) return null;
+    const b = d.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  });
+  t('上のバッジが見つかる', !!badge, badge);
+  await page.mouse.move(badge.x, badge.y);
   await page.waitForTimeout(400);
 
   head('① PC：ポップアップが出て、表の高さを変えない（チラつきの元を断つ）');
@@ -145,7 +159,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   // チラつきそのものを見る：マウスを少し動かしながら20回、ずっと出たままか
   let gone = 0;
   for (let i = 0; i < 20; i++) {
-    await page.mouse.move(box.x + (i % 2), box.y);
+    await page.mouse.move(badge.x + (i % 2), badge.y);
     const on = await page.evaluate(() => /🚫 入庫制限/.test(document.body.innerText) && [...document.querySelectorAll('div')].some(e => getComputedStyle(e).position === 'fixed' && /🚫 入庫制限/.test(e.innerText || '')));
     if (!on) gone++;
     await page.waitForTimeout(40);

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790992503153';
+  window.__APP_BUILD='build-1790995058633';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.28';
+const MOBILE_VERSION='3.29';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1882,7 +1882,8 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   // ★整備は日にちと時間を変えられる（2026-10-01 ユーザー指示）。移り先をここで持つ。
   const [mvDk,setMvDk]=useState(mode.dk);
   const [mvSlot,setMvSlot]=useState(()=>getBaseSlot(mode.slot||'')||'');
-  const moved=!isInsp&&!mode.isNew&&(mvDk!==mode.dk||mvSlot!==(getBaseSlot(mode.slot||'')||''));
+  // ★車検も日を動かせるようにした（2026-10-04）。整備は日＋時間、車検は日だけ。
+  const moved=!mode.isNew&&(isInsp?(mvDk!==mode.dk):(mvDk!==mode.dk||mvSlot!==(getBaseSlot(mode.slot||'')||'')));
   const [carKind,setCarKind]=useState('keep');
   // ★限定＝この車でないとダメな予約。代車スケジュールの最適化で動かさない印。
   //   最初の予約から付けられるようにする（2026-08-27にユーザーが要望）。
@@ -1991,7 +1992,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
     // ★整備の移動：移り先を渡す。代車が付いたまま日を動かす時は、同じ車を新しい日付で付け替える
     //   （付け替えないと、代車の予約だけ元の日に取り残される）
     const outForm=isInsp
-      ?{...form,store:mvStore}                         // 車検は行の store を入れ替える
+      ?{...form,store:mvStore,_dk:mvDk}                // 車検は行の store と移り先の日
       :{...form,_dk:mvDk,_slot:mvSlot,_store:mvStore};  // 整備は移り先（日・時間・店）を渡す
     if(moved&&!loanerAction&&curKind!=='none'){
       const cid=curKind==='rental'?curRentalId:curCarId;
@@ -2055,6 +2056,22 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
           </div>
           {isInsp?(
             <React.Fragment>
+              {/* ★車検日＝この予約が乗っている日。変えるとその日へ予約ごと移す（2026-10-04 現場要望）。
+                  「入庫日」は事前入庫（前日入庫など）の日なので別もの。 */}
+              {!mode.isNew&&(
+                <div>
+                  <label style={LBL}>車検日（予約の日）<span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>変えるとこの予約をその日へ移します</span></label>
+                  <input type="date" value={dkToInputDate(mvDk)}
+                    onChange={e=>{
+                      const v=inputDateToDk(e.target.value)||mode.dk;
+                      if(rejectIfClosed(v,'予約'))return;
+                      setForm(p=>({...p,entryDate:(!p.entryDate||p.entryDate===mvDk)?v:p.entryDate}));  // 当日入庫なら入庫日も一緒に動かす
+                      setMvDk(v);
+                    }}
+                    style={{...INP,...(moved?{border:'2px solid #9a3412',background:'#fff7ed',color:'#9a3412',fontWeight:800}:{})}}/>
+                  {moved&&(()=>{const p=String(mvDk).split('-');return <div style={{fontSize:11,color:'#9a3412',marginTop:4,fontWeight:800}}>→ {Number(p[1])}月{Number(p[2])}日 へ移します（元の日からは消えます）</div>;})()}
+                </div>
+              )}
               <div>
                 <label style={LBL}>コース *</label>
                 <div style={{display:'flex',gap:6}}>
@@ -2088,14 +2105,14 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
               </div>
               {(()=>{
                 // 入庫日は既定で選択日(車検日=mode.dk)。前の日付に変えると「事前入庫」扱い（＝色/バナー/戻すボタン表示）。
-                const isPre=form.entryDate&&form.entryDate!==mode.dk;
+                const isPre=form.entryDate&&form.entryDate!==mvDk;   // ★車検日を動かした時はその日が基準（2026-10-04）
                 return(
               <div>
                 <label style={LBL}>入庫日 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>既定は選択日。事前入庫（前日・前々日など）なら前の日付に変更</span></label>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <input type="date" value={dkToInputDate(form.entryDate||mode.dk)} onChange={e=>{const v=inputDateToDk(e.target.value)||mode.dk;if(rejectIfClosed(v,'入庫'))return;setForm(p=>({...p,entryDate:v}));}}
+                  <input type="date" value={dkToInputDate(form.entryDate||mvDk)} onChange={e=>{const v=inputDateToDk(e.target.value)||mvDk;if(rejectIfClosed(v,'入庫'))return;setForm(p=>({...p,entryDate:v}));}}
                     style={{...INP,flex:1,...(isPre?{border:'2px solid #9a3412',background:'#fff7ed',color:'#9a3412',fontWeight:800}:{})}}/>
-                  {isPre&&<button onClick={()=>setForm(p=>({...p,entryDate:mode.dk}))} style={{padding:'0 14px',background:'#f1f5f9',border:'none',borderRadius:10,fontWeight:800,color:'#64748b',fontSize:13}}>当日に戻す</button>}
+                  {isPre&&<button onClick={()=>setForm(p=>({...p,entryDate:mvDk}))} style={{padding:'0 14px',background:'#f1f5f9',border:'none',borderRadius:10,fontWeight:800,color:'#64748b',fontSize:13}}>当日に戻す</button>}
                 </div>
                 {isPre&&(()=>{const p=form.entryDate.split('-');return <div style={{fontSize:11,color:'#9a3412',marginTop:4,fontWeight:800}}>🚗 事前入庫：{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')} に入庫</div>;})()}
               </div>
@@ -4596,29 +4613,88 @@ const App=()=>{
     const clean=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
     const userName=form.name||user?.name||'';
     if(req.type==='insp'){
-      const bkFinal=`insp-${req.dk}-${req.idx}`;
-      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName);
+      // ★車検の日を動かす（2026-10-04）。移り先の空き枠を、サーバーの最新値で決めてから書く。
+      const tDk=form._dk||req.dk;
+      const isMove=!req.isNew&&tDk!==req.dk;
+      const occ=r=>!!(r&&r.name&&r.bookingStatus!=='cancelled');
+      let idxPlace=req.idx;
+      if(isMove){
+        const fresh=await sGet(STOR+'insp');
+        const rows0=((isPlainObj(fresh)?fresh:hotInsp)[tDk])||[];
+        const f=rows0.findIndex(r=>!occ(r));
+        idxPlace=f>=0?f:rows0.length;
+      }
+      const bkFinal=`insp-${tDk}-${idxPlace}`;
+      const bkOld=`insp-${req.dk}-${req.idx}`;
+      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName,isMove?bkOld:'');
       let placedPending=false,placedSeq=null;
       await writeShared(STOR+'insp',hotInsp,base=>{
-        const rows=((base[req.dk]||[]).map(r=>r||blankInsp()));
-        while(rows.length<=req.idx)rows.push(blankInsp());
-        const prevRow=rows[req.idx];
+        const rows=((base[tDk]||[]).map(r=>r||blankInsp()));
+        // 直前に他の端末がその枠を使っていたら、さらに次の空きへ逃がす（上書きで消さない）
+        if(isMove&&occ(rows[idxPlace])){const f=rows.findIndex(r=>!occ(r));idxPlace=f>=0?f:rows.length;}
+        while(rows.length<=idxPlace)rows.push(blankInsp());
+        const prevRow=rows[idxPlace];
         // PC版と同じseq規則: アクティブ予約の編集はseq維持、新規/キャンセル枠への予約は新seq
         // （再試行時に自分の行が既に書けていた場合はseqが引き継がれるので二重にならない）
-        const editingActive=!!(prevRow&&prevRow.name&&prevRow.bookingStatus!=='cancelled');
+        const editingActive=!isMove&&!!(prevRow&&prevRow.name&&prevRow.bookingStatus!=='cancelled');
         const seq=editingActive?(prevRow.seq!=null?prevRow.seq:Date.now()):Date.now();
         placedSeq=seq;
         // ★カードの「入庫店舗」で選んだ店を優先する（2026-10-02）。以前は元の行の店が勝っていて変えられなかった
-        rows[req.idx]={...entry,store:normStore(entry.store)||normStore(prevRow?.store)||vsId,seq,bookingStatus:'confirmed'};
-        const dayLimit=inspLimits[req.dk]??6;
+        //   日を動かした時は、移り先で承認を見直す（元の承認／承認待ちは引き継がない。PC版と同じ）
+        const moving=isMove?{bookingKey:bkFinal,approved:undefined,pendingApproval:undefined}:{};
+        rows[idxPlace]={...entry,...moving,store:normStore(entry.store)||normStore(prevRow?.store)||vsId,seq,bookingStatus:'confirmed'};
+        if(isMove){delete rows[idxPlace].approved;delete rows[idxPlace].pendingApproval;}
+        const dayLimit=inspLimits[tDk]??6;
         const wasPending=editingActive&&!!prevRow.pendingApproval;
         const recomputed=recomputeInspApproval(rows,dayLimit);
-        placedPending=!!(recomputed[req.idx]&&recomputed[req.idx].pendingApproval&&!wasPending);
-        return{...base,[req.dk]:recomputed};
+        placedPending=!!(recomputed[idxPlace]&&recomputed[idxPlace].pendingApproval&&!wasPending);
+        const out={...base,[tDk]:recomputed};
+        // 元の日の枠を空ける（空いた分だけ、その日の承認待ちが繰り上がる）
+        if(isMove){
+          const oldRows=[...(out[req.dk]||[])];
+          if(oldRows[req.idx])oldRows[req.idx]=blankInsp();
+          out[req.dk]=recomputeInspApproval(oldRows,inspLimits[req.dk]??6);
+        }
+        return out;
       },setInspData,echo=>{
-        const r=(echo[req.dk]||[])[req.idx];
-        return !!r&&r.name===entry.name&&r.seq===placedSeq;
+        const r=(echo[tDk]||[])[idxPlace];
+        const okNew=!!r&&r.name===entry.name&&r.seq===placedSeq;
+        if(!isMove)return okNew;
+        const oldR=(echo[req.dk]||[])[req.idx];
+        return okNew&&!(oldR&&oldR.name);   // 移り先に入って、元の枠が空いていること
       },true);
+      // ★日を動かした時のあと始末（2026-10-04）
+      if(isMove){
+        const _nm=String(entry.name||'').trim();
+        const _hitOld=(e)=>{const f=e&&e.formData;
+          if(!e||!f||String(e.dk||'')!==req.dk)return false;
+          return (!!entry.custId&&f.custId===entry.custId)||(!!_nm&&String(f.name||'').trim()===_nm);};
+        // 古い日のカレンダー控え（custbk）を外す。残っていると同期チェックが元の日に作り直す
+        try{
+          await writeShared(STOR+'custbk',{},base=>{
+            const b=isPlainObj(base)?base:{};
+            const drop=Object.keys(b).filter(k=>_hitOld(b[k]));
+            if(drop.length===0)return undefined;
+            const n={...b};drop.forEach(k=>{delete n[k];});return n;
+          },()=>{},null,true);
+        }catch(e){}
+        // 顧客リストにも新しい日を知らせる（PC版 syncCustStatus と同じキュー）
+        if(entry.custId||_nm){
+          try{
+            const _p=String(tDk).split('-');
+            const _ed=_p.length===3?(_p[0]+'-'+String(_p[1]).padStart(2,'0')+'-'+String(_p[2]).padStart(2,'0')):tDk;
+            const _upd={custId:entry.custId||'',name:_nm,no:entry.no,status:'confirm',
+              entryDate:_ed,linkedInspDate:_ed,course:Number(entry.course)||0,
+              store:normStore(entry.store)||vsId,staff:entry.staff||'',tokuten:entry.tokuten||'-',
+              note:entry.note||'',bookingTime:entry.time||'',ts:Date.now()};
+            const _cur=await sGet(STOR+'cust-updates');
+            const _arr=Array.isArray(_cur)?_cur:[];
+            await sSet(STOR+'cust-updates',[..._arr.filter(u=>!(u&&(
+              (!!_upd.custId&&u.custId===_upd.custId)||
+              (!!_nm&&u.name===_nm&&String(u.no)===String(_upd.no))))),_upd]);
+          }catch(e){}
+        }
+      }
       if(placedPending)alert('⚠️ 1日の上限を超えたため、本店承認が必要です（通常6台／レギュラー車検3台）。この予約は承認待ちになります。');
     }else{
       // ★移り先の店（2026-10-02）。店をまたぐ時は別のキーへ書き、元の店のキーからは消す
@@ -4691,6 +4767,15 @@ const App=()=>{
       const _cnt=(inspData[req.dk]||[]).filter(r=>r&&r.name&&r.bookingStatus!=='cancelled').length;
       if(_cnt>=_lim)throw new Error(`🚫 ${dkLabel(req.dk)} は台数制限（最大${_lim}台）に達しているため、車検の予約はできません`);
     }
+    // ★車検の日を動かす時の確かめ（2026-10-04）
+    if(req.type==='insp'&&!req.isNew&&form._dk&&form._dk!==req.dk){
+      if(isClosedDk(form._dk))throw new Error(`🏖 ${dkLabel(form._dk)} は休業日です。別の日を選んでください`);
+      if(inspLimits[form._dk]!=null){
+        const _lim=inspLimits[form._dk];
+        const _cnt=(inspData[form._dk]||[]).filter(r=>r&&r.name&&r.bookingStatus!=='cancelled').length;
+        if(_cnt>=_lim)throw new Error(`🚫 ${dkLabel(form._dk)} は台数制限（最大${_lim}台）に達しているため、移せません`);
+      }
+    }
     if(form.entryDate&&isClosedDk(form.entryDate))throw new Error(`🏖 入庫日 ${dkLabel(form.entryDate)} は休業日です。別の日を選んでください`);
     if(form.deliveryDate&&isClosedDk(form.deliveryDate))throw new Error(`🏖 納車日 ${dkLabel(form.deliveryDate)} は休業日です。別の日を選んでください`);
     // 入庫制限チェック（PC版handleSaveModalと同じルール。受付前に弾いてモーダル内に表示する）
@@ -4747,12 +4832,25 @@ const App=()=>{
     if(req.type==='insp'){
       const entryOpt={...blankInsp(),...displayEntry,store:normStore(form.store)||vsId,bookingStatus:'confirmed'};
       const reflected=r=>r&&r.name===form.name&&r.time===(form.time||'')&&String(r.course)===String(form.course)&&(r.note||'')===(form.note||'');
+      // ★日を動かした時は、元の日から消して移り先に出す（2026-10-04）
+      const tDkI=form._dk||req.dk;
+      const movedI=!req.isNew&&tDkI!==req.dk;
+      const occI=r=>!!(r&&r.name&&r.bookingStatus!=='cancelled');
       ovs.push({pid,key:STOR+'insp',apply:data=>{
-        const rows=((data[req.dk]||[]).map(r=>r||blankInsp()));
-        while(rows.length<=req.idx)rows.push(blankInsp());
-        if(reflected(rows[req.idx]))return data; // サーバー反映済みならサーバー版を尊重
-        rows[req.idx]=entryOpt;
-        return{...data,[req.dk]:rows};
+        const out={...data};
+        if(movedI){const old=[...(out[req.dk]||[])];if(old[req.idx])old[req.idx]=blankInsp();out[req.dk]=old;}
+        const rows=((out[tDkI]||[]).map(r=>r||blankInsp()));
+        let i=req.idx;
+        if(movedI){
+          if(rows.some(reflected))return out;          // サーバー反映済みならサーバー版を尊重
+          const f=rows.findIndex(r=>!occI(r));
+          i=f>=0?f:rows.length;
+        }
+        while(rows.length<=i)rows.push(blankInsp());
+        if(!movedI&&reflected(rows[i]))return data;    // サーバー反映済みならサーバー版を尊重
+        rows[i]=entryOpt;
+        out[tDkI]=rows;
+        return out;
       }});
     }else{
       const entryOpt={...displayEntry};
@@ -4784,7 +4882,7 @@ const App=()=>{
     (async()=>{
       try{
         await saveCore(req,form,loanerAction);
-        if(req.cust&&req.cust._file)await applyCustBooking(req.cust,req.dk,form,false);   // 顧客リストからの予約（v2.95）
+        if(req.cust&&req.cust._file)await applyCustBooking(req.cust,form._dk||req.dk,form,false);   // 顧客リストからの予約（v2.95。移した時はその日で）
         upsertBanner({pid,phase:'done',label});
         setTimeout(()=>removeBanner(pid),6000);
         dropOverlays(pid,75000); // GAS読み取りキャッシュ(60s)が入れ替わるまで重ね続ける

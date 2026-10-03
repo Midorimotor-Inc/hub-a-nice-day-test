@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -93,6 +93,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
+
+### 車検の日にち変更と、二重予約（v3.29・2026-10-04・現場からの報告）
+- 報告：10/24 の車検を 10/31 に動かしたいが、**スマホのカレンダー・スケジュールからは「入庫日」しか変えられない**。顧客リストから入れ直したら 10/31 はできたが **10/24 も残って二重予約**になった（三田店・山東様）。
+- **① スマホの車検カードに「車検日（予約の日）」を足した**（`mvDk`・`form._dk`）。整備と同じ作りで、移り先の空き枠へ入れて元の枠を空ける。
+  「入庫日」は事前入庫の日なので別もの（基準も `mode.dk` → `mvDk` に直した。当日入庫なら車検日と一緒に動く）。
+  代車は `applyLoanerAction` の `bkOld` で新しい日の `bookingKey` に付け替える。移り先の承認は見直す（元の承認／承認待ちは引き継がない＝PC と同じ）。
+- **② 二重予約の元**：顧客リストの `applyBookingToInsp` が古い行を **`custId` だけ**で探していた。`custId` は `月ファイル__行番号__氏名__ナンバー` なので、**月ファイルを取り込み直すと行番号が変わって別のIDになる**。スケジュール側で手入力した予約には `custId` が無い。どちらも見つけられず、前の日の予約が残っていた。
+  → **氏名＋ナンバー＋車種が同じ行も「同じ車の予約」として外す**（`isSameVehicleRow`）。ただし `custId` が合わない行を消す時は **必ず尋ねる**（`findOtherDayRows` → confirm → `movePerson`）。「両方残す」を選べば2台ぶんとして残る。
+- **③ 古い日の `custbk` を消す**（PC・スマホ・顧客リストの3か所）。これが残っていると**顧客リストの同期チェックが「未反映の予約」と見て、消したはずの日に予約を作り直す**。二重予約の作り直しになるので、日を動かしたら必ず古い控えも外すこと。
+  スマホで日を動かした時は `cust-updates` にも新しい日を積む（PC の `syncCustStatus` と同じキュー。顧客リストが読んで `entryDate`/`linkedInspDate` を直す）。
+- **④ 入庫制限の説明ポップは「上のバッジ」1か所だけ**にした（2026-10-04 ユーザー指示）。表の行の上では出さない（なぞるたびに出て目障りだったため）。
+- 検査は `node insp_move_test.js`（スマホで日を動かす・元の日が空く・custbk が残らない／PC は行で出ずバッジで出る）と `node insp_double_test.js`（`customers.html` の純関数をそのまま取り出して、custId が変わっていても古い予約を外せるか・両方残せるか・別の車は巻き添えにしないか）。
 
 ### 検索のまとめ方は「1台ごと」（v3.28・2026-10-04・重要）
 - **`cfx*` の `no` はナンバー4桁であって顧客Noではない。`no` を人の鍵に使わないこと。**

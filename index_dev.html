@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790992503153';
+    window.__APP_BUILD='build-1790995058633';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.28';
+const APP_VERSION = '3.29';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7471,7 +7471,8 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
 });
 
 // ============================================
-//  入庫制限の内容ポップアップ（入庫制限バッジのホバー・制限網掛け行のホバーで共通に使う）
+//  入庫制限の内容ポップアップ（出すのは画面上の「🚫 入庫制限」バッジの1か所だけ。
+//  ★表の行の上では出さない（2026-10-04 ユーザー指示。なぞるたびに出て目障りだったため）
 //  ※title属性のツールチップは表示まで約1秒かかるので使わない（即時表示のため自前で描画）
 // ============================================
 const RestrictionTip=({r,style,rect})=>{
@@ -7512,8 +7513,7 @@ const RestrictionTip=({r,style,rect})=>{
 //  SchedRow
 // ============================================
 const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loanerRes,vsId,restriction,setItems,onToggleArrived})=>{
-  const [showRestrTip,setShowRestrTip]=useState(false);
-  const [restrTipRect,setRestrTipRect]=useState(null);   // ★乗った枠の位置（画面固定で出すため・2026-10-03）
+  // ★行の上でのホバー説明はやめた（2026-10-04 ユーザー指示）。説明は上のバッジ1か所だけで出す。
   const isEmpty=!row.name&&!row.staff&&!row.carType&&!row.work;
   const locked=lockInfo?.lockedBy;
   const isHour=(baseSlot||slot).endsWith(':00');
@@ -7545,8 +7545,6 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
 
   return (
     <tr id={isFirstSub?'sched-slot-'+(baseSlot||slot).replace(':',''):undefined}
-      onMouseEnter={e=>{if(!isRestricted)return;try{const b=e.currentTarget.getBoundingClientRect();setRestrTipRect({left:b.left,top:b.top,bottom:b.bottom});}catch(x){}setShowRestrTip(true);}}
-      onMouseLeave={()=>{if(isRestricted){setShowRestrTip(false);setRestrTipRect(null);}}}
       style={{background:rowBgSched,cursor:locked||otherStore?'not-allowed':'pointer'}}
       onClick={()=>{if(!locked&&!otherStore){const _e=!row.name;onOpenModal('sched',dk,null,slot,_e);}}}>
       <td onClick={e=>{if(row.name&&onToggleArrived){e.preventDefault();e.stopPropagation();onToggleArrived(dk,slot);}}}
@@ -7556,8 +7554,6 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
         {row.arrived
           ? <span style={{fontWeight:900,color:'#dc2626',fontSize:15,lineHeight:1}}>✓</span>
           : (isFirstSub?(isSpecialSlot(baseSlot)?specialSlotLabel(baseSlot):slot):<span style={{fontSize:9,color:'#a5f3fc'}}>↳</span>)}
-        {/* 制限網掛けの上にマウスが来たら即座に同じポップアップを出す（title属性は表示が遅いので使わない） */}
-        {isRestricted&&showRestrTip&&<RestrictionTip r={restriction} rect={restrTipRect} style={{top:'100%',left:0,marginTop:2}}/>}
       </td>
       <td style={TD}>
         {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{row.name}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
@@ -11544,6 +11540,20 @@ function AppInner() {
             {verb:'旧予約分の解除'}
           );
           setPendingLoanerDeleteBk('');
+        }
+        // ★日付を変えた時は、古い日のカレンダー控え（custbk）も外す（2026-10-04）。
+        //   残っていると顧客リストの同期チェックが「未反映の予約」と見て、消したはずの日に作り直す。
+        if(_isDcForDel&&_origDkForDel){
+          const _dcName=String(cleanData.name||'').trim(), _dcCust=cleanData.custId;
+          setCustBookings(prev=>{
+            const n={...prev};let touched=false;
+            Object.keys(n).forEach(k=>{
+              const e=n[k],f=e&&e.formData;
+              if(!e||!f||String(e.dk||'')!==String(_origDkForDel))return;
+              if((_dcCust&&f.custId===_dcCust)||(_dcName&&String(f.name||'').trim()===_dcName)){delete n[k];touched=true;}
+            });
+            return touched?n:prev;
+          });
         }
         // 本予約確定 → custBookingsの仮予約エントリを削除
         if(fromCustList && custModalMeta?.bkKey){
