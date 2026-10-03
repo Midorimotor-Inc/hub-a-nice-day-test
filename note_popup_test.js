@@ -123,15 +123,17 @@ const LONG2 = '10時15分来店　ハスラーとソリオの乗り比べ希望�
   const after = await page.evaluate(() => ({ sh: window.__sc.scrollHeight, st: window.__sc.scrollTop }));
   t('④ 表の高さ・スクロール位置が動かない', sc.sh === after.sh && Math.abs(sc.st - after.st) < 2, { before: sc, after });
 
-  head('③ 短い備考では出さない');
+  head('③ 短い備考でも出る（2026-10-05 ユーザー指摘で変更）');
   await page.mouse.move(5, 5);
   await page.waitForTimeout(300);
   const c2 = await cellBox('椿');
   await page.mouse.move(c2.x, c2.y);
   await page.waitForTimeout(400);
-  t('★短い備考では吹き出しを出さない', !(await popInfo()), await popInfo());
+  const p2 = await popInfo();
+  t('★短い備考でも吹き出しが出る', !!p2, p2);
+  t('その中身が出ている', !!p2 && p2.text.indexOf('電話') >= 0, p2 && p2.text.slice(0, 40));
 
-  head('⑤ 一般整備の「内容」でも出る');
+  head('⑤ 一般整備の「内容」でも出る（よくある長さでも）');
   await page.mouse.move(5, 5);
   await page.waitForTimeout(300);
   await page.evaluate(() => { const row = [...document.querySelectorAll('tr')].find(r => r.innerText.indexOf('瀧本') >= 0); if (row) row.scrollIntoView({ block: 'center' }); });   // 上の帯に隠れない所まで送る
