@@ -229,13 +229,14 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   t('件数は増えない（2件のまま）', !!saved2 && saved2[DK].length === 2, saved2);
 
   head('② スマホ：書いた人と完了チェック（2026-10-05 ユーザー指示）');
-  t('書いた人が出る', await seeText(mp, '✍ 江川京志', 6000), await mp.evaluate(() => document.body.innerText.slice(-300)));
+  t('担当者が出る（チェックの前から）', await seeText(mp, '👤 江川京志', 6000), await mp.evaluate(() => document.body.innerText.slice(-300)));
   const memoDone = async () => {
     const r = await mp.evaluate(k => JSON.parse(JSON.stringify(window.__fakeFb.get(k) || null)), STOR + 'honten-memo');
     const arr = (r && r[DK]) || [];
     return arr.map(x => ({ c: (x && x.content) || '', done: !!(x && x.done), by: (x && x.by) || '', doneBy: (x && x.doneBy) || '' }));
   };
-  t('サーバーにも書いた人が入る', (await memoDone()).some(x => x.by === '江川京志'), await memoDone());
+  t('担当者が入っていない古い備考は「担当者なし」と出る', await mp.evaluate(() => /担当者なし/.test(document.body.innerText)));
+  t('サーバーにも担当者が入る', (await memoDone()).some(x => x.by === '江川京志'), await memoDone());
   await mp.evaluate(() => { const b = [...document.querySelectorAll('[role=checkbox]')].find(e => e.offsetParent !== null); if (b) b.click(); });
   await mp.waitForTimeout(2500);
   t('★チェックを押すと完了になる', (await memoDone()).some(x => x.done), await memoDone());

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791018438302';
+    window.__APP_BUILD='build-1791019578366';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.39';
+const APP_VERSION = '3.40';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5513,8 +5513,9 @@ const SearchModal=memo(({isOpen,onClose,inspData,schedData,closedDays,closedDate
 // ============================================
 //  備考モーダル（左スライドパネル）
 // ============================================
-const MemoModal=memo(({isNew,initContent,dateLabel,onSave,onDelete,onClose,setItems,onOpenSetItemEdit})=>{
+const MemoModal=memo(({isNew,initContent,initBy,staffNames,dateLabel,onSave,onDelete,onClose,setItems,onOpenSetItemEdit})=>{
   const [content,setContent]=useState(initContent);
+  const [by,setBy]=useState(initBy||'');   // ★担当者＝この備考を書いた人（2026-10-05）
   const ref=useRef(null);
   useEffect(()=>{setTimeout(()=>ref.current?.focus(),120);},[]);
   return (
@@ -5572,9 +5573,28 @@ const MemoModal=memo(({isNew,initContent,dateLabel,onSave,onDelete,onClose,setIt
               placeholder="備考・メモを入力してください..."
               rows={8}
               style={{...INP,resize:'vertical',minHeight:180,fontSize:14,lineHeight:1.7}}/>
+            {/* ★担当者（書いた人）。一覧に出るので、誰が書いたのか後から分かる（2026-10-05 ユーザー指示） */}
+            <div style={{marginTop:14}}>
+              <label style={LBL}>担当者 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>この備考を書いた人。一覧に出ます</span></label>
+              <input list="hub-memo-staff" value={by} onChange={e=>setBy(e.target.value)}
+                placeholder="名前を入れてください"
+                style={{...INP,fontSize:14}}/>
+              <datalist id="hub-memo-staff">
+                {(staffNames||[]).map(n=><option key={n} value={n}/>)}
+              </datalist>
+              {(staffNames||[]).length>0&&(
+                <div style={{display:'flex',flexWrap:'wrap',gap:5,marginTop:6}}>
+                  {(staffNames||[]).map(n=>(
+                    <button key={n} onClick={()=>setBy(n)}
+                      style={{padding:'4px 10px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',
+                        border:'2px solid '+(by===n?'#d97706':'#e5e7eb'),background:by===n?'#fef3c7':'white',color:by===n?'#92400e':'#64748b'}}>{n}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:8,paddingBottom:28}}>
-            <button onClick={()=>onSave(content)}
+            <button onClick={()=>onSave(content,by)}
               style={{width:'100%',padding:'12px 0',background:'linear-gradient(135deg,#d97706,#f59e0b)',color:'white',border:'none',borderRadius:9,fontWeight:800,fontSize:14,cursor:'pointer'}}>
               ✓ 保存
             </button>
@@ -13495,12 +13515,13 @@ function AppInner() {
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,color:memo.done?'#a16207':'#78350f',whiteSpace:'pre-wrap',paddingRight:24,minHeight:20,
                             textDecoration:memo.done?'line-through':'none',opacity:memo.done?0.8:1}}>{memo.content||<span style={{color:'#d97706',fontStyle:'italic'}}>（空の備考）</span>}</div>
-                          {(memo.by||memo.doneBy)&&(
-                            <div style={{display:'flex',gap:10,flexWrap:'wrap',fontSize:10.5,color:'#a16207',marginTop:5}}>
-                              {memo.by&&<span>✍ {memo.by}</span>}
-                              {memo.done&&memo.doneBy&&<span style={{fontWeight:700,color:'#b45309'}}>✓ {memo.doneBy} 完了</span>}
-                            </div>
-                          )}
+                          {/* ★担当者（書いた人）は、チェックに関係なくいつでも出す（2026-10-05 ユーザー指示） */}
+                          <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',fontSize:10.5,color:'#a16207',marginTop:5}}>
+                            {memo.by
+                              ?<span style={{fontWeight:800,color:'#92400e',background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:20,padding:'1px 9px'}}>👤 {memo.by}</span>
+                              :<span style={{color:'#d97706',fontStyle:'italic'}}>担当者なし（クリックして入れられます）</span>}
+                            {memo.done&&memo.doneBy&&<span style={{color:'#b45309'}}>✓ {memo.doneBy} が完了</span>}
+                          </div>
                         </div>
                         <div style={{position:'absolute',top:7,right:7,fontSize:9,color:'#a16207'}}>✏️ 編集</div>
                       </div>
@@ -13898,17 +13919,22 @@ function AppInner() {
         const isNew=memoModal===true;
         const idx=isNew?null:memoModal;
         const initContent=isNew?'':(dayMemos[idx]?.content||'');
+        // ★担当者：新規は自分、直す時は元の人（入っていなければ空＝ここで入れられる）
+        const initBy=isNew?(currentUser?.name||''):((dayMemos[idx]&&dayMemos[idx].by)||'');
         return <MemoModal
           isNew={isNew}
           initContent={initContent}
+          initBy={initBy}
+          staffNames={currentStaffList.map(s=>s.name)}
           dateLabel={dateLabel}
-          onSave={(content)=>{
+          onSave={(content,by)=>{
+            const _by=String(by||'').trim();
             if(isNew){
-              // ★書いた人と日時を残す（2026-10-05）
-              setMemoData(p=>({...p,[dk]:[...(p[dk]||[]),{content,by:currentUser?.name||'',at:Date.now()}]}));
+              // ★担当者（書いた人）と日時を残す（2026-10-05）
+              setMemoData(p=>({...p,[dk]:[...(p[dk]||[]),{content,by:_by,at:Date.now()}]}));
             } else {
-              // 直した時は、書いた人と完了の印はそのまま引き継ぐ
-              setMemoData(p=>{const u=[...(p[dk]||[])];u[idx]={...(u[idx]||{}),content};return{...p,[dk]:u};});
+              // 直した時は、完了の印はそのまま。担当者は画面で入れた人にする
+              setMemoData(p=>{const u=[...(p[dk]||[])];u[idx]={...(u[idx]||{}),content,by:_by};return{...p,[dk]:u};});
             }
             releaseLock(curLockKey);setCurLockKey(null);
             setMemoModal(false);

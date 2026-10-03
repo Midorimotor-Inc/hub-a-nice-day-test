@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791018438302';
+  window.__APP_BUILD='build-1791019578366';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.39';
+const MOBILE_VERSION='3.40';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1685,12 +1685,13 @@ const MemoLine=({m,onEdit,onToggle,compact})=>{
       )}
       <div style={{flex:1,minWidth:0}}>
         <div style={{whiteSpace:'pre-wrap',wordBreak:'break-word',textDecoration:done?'line-through':'none',opacity:done?0.75:1}}>{m.content||m.text||''}</div>
-        {(m.by||m.doneBy)&&(
-          <div style={{display:'flex',gap:9,flexWrap:'wrap',fontSize:10,color:'#7c3aed',marginTop:4}}>
-            {m.by&&<span>✍ {m.by}</span>}
-            {done&&m.doneBy&&<span style={{fontWeight:800,color:'#b45309'}}>✓ {m.doneBy} 完了</span>}
-          </div>
-        )}
+        {/* ★担当者（書いた人）は、チェックに関係なくいつでも出す（2026-10-05 ユーザー指示） */}
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',fontSize:10,marginTop:4}}>
+          {m.by
+            ?<span style={{fontWeight:800,color:'#5b21b6',background:'#ede9fe',border:'1px solid #ddd6fe',borderRadius:20,padding:'1px 8px'}}>👤 {m.by}</span>
+            :<span style={{color:'#a78bfa',fontStyle:'italic'}}>担当者なし（タップで入れられます）</span>}
+          {done&&m.doneBy&&<span style={{color:'#b45309'}}>✓ {m.doneBy} が完了</span>}
+        </div>
       </div>
       {onEdit&&<span style={{fontSize:11,color:'#a78bfa',fontWeight:800,flexShrink:0}}>✎</span>}
     </div>
@@ -1702,8 +1703,9 @@ const MemoLine=({m,onEdit,onToggle,compact})=>{
 //   PC版と同じ {店}-memo の配列（1件 = {content}）に書く。
 //   クイック項目（PCの「⚙ クイック編集」で作った定型文）はタップで1行足す／外す。
 // ============================================
-const MemoSheet=({dateLabel,isNew,initContent,items,onSave,onDelete,onClose})=>{
+const MemoSheet=({dateLabel,isNew,initContent,initBy,staffNames,items,onSave,onDelete,onClose})=>{
   const [content,setContent]=useState(initContent||'');
+  const [by,setBy]=useState(initBy||'');   // ★担当者＝この備考を書いた人（2026-10-05）
   const [busy,setBusy]=useState(false);
   const lines=String(content||'').split(String.fromCharCode(10));
   const joinLines=a=>a.join(String.fromCharCode(10));
@@ -1736,6 +1738,21 @@ const MemoSheet=({dateLabel,isNew,initContent,items,onSave,onDelete,onClose})=>{
         )}
         <textarea style={box} value={content} onChange={e=>setContent(e.target.value)} maxLength={500}
           placeholder="例：部品待ち・代車は午後返却"/>
+        {/* ★担当者（書いた人）。一覧に出るので、誰が書いたのか後から分かる（2026-10-05 ユーザー指示） */}
+        <div style={{marginTop:10}}>
+          <div style={{fontSize:11,fontWeight:800,color:'#6d28d9',marginBottom:4}}>担当者<span style={{fontWeight:400,color:'#94a3b8',marginLeft:5}}>この備考を書いた人。一覧に出ます</span></div>
+          <input value={by} onChange={e=>setBy(e.target.value)} placeholder="名前を入れてください"
+            style={{width:'100%',padding:'10px 12px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16,boxSizing:'border-box',background:'white'}}/>
+          {(staffNames||[]).length>0&&(
+            <div style={{display:'flex',flexWrap:'wrap',gap:5,marginTop:6}}>
+              {(staffNames||[]).map(n=>(
+                <button key={n} onClick={()=>setBy(n)}
+                  style={{padding:'6px 11px',borderRadius:20,fontSize:12,fontWeight:700,
+                    border:'2px solid '+(by===n?'#7c3aed':'#e2e8f0'),background:by===n?'#ede9fe':'white',color:by===n?'#5b21b6':'#64748b'}}>{n}</button>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{display:'flex',gap:8,marginTop:10}}>
           {!isNew&&(
             <button disabled={busy}
@@ -1743,7 +1760,7 @@ const MemoSheet=({dateLabel,isNew,initContent,items,onSave,onDelete,onClose})=>{
               style={{flex:'0 0 92px',padding:'13px 0',borderRadius:12,border:'none',background:'#fee2e2',color:'#b91c1c',fontSize:14,fontWeight:800}}>🗑 削除</button>
           )}
           <button disabled={busy||empty}
-            onClick={async()=>{ setBusy(true); try{ await onSave(String(content)); }finally{ setBusy(false); } }}
+            onClick={async()=>{ setBusy(true); try{ await onSave(String(content),String(by||'').trim()); }finally{ setBusy(false); } }}
             style={{flex:1,padding:'13px 0',borderRadius:12,border:'none',background:'#7c3aed',color:'white',fontSize:15,fontWeight:800,opacity:(busy||empty)?0.5:1}}>
             {busy?'保存中…':'✓ 保存'}
           </button>
@@ -4358,16 +4375,17 @@ const App=()=>{
       fetchAll(true);
     }
   };
-  const saveDayMemo=async(dk,idx,content)=>{
+  const saveDayMemo=async(dk,idx,content,by)=>{
     const key=storKey('memo',vsId);
     const set=vsId==='honten'?setMemoDataH:setMemoDataS;
     const t=String(content||'').trim().slice(0,500);
     try{
       await writeShared(key,{},b=>{
         const arr=Array.isArray(b[dk])?[...b[dk]]:[];
-        if(idx==null||idx<0||idx>=arr.length){ if(!t)return undefined; arr.push({content:t,by:user?.name||'',at:Date.now()}); }   // ★書いた人を残す（2026-10-05）
+        const _by=String(by==null?'':by).trim();
+        if(idx==null||idx<0||idx>=arr.length){ if(!t)return undefined; arr.push({content:t,by:_by,at:Date.now()}); }   // ★担当者（書いた人）を残す（2026-10-05）
         else if(!t){ arr.splice(idx,1); }
-        else { arr[idx]={...(arr[idx]||{}),content:t}; }
+        else { arr[idx]={...(arr[idx]||{}),content:t,by:_by}; }   // 直した時は画面で入れた担当者にする（完了の印はそのまま）
         const n={...b}; if(arr.length)n[dk]=arr; else delete n[dk]; return n;
       },v=>set(v),null,true);
       setMemoEdit(null);
@@ -5235,9 +5253,13 @@ const App=()=>{
         const p=String(memoEdit.dk||'').split('-').map(Number);
         const lbl=(p.length===3&&p[0])?(p[1]+'月'+p[2]+'日'):String(memoEdit.dk||'');
         const items=(Array.isArray(memoItemsRaw)?memoItemsRaw:[]).map(si=>({...si,text:si.text||si.content||si.label||''})).filter(si=>si.text);
-        return <MemoSheet dateLabel={lbl} isNew={isNew} items={items}
+        // ★担当者：新規は自分、直す時は元の人（入っていなければ空＝ここで入れられる）
+        const initBy=isNew?(user?.name||''):((cur&&cur.by)||'');
+        const staffNames=((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(x=>x.store===vsId))
+          .filter(x=>x.badge!=='president'&&x.myNumber!==0).map(x=>x.name);
+        return <MemoSheet dateLabel={lbl} isNew={isNew} items={items} initBy={initBy} staffNames={staffNames}
           initContent={cur?(cur.content||cur.text||''):''}
-          onSave={c=>saveDayMemo(memoEdit.dk,memoEdit.idx,c)}
+          onSave={(c,by)=>saveDayMemo(memoEdit.dk,memoEdit.idx,c,by)}
           onDelete={()=>saveDayMemo(memoEdit.dk,memoEdit.idx,'')}
           onClose={()=>setMemoEdit(null)}/>;
       })()}
