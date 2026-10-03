@@ -94,6 +94,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
 
+### 保管箱（insp-arch）に古い予約が残る（v3.31・2026-10-04・重要）
+- テスト版で「辻井さんが 8/26 と 9/2 の2件」。調べると **8/26 は `insp-arch`、9/2 は `insp`** に居た。
+- **14日より前の予約は `insp` → `insp-arch` に移してある**（`fbArchiveOldInsp`）。画面は3つとも `{...inspArch,...hotInsp}` で**合体して表示**するのに、**書き込み（日付変更・削除）は `insp` にしか効かない**。だから保管箱の古い行が残り、同じ人が2件出ていた。
+  （`applyBookingToInsp` も `buildInspSave` も `insp` だけを組み立てる。保管箱は読み取り専用のつもりで作られている。）
+- 直し：日付を変えた時に `archDropSameBooking(arch,custId,keepDk)` で保管箱からも外す（PC・スマホ・顧客リストの3か所に同じ写し）。
+  **消すのは custId が同じ行だけ**。氏名で消すと**本当の過去の車検履歴まで消える**ので絶対に広げないこと。行は詰めずに `null` にする（後ろの行の bookingKey＝代車の紐付けを壊さない）。
+  月ファイルを取り込み直して custId が変わっている場合は外せない（その時は画面から手で消す）。
+- 検査は `node insp_double_test.js` の ⑧。
+
 ### 日にち変更まわりの続き（v3.30・2026-10-04）
 - **変更前の代車が残っていた**（テスト版で確認：8/28 辻井 → 9/2。予約は移ったが代車管理に 8/28 の代車が残る）。
   顧客リストは**新しい代車を選んだ時しか**古い代車を消していなかった（`resRemoveRes` は `selCarId` がある時だけ走る）。日を変えただけでは誰も消さない。

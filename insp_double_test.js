@@ -23,12 +23,12 @@ const grab = (name) => {
   }
   throw new Error(name + ' の終わりが分かりません');
 };
-const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
+const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'archDropSameBooking', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
   .map(grab).join(String.fromCharCode(10));
 const sandbox = {};
 new Function('exports', code + String.fromCharCode(10) +
-  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;exports.resDropForMove=resDropForMove;')(sandbox);
-const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow, resDropForMove } = sandbox;
+  'exports.applyBookingToInsp=applyBookingToInsp;exports.findOtherDayRows=findOtherDayRows;exports.isSameVehicleRow=isSameVehicleRow;exports.resDropForMove=resDropForMove;exports.archDropSameBooking=archDropSameBooking;')(sandbox);
+const { applyBookingToInsp, findOtherDayRows, isSameVehicleRow, resDropForMove, archDropSameBooking } = sandbox;
 
 const D1 = '2026-10-24', D2 = '2026-10-31';
 const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902, custId: '202612__121__山東庸子__5902' };
@@ -89,6 +89,16 @@ const dropped2 = resDropForMove(lres2, { keys: [], custId: '', name: CUST.name, 
 t('紐付けがずれていても、その人のその日の代車なら消える', !!dropped2 && Object.keys(dropped2.car1 || {}).length === 0, dropped2 && dropped2.car1);
 // 消すものが無ければ何も返さない（＝書き込みをしない）
 t('消すものが無い時は書き込まない', resDropForMove(lres2, { keys: [], custId: '', name: '誰か', dks: ['2026-10-24'] }) === undefined);
+
+head('⑧ 保管箱（insp-arch）に残った同じ予約を外す（2026-10-04 テスト版 辻井さん）');
+const arch = { '2026-8-26': [{ name: '辻井　崇詞', carType: 'ワゴンＲ', custId: 'A', bookingStatus: 'confirmed', bookingKey: 'insp-2026-8-26-0' }, { name: '別の人', custId: 'B', bookingStatus: 'confirmed' }], '2026-8-24': [{ name: '辻井　文夫', custId: 'C', bookingStatus: 'confirmed' }] };
+const a8 = archDropSameBooking(arch, 'A', '2026-9-2');
+t('保管箱の古い行が外れる', !!a8 && a8['2026-8-26'][0] === null, a8 && a8['2026-8-26']);
+t('同じ日の別の人は残る', !!a8 && a8['2026-8-26'][1] && a8['2026-8-26'][1].custId === 'B', a8 && a8['2026-8-26']);
+t('行は詰めない（代車の紐付けを壊さない）', !!a8 && a8['2026-8-26'].length === 2, a8 && a8['2026-8-26'].length);
+t('別人の過去の履歴は触らない', !!a8 && a8['2026-8-24'][0] && a8['2026-8-24'][0].custId === 'C', a8 && a8['2026-8-24']);
+t('移り先の日は触らない', archDropSameBooking({ '2026-9-2': [{ custId: 'A', name: 'x', bookingStatus: 'confirmed' }] }, 'A', '2026-9-2') === undefined);
+t('custId が無い時は何もしない', archDropSameBooking(arch, '', '2026-9-2') === undefined);
 
 console.log(String.fromCharCode(10) + `結果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

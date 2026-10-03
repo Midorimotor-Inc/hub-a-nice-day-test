@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790997037930';
+    window.__APP_BUILD='build-1791000873678';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.30';
+const APP_VERSION = '3.31';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2232,6 +2232,22 @@ const buildInspSave = (base, p)=>{
   return {result, idxPlace, relocated, pendingNow:!!(rows[idxPlace]&&rows[idxPlace].pendingApproval&&!wasPending)};
 };
 
+// ★保管箱（insp-arch）から「同じ予約」を外す（2026-10-04）。
+//   14日より前の予約は insp から insp-arch に移してあり、画面は両方を合体して出す。
+//   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
+//   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
+//   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+const archDropSameBooking=(arch,custId,keepDk)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=Array.isArray(arch[d])?arch[d]:arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    const next=rows.map(r=>(r&&r.custId===custId&&r.bookingStatus!=='cancelled')?(hit=true,null):r);
+    out[d]=next;
+  });
+  return hit?out:undefined;
+};
 // ── 予約1件を特定する述語（削除・状態変更の対象判定）。位置(idx)ではなく本人性で照合する ──
 //   custId → seq（行ごとに一意）→ 氏名+no の順（handleDeleteModal の _delVerify と同じ規約）。
 //   これにより、サーバー最新値で行の並びがズレていても取り違えない。
@@ -11564,6 +11580,16 @@ function AppInner() {
             {verb:'旧予約分の解除'}
           );
           setPendingLoanerDeleteBk('');
+        }
+        // ★日付を変えた時は、保管箱（14日より前の分）に残る同じ予約も外す（2026-10-04）
+        if(_isDcForDel&&cleanData.custId){
+          (async()=>{
+            try{
+              const _a=await sGet(STOR+'insp-arch');
+              const _n=archDropSameBooking(_a,cleanData.custId,_targetDk);
+              if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
+            }catch(e){}
+          })();
         }
         // ★日付を変えた時は、古い日のカレンダー控え（custbk）も外す（2026-10-04）。
         //   残っていると顧客リストの同期チェックが「未反映の予約」と見て、消したはずの日に作り直す。

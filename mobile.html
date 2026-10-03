@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790997037930';
+  window.__APP_BUILD='build-1791000873678';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.30';
+const MOBILE_VERSION='3.31';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1019,6 +1019,22 @@ const cfSaveRow=async(fileName,cust)=>{
     return true;
   }
   throw new Error('顧客リストにこの方の行が見つかりませんでした');
+};
+// ★保管箱（insp-arch）から「同じ予約」を外す（2026-10-04）。
+//   14日より前の予約は insp から insp-arch に移してあり、画面は両方を合体して出す。
+//   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
+//   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
+//   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+const archDropSameBooking=(arch,custId,keepDk)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=Array.isArray(arch[d])?arch[d]:arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    const next=rows.map(r=>(r&&r.custId===custId&&r.bookingStatus!=='cancelled')?(hit=true,null):r);
+    out[d]=next;
+  });
+  return hit?out:undefined;
 };
 // 予約の控え（カレンダーの仮予約枠 custbk）。PC のリストから予約した時と同じ形で書く
 const cfCustbkEntry=(cust,dk,form,isTemp)=>({
@@ -4666,6 +4682,14 @@ const App=()=>{
       // ★日を動かした時のあと始末（2026-10-04）
       if(isMove){
         const _nm=String(entry.name||'').trim();
+        // 保管箱（14日より前の分）に残る同じ予約を外す
+        if(entry.custId){
+          try{
+            const _a=await sGet(STOR+'insp-arch');
+            const _n=archDropSameBooking(_a,entry.custId,tDk);
+            if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
+          }catch(e){}
+        }
         const _hitOld=(e)=>{const f=e&&e.formData;
           if(!e||!f||String(e.dk||'')!==req.dk)return false;
           return (!!entry.custId&&f.custId===entry.custId)||(!!_nm&&String(f.name||'').trim()===_nm);};

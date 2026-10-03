@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790997037930';
+  window.__APP_BUILD='build-1791000873678';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.30'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.31'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -403,6 +403,22 @@ const resDropForMove=(base,{keys,custId,name,dks})=>{
     out[cid]=days;
   }
   return touched?out:undefined;
+};
+// ★保管箱（insp-arch）から「同じ予約」を外す（2026-10-04）。
+//   14日より前の予約は insp から insp-arch に移してあり、画面は両方を合体して出す。
+//   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
+//   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
+//   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+const archDropSameBooking=(arch,custId,keepDk)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=Array.isArray(arch[d])?arch[d]:arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    const next=rows.map(r=>(r&&r.custId===custId&&r.bookingStatus!=='cancelled')?(hit=true,null):r);
+    out[d]=next;
+  });
+  return hit?out:undefined;
 };
 const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})=>{
   const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
@@ -3232,6 +3248,15 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           alert(`⚠️ ${customer.name} の予約をスケジュールに反映できませんでした（サーバー混雑）。\n画面上部の「未反映の予約」バナーから再送できます。`);
         }
 
+        // ★保管箱（14日より前の分）に残っている同じ予約も外す（2026-10-04）
+        _bg.push((async()=>{
+          try{
+            const _a=await sGet(STOR+'insp-arch');
+            const _n=archDropSameBooking(_a,customer.custId,dkFormatted);
+            if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n);
+              try{ if(IS_EMBED)window.parent.postMessage({type:'hub-reload-main'},location.origin); }catch(_e){} }
+          }catch(e){}
+        })());
         // ★変更前の代車・レンタカーを消す（2026-10-04 報告：日を変えても前の代車が残っていた）。
         //   「両方残す」を選んだ時は、custId が同じ古い予約の分だけ消す（別予約の代車は触らない）。
         {
