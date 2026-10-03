@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790990004033';
+  window.__APP_BUILD='build-1790991459468';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.26'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.27'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -3649,8 +3649,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
             style={{marginLeft:'auto',padding:'5px 12px',borderRadius:20,border:'1.5px solid #cbd5e1',background:'white',color:'#475569',fontSize:11,fontWeight:700,opacity:cfxBusy?0.6:1}}>
             {cfxBusy?'作成中…':'🗂 索引を作り直す'}
           </button>
-          {cfxQ.trim().length>=2&&cfxRows&&cfxRows.length>0&&(()=>{
-            const hits=cfxSearch(cfxRows,cfxQ,60);
+          {cfxQ.trim().length>=1&&cfxRows&&cfxRows.length>0&&(()=>{
+            const hits=cfxSearch(cfxRows,cfxQ,600);   // ★1文字から・上限もスマホ/PCと同じ（2026-10-04）
             return(
               <div style={{position:'absolute',top:'100%',left:120,zIndex:50,width:'min(760px,88vw)',maxHeight:360,overflowY:'auto',
                 background:'white',border:'1px solid #cbd5e1',borderRadius:10,boxShadow:'0 14px 34px rgba(15,23,42,.22)'}}>

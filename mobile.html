@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790990004033';
+  window.__APP_BUILD='build-1790991459468';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.26';
+const MOBILE_VERSION='3.27';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3672,7 +3672,7 @@ const FindSheet=({inspData,schedDataH,schedDataS,cfx,custBusy,onGo,onGoCust,onCl
       </div>
       <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
         {!nq&&<div style={{padding:'34px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5,lineHeight:1.8}}>
-          2文字ほど入れると、その場で絞り込まれます{custBusy?<><br/>（顧客リストを読み込んでいます…）</>:null}</div>}
+          1文字からその場で絞り込まれます{custBusy?<><br/>（顧客リストを読み込んでいます…）</>:null}</div>}
         {!!nq&&total===0&&!custBusy&&<div style={{padding:'34px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5}}>見つかりませんでした</div>}
         {showI&&inspHits.slice(0,60).map(h=>(
           <Row key={'i'+h.dk+'-'+h.ix} onClick={()=>onGo(h.dk)} date={_dkLab(h.dk)}
@@ -3772,8 +3772,8 @@ const CustSheet=({names,cache,busy,loadingName,cfx,cfxBusy,initCust,initMode,vsI
           </div>
         </div>
         <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
-          {q.trim().length<2&&<div style={{padding:'30px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5,lineHeight:1.8}}>2文字ほど入れると、その場で出ます</div>}
-          {q.trim().length>=2&&hits.length===0&&!cfxBusy&&<div style={{padding:'30px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5}}>見つかりませんでした</div>}
+          {q.trim().length<1&&<div style={{padding:'30px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5,lineHeight:1.8}}>1文字からその場で出ます</div>}
+          {q.trim().length>=1&&hits.length===0&&!cfxBusy&&<div style={{padding:'30px 18px',textAlign:'center',color:'#94a3b8',fontSize:12.5}}>見つかりませんでした</div>}
           {hits.map(g=>(
             <div key={g.key} onClick={()=>openPerson(g.now)}
               style={{display:'flex',alignItems:'center',gap:9,padding:'10px 12px',borderBottom:'1px solid #f1f5f9'}}>

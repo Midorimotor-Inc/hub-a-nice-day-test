@@ -43,7 +43,7 @@ const cust = (i, name, car, over) => Object.assign({
 }, over || {});
 const M1 = '202610', M2 = '202609';
 const ROWS1 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'ダイナ'), cust(3, '佐藤 太郎', 'スイフト')];
-const ROWS2 = [cust(1, '藤原 昭人', 'ハスラー'), cust(4, '藤田 花子', 'アルト', { address: '神戸市中央区' })];
+const ROWS2 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'タイタン'), cust(4, '藤田 花子', 'アルト', { address: '神戸市中央区' })];
 // 索引（アプリの cfxRow と同じ形。住所 a つき）
 const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile, c.phoneHome].filter(Boolean).join('/'), a: c.address || '', e: c.expiry, f, i: c.custId });
 
@@ -84,6 +84,13 @@ const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile
     if (!b) return null;
     return b.innerText.replace(/^顧客(ファイル)?/, '').trim() || '0';
   });
+  // 画面に並んだ行の数（氏名の見出しがいくつ出ているか）。
+  //   ラベルの数が合っていても、PC だけ月ごとの行を並べていたことがあるので、ここも見る。
+  const countRows = (page, name) => page.evaluate(nm => {
+    const norm = x => String(x || '').replace(/[\s\u3000]/g, '');
+    const all = [...document.querySelectorAll('span,div')].filter(e => e.offsetParent !== null && norm(e.innerText) === norm(nm));
+    return all.filter(e => !all.some(o => o !== e && e.contains(o))).length;   // 一番内側だけ＝1行につき1つ
+  }, name);
   // ── PC ──
   const pc = await mkCtx(false);
   const pp = await pc.newPage();
@@ -136,6 +143,19 @@ const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile
   console.log('   PC=' + a2 + ' / スマホ=' + b2);
   t('「1人（2件）」の形で出る', !!a2 && /人（\d+件）/.test(a2), { pc: a2, mobile: b2 });
   t('★PCとスマホの数が同じ', a2 === b2, { pc: a2, mobile: b2 });
+
+  console.log(String.fromCharCode(10) + '■ 同じ人が複数の月にいる時、並ぶ行も1人1行（2026-10-04 ユーザー報告）');
+  for (const nm of ['有限会社　藤明建設工業', '藤原 昭人']) {
+    const q = nm.indexOf('藤明') >= 0 ? '藤明' : '藤原';
+    await typeIn(pp, q); await typeIn(mp, q);
+    await pp.waitForTimeout(900); await mp.waitForTimeout(900);
+    const la = await readCount(pp), lb = await readCount(mp);
+    const ra = await countRows(pp, nm), rb = await countRows(mp, nm);
+    console.log('   「' + q + '」 PC=' + la + '/' + ra + '行　スマホ=' + lb + '/' + rb + '行');
+    t('「' + q + '」：数の出方が同じ', la === lb, { pc: la, mobile: lb });
+    t('「' + q + '」：並ぶ行も同じ数', ra === rb, { pc: ra, mobile: rb });
+    t('「' + q + '」：1人なので1行だけ', ra === 1, { pc: ra, mobile: rb });
+  }
 
   t('PC：JSエラーなし', perr.length === 0, perr.slice(0, 3));
   t('スマホ：JSエラーなし', merr.length === 0, merr.slice(0, 3));

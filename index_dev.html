@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790990004033';
+    window.__APP_BUILD='build-1790991459468';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.26';
+const APP_VERSION = '3.27';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5289,12 +5289,15 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
     if(hit(r.name,r.carType,r.content,r.work)) schedHits.push({kind:'sched',dk,sk,r,store:st,n:dkNum(dk)});
   }); }); });
   // 顧客ファイル
-  const custHits=nq?(cust||[]).filter(r=>hit(r.name,r.carType,r.no,r.phoneHome,r.phoneMobile,r.address)):[];
-  // ★数え方をスマホと揃える（2026-10-02 ユーザー指示）。
-  //   スマホは「同じ人をまとめた人数」、PC は「行数」で数えていたため、同じ言葉で探しても数が違った。
-  //   どちらも人数を主にし、カッコで行数も出す。まとめる鍵は cfxPersonKey と同じ規則。
-  const custPeople=(()=>{const set=new Set();custHits.forEach(r=>{set.add(r.no?('no:'+String(r.no)):(_hubNorm(r.name)+'|'+_hubNorm(r.carType)));});return set.size;})();
-  const custLabel=nq?(custHits.length===custPeople?String(custPeople):custPeople+'人（'+custHits.length+'件）'):'';
+  // ★探し方・まとめ方・並び順を cfxSearch に一本化した（2026-10-04 ユーザー報告）。
+  //   「藤明」で PC 4件・スマホ 1件になっていたのは、同じ人が4ヶ月分の行で出ていたから。
+  //   PC だけ月ごとの行をそのまま並べていたので、スマホ・顧客リストと同じ「人ごと」に揃える。
+  const custRowsX=(cust||[]).map(r=>({n:r.name,c:r.carType,no:(r.no==null?'':r.no),
+    p:[r.phoneMobile,r.phoneHome].filter(Boolean).join('/'),e:r.expiry,i:r.custId,f:r._file,a:r.address||''}));
+  const custHits=nq?cfxSearch(custRowsX,q,600):[];        // 1件＝1人（g.now＝今回の月／g.past＝前回まで）
+  const custPeople=custHits.length;
+  const custRowCount=custHits.reduce((n,g)=>n+1+g.past.length,0);
+  const custLabel=nq?(custRowCount===custPeople?String(custPeople):custPeople+'人（'+custRowCount+'件）'):'';
   const byDate=(a,b)=>b.n-a.n;
   inspHits.sort(byDate); schedHits.sort(byDate);
   const all=(tab==='all'||tab==='insp')?inspHits:[];
@@ -5329,7 +5332,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
           <Tab id="all" label="すべて" n={nq?total:''}/><Tab id="insp" label="車検" n={nq?inspHits.length:''}/><Tab id="sched" label="整備" n={nq?schedHits.length:''}/><Tab id="cust" label="顧客ファイル" n={custLabel}/>
         </div>
         <div style={{flex:1,overflowY:'auto',padding:'6px 0 12px'}}>
-          {!nq&&<div style={{padding:'28px 16px',textAlign:'center',color:'#94a3b8',fontSize:13}}>2文字以上入れると、その場で絞り込まれます</div>}
+          {!nq&&<div style={{padding:'28px 16px',textAlign:'center',color:'#94a3b8',fontSize:13}}>1文字からその場で絞り込まれます</div>}
           {nq&&total===0&&<div style={{padding:'28px 16px',textAlign:'center',color:'#94a3b8',fontSize:13}}>見つかりませんでした</div>}
           {all.slice(0,80).map(h=>(
             <Row key={'i'+h.dk+'-'+h.ix} onClick={()=>onGo({kind:'insp',dk:h.dk,ix:h.ix,store:(h.r.store==='sanda'||h.r.store==='三田店')?'sanda':'honten'})}>
@@ -5347,12 +5350,18 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
               <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.store)}{' ・ '+getBaseSlot(h.sk)}{h.r.work?' ・ '+h.r.work:''}</span>
             </Row>
           ))}
-          {all3.slice(0,120).map((r,i)=>(
-            <Row key={'c'+r._file+'-'+(r.custId||i)} onClick={()=>onGoCust({name:r.name,file:r._file})}>
-              <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{r._file}</span>
+          {all3.slice(0,120).map(g=>(
+            <Row key={'c'+g.key} onClick={()=>onGoCust({name:g.now.n,file:g.now.f})}>
+              <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{g.now.f}</span>
               <Pill c="#059669">顧客</Pill>
-              <span style={{fontWeight:800}}>{mark(r.name)}</span>
-              <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(r.carType||'')}{r.no?' ・ No.'+mark(String(r.no)):''}{(r.phoneMobile||r.phoneHome)?' ・ '+mark(r.phoneMobile||r.phoneHome):''}{r.expiry?' ・ 満了 '+r.expiry:''}{r.status==='confirm'?' ・ 予約済':''}</span>
+              <span style={{fontWeight:800}}>{mark(g.now.n)}</span>
+              <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {mark(g.now.c||'')}
+                {g.now.no!==''&&g.now.no!=null?<>{' ・ No.'}{mark(String(g.now.no))}</>:null}
+                {g.now.p?<>{' ・ '}{mark(g.now.p)}</>:null}
+                {g.now.e?' ・ 満了 '+g.now.e:''}
+              </span>
+              {g.past.length>0&&<span style={{marginLeft:'auto',flexShrink:0,fontSize:10,fontWeight:700,background:'#f1f5f9',color:'#64748b',borderRadius:12,padding:'2px 9px',whiteSpace:'nowrap'}}>前回 {g.past[0].f}</span>}
             </Row>
           ))}
           {(tab==='all'||tab==='cust')&&nq&&custBusy&&<div style={{padding:'10px 16px',fontSize:12,color:'#94a3b8'}}>顧客ファイルを読み込んでいます…</div>}
@@ -7469,7 +7478,7 @@ const RestrictionTip=({r,style,rect})=>{
   // ★rect（マウスが乗った枠の位置）をもらった時は画面に対する固定位置で出す（2026-10-03）。
   //   行の中に absolute で出すと、一番下までスクロールした状態で「出す→高さが伸びる→
   //   行が逃げる→消える→高さが戻る→また入る」を繰り返してチラついていた。
-  const W=250, H=220;
+  const W=270, H=220;
   const fixedStyle=rect?(()=>{
     const left=Math.max(8,Math.min(rect.left,window.innerWidth-W-8));
     const below=rect.bottom+4, above=rect.top-4;
@@ -7478,8 +7487,9 @@ const RestrictionTip=({r,style,rect})=>{
   })():null;
   return(
     <div style={{position:'absolute',zIndex:9999,width:W,background:'white',border:'2px solid #ef4444',borderRadius:10,
-      boxShadow:'0 10px 30px rgba(0,0,0,0.22)',padding:'10px 12px',pointerEvents:'none',...(fixedStyle||style)}}>
-      <div style={{fontWeight:800,fontSize:12,color:'#dc2626',marginBottom:7}}>🚫 入庫制限　{restrLabels(r).join('　／　')}</div>
+      boxShadow:'0 10px 30px rgba(0,0,0,0.22)',padding:'10px 12px',pointerEvents:'none',
+      whiteSpace:'normal',wordBreak:'break-word',boxSizing:'border-box',...(fixedStyle||style)}}>
+      <div style={{fontWeight:800,fontSize:12,color:'#dc2626',marginBottom:7,whiteSpace:'normal',lineHeight:1.5}}>🚫 入庫制限　{restrLabels(r).join('　／　')}</div>
       <div style={{fontSize:11,fontWeight:800,color:'#047857',marginBottom:5}}>✅ この時間帯に入庫できる作業</div>
       {okWorks.length===0
         ?<div style={{fontSize:11,color:'#6b7280'}}>なし（すべて入庫できません）</div>

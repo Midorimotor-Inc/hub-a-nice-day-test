@@ -47,7 +47,8 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
     // 一番下の方の時間を制限する（下端でのチラつきを見るため）
-    schedRestrictions: { [DK]: { ranges: [{ startTime: '17:00', endTime: '18:00' }], exemptWorks: ['B'] } },
+    // 2区画にする（時間の並びが長くなるので、枠からはみ出さないかも見る）
+    schedRestrictions: { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '17:00', endTime: '18:00' }], exemptWorks: ['B'] } },
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -81,7 +82,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   await page.waitForTimeout(1500);
 
   head('① PC：制限の帯が出ている');
-  t('上に「入庫制限 17:00〜18:00」が出る', await page.waitForFunction(() => /入庫制限\s*17:00〜18:00/.test(document.body.innerText), null, { timeout: 12000 }).then(() => true).catch(() => false),
+  t('上に2つの時間帯が並んで出る', await page.waitForFunction(() => /入庫制限\s*09:00〜11:00/.test(document.body.innerText) && /17:00〜18:00/.test(document.body.innerText), null, { timeout: 12000 }).then(() => true).catch(() => false),
     await page.evaluate(() => (document.body.innerText.match(/入庫制限[^\n]*/g) || []).slice(0, 3)));
 
   // 制限されている行（17:00）の位置を調べ、その行がいるスクロール容器を一番下まで送る
@@ -126,6 +127,17 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   t('画面に対する固定位置（fixed）で出ている', !!tip && tip.position === 'fixed', tip);
   t('マウスを通す（pointer-events:none）', !!tip && tip.pe === 'none', tip);
   t('画面の中に収まっている（下端では上側に出す）', !!tip && tip.inView, tip);
+  // 時間帯が2つあると見出しが長くなる。枠からはみ出していないか（2026-10-04 ユーザー報告）
+  const ov = await page.evaluate(() => {
+    const tip = [...document.querySelectorAll('div')].find(e => getComputedStyle(e).position === 'fixed' && /🚫 入庫制限/.test(e.innerText || ''));
+    if (!tip) return null;
+    const h = tip.firstElementChild; if (!h) return null;
+    const r = tip.getBoundingClientRect(), hr = h.getBoundingClientRect();
+    return { tipRight: Math.round(r.right), headRight: Math.round(hr.right), ws: getComputedStyle(h).whiteSpace, lines: Math.round(hr.height) };
+  });
+  t('時間の表示が枠からはみ出さない', !!ov && ov.headRight <= ov.tipRight, ov);
+  t('見出しが折り返せる（nowrap を受け継いでいない）', !!ov && ov.ws === 'normal', ov);
+
   const after = await page.evaluate(() => ({ sh: window.__sc.scrollHeight, st: window.__sc.scrollTop }));
   t('表のスクロールできる高さが変わらない', before.sh === after.sh, { before, after });
   t('スクロール位置が動かない', Math.abs(before.st - after.st) < 2, { before, after });
