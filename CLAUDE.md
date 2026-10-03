@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -93,6 +93,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   以前の暗号書庫 `${STOR}mysec-{uid}` は **v3.13（2026-09-30）で完全に廃止**。「持ってくる」案内も消し、復号のコードも残していない。Firestore の `mysec-*` も同日に削除済み（あったのは江川さんの2件だけ。暗号文のままの控えは scratchpad に置いたが、読む手立ては無い）。
   共通コードは index/mobile 両方にある `HUB_OWN_DEVICE`/`useHubPrivate`/`MySchedPanel`。検査は `node fb_mysched_test.js`。
   **ヒントと答え（AES-GCM の暗号シークレット）は v3.12 で廃止**（2026-09-30 ユーザー判断）。中身は Firestore に平文で入るので、`firestore.rules` に「myprv はその本人だけ」の決まりを用意してある（**コンソールに貼るまで効かない**）。
+
+### 入庫制限は複数の時間帯を持てる（v3.25・2026-10-03・B案＋①）
+- データ：`schedRestrictions[dk] = {ranges:[{startTime,endTime},...], exemptWorks:[...]}`。**制限解除項目はその日で共通**（B案）。
+  **古い形 `{startTime,endTime,exemptWorks}` も1本の区間として読める**（入れ直し不要。本番に4件あった分はそのまま動く）。
+- **必ずこの3つの関数を通して読むこと。中の形を直接見ないこと**（PC・スマホに同じものを置いてある）：
+  `restrRanges(r)`（区間の配列）／`restrExempt(r)`（解除項目）／`restrHas(r)`（制限があるか）／`restrCovers(r,time)`（その時刻が制限の中か＝どれか1つの区間に入っていれば制限）／`restrLabels(r)`（「10:00〜11:00」の配列）。
+- 表示（①案）：スケジュール上部に区間を**並べて**出す（`restrLabels(r).join('　／　')`）。ホバー／タップで出す内容も全区間を並べる。
+- 設定画面：時間帯を何本でも足せる（「＋ 時間帯を追加」「🗑」）。保存時に**早い順に並べ替え**、**終わりが始まりより後でない区間は弾く**（画面に赤字で知らせる）。区間が0本で保存すると制限なしになる。
+- 注意：`SchedRow` の中に `restrExempt` という**同名のローカル変数があった**ので `rowExempt` に改名した（外の関数を隠していた）。
+- 検査は `node restriction_multi_test.js`（古い1区間が読める／2区間にできる／間の時間は制限されない／逆さの区間は弾く）。
 
 ### PCとスマホで検索の結果を揃える（v3.24・2026-10-03）
 - 報告：「藤」で PC 70件／スマホ 12件、「藤明」で PC 4件／スマホ 0件。

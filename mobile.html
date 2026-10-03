@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790983208997';
+  window.__APP_BUILD='build-1790986526477';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.24';
+const MOBILE_VERSION='3.25';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -217,6 +217,26 @@ const SPECIAL_SLOTS=[{id:'未定',label:'入庫時間未定'},{id:'午前',label
 const SPECIAL_SLOT_IDS=SPECIAL_SLOTS.map(s=>s.id);
 const isSpecialSlot=(id)=>SPECIAL_SLOT_IDS.includes(String(id).split('__')[0]);
 const specialSlotLabel=(id)=>{const b=String(id).split('__')[0];const s=SPECIAL_SLOTS.find(x=>x.id===b);return s?s.label:id;};
+// ── 入庫制限（2026-10-03 から複数の時間帯を持てる）────────────────
+//   新しい形：{ranges:[{startTime,endTime},...], exemptWorks:[...]}
+//   古い形　：{startTime,endTime,exemptWorks}  → 1本の区間として読む（入れ直し不要）
+//   ★この3つの関数を通して読むこと。中の形を直接見ないこと。
+const restrRanges = r => {
+  if (!r) return [];
+  if (Array.isArray(r.ranges)) return r.ranges.filter(x => x && x.startTime && x.endTime);
+  if (r.startTime && r.endTime) return [{ startTime: r.startTime, endTime: r.endTime }];
+  return [];
+};
+const restrExempt = r => (r && Array.isArray(r.exemptWorks)) ? r.exemptWorks : [];
+const restrHas = r => restrRanges(r).length > 0;
+const restrMin = t => { const m = String(t || '').match(/(\d+):(\d+)/); return m ? Number(m[1]) * 60 + Number(m[2]) : -1; };
+// その時刻が制限の中か（重なっていても、どれか1つに入っていれば制限中）
+const restrCovers = (r, time) => {
+  const n = restrMin(time); if (n < 0) return false;
+  return restrRanges(r).some(g => { const s = restrMin(g.startTime), e = restrMin(g.endTime); return s >= 0 && e >= 0 && n >= s && n < e; });
+};
+// 画面に出す文字（「10:00〜11:00」の配列）
+const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime);
 // 納車時間の表示ラベル（入庫時間の「入庫時間未定」等とは文言を分ける）
 const deliverySlotLabel=(id)=>{const b=String(id).split('__')[0];return b==='未定'?'納車時間未定':b;};
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
@@ -2218,15 +2238,15 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
   const restr=(schedRestrictions||{})[dk];
   const [showRestr,setShowRestr]=useState(false); // 入庫制限バッジをタップした時の内容ポップアップ
   useEffect(()=>{setShowRestr(false);},[dk]);
-  const restrExemptIds=(restr&&Array.isArray(restr.exemptWorks))?restr.exemptWorks:[];
+  const restrExemptIds=restrExempt(restr);
   const restrOkWorks=WORKS.filter(w=>restrExemptIds.includes(w.id));
   const restrNgWorks=WORKS.filter(w=>!restrExemptIds.includes(w.id));
   const toMinR=t=>{const[hh,mm]=String(t).split(':').map(Number);return hh*60+mm;};
   const isSlotRestricted=slot=>{
     try{
-      if(!restr||!restr.startTime||!restr.endTime||isSpecialSlot(slot))return false;
+      if(!restrHas(restr)||isSpecialSlot(slot))return false;
       const s=toMinR(slot);
-      return s>=toMinR(restr.startTime)&&s<toMinR(restr.endTime);
+      return restrCovers(restr,getBaseSlot(slot));
     }catch(e){return false;}
   };
   return(
@@ -2368,7 +2388,7 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
             {restr&&(
               <span onClick={()=>setShowRestr(true)}
                 style={{display:'flex',alignItems:'center',gap:3,padding:'2px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6,fontWeight:700,color:'#dc2626',fontSize:10}}>
-                🚫 入庫制限 {restr.startTime}〜{restr.endTime}
+                🚫 入庫制限 {restrLabels(restr).join('／')}
                 <span style={{marginLeft:2,fontSize:9,color:'#b91c1c'}}>タップで内容</span>
               </span>
             )}
@@ -2379,7 +2399,7 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
               style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',zIndex:9998,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
               <div onClick={e=>e.stopPropagation()}
                 style={{width:'100%',maxWidth:340,maxHeight:'80vh',overflowY:'auto',background:'white',border:'2px solid #ef4444',borderRadius:14,padding:'14px 16px',boxShadow:'0 16px 40px rgba(0,0,0,.3)'}}>
-                <div style={{fontWeight:900,fontSize:14,color:'#dc2626',marginBottom:10}}>🚫 入庫制限 {restr.startTime}〜{restr.endTime}</div>
+                <div style={{fontWeight:900,fontSize:14,color:'#dc2626',marginBottom:10}}>🚫 入庫制限　{restrLabels(restr).join('　／　')}</div>
                 <div style={{fontSize:12,fontWeight:800,color:'#047857',marginBottom:5}}>✅ この時間帯に入庫できる作業</div>
                 {restrOkWorks.length===0
                   ?<div style={{fontSize:12,color:'#64748b',marginBottom:10}}>なし（すべて入庫できません）</div>
@@ -2524,7 +2544,7 @@ const ScheduleView=({otherView,inspData,schedDataH,schedDataS,memoDataH,memoData
                         onOpenEdit({type:'sched',dk,slot:free,isNew:true});
                       }}
                       style={{color:restricted?'#dc2626':isHoliday?'#94a3b8':isEmpty?'#475569':'#0e7490',fontSize:11,cursor:'pointer',padding:'2px 0',fontWeight:restricted?700:600}}>
-                      {isHoliday?'休業日（追加不可）':restricted?`🚫 入庫制限 ${restr.startTime}〜${restr.endTime}（制限解除の作業のみ）`:isEmpty?'＋ タップで追加':'＋ 同時刻に追加'}
+                      {isHoliday?'休業日（追加不可）':restricted?`🚫 入庫制限 ${restrLabels(restr).join('／')}（制限解除の作業のみ）`:isEmpty?'＋ タップで追加':'＋ 同時刻に追加'}
                     </div>}
                   </div>
                 </div>
@@ -4573,9 +4593,9 @@ const App=()=>{
       if(restriction){
         const toMin=t=>{const[h,m]=String(t).split(':').map(Number);return h*60+m;};
         const slotMin=toMin(_tSlot);
-        if(slotMin>=toMin(restriction.startTime)&&slotMin<toMin(restriction.endTime)){
-          const isExempt=restriction.exemptWorks&&restriction.exemptWorks.includes(form.work);
-          if(!isExempt)throw new Error(`🚫 この時間帯（${restriction.startTime}〜${restriction.endTime}）は入庫制限中です。制限解除されている作業内容のみ予約可能です`);
+        if(restrCovers(restriction,_tSlot)){
+          const isExempt=restrExempt(restriction).includes(form.work);
+          if(!isExempt)throw new Error(`🚫 この時間帯（${restrLabels(restriction).join('／')}）は入庫制限中です。制限解除されている作業内容のみ予約可能です`);
         }
       }
     }

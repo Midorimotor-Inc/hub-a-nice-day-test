@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790983208997';
+    window.__APP_BUILD='build-1790986526477';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.24';
+const APP_VERSION = '3.25';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -791,6 +791,26 @@ const SPECIAL_SLOTS=[
 const SPECIAL_SLOT_IDS=SPECIAL_SLOTS.map(s=>s.id);
 const isSpecialSlot=(id)=>SPECIAL_SLOT_IDS.includes(getBaseSlot(id));
 const specialSlotLabel=(id)=>{const b=getBaseSlot(id);const s=SPECIAL_SLOTS.find(x=>x.id===b);return s?s.label:id;};
+// ── 入庫制限（2026-10-03 から複数の時間帯を持てる）────────────────
+//   新しい形：{ranges:[{startTime,endTime},...], exemptWorks:[...]}
+//   古い形　：{startTime,endTime,exemptWorks}  → 1本の区間として読む（入れ直し不要）
+//   ★この3つの関数を通して読むこと。中の形を直接見ないこと。
+const restrRanges = r => {
+  if (!r) return [];
+  if (Array.isArray(r.ranges)) return r.ranges.filter(x => x && x.startTime && x.endTime);
+  if (r.startTime && r.endTime) return [{ startTime: r.startTime, endTime: r.endTime }];
+  return [];
+};
+const restrExempt = r => (r && Array.isArray(r.exemptWorks)) ? r.exemptWorks : [];
+const restrHas = r => restrRanges(r).length > 0;
+const restrMin = t => { const m = String(t || '').match(/(\d+):(\d+)/); return m ? Number(m[1]) * 60 + Number(m[2]) : -1; };
+// その時刻が制限の中か（重なっていても、どれか1つに入っていれば制限中）
+const restrCovers = (r, time) => {
+  const n = restrMin(time); if (n < 0) return false;
+  return restrRanges(r).some(g => { const s = restrMin(g.startTime), e = restrMin(g.endTime); return s >= 0 && e >= 0 && n >= s && n < e; });
+};
+// 画面に出す文字（「10:00〜11:00」の配列）
+const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime);
 // 納車時間の表示ラベル（入庫時間の「入庫時間未定」等とは文言を分ける）
 const deliverySlotLabel=(id)=>{const b=getBaseSlot(id);return b==='未定'?'納車時間未定':b;};
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
@@ -5580,21 +5600,17 @@ const DayOffModal=memo(({isOpen,onClose,dateLabel,staffList,selected,onSave})=>{
 //  入庫制限モーダル
 // ============================================
 const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>{
-  const [startTime,setStartTime]=useState('09:00');
-  const [endTime,setEndTime]=useState('17:00');
+  // ★時間帯を何本でも持てる（2026-10-03 ユーザー決定・B案）。制限解除項目はその日で共通。
+  const [ranges,setRanges]=useState([{startTime:'09:00',endTime:'17:00'}]);
   const [exemptWorks,setExemptWorks]=useState([]);
-  
+  const [err,setErr]=useState('');
+
   useEffect(()=>{
     if(isOpen){
-      if(restriction){
-        setStartTime(restriction.startTime||'09:00');
-        setEndTime(restriction.endTime||'17:00');
-        setExemptWorks(restriction.exemptWorks||[]);
-      }else{
-        setStartTime('09:00');
-        setEndTime('17:00');
-        setExemptWorks([]);
-      }
+      const rs=restrRanges(restriction);
+      setRanges(rs.length?rs.map(g=>({startTime:g.startTime,endTime:g.endTime})):[{startTime:'09:00',endTime:'17:00'}]);
+      setExemptWorks(restrExempt(restriction));
+      setErr('');
     }
   },[isOpen,restriction]);
   
@@ -5605,7 +5621,13 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
   };
   
   const handleSave=()=>{
-    onSave({startTime,endTime,exemptWorks});
+    const bad=ranges.find(g=>restrMin(g.startTime)>=restrMin(g.endTime));
+    if(bad){setErr('「'+bad.startTime+'〜'+bad.endTime+'」は終わりが始まりより後になっていません。直してください。');return;}
+    // 早い順に並べて保存（画面で見やすいように）
+    const rs=[...ranges].sort((a,b)=>restrMin(a.startTime)-restrMin(b.startTime))
+      .map(g=>({startTime:g.startTime,endTime:g.endTime}));
+    if(!rs.length){onSave(null);onClose();return;}
+    onSave({ranges:rs,exemptWorks});
     onClose();
   };
   
@@ -5626,24 +5648,39 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
           <button onClick={onClose} style={{background:'#f3f4f6',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={16}/></button>
         </div>
         
-        {/* 制限時間 */}
-        <div style={{marginBottom:20}}>
-          <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:8}}>📅 制限時間</label>
-          <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <select value={startTime} onChange={e=>setStartTime(e.target.value)} style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
-              {TIME_SLOTS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <span style={{fontWeight:700,color:'#6b7280'}}>〜</span>
-            <select value={endTime} onChange={e=>setEndTime(e.target.value)} style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
-              {TIME_SLOTS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+        {/* ★制限する時間帯（何本でも。2026-10-03 ユーザー決定・B案） */}
+        <div style={{marginBottom:16}}>
+          <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:8}}>📅 制限する時間帯</label>
+          <div style={{border:'2px solid #fecaca',background:'#fff8f8',borderRadius:12,padding:'10px 12px'}}>
+            {ranges.map((g,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i===ranges.length-1?0:8}}>
+                <span style={{fontSize:11,fontWeight:800,color:'white',background:'#dc2626',borderRadius:20,padding:'2px 10px',whiteSpace:'nowrap'}}>{i+1}つめ</span>
+                <select value={g.startTime} onChange={e=>setRanges(p=>p.map((x,j)=>j===i?{...x,startTime:e.target.value}:x))}
+                  style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
+                  {TIME_SLOTS.map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+                <span style={{fontWeight:700,color:'#6b7280'}}>〜</span>
+                <select value={g.endTime} onChange={e=>setRanges(p=>p.map((x,j)=>j===i?{...x,endTime:e.target.value}:x))}
+                  style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
+                  {TIME_SLOTS.map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={()=>setRanges(p=>p.filter((x,j)=>j!==i))} title="この時間帯を消す"
+                  style={{background:'#fee2e2',border:'1px solid #fca5a5',borderRadius:7,color:'#b91c1c',fontSize:11,fontWeight:800,padding:'5px 9px',cursor:'pointer'}}>🗑</button>
+              </div>
+            ))}
+            {ranges.length===0&&<div style={{fontSize:12,color:'#9ca3af',textAlign:'center',padding:'6px 0'}}>時間帯がありません（保存すると制限なしになります）</div>}
           </div>
+          <button onClick={()=>setRanges(p=>[...p,{startTime:'14:00',endTime:'15:00'}])}
+            style={{marginTop:8,width:'100%',padding:'10px 0',borderRadius:11,border:'2.5px dashed #fca5a5',background:'#fff5f5',color:'#b91c1c',fontSize:13,fontWeight:800,cursor:'pointer'}}>
+            ＋ 時間帯を追加
+          </button>
+          {err&&<div style={{marginTop:8,fontSize:12,color:'#b91c1c',fontWeight:700}}>{err}</div>}
         </div>
         
         {/* 制限解除項目 */}
         <div style={{marginBottom:20}}>
-          <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:8}}>✅ 制限解除項目</label>
-          <div style={{fontSize:11,color:'#6b7280',marginBottom:8}}>制限時間内でも予約可能にする作業内容を選択</div>
+          <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:8}}>✅ 制限解除項目<span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>（この日ぜんぶ共通）</span></label>
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:8}}>上のどの時間帯でも、この作業なら予約できます</div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,maxHeight:280,overflowY:'auto'}}>
             {WORKS.map(w=>{
               const on=exemptWorks.includes(w.id);
@@ -7426,13 +7463,13 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
 //  ※title属性のツールチップは表示まで約1秒かかるので使わない（即時表示のため自前で描画）
 // ============================================
 const RestrictionTip=({r,style})=>{
-  const ex=Array.isArray(r.exemptWorks)?r.exemptWorks:[];
+  const ex=restrExempt(r);
   const okWorks=WORKS.filter(w=>ex.includes(w.id));
   const ngCount=WORKS.length-okWorks.length;
   return(
     <div style={{position:'absolute',zIndex:9999,width:250,background:'white',border:'2px solid #ef4444',borderRadius:10,
       boxShadow:'0 10px 30px rgba(0,0,0,0.22)',padding:'10px 12px',pointerEvents:'none',...style}}>
-      <div style={{fontWeight:800,fontSize:12,color:'#dc2626',marginBottom:7}}>🚫 入庫制限 {r.startTime}〜{r.endTime}</div>
+      <div style={{fontWeight:800,fontSize:12,color:'#dc2626',marginBottom:7}}>🚫 入庫制限　{restrLabels(r).join('　／　')}</div>
       <div style={{fontSize:11,fontWeight:800,color:'#047857',marginBottom:5}}>✅ この時間帯に入庫できる作業</div>
       {okWorks.length===0
         ?<div style={{fontSize:11,color:'#6b7280'}}>なし（すべて入庫できません）</div>
@@ -7465,10 +7502,10 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
 
   const isRestricted=!!(()=>{
     try{
-      if(!restriction||!restriction.startTime||!restriction.endTime)return false;
+      if(!restrHas(restriction))return false;
       const toMin=(t)=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
       const slotMin=toMin(baseSlot||slot);
-      return slotMin>=toMin(restriction.startTime)&&slotMin<toMin(restriction.endTime);
+      return restrCovers(restriction,baseSlot);
     }catch(e){return false;}
   })();
 
@@ -7476,8 +7513,9 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
 
   // 制限時間帯でも「制限解除の作業」の予約が入っている行は、入庫時間の欄だけ制限色を残し、
   // 案件の内容は白背景にして「この予約は入庫できる案件」と一目で分かるようにする
-  const restrExempt=isRestricted&&!!row.name&&Array.isArray(restriction.exemptWorks)&&restriction.exemptWorks.includes(row.work);
-  const rowBgSched=restrExempt?'white'
+  // ★名前が外の関数 restrExempt と同じだったので、行の分は別の名前にした（2026-10-03）
+  const rowExempt=isRestricted&&!!row.name&&restrExempt(restriction).includes(row.work);
+  const rowBgSched=rowExempt?'white'
     :isRestricted?'#fee2e2'
     :locked?'#fffbeb':row.store==='sanda'?'#fff0f0':row.store==='honten'?'#eff6ff':isHour?'white':'#f0feff';
 
@@ -11509,17 +11547,16 @@ function AppInner() {
         // 制限時間帯かどうかをチェック
         const toMin=(t)=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
         const slotMin=toMin(newSlot);
-        const startMin=toMin(restriction.startTime);
-        const endMin=toMin(restriction.endTime);
+        // ★複数区間に対応（2026-10-03）。どれかの区間に入っていれば制限中
         const isRestricted=slotMin>=startMin&&slotMin<endMin;
         
         // 制限時間帯の場合、制限解除項目に含まれていないかチェック
         if(isRestricted){
           const workId=cleanData.work;
-          const isExempt=restriction.exemptWorks&&restriction.exemptWorks.includes(workId);
+          const isExempt=restrExempt(restriction).includes(workId);
           
           if(!isExempt){
-            alert(`🚫 この時間帯（${restriction.startTime}〜${restriction.endTime}）は入庫制限中です。\n制限解除されている作業内容のみ予約可能です。`);
+            alert(`🚫 この時間帯（${restrLabels(restriction).join('／')}）は入庫制限中です。\n制限解除されている作業内容のみ予約可能です。`);
             setModalOpen(true); // モーダルを再度開く
             return;
           }
@@ -13336,12 +13373,12 @@ function AppInner() {
                   <h3 style={SEC_TITLE('#0891b2')}>⏰ タイムスケジュール</h3>
                   {/* 入庫制限の警告アイコン。マウスを乗せると、制限中の作業と制限解除の作業が一覧で出る
                       （入力自体はこれまでどおり可能。保存時に制限解除の作業だけが通る） */}
-                  {schedRestrictions[dk]&&(
+                  {restrHas(schedRestrictions[dk])&&(
                     <div style={{position:'relative'}}
                       onMouseEnter={()=>setRestrTip(dk)} onMouseLeave={()=>setRestrTip('')}>
                       <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6,cursor:'help'}}>
                         <span style={{fontSize:16}}>🚫</span>
-                        <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>入庫制限 {schedRestrictions[dk].startTime}〜{schedRestrictions[dk].endTime}</span>
+                        <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>入庫制限　{restrLabels(schedRestrictions[dk]).join('　／　')}</span>
                       </div>
                       {restrTip===dk&&<RestrictionTip r={schedRestrictions[dk]} style={{top:'100%',left:0,marginTop:6}}/>}
                     </div>
@@ -13425,9 +13462,9 @@ function AppInner() {
                         const _slotRestr=schedRestrictions[dk];
                         const isSlotRestricted=!!(()=>{
                           try{
-                            if(!_slotRestr||!_slotRestr.startTime||!_slotRestr.endTime)return false;
+                            if(!restrHas(_slotRestr))return false;
                             const _tm=t=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
-                            return _tm(slot)>=_tm(_slotRestr.startTime)&&_tm(slot)<_tm(_slotRestr.endTime);
+                            return restrCovers(_slotRestr,slot);
                           }catch(e){return false;}
                         })();
                         return(
