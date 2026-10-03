@@ -15,7 +15,7 @@ const get = async k => { const d = await db.collection('kv').doc(k).get(); if (!
 
 const norm = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[\s　\-‐ー－()（）]/g, '');
 const digits = s => String(s == null ? '' : s).normalize('NFKC').replace(/[^0-9]/g, '');
-const personKey = r => (r.no !== '' && r.no != null) ? ('no:' + norm(r.no)) : ('nm:' + norm(r.n) + '/' + norm(r.c));
+const personKey = r => 'v:' + norm(r.n) + '/' + norm(r.c) + '/' + norm(r.no) + '/' + norm(r.e);   // アプリと同じ（2026-10-04）
 
 (async () => {
   const idx = await get(STOR + 'cf-search-index');
@@ -33,10 +33,10 @@ const personKey = r => (r.no !== '' && r.no != null) ? ('no:' + norm(r.no)) : ('
     const mRows = rows.filter(mHit);
     const mPeople = new Set(mRows.map(personKey));
     // PC（FindModal）：索引の行を別の形に移してから同じ言葉で見る
-    const pcRows = rows.map(x => ({ name: x.n, carType: x.c, no: x.no, phoneMobile: (String(x.p || '').split('/')[0] || ''), phoneHome: (String(x.p || '').split('/')[1] || ''), address: x.a || '', custId: x.i, _file: x.f }));
+    const pcRows = rows.map(x => ({ name: x.n, carType: x.c, no: x.no, phoneMobile: (String(x.p || '').split('/')[0] || ''), phoneHome: (String(x.p || '').split('/')[1] || ''), address: x.a || '', expiry: x.e, custId: x.i, _file: x.f }));   // ★満了日も渡す（PC の FindModal と同じ）
     const pHit = r => [r.name, r.carType, r.no, r.phoneHome, r.phoneMobile, r.address].some(v => v != null && norm(v).includes(nq));
     const pRows = pcRows.filter(pHit);
-    const pPeople = new Set(pRows.map(r => r.no ? ('no:' + String(r.no)) : (norm(r.name) + '|' + norm(r.carType))));
+    const pPeople = new Set(pRows.map(r => personKey({ n: r.name, c: r.carType, no: r.no, e: r.expiry })));
     console.log('');
     console.log('【' + w + '】 スマホ: ' + mPeople.size + '人（' + mRows.length + '件）　PC: ' + pPeople.size + '人（' + pRows.length + '件）'
       + (numOnly ? '　※数字だけの検索' : ''));

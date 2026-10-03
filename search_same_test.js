@@ -42,8 +42,11 @@ const cust = (i, name, car, over) => Object.assign({
   store: 'honten', staff: '', note: '', status: '', bookingTime: '', linkedInspDate: '',
 }, over || {});
 const M1 = '202610', M2 = '202609';
-const ROWS1 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'ダイナ'), cust(3, '佐藤 太郎', 'スイフト')];
-const ROWS2 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'タイタン'), cust(4, '藤田 花子', 'アルト', { address: '神戸市中央区' })];
+const ROWS1 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'ダイナ'), cust(3, '佐藤 太郎', 'スイフト'),
+  // ★同じ4桁ナンバー（3505）の別人。今までは1件にまとめられて、片方が画面から消えていた
+  cust(5, '栗﨑 茂人', 'ヴォクシー', { no: 3505, expiry: '2026-12-03' }),
+  cust(6, '阿部 佳世子', 'ムーヴ', { no: 3505, expiry: '2026-12-20' })];
+const ROWS2 = [cust(1, '藤原 昭人', 'ハスラー'), cust(2, '有限会社　藤明建設工業', 'タイタン', { expiry: '2026-09-15' }), cust(4, '藤田 花子', 'アルト', { address: '神戸市中央区' })];
 // 索引（アプリの cfxRow と同じ形。住所 a つき）
 const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile, c.phoneHome].filter(Boolean).join('/'), a: c.address || '', e: c.expiry, f, i: c.custId });
 
@@ -141,20 +144,41 @@ const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile
   await pp.waitForTimeout(900); await mp.waitForTimeout(900);
   const a2 = await readCount(pp), b2 = await readCount(mp);
   console.log('   PC=' + a2 + ' / スマホ=' + b2);
-  t('「1人（2件）」の形で出る', !!a2 && /人（\d+件）/.test(a2), { pc: a2, mobile: b2 });
+  t('重複をまとめた時は、そう分かる形で出る', !!a2 && /重複/.test(a2), { pc: a2, mobile: b2 });
   t('★PCとスマホの数が同じ', a2 === b2, { pc: a2, mobile: b2 });
 
-  console.log(String.fromCharCode(10) + '■ 同じ人が複数の月にいる時、並ぶ行も1人1行（2026-10-04 ユーザー報告）');
-  for (const nm of ['有限会社　藤明建設工業', '藤原 昭人']) {
-    const q = nm.indexOf('藤明') >= 0 ? '藤明' : '藤原';
-    await typeIn(pp, q); await typeIn(mp, q);
-    await pp.waitForTimeout(900); await mp.waitForTimeout(900);
+  console.log(String.fromCharCode(10) + '■ 1台ずつ別の行で出る（2026-10-04 ユーザー指摘）');
+  // ① 同じ会社の別の車（ナンバー4桁は同じ・車種と満了日が違う）＝ 2行
+  await typeIn(pp, '藤明'); await typeIn(mp, '藤明');
+  await pp.waitForTimeout(900); await mp.waitForTimeout(900);
+  {
     const la = await readCount(pp), lb = await readCount(mp);
-    const ra = await countRows(pp, nm), rb = await countRows(mp, nm);
-    console.log('   「' + q + '」 PC=' + la + '/' + ra + '行　スマホ=' + lb + '/' + rb + '行');
-    t('「' + q + '」：数の出方が同じ', la === lb, { pc: la, mobile: lb });
-    t('「' + q + '」：並ぶ行も同じ数', ra === rb, { pc: ra, mobile: rb });
-    t('「' + q + '」：1人なので1行だけ', ra === 1, { pc: ra, mobile: rb });
+    const ra = await countRows(pp, '有限会社　藤明建設工業'), rb = await countRows(mp, '有限会社　藤明建設工業');
+    console.log('   「藤明」 PC=' + la + '/' + ra + '行　スマホ=' + lb + '/' + rb + '行');
+    t('同じナンバーでも車が違えば別の行（PC 2行）', ra === 2, { pc: ra, mobile: rb });
+    t('同じナンバーでも車が違えば別の行（スマホ 2行）', rb === 2, { pc: ra, mobile: rb });
+    t('PCとスマホで数の出方が同じ', la === lb, { pc: la, mobile: lb });
+  }
+  // ② 同じ4桁ナンバーの別人は、両方とも出る（今までは片方が隠れていた）
+  await typeIn(pp, '3505'); await typeIn(mp, '3505');
+  await pp.waitForTimeout(900); await mp.waitForTimeout(900);
+  {
+    const a1 = await countRows(pp, '栗﨑 茂人'), a2 = await countRows(pp, '阿部 佳世子');
+    const b1 = await countRows(mp, '栗﨑 茂人'), b2 = await countRows(mp, '阿部 佳世子');
+    console.log('   「3505」 PC=栗﨑' + a1 + '/阿部' + a2 + '　スマホ=栗﨑' + b1 + '/阿部' + b2);
+    t('★同じ4桁ナンバーの別人が両方出る（PC）', a1 === 1 && a2 === 1, { 栗﨑: a1, 阿部: a2 });
+    t('★同じ4桁ナンバーの別人が両方出る（スマホ）', b1 === 1 && b2 === 1, { 栗﨑: b1, 阿部: b2 });
+  }
+  // ③ 本当に同じ内容（氏名・車種・ナンバー・満了日が同じ）の重複だけ1つにまとめる
+  await typeIn(pp, '藤原'); await typeIn(mp, '藤原');
+  await pp.waitForTimeout(900); await mp.waitForTimeout(900);
+  {
+    const la = await readCount(pp), lb = await readCount(mp);
+    const ra = await countRows(pp, '藤原 昭人'), rb = await countRows(mp, '藤原 昭人');
+    console.log('   「藤原」 PC=' + la + '/' + ra + '行　スマホ=' + lb + '/' + rb + '行');
+    t('同じ内容の重複は1行にまとまる（PC）', ra === 1, { pc: ra, mobile: rb });
+    t('同じ内容の重複は1行にまとまる（スマホ）', rb === 1, { pc: ra, mobile: rb });
+    t('重複をまとめたことが数に出る', !!la && /重複/.test(la) && la === lb, { pc: la, mobile: lb });
   }
 
   t('PC：JSエラーなし', perr.length === 0, perr.slice(0, 3));

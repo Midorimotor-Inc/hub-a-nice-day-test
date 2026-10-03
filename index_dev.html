@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1790991459468';
+    window.__APP_BUILD='build-1790992503153';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.27';
+const APP_VERSION = '3.28';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5183,8 +5183,11 @@ const cfxRow = (c, fileName) => ({
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
 const cfxNorm = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[\s　\-‐ー－()（）]/g, '');
 const cfxDigits = s => String(s == null ? '' : s).normalize('NFKC').replace(/[^0-9]/g, '');
-// 同じ人をまとめる鍵：顧客Noがあればそれ、無ければ氏名＋車種
-const cfxPersonKey = r => (r.no !== '' && r.no != null) ? ('no:' + cfxNorm(r.no)) : ('nm:' + cfxNorm(r.n) + '/' + cfxNorm(r.c));
+// まとめる鍵：氏名＋車種＋ナンバー＋満了日（2026-10-04 に直した）
+//   ★no は【ナンバー4桁】であって顧客Noではない。no だけで鍵にしていたため、
+//     同じ4桁の別人（栗﨑さんと阿部さん…）や、同じ会社の別の車（ダイナ／タイタン）まで
+//     1件にまとめて隠していた。満了日まで見れば、車ごと・1台ごとに出る。
+const cfxPersonKey = r => 'v:' + cfxNorm(r.n) + '/' + cfxNorm(r.c) + '/' + cfxNorm(r.no) + '/' + cfxNorm(r.e);
 // 索引を読む（sGet を渡す）。無ければ null＝まだ作られていない
 const cfxLoad = async (sGet) => {
   const idx = await sGet(cfxIndexKey());
@@ -5297,7 +5300,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
   const custHits=nq?cfxSearch(custRowsX,q,600):[];        // 1件＝1人（g.now＝今回の月／g.past＝前回まで）
   const custPeople=custHits.length;
   const custRowCount=custHits.reduce((n,g)=>n+1+g.past.length,0);
-  const custLabel=nq?(custRowCount===custPeople?String(custPeople):custPeople+'人（'+custRowCount+'件）'):'';
+  const custLabel=nq?(custRowCount===custPeople?String(custPeople):custPeople+'件（同じ内容の重複'+(custRowCount-custPeople)+'件を1つに）'):'';
   const byDate=(a,b)=>b.n-a.n;
   inspHits.sort(byDate); schedHits.sort(byDate);
   const all=(tab==='all'||tab==='insp')?inspHits:[];

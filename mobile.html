@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1790991459468';
+  window.__APP_BUILD='build-1790992503153';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.27';
+const MOBILE_VERSION='3.28';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -931,8 +931,11 @@ const cfxRow = (c, fileName) => ({
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
 const cfxNorm = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[\s　\-‐ー－()（）]/g, '');
 const cfxDigits = s => String(s == null ? '' : s).normalize('NFKC').replace(/[^0-9]/g, '');
-// 同じ人をまとめる鍵：顧客Noがあればそれ、無ければ氏名＋車種
-const cfxPersonKey = r => (r.no !== '' && r.no != null) ? ('no:' + cfxNorm(r.no)) : ('nm:' + cfxNorm(r.n) + '/' + cfxNorm(r.c));
+// まとめる鍵：氏名＋車種＋ナンバー＋満了日（2026-10-04 に直した）
+//   ★no は【ナンバー4桁】であって顧客Noではない。no だけで鍵にしていたため、
+//     同じ4桁の別人（栗﨑さんと阿部さん…）や、同じ会社の別の車（ダイナ／タイタン）まで
+//     1件にまとめて隠していた。満了日まで見れば、車ごと・1台ごとに出る。
+const cfxPersonKey = r => 'v:' + cfxNorm(r.n) + '/' + cfxNorm(r.c) + '/' + cfxNorm(r.no) + '/' + cfxNorm(r.e);
 // 索引を読む（sGet を渡す）。無ければ null＝まだ作られていない
 const cfxLoad = async (sGet) => {
   const idx = await sGet(cfxIndexKey());
@@ -3629,7 +3632,7 @@ const FindSheet=({inspData,schedDataH,schedDataS,cfx,custBusy,onGo,onGoCust,onCl
   const custHits=nq?cfxSearch(cfx||[],q,600):[];   // ★上限を上げて PC と揃える（2026-10-02）
   // ★PC と同じ出し方：人数を主に、カッコで行数（同じ人が複数の月に居るぶん）（2026-10-02）
   const custRows=custHits.reduce((a,g)=>a+1+((g.past&&g.past.length)||0),0);
-  const custLabel=nq?(custRows===custHits.length?String(custHits.length):custHits.length+'人（'+custRows+'件）'):'';
+  const custLabel=nq?(custRows===custHits.length?String(custHits.length):custHits.length+'件（同じ内容の重複'+(custRows-custHits.length)+'件を1つに）'):'';
   const byDate=(a,b)=>b.n-a.n;
   inspHits.sort(byDate);schedHits.sort(byDate);
   const total=inspHits.length+schedHits.length+custHits.length;

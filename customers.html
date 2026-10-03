@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1790991459468';
+  window.__APP_BUILD='build-1790992503153';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.27'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.28'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -173,8 +173,11 @@ const cfxRow = (c, fileName) => ({
 // 探す時の正規化：全角半角・大小・空白・ハイフン・かっこを無視する（画面の検索と同じ規則）
 const cfxNorm = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[\s　\-‐ー－()（）]/g, '');
 const cfxDigits = s => String(s == null ? '' : s).normalize('NFKC').replace(/[^0-9]/g, '');
-// 同じ人をまとめる鍵：顧客Noがあればそれ、無ければ氏名＋車種
-const cfxPersonKey = r => (r.no !== '' && r.no != null) ? ('no:' + cfxNorm(r.no)) : ('nm:' + cfxNorm(r.n) + '/' + cfxNorm(r.c));
+// まとめる鍵：氏名＋車種＋ナンバー＋満了日（2026-10-04 に直した）
+//   ★no は【ナンバー4桁】であって顧客Noではない。no だけで鍵にしていたため、
+//     同じ4桁の別人（栗﨑さんと阿部さん…）や、同じ会社の別の車（ダイナ／タイタン）まで
+//     1件にまとめて隠していた。満了日まで見れば、車ごと・1台ごとに出る。
+const cfxPersonKey = r => 'v:' + cfxNorm(r.n) + '/' + cfxNorm(r.c) + '/' + cfxNorm(r.no) + '/' + cfxNorm(r.e);
 // 索引を読む（sGet を渡す）。無ければ null＝まだ作られていない
 const cfxLoad = async (sGet) => {
   const idx = await sGet(cfxIndexKey());
