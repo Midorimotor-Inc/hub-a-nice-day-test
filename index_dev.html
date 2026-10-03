@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791019578366';
+    window.__APP_BUILD='build-1791036119358';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.40';
+const APP_VERSION = '3.41';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -811,6 +811,74 @@ const restrCovers = (r, time) => {
 };
 // 画面に出す文字（「10:00〜11:00」の配列）
 const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime);
+// ── マッハ車検の自動入庫制限（本店のみ・2026-10-05 ユーザー指示）──
+//   マッハ車検は複数人がかかるので、入庫から1時間は一般のクイック整備・各種点検・リコールを止める。
+//   ★必ずこの関数を通して出すこと（中の形を直接見ない）。手動の制限と同じ形にして返す。
+//   ・止める作業＝MACH_BLOCK_WORKS。通せる作業＝それ以外（＝制限解除項目の既定値）
+//   ・1件につき1区間（同じ時間に2台は無い前提・2026-10-05 ユーザー確認）
+//   ・手で消した／時間を変えた分は machOff / machEdit に残す。ただし **マッハの入庫時間が
+//     変わったら作り直す**（base と今の時刻が違えば、その手直しは無かったことにする）
+const MACH_COURSE = 1;                 // コース：1＝マッハ車検
+const MACH_STORE  = 'honten';          // 本店だけ
+const MACH_SPAN_MIN = 60;              // 入庫から1時間
+const MACH_BLOCK_WORKS = ['Q','⑫','M12','M6','N1','N6','R'];   // クイック整備・全ての点検・リコール
+const machDefaultExempt = () => WORKS.map(w => w.id).filter(id => MACH_BLOCK_WORKS.indexOf(id) < 0);
+const machAddMin = (t, add) => {
+  const n = restrMin(t); if (n < 0) return '';
+  const m = Math.min(n + add, 23 * 60 + 59);
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+};
+const machKeyOf = (r, i) => String((r && (r.custId || (r.seq != null ? 'seq' + r.seq : ''))) || ('ix' + i));
+// その日のマッハ車検から自動の区間を作る（手直しを反映したもの）
+const machAutoRanges = (inspRows, storeId, stored) => {
+  if (storeId !== MACH_STORE) return [];
+  const off = (stored && stored.machOff) || {}, edt = (stored && stored.machEdit) || {};
+  const out = [];
+  (inspRows || []).forEach((r, i) => {
+    if (!r || !r.name || Number(r.course) !== MACH_COURSE || r.bookingStatus === 'cancelled' || r.pendingApproval) return;
+    const _rs = String(r.store || '');
+    const _rst = (_rs === 'sanda' || _rs === '三田店') ? 'sanda' : MACH_STORE;   // 店の指定が無い行は本店とみなす
+    if (_rst !== MACH_STORE) return;
+    const base = getBaseSlot(r.time || '');
+    if (restrMin(base) < 0) return;          // 「未定」など時刻でないものは対象外
+    const key = machKeyOf(r, i);
+    // 手で消した分（その入庫時間のままの時だけ有効）
+    if (off[key] && String(off[key]) === String(base)) return;
+    const e = edt[key];
+    const useEdit = e && e.startTime && e.endTime && String(e.base || '') === String(base);
+    out.push({
+      startTime: useEdit ? e.startTime : base,
+      endTime:   useEdit ? e.endTime   : machAddMin(base, MACH_SPAN_MIN),
+      mach: true, machKey: key, machBase: base, machWho: r.name || '',
+      machSeq: (r.seq != null ? r.seq : 0),
+    });
+  });
+  return out.filter(g => restrMin(g.startTime) >= 0 && restrMin(g.endTime) > restrMin(g.startTime));
+};
+// 手動の制限と自動の区間を1つにまとめる（画面・保存の判定はこれを使う）
+const machMerge = (stored, autoRanges) => {
+  const manual = restrRanges(stored);
+  const auto = autoRanges || [];
+  if (!auto.length) return stored;
+  const ex = (stored && Array.isArray(stored.exemptWorks)) ? stored.exemptWorks : machDefaultExempt();
+  const ranges = [...manual, ...auto].sort((a, b) => restrMin(a.startTime) - restrMin(b.startTime));
+  return { ...(stored || {}), ranges, exemptWorks: ex, _hasMach: true };
+};
+// その時刻を覆っているマッハの区間（網掛けに「マッハ車検」と出すため）
+const machCovering = (r, time) => {
+  const n = restrMin(time); if (n < 0) return null;
+  return restrRanges(r).find(g => g && g.mach && restrMin(g.startTime) >= 0 && n >= restrMin(g.startTime) && n < restrMin(g.endTime)) || null;
+};
+// ★特例：マッハより先に入っていた予定は、そのまま残す（2026-10-05 ユーザー指示）
+//   予定の id（保存した時刻）が、マッハの予約の seq（受け付けた時刻）より前なら「先にあった」
+const machPreexisting = (r, entry) => {
+  const n = entry && (entry.at != null ? Number(entry.at) : (entry.id != null ? Number(entry.id) : null));
+  if (!n) return false;
+  const gs = restrRanges(r).filter(g => g && g.mach && g.machSeq);
+  if (!gs.length) return false;
+  return gs.every(g => n < Number(g.machSeq));
+};
+
 // 納車時間の表示ラベル（入庫時間の「入庫時間未定」等とは文言を分ける）
 const deliverySlotLabel=(id)=>{const b=getBaseSlot(id);return b==='未定'?'納車時間未定':b;};
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
@@ -5664,7 +5732,7 @@ const DayOffModal=memo(({isOpen,onClose,dateLabel,staffList,selected,onSave})=>{
 // ============================================
 //  入庫制限モーダル
 // ============================================
-const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>{
+const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,autoRanges,onSave})=>{
   // ★時間帯を何本でも持てる（2026-10-03 ユーザー決定・B案）。制限解除項目はその日で共通。
   const [ranges,setRanges]=useState([{startTime:'09:00',endTime:'17:00'}]);
   const [exemptWorks,setExemptWorks]=useState([]);
@@ -5673,7 +5741,9 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
   useEffect(()=>{
     if(isOpen){
       const rs=restrRanges(restriction);
-      setRanges(rs.length?rs.map(g=>({startTime:g.startTime,endTime:g.endTime})):[{startTime:'09:00',endTime:'17:00'}]);
+      // ★マッハ車検の自動区間も同じ並びに出す（2026-10-05）。印（mach…）を持ったまま編集する
+      setRanges(rs.length?rs.map(g=>({startTime:g.startTime,endTime:g.endTime,
+        mach:!!g.mach,machKey:g.machKey,machBase:g.machBase,machWho:g.machWho})):[{startTime:'09:00',endTime:'17:00'}]);
       setExemptWorks(restrExempt(restriction));
       setErr('');
     }
@@ -5688,11 +5758,26 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
   const handleSave=()=>{
     const bad=ranges.find(g=>restrMin(g.startTime)>=restrMin(g.endTime));
     if(bad){setErr('「'+bad.startTime+'〜'+bad.endTime+'」は終わりが始まりより後になっていません。直してください。');return;}
-    // 早い順に並べて保存（画面で見やすいように）
-    const rs=[...ranges].sort((a,b)=>restrMin(a.startTime)-restrMin(b.startTime))
+    // ★手で掛けた分と、マッハ車検の自動分を分けて保存する（2026-10-05）。
+    //   自動分は「消した（machOff）」「時間を変えた（machEdit）」だけを残し、区間そのものは持たない。
+    //   どちらもマッハの入庫時間が変わったら作り直す（machBase と比べる）。
+    const manual=[...ranges].filter(g=>!g.mach)
+      .sort((a,b)=>restrMin(a.startTime)-restrMin(b.startTime))
       .map(g=>({startTime:g.startTime,endTime:g.endTime}));
-    if(!rs.length){onSave(null);onClose();return;}
-    onSave({ranges:rs,exemptWorks});
+    const machOff={},machEdit={};
+    const keep=ranges.filter(g=>g.mach);
+    (autoRanges||[]).forEach(a=>{
+      const now=keep.find(g=>g.machKey===a.machKey);
+      if(!now){ machOff[a.machKey]=a.machBase; return; }                      // 消された
+      if(now.startTime!==a.startTime||now.endTime!==a.endTime){               // 時間を変えた
+        machEdit[a.machKey]={startTime:now.startTime,endTime:now.endTime,base:a.machBase};
+      }
+    });
+    const hasMach=(autoRanges||[]).length>0;
+    if(!manual.length&&!hasMach){onSave(null);onClose();return;}
+    onSave({ranges:manual,exemptWorks,
+      ...(Object.keys(machOff).length?{machOff}:{}),
+      ...(Object.keys(machEdit).length?{machEdit}:{})});
     onClose();
   };
   
@@ -5719,7 +5804,7 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
           <div style={{border:'2px solid #fecaca',background:'#fff8f8',borderRadius:12,padding:'10px 12px'}}>
             {ranges.map((g,i)=>(
               <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:i===ranges.length-1?0:8}}>
-                <span style={{fontSize:11,fontWeight:800,color:'white',background:'#dc2626',borderRadius:20,padding:'2px 10px',whiteSpace:'nowrap'}}>{i+1}つめ</span>
+                <span style={{fontSize:11,fontWeight:800,color:'white',background:g.mach?'#b91c1c':'#dc2626',borderRadius:20,padding:'2px 10px',whiteSpace:'nowrap'}}>{i+1}つめ</span>
                 <select value={g.startTime} onChange={e=>setRanges(p=>p.map((x,j)=>j===i?{...x,startTime:e.target.value}:x))}
                   style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
                   {TIME_SLOTS.map(t=><option key={t} value={t}>{t}</option>)}
@@ -5729,6 +5814,7 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
                   style={{flex:1,padding:'8px 10px',border:'2px solid #d1d5db',borderRadius:6,fontSize:13}}>
                   {TIME_SLOTS.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
+                {g.mach&&<span title="マッハ車検の入庫時間から自動で入った区間です" style={{fontSize:10.5,fontWeight:800,color:'#b91c1c',whiteSpace:'nowrap'}}>🚗 マッハ{g.machWho?'（'+shortenCorpName(String(g.machWho))+'）':''}</span>}
                 <button onClick={()=>setRanges(p=>p.filter((x,j)=>j!==i))} title="この時間帯を消す"
                   style={{background:'#fee2e2',border:'1px solid #fca5a5',borderRadius:7,color:'#b91c1c',fontSize:11,fontWeight:800,padding:'5px 9px',cursor:'pointer'}}>🗑</button>
               </div>
@@ -5739,6 +5825,12 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,onSave})=>
             style={{marginTop:8,width:'100%',padding:'10px 0',borderRadius:11,border:'2.5px dashed #fca5a5',background:'#fff5f5',color:'#b91c1c',fontSize:13,fontWeight:800,cursor:'pointer'}}>
             ＋ 時間帯を追加
           </button>
+          {ranges.some(g=>g.mach)&&(
+            <div style={{marginTop:8,fontSize:11,color:'#b91c1c',lineHeight:1.7,background:'#fff5f5',border:'1px solid #fecaca',borderRadius:8,padding:'7px 10px'}}>
+              🚗 マッハ車検の入庫時間から1時間は、自動で入庫制限になります（本店のみ）。<br/>
+              ここで時間を変えたり 🗑 で消したりできます。<b>マッハの入庫時間を変えると、元の1時間に戻ります。</b>
+            </div>
+          )}
           {err&&<div style={{marginTop:8,fontSize:12,color:'#b91c1c',fontWeight:700}}>{err}</div>}
         </div>
         
@@ -7667,7 +7759,11 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
   // 制限時間帯でも「制限解除の作業」の予約が入っている行は、入庫時間の欄だけ制限色を残し、
   // 案件の内容は白背景にして「この予約は入庫できる案件」と一目で分かるようにする
   // ★名前が外の関数 restrExempt と同じだったので、行の分は別の名前にした（2026-10-03）
-  const rowExempt=isRestricted&&!!row.name&&restrExempt(restriction).includes(row.work);
+  // ★マッハ車検の自動制限（2026-10-05）。網掛けの中に「マッハ車検」とだけ出す。
+  //   マッハより先に入っていた予定は特例でそのまま（白いまま）。
+  const machCov=isRestricted?machCovering(restriction,baseSlot):null;
+  const rowMachPre=isRestricted&&!!row.name&&machPreexisting(restriction,row);
+  const rowExempt=isRestricted&&!!row.name&&(restrExempt(restriction).includes(row.work)||rowMachPre);
   const rowBgSched=rowExempt?'white'
     :isRestricted?'#fee2e2'
     :locked?'#fffbeb':row.store==='sanda'?'#fff0f0':row.store==='honten'?'#eff6ff':isHour?'white':'#f0feff';
@@ -7690,7 +7786,9 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
       </td>
       <td style={TD}>
         {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{row.name}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
-         :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加</div>
+         :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加
+           {/* ★マッハ車検による自動の入庫制限（2026-10-05）。網掛けの中に名前だけ出す */}
+           {machCov&&<span style={{marginLeft:4,fontSize:11,fontWeight:800,color:'#b91c1c',fontStyle:'normal',whiteSpace:'nowrap'}}>マッハ車検</span>}</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'nowrap'}}>
                 <span style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{row.name}</span>
@@ -11719,7 +11817,12 @@ function AppInner() {
     }else{
       // 整備予約：入庫制限チェック
       const newSlot=formData._slot||modalSlot||getBaseSlot(formData.time||'')||'未定';
-      const restriction=schedRestrictions[modalDk];
+      // ★マッハ車検の自動制限も込みで見る（2026-10-05）
+      const restriction=machMerge(schedRestrictions[modalDk],
+        machAutoRanges((inspData&&inspData[modalDk])||[],vsId,schedRestrictions[modalDk]));
+      // ★特例：マッハより先に入っていた予定は、そのまま直して保存できる（新規は対象外）
+      const _preEntry=(!modalIsNew&&schedData&&schedData[modalDk])?schedData[modalDk][modalSlot]:null;
+      const _machPre=machPreexisting(restriction,_preEntry);
       
       if(restriction){
         // ★複数区間に対応（2026-10-03）。どれかの区間に入っていれば制限中。
@@ -11729,7 +11832,7 @@ function AppInner() {
         const isRestricted=restrCovers(restriction,newSlot);
 
         // 制限時間帯の場合、制限解除項目に含まれていないかチェック
-        if(isRestricted){
+        if(isRestricted&&!_machPre){   // ★マッハより先にあった予定は通す（2026-10-05）
           const workId=cleanData.work;
           const isExempt=restrExempt(restriction).includes(workId);
           
@@ -11745,6 +11848,9 @@ function AppInner() {
       // 日付は左上の吹き出しカレンダーで変更でき、handleDateChangeModalがmodalDk/_targetDkを更新する。
       // ★タイムスケジュールは同時刻に複数予約OK。移動先の時刻が埋まっていてもブロックせず、
       //   その時刻の空きサブ枠（base→base__1→base__2…）へ自動配置する。
+      // ★at＝この予定を最初に保存した時刻（マッハ自動制限の特例判定に使う）
+      const _scAt=(()=>{const p=(schedData&&schedData[modalDk])?schedData[modalDk][modalSlot]:null;
+        return (p&&(p.at!=null?p.at:p.id))||Date.now();})();
       const _scOrigDk=formData._originalDk||originalModalDkRef.current||modalDk;
       const _scTgtDk=formData._targetDk||modalDk;
       const _scBase=getBaseSlot(newSlot);
@@ -11771,7 +11877,7 @@ function AppInner() {
         _scSetTgt(prev=>{
           const next={...prev};
           const tgtDay={...(next[_scTgtDk]||{})};
-          tgtDay[_scFinalSlot]={...cleanData,store:_scTgtSt,id:Date.now()};
+          tgtDay[_scFinalSlot]={...cleanData,store:_scTgtSt,at:_scAt,id:Date.now()};
           next[_scTgtDk]=tgtDay;
           return next;
         });
@@ -11784,7 +11890,8 @@ function AppInner() {
         // 新日付の空きサブ枠へ配置（同日移動時は上で削除済みの oldDay を引き継ぐ）
         const tgtDay={...(next[_scTgtDk]||{})};
         // idを付与: useSharedのidベースマージで「新しい保存が勝つ」判定を可能にする
-        tgtDay[_scFinalSlot]={...cleanData,id:Date.now()};
+        //   at＝最初に保存した時刻（マッハ自動制限の「先にあった予定」の判定に使う。id は毎回変わる）
+        tgtDay[_scFinalSlot]={...cleanData,at:_scAt,id:Date.now()};
         next[_scTgtDk]=tgtDay;
         return next;
       });
@@ -12520,6 +12627,11 @@ function AppInner() {
     const d=new Date(_selDate.getFullYear(),_selDate.getMonth(),_selDate.getDate()+days);
     setSelDate(d);
   };
+  // ★その日の入庫制限＝手で掛けた分＋マッハ車検の自動分（2026-10-05 ユーザー指示）。
+  //   画面も保存の判定も必ずこれを使う（schedRestrictions[dk] を直接見ない）。
+  const machAutoOf=(d)=>machAutoRanges((inspData&&inspData[d])||[],vsId,schedRestrictions[d]);
+  const restrictionOf=(d)=>machMerge(schedRestrictions[d],machAutoOf(d));
+  const dayRestriction=dk?restrictionOf(dk):null;
   const dayMemos=dk?memoData[dk]||[]:[];
   // ★備考の「終わった」印を付け外しする（2026-10-05 ユーザー指示）。誰が終わらせたかも残す。
   //（この辺りはログイン前の早い return より後ろなので、ここでフックを足すと数が合わなくなる。ふつうの関数にする）
@@ -13587,14 +13699,14 @@ function AppInner() {
                   <h3 style={SEC_TITLE('#0891b2')}>⏰ タイムスケジュール</h3>
                   {/* 入庫制限の警告アイコン。マウスを乗せると、制限中の作業と制限解除の作業が一覧で出る
                       （入力自体はこれまでどおり可能。保存時に制限解除の作業だけが通る） */}
-                  {restrHas(schedRestrictions[dk])&&(
+                  {restrHas(dayRestriction)&&(
                     <div style={{position:'relative'}}
                       onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();setRestrTipRect2({left:b.left,top:b.top,bottom:b.bottom});}catch(x){}setRestrTip(dk);}} onMouseLeave={()=>{setRestrTip('');setRestrTipRect2(null);}}>
                       <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6,cursor:'help'}}>
                         <span style={{fontSize:16}}>🚫</span>
-                        <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>入庫制限　{restrLabels(schedRestrictions[dk]).join('　／　')}</span>
+                        <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>入庫制限　{restrLabels(dayRestriction).join('　／　')}</span>
                       </div>
-                      {restrTip===dk&&<RestrictionTip r={schedRestrictions[dk]} rect={restrTipRect2} style={{top:'100%',left:0,marginTop:6}}/>}
+                      {restrTip===dk&&<RestrictionTip r={dayRestriction} rect={restrTipRect2} style={{top:'100%',left:0,marginTop:6}}/>}
                     </div>
                   )}
                   <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
@@ -13673,7 +13785,7 @@ function AppInner() {
                         const hasBookingInSlot=subKeys.some(k=>(schedData[dk]?.[k]?.name))||((_doBySlot[slot]||[]).length>0)||((_dlBySlot[slot]||[]).length>0);
                         if(schedCollapsed&&!hasBookingInSlot) return null;
                         // 入庫制限チェック（同時刻追加ボタン用・nullガード付き）
-                        const _slotRestr=schedRestrictions[dk];
+                        const _slotRestr=dayRestriction;
                         const isSlotRestricted=!!(()=>{
                           try{
                             if(!restrHas(_slotRestr))return false;
@@ -13698,7 +13810,7 @@ function AppInner() {
                                 lockInfo={getSchedLock(dk,subKey)}
                                 loanerRes={loanerRes}
                                 vsId={vsId}
-                                restriction={schedRestrictions[dk]}
+                                restriction={dayRestriction}
                                 onToggleArrived={toggleSchedArrived}
                                 setItems={setItems}/>
                               );
@@ -13952,11 +14064,12 @@ function AppInner() {
 
       {/* -- 入庫制限モーダル -- */}
       <RestrictionModal
+        autoRanges={dk?machAutoOf(dk):[]}
         isOpen={restrictionModal}
         onClose={()=>setRestrictionModal(false)}
         dateLabel={dateLabel}
         dk={dk}
-        restriction={schedRestrictions[dk]}
+        restriction={dayRestriction}
         onSave={(data)=>{
           if(data===null){
             // 制限解除

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791019578366';
+  window.__APP_BUILD='build-1791036119358';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.40';
+const MOBILE_VERSION='3.41';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -238,6 +238,74 @@ const restrCovers = (r, time) => {
 };
 // 画面に出す文字（「10:00〜11:00」の配列）
 const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime);
+// ── マッハ車検の自動入庫制限（本店のみ・2026-10-05 ユーザー指示）──
+//   マッハ車検は複数人がかかるので、入庫から1時間は一般のクイック整備・各種点検・リコールを止める。
+//   ★必ずこの関数を通して出すこと（中の形を直接見ない）。手動の制限と同じ形にして返す。
+//   ・止める作業＝MACH_BLOCK_WORKS。通せる作業＝それ以外（＝制限解除項目の既定値）
+//   ・1件につき1区間（同じ時間に2台は無い前提・2026-10-05 ユーザー確認）
+//   ・手で消した／時間を変えた分は machOff / machEdit に残す。ただし **マッハの入庫時間が
+//     変わったら作り直す**（base と今の時刻が違えば、その手直しは無かったことにする）
+const MACH_COURSE = 1;                 // コース：1＝マッハ車検
+const MACH_STORE  = 'honten';          // 本店だけ
+const MACH_SPAN_MIN = 60;              // 入庫から1時間
+const MACH_BLOCK_WORKS = ['Q','⑫','M12','M6','N1','N6','R'];   // クイック整備・全ての点検・リコール
+const machDefaultExempt = () => WORKS.map(w => w.id).filter(id => MACH_BLOCK_WORKS.indexOf(id) < 0);
+const machAddMin = (t, add) => {
+  const n = restrMin(t); if (n < 0) return '';
+  const m = Math.min(n + add, 23 * 60 + 59);
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+};
+const machKeyOf = (r, i) => String((r && (r.custId || (r.seq != null ? 'seq' + r.seq : ''))) || ('ix' + i));
+// その日のマッハ車検から自動の区間を作る（手直しを反映したもの）
+const machAutoRanges = (inspRows, storeId, stored) => {
+  if (storeId !== MACH_STORE) return [];
+  const off = (stored && stored.machOff) || {}, edt = (stored && stored.machEdit) || {};
+  const out = [];
+  (inspRows || []).forEach((r, i) => {
+    if (!r || !r.name || Number(r.course) !== MACH_COURSE || r.bookingStatus === 'cancelled' || r.pendingApproval) return;
+    const _rs = String(r.store || '');
+    const _rst = (_rs === 'sanda' || _rs === '三田店') ? 'sanda' : MACH_STORE;   // 店の指定が無い行は本店とみなす
+    if (_rst !== MACH_STORE) return;
+    const base = getBaseSlot(r.time || '');
+    if (restrMin(base) < 0) return;          // 「未定」など時刻でないものは対象外
+    const key = machKeyOf(r, i);
+    // 手で消した分（その入庫時間のままの時だけ有効）
+    if (off[key] && String(off[key]) === String(base)) return;
+    const e = edt[key];
+    const useEdit = e && e.startTime && e.endTime && String(e.base || '') === String(base);
+    out.push({
+      startTime: useEdit ? e.startTime : base,
+      endTime:   useEdit ? e.endTime   : machAddMin(base, MACH_SPAN_MIN),
+      mach: true, machKey: key, machBase: base, machWho: r.name || '',
+      machSeq: (r.seq != null ? r.seq : 0),
+    });
+  });
+  return out.filter(g => restrMin(g.startTime) >= 0 && restrMin(g.endTime) > restrMin(g.startTime));
+};
+// 手動の制限と自動の区間を1つにまとめる（画面・保存の判定はこれを使う）
+const machMerge = (stored, autoRanges) => {
+  const manual = restrRanges(stored);
+  const auto = autoRanges || [];
+  if (!auto.length) return stored;
+  const ex = (stored && Array.isArray(stored.exemptWorks)) ? stored.exemptWorks : machDefaultExempt();
+  const ranges = [...manual, ...auto].sort((a, b) => restrMin(a.startTime) - restrMin(b.startTime));
+  return { ...(stored || {}), ranges, exemptWorks: ex, _hasMach: true };
+};
+// その時刻を覆っているマッハの区間（網掛けに「マッハ車検」と出すため）
+const machCovering = (r, time) => {
+  const n = restrMin(time); if (n < 0) return null;
+  return restrRanges(r).find(g => g && g.mach && restrMin(g.startTime) >= 0 && n >= restrMin(g.startTime) && n < restrMin(g.endTime)) || null;
+};
+// ★特例：マッハより先に入っていた予定は、そのまま残す（2026-10-05 ユーザー指示）
+//   予定の id（保存した時刻）が、マッハの予約の seq（受け付けた時刻）より前なら「先にあった」
+const machPreexisting = (r, entry) => {
+  const n = entry && (entry.at != null ? Number(entry.at) : (entry.id != null ? Number(entry.id) : null));
+  if (!n) return false;
+  const gs = restrRanges(r).filter(g => g && g.mach && g.machSeq);
+  if (!gs.length) return false;
+  return gs.every(g => n < Number(g.machSeq));
+};
+
 // 納車時間の表示ラベル（入庫時間の「入庫時間未定」等とは文言を分ける）
 const deliverySlotLabel=(id)=>{const b=String(id).split('__')[0];return b==='未定'?'納車時間未定':b;};
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
@@ -2404,7 +2472,8 @@ const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,sched
     onOpenEdit({type:'insp',dk,idx:newInspIdx,isNew:true});
   };
   const blockNew=()=>alert(`🏖 ${m+1}月${d}日は休業日です。\nこの日には新規の予約を追加できません（休業日の設定はPC版で変更できます）。`);
-  const restr=(schedRestrictions||{})[dk];
+  // ★マッハ車検の自動制限も込み（本店のみ・2026-10-05）。手で掛けた分と同じ扱いで出す
+  const restr=machMerge((schedRestrictions||{})[dk],machAutoRanges((inspData&&inspData[dk])||[],vsId,(schedRestrictions||{})[dk]));
   const [showRestr,setShowRestr]=useState(false); // 入庫制限バッジをタップした時の内容ポップアップ
   useEffect(()=>{setShowRestr(false);},[dk]);
   const restrExemptIds=restrExempt(restr);
@@ -4847,7 +4916,10 @@ const App=()=>{
           while(day[k]&&day[k].name&&day[k].id!==placedId){sub++;k=makeSlotKey(baseSlot,sub);}
           slotFinal=k;
         }
-        day[slotFinal]={...entry,id:placedId};
+        // at＝最初に保存した時刻（マッハ自動制限の「先にあった予定」の判定に使う。id は毎回変わる）
+        const _prevE=(base&&base[req.dk])?base[req.dk][req.slot]:null;
+        const _atKeep=(_prevE&&(_prevE.at!=null?_prevE.at:_prevE.id))||placedId;
+        day[slotFinal]={...entry,at:_atKeep,id:placedId};
         out[tDk]=day;
         return out;
       },setSd,echo=>{
@@ -4893,11 +4965,15 @@ const App=()=>{
       // ★整備の移動先（form._dk / form._slot）で見る。移動していない時は今までどおり req のまま
       const _tDk=form._dk||req.dk, _tSlot=form._slot||getBaseSlot(req.slot), _tSt=form._store||vsId;
       if(_tDk!==req.dk&&isClosedDk(_tDk))throw new Error(`🏖 ${dkLabel(_tDk)} は休業日です。別の日を選んでください`);
-      const restriction=schedRestrictions[_tDk];
+      const _storedR=schedRestrictions[_tDk];
+      const restriction=machMerge(_storedR,machAutoRanges((inspData&&inspData[_tDk])||[],vsId,_storedR));
+      // ★特例：マッハより先に入っていた予定は、そのまま直して保存できる
+      const _preE=(!req.isNew&&(vsId==="honten"?schedDataH:schedDataS)[req.dk])?(vsId==="honten"?schedDataH:schedDataS)[req.dk][req.slot]:null;
+      const _machPre=machPreexisting(restriction,_preE);
       if(restriction){
         const toMin=t=>{const[h,m]=String(t).split(':').map(Number);return h*60+m;};
         const slotMin=toMin(_tSlot);
-        if(restrCovers(restriction,_tSlot)){
+        if(restrCovers(restriction,_tSlot)&&!_machPre){
           const isExempt=restrExempt(restriction).includes(form.work);
           if(!isExempt)throw new Error(`🚫 この時間帯（${restrLabels(restriction).join('／')}）は入庫制限中です。制限解除されている作業内容のみ予約可能です`);
         }

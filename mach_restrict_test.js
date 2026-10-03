@@ -1,12 +1,11 @@
-// 入庫制限を掛けた日に、整備の予約が保存できるかの検査（2026-10-04 現場報告）
-//   報告：10/3（制限 09:00-11:00 ／ 14:00-17:00・鈑金は制限解除）で 16:30 に鈑金の予定が入らない。
-//   原因：v3.25 の複数区間対応で startMin/endMin（1区間だった頃の変数）を消し忘れ、
-//        制限を掛けた日は【どの時間でも】保存が実行時エラーで落ちていた。
-//   ここで見ること：
-//     ① 制限時間の中でも、制限解除の作業（鈑金）なら保存できる
-//     ② 制限時間の中で、解除されていない作業は今までどおり断られる
-//     ③ 制限時間の外（区間の間の時間）は、どの作業でも保存できる
-//   実行: node restriction_save_test.js
+// マッハ車検の入庫時間から1時間を自動で入庫制限にする検査（本店のみ・2026-10-05 ユーザー指示）
+//   ① マッハ 10:00 → 10:00〜11:00 が自動で制限になり、網掛けに「マッハ車検」と出る
+//   ② 制限中はクイック整備・点検・リコールを断る／納車などの免除項目は入れられる
+//   ③ マッハより先に入っていた予定は、そのまま残る（特例）
+//   ④ マッハの入庫時間を変えると、制限もその時間に移る
+//   ⑤ 三田店には掛からない
+//   ⑥ 入庫制限の設定画面に自動の区間が並び、🗑 で消せる
+//   実行: node mach_restrict_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
 for (const base of [__dirname, path.join(process.env.LOCALAPPDATA || '', 'Temp', 'hub-verify')]) {
@@ -15,7 +14,7 @@ for (const base of [__dirname, path.join(process.env.LOCALAPPDATA || '', 'Temp',
 if (!chromium) { try { chromium = require('playwright').chromium; } catch (e) {} }
 if (!chromium) { console.error('playwright が見つかりません'); process.exit(1); }
 
-const DIR = __dirname, PORT = 8299, STOR = 'hub-v8-dev-';
+const DIR = __dirname, PORT = 8303, STOR = 'hub-v8-dev-';
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 400)); } };
 const head = s => console.log(String.fromCharCode(10) + '■ ' + s);
@@ -35,14 +34,24 @@ const signedInInit = ([me, stor]) => {
 };
 const now = new Date();
 const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+const MACH_SEQ = Date.now();                    // マッハを受け付けた時刻
+const OLD_ID = MACH_SEQ - 600000;               // その10分前に入っていた予定（＝先にあった）
 
 (async () => {
   const seed = {
-    [STOR + 'insp']: {}, [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
+    // 本店のマッハ 10:00（芝田）／三田店のマッハ 13:00（こちらは制限を作らない）
+    [STOR + 'insp']: { [DK]: [
+      { name: '芝田', carType: 'ワゴンR', course: 1, store: 'honten', staff: '', tokuten: '-', time: '10:00', bookingStatus: 'confirmed', seq: MACH_SEQ },
+      { name: '三田太郎', carType: 'アルト', course: 1, store: 'sanda', staff: '', tokuten: '-', time: '13:00', bookingStatus: 'confirmed', seq: MACH_SEQ },
+    ] },
+    // 10:30 に「先に入っていた」クイック整備（at がマッハの seq より前）
+    [STOR + 'honten-sched']: { [DK]: {
+      '10:30': { name: '森本', carType: 'タント', work: 'Q', content: 'オイル交換', id: OLD_ID, at: OLD_ID, store: 'honten' },
+    } },
+    [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
-    // 本番 10/3 と同じ形：2区間・鈑金(B)ほかが制限解除
-    'honten-schedRestrictions': { [DK]: { ranges: [{ startTime: '09:00', endTime: '11:00' }, { startTime: '14:00', endTime: '17:00' }], exemptWorks: ['保', '納', '試', '商', 'B'] } },
+    'honten-schedRestrictions': {}, 'sanda-schedRestrictions': {},
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -68,8 +77,22 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   await page.waitForTimeout(600);
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('スケジュール') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 12); if (b) b.click(); });
   await page.waitForTimeout(1500);
-  console.log('   [debug] 画面:', JSON.stringify((await page.evaluate(()=>document.body.innerText)).slice(0,260)));
-  t('制限の帯が出ている', await seeText(page, '入庫制限', 10000));
+
+  const red = () => page.evaluate(() => [...document.querySelectorAll('tr')]
+    .filter(r => { const td = r.querySelector('td'); return getComputedStyle(r).backgroundColor === 'rgb(254, 226, 226)' || (td && getComputedStyle(td).backgroundColor === 'rgb(254, 226, 226)'); })
+    .map(r => (r.innerText.match(/^\s*(\d+:\d+)/) || [])[1]).filter(Boolean));
+  const band = () => page.evaluate(() => (document.body.innerText.match(/入庫制限[^\n]*/) || [''])[0]);
+
+  head('① マッハ 10:00 → 10:00〜11:00 が自動で制限になる');
+  t('マッハの予約が出ている', await seeText(page, '芝田', 8000));
+  t('★上の帯に 10:00〜11:00 が出る', /10:00〜11:00/.test(await band()), await band());
+  const r1 = await red();
+  t('★10:00 と 10:30 が制限の色', r1.indexOf('10:00') >= 0 && r1.indexOf('10:30') >= 0, r1);
+  t('11:00 は制限されない', r1.indexOf('11:00') < 0, r1);
+  t('★網掛けに「マッハ車検」と出る', await page.evaluate(() => {
+    const row = [...document.querySelectorAll('tr')].find(x => /^\s*10:00/.test(x.innerText));
+    return !!row && /マッハ車検/.test(row.innerText);
+  }));
 
   // 指定の時間の空き行をクリックして予約カードを開き、名前と作業内容を入れて保存する
   const addAt = async (slot, workName, name) => {
@@ -118,39 +141,66 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     return { opened: true, saved, alerts: [...alerts] };
   };
 
-  head('① 制限時間の中でも、制限解除の作業（鈑金）なら保存できる');
-  const r1 = await addAt('16:30', '鈑金', 'ばんきん太郎');
-  t('予約カードが開く', r1.opened, r1);
-  t('★16:30 に鈑金で保存できる', !!r1.saved, r1);
-  t('断りのメッセージは出ない', !(r1.alerts || []).some(a => /入庫制限中/.test(a)), r1.alerts);
-  t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 2));
 
-  head('② 解除されていない作業は、今までどおり断られる');
-  const r2 = await addAt('16:30', 'クイック整備', 'くいっく次郎');
-  t('★保存されない', !r2.saved, r2);
-  t('「入庫制限中です」と出る', (r2.alerts || []).some(a => /入庫制限中/.test(a)), r2.alerts);
+  head('② 自動の制限中も、免除項目なら入れられる');
+  const rA = await addAt('10:00', '納車', 'のうしゃ太郎');
+  t('★納車は入れられる', !!rA.saved, rA);
+  const rB = await addAt('10:00', 'クイック整備', 'くいっく次郎');
+  t('★クイック整備は断られる', !rB.saved, rB);
+  t('「入庫制限中です」と出る', (rB.alerts||[]).some(x=>/入庫制限中/.test(x)), rB.alerts);
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /^✕|×/.test(e.innerText.trim()) && e.offsetParent !== null); if (b) b.click(); });
   await page.waitForTimeout(500);
 
-  head('③ 制限時間の外（区間の間）は、どの作業でも保存できる');
-  const r3 = await addAt('13:00', 'クイック整備', 'あいだ三郎');
-  t('★13:00 は保存できる', !!r3.saved, r3);
-  t('JSエラーが出ていない（通し）', errs.length === 0, errs.slice(0, 2));
+  head('③ マッハより先に入っていた予定はそのまま（特例）');
+  t('森本さんの予定が残っている', await seeText(page, '森本', 6000));
+  t('★その行は網掛けにしない（白いまま）', await page.evaluate(() => {
+    const row = [...document.querySelectorAll('tr')].find(x => /森本/.test(x.innerText));
+    if (!row) return false;
+    const tds = [...row.querySelectorAll('td')];
+    return tds.slice(1).every(td => getComputedStyle(td).backgroundColor !== 'rgb(254, 226, 226)');
+  }));
 
-  head('④ 入庫制限は店舗ごと（2026-10-04 ユーザー指示）');
-  t('本店では制限が出ている', await page.evaluate(() => /入庫制限/.test(document.body.innerText)));
+  head('⑤ 三田店には掛からない');
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim().indexOf('三田店') === 0 && e.offsetParent !== null); if (b) b.click(); });
-  await page.waitForTimeout(1800);
-  // 「🚫 入庫制限」は設定ボタンの名前でもあるので、時間が付いた帯（例：入庫制限 09:00〜11:00）で見る
-  const hasBand = () => page.evaluate(() => /入庫制限[s　]*[0-9]{1,2}:[0-9]{2}/.test(document.body.innerText));
-  t('★三田店に切り替えると制限は出ない（店ごとに分かれている）', !(await hasBand()), await page.evaluate(() => document.body.innerText.slice(0, 160)));
-  t('三田店では制限色の枠も無い', await page.evaluate(() => ![...document.querySelectorAll('tr')].some(r => getComputedStyle(r).backgroundColor === 'rgb(254, 226, 226)')));
+  await page.waitForTimeout(1500);
+  t('★三田店では自動制限が出ない', !/入庫制限[\s　]*\d+:\d+/.test(await page.evaluate(() => document.body.innerText)), await band());
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim().indexOf('本店') === 0 && e.offsetParent !== null); if (b) b.click(); });
-  await page.waitForTimeout(1800);
-  t('本店に戻すと制限が出る', await hasBand());
+  await page.waitForTimeout(1500);
 
-  await page.screenshot({ path: path.join(DIR, 'smoke-restriction-save.png') });
+  head('⑥ 入庫制限の設定画面に自動の区間が並ぶ');
+  t('設定を開ける', await clickText(page, '入庫制限'));
+  await page.waitForTimeout(800);
+  t('「制限する時間帯」が出る', await seeText(page, '制限する時間帯', 6000));
+  t('★自動の区間に「🚗 マッハ」の印が出る', await page.evaluate(() => /🚗 マッハ/.test(document.body.innerText)));
+  t('時間が 10:00〜11:00 で入っている', await page.evaluate(() => {
+    const box = document.querySelector('.modal-box'); if (!box) return false;
+    const sels = [...box.querySelectorAll('select')];
+    return sels.length >= 2 && sels[0].value === '10:00' && sels[1].value === '11:00';
+  }));
+  // 🗑 で消して保存 → 自動制限が消える
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '🗑' && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /保存/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(2500);
+  t('★🗑 で消すと制限が消える', !/入庫制限[\s　]*\d+:\d+/.test(await page.evaluate(() => document.body.innerText)), await band());
+  const saved = await page.evaluate(k => JSON.parse(JSON.stringify(window.__fakeFb.get(k) || null)), STOR + 'honten-schedRestrictions');
+  t('消したことがデータに残る（machOff）', !!(saved && saved[DK] && saved[DK].machOff), saved && saved[DK]);
+
+  head('④ マッハの入庫時間を変えると、制限もその時間に移る');
+  await page.evaluate(([k, dk, seq]) => {
+    const insp = JSON.parse(JSON.stringify(window.__fakeFb.get(k) || {}));
+    (insp[dk] || []).forEach(r => { if (r && r.name === '芝田') r.time = '14:00'; });
+    window.__fakeFb.set(k, insp);
+  }, [STOR + 'insp', DK, MACH_SEQ]);
+  await page.waitForTimeout(2500);
+  t('★14:00〜15:00 に移る', /14:00〜15:00/.test(await band()), await band());
+  const r2 = await red();
+  t('14:00・14:30 が制限の色', r2.indexOf('14:00') >= 0 && r2.indexOf('14:30') >= 0, r2);
+  t('10:00 はもう制限されない', r2.indexOf('10:00') < 0, r2);
+  t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
+
+  await page.screenshot({ path: path.join(DIR, 'smoke-mach-restrict.png') });
   await browser.close(); server.close();
-  console.log(String.fromCharCode(10) + `結果: ${pass} PASS / ${fail} FAIL`);
+  console.log(String.fromCharCode(10) + '結果: ' + pass + ' PASS / ' + fail + ' FAIL');
   process.exit(fail ? 1 : 0);
 })();

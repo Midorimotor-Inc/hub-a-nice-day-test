@@ -196,6 +196,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 同じ時刻に複数入れた整備は、内部では `09:00__1` のようなサブ枠の名前で持っている（`makeSlotKey`）。これが予約カードの見出しと日付の札にそのまま出ていた。
 - `specialSlotLabel(getBaseSlot(timeSlot))` を通して出すようにした。**画面に時刻を出す所では必ず getBaseSlot を通すこと**（内部の名前をそのまま出さない）。
 
+### マッハ車検の時間を自動で入庫制限（v3.41・2026-10-05・テスト版のみ）
+- **本店のみ**。マッハ車検（`course===1`）の**入庫時間から1時間**を、一般整備の入庫制限にする。マッハは複数人がかかるため。
+- 止める作業 `MACH_BLOCK_WORKS` ＝ クイック整備・修理／12ヶ月点検／メンパ12ヶ月・6ヶ月点検／新車1ヶ月・6ヶ月点検／リコール。通せるのはそれ以外（`machDefaultExempt()`＝制限解除項目の既定値）。
+- **データは持たない（計算で出す）**：`machAutoRanges(inspRows,storeId,stored)` がその日の車検から区間を作り、`machMerge(stored,auto)` で手動の制限と1つにまとめる。**画面も保存の判定も必ず machMerge した物を使う**（`schedRestrictions[dk]` を直接見ない）。
+  手直しだけを `schedRestrictions[dk]` に残す：`machOff[key]=入庫時刻`（消した）／`machEdit[key]={startTime,endTime,base}`（時間を変えた）。
+  **マッハの入庫時間が変わったら手直しは無効**（`base` と今の時刻を比べる）＝ユーザー指示「時間変更があれば制限も自動で追従」。
+- **特例：マッハより先に入っていた予定はそのまま**（`machPreexisting`）。見分けは予定の `at`（**最初に保存した時刻**。`id` は保存のたびに変わるので使えない）とマッハの `seq` を比べる。
+  `at` は PC・スマホの整備の保存で引き継ぐ（新規の時だけ今の時刻）。
+- 画面：いつもの網掛けと同じ色。マッハ由来の枠だけ「マッハ車検」と出す（`machCovering`）。設定画面にも同じ並びで出て、🗑 や時間変更ができる（印は 🚗 マッハ）。
+- **同じ時間に2台は無い前提**（2026-10-05 ユーザー確認）。既定の長さは1時間（`MACH_SPAN_MIN`）。
+- 検査は `node mach_restrict_test.js`（21件）。**本番にはまだ入れていない**（ユーザー指示：先にテスト版のみ）。
+
 ### 入庫制限は店舗ごと（v3.35・2026-10-04・ユーザー指示）
 - タイムスケジュール（整備）の予定は店ごとに立てるので、**入庫制限も店ごと**。**車検の台数制限（`inspLimits`）は今までどおり両店共通**。
 - キー：`honten-schedRestrictions` / `sanda-schedRestrictions`（PC は `useShared('honten-schedRestrictions')` を2本、スマホは MOBILE_KEYS に2つ）。見ている店（`vsId`）で選び分ける。
