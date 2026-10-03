@@ -72,6 +72,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - サーバーは無いので **開いている PC 画面（index）が作る**：daily（1日1回・90日保持）、auto（1時間ごと・48時間保持）、復旧直前の pre-restore。一覧のトランザクションで claim してから中身を書く（複数画面の重複防止）。14日より前の車検の `insp → insp-arch` 仕分けも daily の後に画面側で行う。
 - 復旧画面（管理者）に「今すぐ時点保存を作る」。検査は `node fb_snap_test.js`。
 
+### 本番のデータをテスト版へ写す（開発用・2026-10-05）
+- `node fb_copy_prod_to_dev.js`（下見）／`--write`（実行）。**向きは本番→テスト版の一方通行**。書き先が `hub-v8-dev-` で始まらなければ止まる（逆向きはできない作り）。
+- 写すのは kv の `hub-v8-*` のデータ一式（車検 insp・整備 sched・備考 memo・代車 lres/rres・顧客ファイル cf-*・入庫制限・休日 など）。
+  **写さない**：`auth-*`・`devices`・`meta/allowed`（本人認証と端末）／`myprv-*`（個人のマイスケジュール）／`snap*`（時点保存）／`locks`・`list-pending`・`diag-*`。
+- 実行前に**テスト版の今の中身を控えに保存**する（`C:/Users/A/Documents/Hub重要書類/dev-backup-<日時>.json`。顧客名や電話が入るのでリポジトリの外）。戻す時はこの控えから。
+- 2026-10-05 に初回実行：64件・743KB（車検223件／整備87件／顧客ファイル4本）。**テスト版にも本物の顧客情報が入っている**ので、テスト版の `AUTH_REQUIRED` は true のままにすること。
+- これは**その時点の写し**（自動では同期しない）。新しくしたい時はもう一度実行する。
+
 ### GAS→Firestore の移行
 `node fb_migrate.js [--prod] [--write|--verify]`（キー一覧はスナップショット＋cf-index＋既知キーから集める）。DEV は 2026-09-18、本番も同日に写し済み。
 
