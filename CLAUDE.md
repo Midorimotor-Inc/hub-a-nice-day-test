@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -138,7 +138,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   上に**撮った日・撮った人・大きさ・分けて保存した数**が出る。**⬇ 保存**（端末へダウンロード）と**🗑 削除**（`vehDocDelete` で chunk と index を全部 null にし、車両の `docs` からも外す。車両そのものは消えない）。
 - **注意（React）**：入力欄を `<Fld/>` のような**描画のたびに作られる部品にしないこと**。1文字打つたびに作り直されてカーソルが外れる。
   ふつうの関数 `fld(k,label,…)` にして、その場で中身を返させる（2026-10-05 に作り込み中に踏んだ）。
-- 検査は `node shaken_qr_test.js`（112件。読み解く部分の純関数＋スマホの入口・2通りの読み方・手入力での登録・写真の分割保存＋PC の 📄 表示・情報・削除）。
+- 検査は `node shaken_qr_test.js`（114件。読み解く部分の純関数＋スマホの入口・2通りの読み方・手入力での登録・写真の分割保存＋PC の 📄 表示・情報・削除）。
 - **【2026-10-05 ユーザー報告】実物の写真から ナンバー・初度登録・メーカーが出なかった** → v3.50 で読み方をゆるくした：
   ① `shkNorm` で**半角カナ→全角・全角英数→半角・空白つめ**をしてから見分ける（端末によって半角カナで入っている）
   ② 区切りは `/` だけでなく `, | tab ;` も見る。**区切りが無ければ全文をそのまま**正規表現で探す
@@ -149,6 +149,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     （コードの全文をそのまま見せる＝**並びを実物に合わせるための唯一の手がかり**。ユーザーに送ってもらうこと）
   ⑦ **電子車検証（2023年1月〜のICチップ付きA6）はQRが1つだけ**で中身も違う。紙のA4（QR3つ）と見分けること
 - **本番にはまだ入れていない**（テスト版のみ）。
+
+### 小さいQR・文字コード（v3.53・2026-10-05・ユーザー指摘から）
+- ユーザー指摘「**自動車検査証記録事項の下部にあるQRは車両情報ではないですか？**」→ そのとおり。記録事項にもQRがあり、**OCRより確実**。
+  写真から読めなかった原因を `node qr_small_scan_test.js`（本物の jsQR と本物のQR画像で確かめる検査）で突き止めた。原因は3つ：
+- **① jsQR は1枚につき1つしか返さない。**
+  QRが3つ並んでいると、切れ端の中に2つ入った時点で片方しか拾えず、**となりのQRにじゃまされて永久に読めない**ものが出る。
+  → **見つけたQRの場所（`r.location`）を白く塗りつぶして、同じ1枚をもう一度読む**（最大5回）。
+  これで**丸ごと1回読むだけで3つとも拾える**ようになった（切り分けは写りが悪い時の保険になり、速くもなった）。
+  **jsQR を使う所では必ずこの「塗って読み直す」をすること。**
+- **② `r.data` だけを見ていた。**
+  jsQR は文字に直せない時（Shift_JIS など）**`data` を空のまま `binaryData` だけ**返すことがある。
+  `if(r&&r.data)` で見ていたので、**読めたQRを丸ごと捨てていた**。
+  → `qrText(r)`：英数字だけならそのまま／そうでなければ `binaryData` を **UTF-8 →（だめなら）Shift_JIS** の順で読み直す。
+  Android の `BarcodeDetector` は端末側が直してくれるので、この処理は jsQR の時だけ要る。
+- **③ cdnjs に jsQR は置かれていない（404）。** → `jsdelivr` を先、控えを `unpkg` に。
+- 切り分けは 2・3・4・5 分割（半分ずつ重ねる）。小さい切れ端は**2倍に伸ばしてから**読む（なめらかに伸ばすと逆に悪くなるので `imageSmoothingEnabled=false`）。
+  **3つそろったら打ち切る。** 写真の解像度は長辺 2800px（A4の2cmのQRが約190px）。
+- 実測（`qr_small_scan_test.js`）：A4縦2800pxの写真で、1辺190pxのQR3つ→**丸ごと1回で3/3**、少しボケても3/3、1辺130pxでも3/3。
+- **ただし実物の写りによるので、画面の案内は「その場で撮るでQRに近づけて1つずつ」を勧めている**（1枚に全部写すより確実）。
+- 検査は `node qr_small_scan_test.js`（11件・**CDN に実際につなぐ**）。
+  ※QRを作る `qrcode-generator` の既定は「文字コードの下1バイトだけ」を入れる作りで、**日本語は作った時点で化ける**。
+  検査で日本語のQRを作る時は `qrcode.stringToBytes` を差し替えること（ここで一度ハマった）。
 
 ### 写真の「文字」から読む（OCR・v3.51・2026-10-05・テスト版のみ）
 - **なぜ入れたか**：2023年1月からの**電子車検証**に付いてくる「**自動車検査証記録事項**」（A4）には**QRが無い**。

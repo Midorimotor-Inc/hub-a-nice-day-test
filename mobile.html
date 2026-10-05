@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791192046994';
+  window.__APP_BUILD='build-1791194218751';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.51';
+const MOBILE_VERSION='3.53';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1785,8 +1785,9 @@ const qrDetector=()=>{
   })();
   return _qrBdP;
 };
-const JSQR_SRC=['https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js',
-                'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'];
+// ★cdnjs には jsQR が置かれていない（404。2026-10-05 に確認）。jsdelivr を先に、控えを unpkg に
+const JSQR_SRC=['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
+                'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js'];
 let _jsqrP=null;
 const qrLoadJsQR=()=>{
   if(window.jsQR)return Promise.resolve(window.jsQR);
@@ -1806,29 +1807,89 @@ const qrLoadJsQR=()=>{
 };
 // 1枚の絵からQRを探す。deep=true（写真から選んだ時）は少しずつ重ねて切り分け、
 // 車検証に並んでいる3つのQRを取りこぼさないようにする（jsQRは1枚につき1つしか見つけられないため）
-const qrScanCanvas=async(cv,deep)=>{
+// ★jsQR が返す文字の直し（2026-10-05・検査で見つけた）
+//   jsQR は QR の中のバイト列を ISO-8859-1 として返すため、**日本語が化ける**
+//   （「神戸580あ3503」→「^8580B3503」）。生のバイト列から読み直す。
+//   Android の BarcodeDetector は端末側が正しく直してくれるので、この直しは要らない。
+const qrText=(r)=>{
+  if(!r)return '';
+  const d=r.data||'';
+  if(d&&/^[\x00-\x7F]*$/.test(d))return d;      // 英数字だけなら化けようがない
+  // ★ここが大事：jsQR は文字に直せない時「data が空」で binaryData だけを返すことがある。
+  //   r.data だけを見ていると、せっかく読めたQRを丸ごと捨ててしまう（2026-10-05 検査で判明）
+  const b=r.binaryData;
+  if(b&&b.length){
+    let u8=null; try{ u8=Uint8Array.from(b); }catch(e){}
+    if(u8){
+      for(const enc of ['utf-8','shift_jis']){     // 日本語は UTF-8 か Shift_JIS のどちらか
+        try{ const v=new TextDecoder(enc,{fatal:true}).decode(u8); if(v)return v; }catch(e){}
+      }
+      try{ const v=new TextDecoder('shift_jis').decode(u8); if(v)return v; }catch(e){}
+    }
+  }
+  return d;
+};
+const QR_MAX_HITS=5;      // 車検証・記録事項とも、並んでいるコードはせいぜい3〜4つ
+const qrScanCanvas=async(cv,deep,onStep)=>{
   const found=[];
   const push=t=>{const v=String(t||'').trim(); if(v&&found.indexOf(v)<0)found.push(v);};
   const bd=await qrDetector();
   if(bd){ try{ (await bd.detect(cv)).forEach(r=>push(r.rawValue)); }catch(e){} }
   if(found.length>0&&!deep)return found;
-  if(found.length>=3)return found;
+  if(found.length>=QR_MAX_HITS)return found;
   const js=await qrLoadJsQR();
   if(!js)return found;
-  const ctx=cv.getContext('2d');
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  // 切り出した1枚を読む。小さい時は2倍に伸ばしてから読む（白黒の切り分けがうまくいく）。
+  // ★jsQR は1枚につき1つしか返さないので、**見つけた所を白く塗って同じ1枚を読み直す**。
+  //   そうしないと、となりのQRにじゃまされて片方が永久に読めない（2026-10-05 検査で判明）
+  let tmp=null,tctx=null;
   const run=(x,y,w,h)=>{
     if(w<60||h<60)return;
-    try{ const d=ctx.getImageData(x,y,w,h); const r=js(d.data,d.width,d.height,{inversionAttempts:'attemptBoth'}); if(r&&r.data)push(r.data); }catch(e){}
+    try{
+      const z=(w<700||h<700)?2:1;
+      if(!tmp){ tmp=document.createElement('canvas'); tctx=tmp.getContext('2d',{willReadFrequently:true}); }
+      tmp.width=w*z; tmp.height=h*z;
+      tctx.imageSmoothingEnabled=false;
+      tctx.drawImage(cv,x,y,w,h,0,0,w*z,h*z);
+      for(let k=0;k<QR_MAX_HITS;k++){
+        const d=tctx.getImageData(0,0,tmp.width,tmp.height);
+        const r=js(d.data,d.width,d.height,{inversionAttempts:'attemptBoth'});
+        if(!r)break;
+        const txt=qrText(r); if(txt)push(txt);          // data が空でも binaryData から拾う
+        const L=r.location;
+        const pts=L?[L.topLeftCorner,L.topRightCorner,L.bottomRightCorner,L.bottomLeftCorner].filter(Boolean):[];
+        if(pts.length<4)break;
+        const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y), pad=10;
+        const x0=Math.min.apply(null,xs)-pad, y0=Math.min.apply(null,ys)-pad;
+        const x1=Math.max.apply(null,xs)+pad, y1=Math.max.apply(null,ys)+pad;
+        tctx.fillStyle='#fff'; tctx.fillRect(x0,y0,x1-x0,y1-y0);   // 見つけた所を消して、次を探す
+        if(found.length>=QR_MAX_HITS)break;
+      }
+    }catch(e){}
   };
   run(0,0,cv.width,cv.height);
   if(deep){
     const W=cv.width,H=cv.height;
-    for(const n of [2,3]){
+    // ★A4を1枚に写すとQRは画面の1割ほどしかない。細かく切り分けないと見つからない（2026-10-05）
+    const NS=[2,3,4,5];
+    const total=NS.reduce((a,n)=>a+(n*2-1)*(n*2-1),0);
+    let done=0;
+    for(const n of NS){
+      // ★塗りつぶして読み直すようにしたので、たいていは丸ごと1回で全部そろう。
+      //   3つそろったらそこで打ち切る（切り分けは写りが悪い時の保険）
       if(found.length>=3)break;
       const tw=Math.floor(W/n),th=Math.floor(H/n);
-      for(let gy=0;gy<n*2-1&&found.length<3;gy++)
-        for(let gx=0;gx<n*2-1&&found.length<3;gx++)
+      for(let gy=0;gy<n*2-1;gy++){
+        for(let gx=0;gx<n*2-1;gx++){
           run(Math.floor(gx*tw/2),Math.floor(gy*th/2),tw,th);
+          done++;
+          if(found.length>=QR_MAX_HITS)break;
+        }
+        if(found.length>=QR_MAX_HITS)break;
+        // 1行ぶん終わるごとに画面へ返す（固まって見えないように）
+        if(onStep){ onStep(Math.round(done*100/total),found.length); await new Promise(r=>setTimeout(r,0)); }
+      }
     }
   }
   return found;
@@ -2207,8 +2268,11 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
       lastImgRef.current=im;
       const pic=shkCanvas(im,1600).toDataURL('image/jpeg',0.72);
       if(!wantOcr){
-        const big=shkCanvas(im,2200);                             // QRが小さいので解像度は残す
-        const got=await qrScanCanvas(big,true);
+        // ★A4の記録事項は下の方にQRが並ぶ。写真の中では小さいので解像度を残す（2026-10-05）
+        const big=shkCanvas(im,2800);
+        const got=await qrScanCanvas(big,true,(p,n)=>{
+          setProg(p); setMsg(n>0?('QRを '+n+'件 見つけました…まだ探しています'):'写真のすみずみからQRを探しています…');
+        });
         if(got.length>0){ finish(got,pic); return; }
         // ★QRが無い／読めない時は、そのまま文字から読む（記録事項はQRが無いため・2026-10-05）
         setMsg('QRが見つからないので、文字から読んでみます…');
@@ -2346,7 +2410,7 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
             style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #1d4ed8',borderRadius:13,background:'#eff6ff',textAlign:'left'}}>
             <span style={{width:36,height:36,borderRadius:11,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🖼</span>
             <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>写真から選ぶ</span>
-              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>前に撮った車検証の写真でもOK</span></span>
+              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>前に撮った写真でもOK（QRが大きく写っているほど確実）</span></span>
           </button>
           {/* ★自動車検査証記録事項（電子車検証に付いてくるA4）はQRが無いので、文字から読む道を用意する */}
           <button onClick={()=>{setErr('');wantOcrRef.current=true;fileRef.current&&fileRef.current.click();}}
@@ -2356,8 +2420,10 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
               <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>自動車検査証記録事項（QRが無い用紙）はこちら</span></span>
           </button>
           <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
-            まず車検証の<b>2次元コード（QR）</b>を読みます。明るい所で、QRが大きく写るように近づけてください。<br/>
-            <b>QRが無い用紙（記録事項）は「文字から読み取る」</b>をお使いください。QRが見つからない時は自動で文字読み取りに切り替わります。<br/>
+            まず<b>2次元コード（QR）</b>を読みます。<b>自動車検査証記録事項は用紙の下の方にQRが並んでいます</b>（車検証は右側に3つ）。<br/>
+            <b>いちばん確実なのは「その場で撮る」でQRに近づけて1つずつ写す</b>やり方です。
+            1枚に全部写した写真だとQRが小さく、読み取れないことがあります。<br/>
+            QRがどうしても読めない時は<b>「文字から読み取る」</b>をお使いください（QRが見つからなければ自動で切り替わります）。<br/>
             <b>車種名とグレードは車検証に載っていない</b>ので、読み取ったあとに入れていただきます。
           </div>
           <button onClick={manual}
@@ -2373,7 +2439,9 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
             <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:180,height:180,border:'3px solid #22c55e',borderRadius:12,boxShadow:'0 0 0 2000px rgba(0,0,0,.35)'}}/>
           </div>
           <div style={{fontSize:11.5,color:'#64748b',margin:'9px 2px',lineHeight:1.7}}>
-            QRが枠に入ると<b>自動で読み取ります</b>（シャッターは要りません）。車検証にはQRが3つ並んでいるので、順に写してください。
+            QRが枠に入ると<b>自動で読み取ります</b>（シャッターは要りません）。<br/>
+            <b>QRに近づけて、1つずつ順に写してください。</b>車検証は右側に3つ、記録事項は下の方に並んでいます。
+            1枚に全部写すより、<b>近づけて1つずつの方が確実</b>です。
           </div>
           <div style={{display:'flex',gap:8}}>
             <button onClick={()=>{liveRef.current.dead=true;stopCam();setStep('pick');}}

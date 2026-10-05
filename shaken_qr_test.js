@@ -175,7 +175,10 @@ t('4ナンバー貨物は分類番号から分かる', shakenOcrParse('自動車
 
 // ════════ ソースの決まりごと ════════
 head('② 作りの決まり');
-t('jsQR は CDN から読み込む（iPhone 用）', SRC_M.indexOf('jsQR') > 0 && SRC_M.indexOf('cdnjs.cloudflare.com/ajax/libs/jsQR') > 0);
+// ★cdnjs には jsQR が無い（404）。jsdelivr を先に、控えを unpkg に（2026-10-05 に実際に確認）
+t('jsQR は CDN から読み込む（iPhone 用）', SRC_M.indexOf('jsdelivr.net/npm/jsqr@') > 0 && SRC_M.indexOf('unpkg.com/jsqr@') > 0 && SRC_M.indexOf('cdnjs.cloudflare.com/ajax/libs/jsQR') < 0);
+t('読めたQRを捨てない（data が空でも binaryData から拾う）', SRC_M.indexOf('data が空でも binaryData から拾う') > 0);
+t('見つけた所を白く塗って同じ1枚から何個でも拾う', SRC_M.indexOf('見つけた所を消して、次を探す') > 0);
 t('Android は端末の BarcodeDetector を先に使う', SRC_M.indexOf('BarcodeDetector') > 0);
 t('車検証の写真は Firestore に分割して入れる', SRC_M.indexOf("vehdoc-") > 0 && SRC_M.indexOf('VEHDOC_CHUNK') > 0);
 t('1ドキュメントの文字数は 1MB より小さい', /VEHDOC_CHUNK\s*=\s*(\d+)/.test(SRC_M) && Number(SRC_M.match(/VEHDOC_CHUNK\s*=\s*(\d+)/)[1]) < 900000,
