@@ -214,6 +214,18 @@ const minus = n => plus(-n);
   const after = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v7'), STOR + 'vehicles-v2');
   t('登録日が満了日から入る', !!after && after.regDate === '2025-11-20', after && after.regDate);
 
+  head('⑪ 動きと保険（2026-10-05 ユーザー指示）');
+  const anim = await page.evaluate(() => [...document.querySelectorAll('span')].filter(e=>/点検$/.test(e.innerText.trim()))
+    .map(e=>{const st=getComputedStyle(e);return {name:st.animationName,dur:st.animationDuration,cnt:st.animationIterationCount};}));
+  t('★動きは止まる（ずっと動かない）', anim.length>0 && anim.every(a=>a.cnt!=='infinite'), anim.slice(0,3));
+  t('★3秒くらいで止まる', anim.length>0 && anim.every(a=>Math.abs(parseFloat(a.dur)*parseFloat(a.cnt)-3)<=0.6), anim.slice(0,3));
+  t('★速さは色によらず同じ', new Set(anim.map(a=>a.dur+'/'+a.cnt)).size===1, anim.slice(0,3));
+  const insBefore = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v1').insurance, STOR+'vehicles-v2');
+  await page.evaluate(() => { const r=[...document.querySelectorAll('tr')].find(x=>x.innerText.includes('ハスラー タフワイルド ホワイト')); if(r)r.querySelectorAll('td')[3].click(); });
+  await page.waitForTimeout(1200);
+  const insAfter = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v1').insurance, STOR+'vehicles-v2');
+  t('★一覧で保険の○×を切り替えられる', insBefore!==insAfter, {before:insBefore,after:insAfter});
+
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
   await page.screenshot({ path: path.join(DIR, 'smoke-vehicle-v2.png') });

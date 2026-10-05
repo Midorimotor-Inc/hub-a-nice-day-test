@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791181455252';
+    window.__APP_BUILD='build-1791183932873';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.45';
+const APP_VERSION = '3.46';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8039,9 +8039,19 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
               ))}
             </div>
           </div>
+          <div><div style={LB}>保険</div>
+            <div style={{display:'flex',gap:4}}>
+              {[[true,'○ あり'],[false,'× なし']].map(([val,lb])=>(
+                <button key={String(val)} onClick={()=>set('insurance',val)}
+                  style={{padding:'5px 14px',borderRadius:20,fontSize:11.5,fontWeight:800,cursor:'pointer',
+                    border:'2px solid '+(f.insurance===val?(val?'#047857':'#dc2626'):'#e5e7eb'),
+                    background:f.insurance===val?(val?'#ecfdf5':'#dc2626'):'white',
+                    color:f.insurance===val?(val?'#047857':'white'):'#64748b'}}>{lb}</button>
+              ))}
+            </div>
+          </div>
           <div><div style={LB}>その他</div>
             <div style={{display:'flex',gap:10,alignItems:'center',fontSize:12,paddingTop:6}}>
-              <label style={{display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}><input type="checkbox" checked={f.insurance} onChange={e=>set('insurance',e.target.checked)}/>保険あり</label>
               <label style={{display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}><input type="checkbox" checked={f.cargo4} onChange={e=>set('cargo4',e.target.checked)}/>4ナンバー貨物</label>
               <label style={{display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}><input type="checkbox" checked={f.usedNew} onChange={e=>set('usedNew',e.target.checked)}/>中古新規</label>
             </div>
@@ -8147,7 +8157,9 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlin
 
       <div style={LB}>その他</div>
       <div style={BOX}>
-        保険 {v.insurance?<span style={{color:'#047857',fontWeight:800}}>○</span>:<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:20,height:18,background:'#dc2626',color:'white',fontWeight:900,borderRadius:5}}>×</span>}
+        保険 <span onClick={()=>onChange({insurance:!v.insurance})} title="押すと ○⇄× が入れ替わります"
+          style={{cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:20,height:18,padding:'0 4px',borderRadius:5,fontWeight:900,
+            background:v.insurance?'#ecfdf5':'#dc2626',color:v.insurance?'#047857':'white',border:'1.5px solid '+(v.insurance?'#6ee7b7':'#dc2626')}}>{v.insurance?'○':'×'}</span>
         　/　ナビ {v.nav||'無し'}{v.navYen?'（'+v.navYen+'）':''}<br/>
         仕入先 {v.supplier||'—'}　/　初度 {vehFmt(v.firstReg)}　/　登録 {vehFmt(v.regDate)}<br/>
         {v.model&&<>型式 {v.model}　</>}{v.cargo4?'4ナンバー貨物':''}
@@ -8248,10 +8260,12 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
   const TH={background:'#334155',color:'white',fontSize:10.5,fontWeight:700,padding:'5px 6px',textAlign:'left',whiteSpace:'nowrap',border:'1px solid #475569'};
   const THR={...TH,background:'#5b21b6',borderColor:'#6d28d9'};
   const TD2={border:'1px solid #e5e7eb',padding:'4px 6px',whiteSpace:'nowrap',verticalAlign:'middle',fontSize:11.5};
-  // ★黄 → オレンジ → 赤。どれも揺れる（赤がいちばん速い）。日数は出さない
-  const insStyle=(st)=>st==='red'?{background:'#dc2626',color:'white',animation:'vehMove .55s ease-in-out infinite'}
-    :st==='orange'?{background:'#f97316',color:'white',animation:'vehMove .8s ease-in-out infinite'}
-    :st==='yellow'?{background:'#fde047',color:'#854d0e',animation:'vehMove .9s ease-in-out infinite'}
+  // ★黄 → オレンジ → 赤。色で強さを出す。**動きは最初の3秒だけ**で止める（ずっと動くと目が疲れるため・2026-10-05 ユーザー指示）
+  //   速さは3色とも同じ（0.75秒 × 4回 = 3秒）
+  const VEH_MOVE='vehMove .75s ease-in-out 4';
+  const insStyle=(st)=>st==='red'?{background:'#dc2626',color:'white',animation:VEH_MOVE}
+    :st==='orange'?{background:'#f97316',color:'white',animation:VEH_MOVE}
+    :st==='yellow'?{background:'#fde047',color:'#854d0e',animation:VEH_MOVE}
     :st==='done'?{background:'#f1f5f9',color:'#94a3b8'}:{background:'#eef2ff',color:'#4f46e5'};
   const InsCell=({v,kind})=>{
     if(!vehAlertOn(v,kind))return <span style={{color:'#cbd5e1'}}>—</span>;
@@ -8280,9 +8294,10 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
           {v.user&&<span style={{marginLeft:4,fontSize:10,color:'#0891b2',fontWeight:700}}>👤{v.user}</span>}
         </td>
         <td style={TD2}>{v.num||'—'}</td>
-        <td style={{...TD2,textAlign:'center'}}>{v.insurance
-          ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,color:'#047857',fontWeight:900,fontSize:13}}>○</span>
-          :<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,background:'#dc2626',color:'white',fontWeight:900,fontSize:13,borderRadius:5}}>×</span>}</td>
+        <td style={{...TD2,textAlign:'center'}} onClick={e=>{e.stopPropagation();upd(v.id,{insurance:!v.insurance});}} title="押すと ○⇄× が入れ替わります">
+          {v.insurance
+          ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,color:'#047857',fontWeight:900,fontSize:13,cursor:'pointer'}}>○</span>
+          :<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,background:'#dc2626',color:'white',fontWeight:900,fontSize:13,borderRadius:5,cursor:'pointer'}}>×</span>}</td>
         <td style={TD2}><span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:20,padding:'1px 7px',color:'white',background:p.color}}>{p.label}</span></td>
         <td style={{...TD2,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis'}}>{v.nav||<span style={{color:'#b91c1c',fontWeight:800,background:'#fee2e2',borderRadius:4,padding:'0 5px'}}>無し</span>}</td>
         {!rental&&<td style={TD2}>{v.navYen||'—'}</td>}
@@ -8306,7 +8321,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
 
   return(
     <div style={{background:'white',borderRadius:13,boxShadow:'0 10px 40px rgba(0,0,0,.18)',borderTop:'4px solid #c2410c',display:'flex',flexDirection:'column',position:'fixed',top:'var(--header-h,90px)',left:8,right:8,bottom:8,overflow:'hidden',zIndex:10}}>
-      <style>{'@keyframes vehMove{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}@keyframes vehMoveR{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(220,38,38,.55)}50%{transform:scale(1.06);box-shadow:0 0 0 6px rgba(220,38,38,0)}}'}</style>
+      <style>{'@keyframes vehMove{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}'}</style>
       {/* ヘッダー */}
       <div style={{padding:'10px 16px',background:'linear-gradient(135deg,#7c2d12,#c2410c)',display:'flex',alignItems:'center',gap:9,flexWrap:'wrap',flexShrink:0}}>
         <span style={{fontSize:19}}>🚗</span>

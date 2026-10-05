@@ -135,10 +135,11 @@ const is4 = num => /[^\d](4\d{2}|4\d|4)[あ-ん]/.test(String(num || '')) || /\s
       expiryRaw,
       maker: makerOf(name, supplier), model: '', cargo4: is4(num),
       usedNew: false,
-      // ★レンタカーは現在すべて点検済み（日付は分からないので「済」だけ付ける。2026-10-05 ユーザー指示）
+      // ★レンタカーは現在すべて点検済み。工場代車も12か月点検は済（2026-10-05 ユーザー指示）
+      //   12か月の回は画面側（vehM12List）が車検満了日から出すので、ここでは1回ぶんの「済」だけ置く
       inspections: group === 'rental'
         ? { m1: { done: true, doneAt: m1.doneAt || '' }, m6: { done: true, doneAt: m6.doneAt || '' }, m12: [{ done: true, doneAt: '' }] }
-        : { m1, m6, m12: [] },
+        : { m1, m6, m12: [{ done: true, doneAt: '' }] },
       docs: [],
       note: [extra && !/三田|八多|北神|ハ多/.test(extra) ? extra : '', m1.note, m6.note].filter(Boolean).join(' / '),
       archived, archivedAt: archived ? '2026-10-05' : '',
