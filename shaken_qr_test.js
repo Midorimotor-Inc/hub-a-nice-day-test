@@ -38,7 +38,7 @@ const grab = (name, src) => {
 
 // ════════ ① 読み解く部分（純関数） ════════
 head('① 車検証の2次元コードを読み解く');
-const names = ['SHK_ERA', 'shkIso', 'SHK_HK', 'SHK_ZK', 'shkNorm', 'shkDate', 'SHK_MAKERS', 'SHK_PLATE_RE', 'shkPlate', 'shkVin', 'shkModel', 'shkClass', 'shkJoinPlate', 'shakenParse', 'vehPlate4', 'vehAddMonths', 'vehBase'];
+const names = ['SHK_ERA', 'shkIso', 'SHK_HK', 'SHK_ZK', 'shkNorm', 'shkDate', 'SHK_MAKERS', 'SHK_PLATE_RE', 'shkPlate', 'shkVin', 'shkModel', 'shkClass', 'shkJoinPlate', 'OCR_LABELS', 'ocrFixVin', 'shakenOcrParse', 'shakenParse', 'vehPlate4', 'vehAddMonths', 'vehBase'];
 const sandbox = {};
 new Function('exports', names.map(n => grab(n)).join(NL) + NL +
   names.map(n => 'exports.' + n + '=' + n + ';').join('')) (sandbox);
@@ -125,6 +125,54 @@ t('まったく関係ない文字列からは何も拾わない', (() => {
   return x.plate === '' && x.vin === '' && x.expiry === '' && x.maker === '';
 })(), shakenParse(['https://example.com/abc']));
 
+head('①-3 自動車検査証記録事項を「文字」から読む（OCR）');
+const { shakenOcrParse, ocrFixVin } = sandbox;
+// 写真から読んだ文字（よくある並び）。項目名のうしろに値が来る
+const REC = [
+  '自動車検査証記録事項',
+  '自動車登録番号又は車両番号  神戸 580 あ 3503',
+  '登録年月日/交付年月日  令和 7年 9月16日',
+  '初度登録年月  令和 7年 9月',
+  '自動車の種別  普通      用途  乗用',
+  '車名  スズキ',
+  '型式  5AA-MK53S',
+  '車台番号  MK53S-123456',
+  '原動機の型式  R06A',
+  '型式指定番号  18014      類別区分番号  0001',
+  '有効期間の満了する日  令和10年 9月16日',
+].join(NL);
+const r = shakenOcrParse(REC);
+t('ナンバーを読める', r.plate === '神戸580あ3503', r.plate);
+t('初度登録年月を読める', r.firstReg === '2025-09', r.firstReg);
+t('有効期間の満了する日を読める', r.expiry === '2028-09-16', r.expiry);
+t('車台番号を読める', r.vin === 'MK53S-123456', r.vin);
+t('メーカー（車名）を読める', r.maker === 'スズキ', r.maker);
+t('型式を読める（型式指定番号と取り違えない）', r.model === '5AA-MK53S', r.model);
+t('文字から読んだ印が付く', r.via === 'ocr', r.via);
+
+// 項目名の次の行に値が来る形（表組みの写真でよくある）
+const REC2 = ['車台番号', 'MK53S-654321', '有効期間の満了する日', '令和10年3月1日', '初度検査年月', '令和4年3月'].join(NL);
+const r2 = shakenOcrParse(REC2);
+t('値が次の行にあっても読める（車台番号）', r2.vin === 'MK53S-654321', r2.vin);
+t('値が次の行にあっても読める（満了日）', r2.expiry === '2028-03-01', r2.expiry);
+t('「初度検査年月」（軽自動車の言い方）も読める', r2.firstReg === '2022-03', r2.firstReg);
+
+// まぎらわしい字の直し（車台番号の「−」より後ろは数字だけ）
+t('車台番号のうしろの O を 0 に直す', ocrFixVin('MK53S-1234O6') === 'MK53S-123406', ocrFixVin('MK53S-1234O6'));
+t('車台番号のうしろの S・I・B も数字に直す', ocrFixVin('ZVW30-S1IB00') === 'ZVW30-511800', ocrFixVin('ZVW30-S1IB00'));
+t('車台番号の前半（型式の部分）は直さない', ocrFixVin('S321V-0012345') === 'S321V-0012345', ocrFixVin('S321V-0012345'));
+t('全角のハイフンでも直せる', ocrFixVin('MK53S−123456') === 'MK53S-123456', ocrFixVin('MK53S−123456'));
+
+// 項目名が読めなかった時は、全文から形で探す
+const r3 = shakenOcrParse('神戸580あ3503 MK53S-123456 令和7年9月 令和10年9月16日 スズキ');
+t('項目名が読めなくても形から拾う',
+  r3.plate === '神戸580あ3503' && r3.vin === 'MK53S-123456' && r3.expiry === '2028-09-16' && r3.firstReg === '2025-09',
+  [r3.plate, r3.vin, r3.expiry, r3.firstReg]);
+
+t('読めなかった時も落ちない', (() => { const x = shakenOcrParse(''); return x && x.plate === '' && x.via === 'ocr'; })());
+t('4ナンバー貨物は分類番号から分かる', shakenOcrParse('自動車登録番号又は車両番号  神戸 480 あ 1234').cargo4 === true,
+  shakenOcrParse('自動車登録番号又は車両番号  神戸 480 あ 1234').cargo4);
+
 // ════════ ソースの決まりごと ════════
 head('② 作りの決まり');
 t('jsQR は CDN から読み込む（iPhone 用）', SRC_M.indexOf('jsQR') > 0 && SRC_M.indexOf('cdnjs.cloudflare.com/ajax/libs/jsQR') > 0);
@@ -137,7 +185,12 @@ t('PC の「次の段階で入れます」の断り書きは消えている', SR
 t('入力欄は16px以上（iPhoneの自動拡大よけ）',
   !/ShakenScanSheet[\s\S]{0,20000}?fontSize:1[0-5][,.}]/.test(SRC_M.slice(SRC_M.indexOf('const INP={width:\'100%\',padding:\'10px 11px\''), SRC_M.indexOf('const INP={width:\'100%\',padding:\'10px 11px\'') + 200)) &&
   SRC_M.indexOf("const INP={width:'100%',padding:'10px 11px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16") > 0);
-t('読めなかった時も結果の画面に進む（何が起きたか見せる）', SRC_M.indexOf('読めなくても結果の画面へ進む') > 0);
+t('文字読み取りは端末の中だけで動く（外へ送らない）', SRC_M.indexOf('tesseract.js') > 0 && SRC_M.indexOf('端末の中だけで動く') > 0);
+t('文字読み取りは必要な時だけ読み込む（毎回取らない）', SRC_M.indexOf('const ocrLoad=') > 0 && SRC_M.indexOf('_tessP') > 0);
+t('QRが見つからなければ自動で文字読み取りに切り替わる', SRC_M.indexOf('QRが見つからないので、文字から読んでみます') > 0);
+t('文字から読んだ時は写真を並べて見比べさせる', SRC_M.indexOf('かならず写真と見比べてください') > 0);
+t('進み具合（％）を出す', SRC_M.indexOf('prog+') > 0);
+t('読めなかった時も結果の画面に進み、理由を赤帯で出す', SRC_M.indexOf('QRを読み取れませんでした。') > 0 && SRC_M.indexOf('欄に入れられなかった項目があります') > 0);
 t('足りない時は中身をコピーできる', SRC_M.indexOf('📋 中身をコピー') > 0 && SRC_M.indexOf('navigator.clipboard.writeText') > 0);
 t('読み取れたQRの全文をそのまま見せる', SRC_M.indexOf('】全文') > 0);
 t('文字をそろえてから見分ける（半角カナ・全角数字）', SRC_M.indexOf('const shkNorm=') > 0);

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791191163052';
+  window.__APP_BUILD='build-1791192046994';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.50';
+const MOBILE_VERSION='3.51';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1957,6 +1957,111 @@ const shakenParse=(texts)=>{
   return {...out, cargo4:/^4/.test(String(cls||'')), fields, raw:list};
 };
 
+// ============================================================
+//  🔤 写真の文字をそのまま読む（OCR）  v3.51 / 2026-10-05
+//  自動車検査証記録事項（電子車検証に付いてくるA4）はQRが無い／少ないので、文字から拾う。
+//  ・読む道具は tesseract.js。**端末の中だけで動く**ので、顧客情報が外のサービスへ出ることはない
+//  ・初回だけ文字のデータ（十数MB）を取りに行く。2回目からは端末が覚えているので速い
+//  ・★数字は強いが、車台番号のような英数字混じりは間違えることがある。
+//    なので**読んだ値は必ず写真と見比べてもらう**（確認画面に写真を出す）
+// ============================================================
+const TESS_SRC=['https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js',
+                'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'];
+let _tessP=null;
+const ocrLoad=()=>{
+  if(window.Tesseract)return Promise.resolve(window.Tesseract);
+  if(!_tessP)_tessP=new Promise(res=>{
+    let i=0;
+    const next=()=>{
+      if(i>=TESS_SRC.length){res(null);return;}
+      const el=document.createElement('script');
+      el.src=TESS_SRC[i++];
+      el.onload=()=>res(window.Tesseract||null);
+      el.onerror=next;
+      document.head.appendChild(el);
+    };
+    next();
+  });
+  return _tessP;
+};
+// 読みやすいように白黒にして、明るさの幅をいっぱいに広げる
+const ocrPrep=(src,max)=>{
+  const cv=shkCanvas(src,max||2000);
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  const d=ctx.getImageData(0,0,cv.width,cv.height), a=d.data;
+  let mn=255,mx=0;
+  for(let i=0;i<a.length;i+=4){ const g=(a[i]*0.299+a[i+1]*0.587+a[i+2]*0.114)|0; a[i]=a[i+1]=a[i+2]=g; if(g<mn)mn=g; if(g>mx)mx=g; }
+  const r=(mx-mn)||1;
+  for(let i=0;i<a.length;i+=4){ const g=((a[i]-mn)*255/r)|0; const v=g<0?0:(g>255?255:g); a[i]=a[i+1]=a[i+2]=v; }
+  ctx.putImageData(d,0,0);
+  return cv;
+};
+const ocrRun=async(cv,onStep)=>{
+  const T=await ocrLoad();
+  if(!T)throw new Error('文字の読み取りを読み込めませんでした（通信をご確認ください）');
+  onStep&&onStep('文字のデータを用意しています…',0);
+  const worker=await T.createWorker('jpn',1,{logger:m=>{
+    if(!m||!m.status)return;
+    const pct=Math.round((m.progress||0)*100);
+    if(/download|load/i.test(m.status))onStep&&onStep('文字のデータを取りに行っています…（初回だけ）',pct);
+    else if(/recogniz/i.test(m.status))onStep&&onStep('文字を読んでいます…',pct);
+  }});
+  try{
+    const r=await worker.recognize(cv);
+    return (r&&r.data&&r.data.text)||'';
+  }finally{ try{ await worker.terminate(); }catch(e){} }
+};
+
+// ── 読んだ文字から必要な項目を取り出す ──
+//   自動車検査証記録事項は項目名が必ず印刷されているので、**項目名を手がかりに右（または次の行）を見る**。
+//   見つからなければ、QRの時と同じ「形からの推測」で全文を探す。
+const OCR_LABELS={
+  plate:['自動車登録番号又は車両番号','自動車登録番号','車両番号','登録番号'],
+  vin:['車台番号','車体番号'],
+  firstReg:['初度登録年月','初度検査年月','初年度登録年月','初年度登録','初度登録'],
+  expiry:['有効期間の満了する日','有効期間満了の日','有効期間の満了','満了する日'],
+  maker:['車名'],
+  model:['型式'],
+};
+// 車台番号の「−」より後ろは数字だけなので、まぎらわしい英字を数字に直す
+const ocrFixVin=(t)=>{
+  const v=shkNorm(t).replace(/\s/g,'').toUpperCase().replace(/[−ー—–]/g,'-');
+  const i=v.indexOf('-');
+  if(i<0)return v;
+  const head=v.slice(0,i);
+  const tail=v.slice(i+1).replace(/[OQD]/g,'0').replace(/[IL]/g,'1').replace(/S/g,'5').replace(/B/g,'8').replace(/Z/g,'2').replace(/G/g,'6');
+  return head+'-'+tail;
+};
+const shakenOcrParse=(raw)=>{
+  const lines=String(raw||'').split(String.fromCharCode(10)).map(x=>shkNorm(x)).filter(x=>x);
+  const out={plate:'',vin:'',engine:'',model:'',typeNo:'',classNo:'',firstReg:'',expiry:'',maker:'',shape:'',use:''};
+  const take=(keys,pickFn)=>{
+    for(let i=0;i<lines.length;i++){
+      const L=lines[i];
+      for(const k of keys){
+        const at=L.indexOf(k);
+        if(at<0)continue;
+        if(k==='型式'&&/指定番号|原動機/.test(L))continue;    // 型式指定番号・原動機の型式は別もの
+        const cands=[L.slice(at+k.length),lines[i+1]||'',lines[i+2]||''];
+        for(const c of cands){ const v=pickFn(c); if(v)return v; }
+      }
+    }
+    return '';
+  };
+  out.vin=take(OCR_LABELS.vin,c=>{ const m=c.replace(/\s/g,'').match(/[A-Z0-9]{2,}[-−ー—–][A-Z0-9]{4,}/i); return m?ocrFixVin(m[0]):''; });
+  out.expiry=take(OCR_LABELS.expiry,c=>{ const d=shkDate(c.replace(/\s/g,'')); return (d&&d.length===10)?d:''; });
+  out.firstReg=take(OCR_LABELS.firstReg,c=>{ const d=shkDate(c.replace(/\s/g,'')); return d?d.slice(0,7):''; });
+  out.plate=take(OCR_LABELS.plate,c=>{ const m=c.match(SHK_PLATE_RE); return m?m[0].replace(/\s/g,''):''; });
+  out.maker=take(OCR_LABELS.maker,c=>SHK_MAKERS.find(mk=>c.indexOf(mk)>=0)||'');
+  out.model=take(OCR_LABELS.model,c=>{ const m=c.replace(/\s/g,'').match(/[0-9A-Z]{1,5}-[A-Z][A-Z0-9]{2,}/); return (m&&!shkVin(m[0]))?m[0]:''; });
+  // 項目名で見つからなかった分は、全文から形で探す（QRの時と同じ見つけ方）
+  const g=shakenParse([lines.join(' ')]);
+  ['plate','vin','model','maker','firstReg','expiry'].forEach(k=>{ if(!out[k]&&g[k])out[k]=g[k]; });
+  const cls=out.classNo||shkClass(out.plate);
+  const fields=lines.map((v,i)=>({t:0,i,v}));
+  return {...out, cargo4:/^4/.test(String(cls||'')), fields, raw:[String(raw||'')], via:'ocr'};
+};
+
 // ── 車検証の写真を Firestore に分割して保存する（Storage は使えないため） ──
 const VEHDOC_CHUNK=600000;   // 1ドキュメントの上限（1MB）に余裕を見た文字数
 const vehDocSave=async(docId,dataUrl)=>{
@@ -2016,6 +2121,10 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
   const [err,setErr]=useState('');
   const [msg,setMsg]=useState('');
   const [found,setFound]=useState([]);     // 読み取れたQRの文字列
+  const [ocrText,setOcrText]=useState(''); // 文字から読み取った時の中身
+  const [prog,setProg]=useState(0);        // 文字読み取りの進み具合（％）
+  const lastImgRef=useRef(null);           // 文字読み取りをやり直せるよう、元の絵を覚えておく
+  const wantOcrRef=useRef(false);          // 写真を選ぶ時に「文字から読む」を選んだか
   const [photo,setPhoto]=useState('');     // 車検証の写真（JPEG の dataURL）
   const [parsed,setParsed]=useState(null);
   const [showRaw,setShowRaw]=useState(false);
@@ -2031,9 +2140,9 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
   const stopCam=()=>{ try{ (streamRef.current&&streamRef.current.getTracks()||[]).forEach(t=>t.stop()); }catch(e){} streamRef.current=null; };
   useEffect(()=>()=>{ liveRef.current.dead=true; stopCam(); },[]);
 
-  const finish=(texts,pic)=>{
+  const finish=(texts,pic,pre)=>{
     stopCam();
-    const p=shakenParse(texts);
+    const p=pre||shakenParse(texts);
     setFound(texts); setPhoto(pic||''); setParsed(p);
     setF({
       name:'', num:p.plate||'', maker:p.maker||'', model:p.model||'', vin:p.vin||'',
@@ -2088,19 +2197,40 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
   },[step]);
 
   // ── ②写真から選ぶ ──
-  const onFile=async(file)=>{
+  const onFile=async(file,wantOcr)=>{
     if(!file)return;
-    setErr(''); setMsg('写真からQRを探しています…'); setStep('busy');
+    setErr(''); setProg(0);
+    setMsg(wantOcr?'写真の文字を読んでいます…':'写真からQRを探しています…');
+    setStep('busy');
     try{
       const im=await shkLoadImage(file);
-      const big=shkCanvas(im,2200);                               // QRが小さいので解像度は残す
-      const got=await qrScanCanvas(big,true);
+      lastImgRef.current=im;
       const pic=shkCanvas(im,1600).toDataURL('image/jpeg',0.72);
-      finish(got,pic);   // ★読めなくても結果の画面へ進む（何が起きたかを画面で見せるため・2026-10-05）
+      if(!wantOcr){
+        const big=shkCanvas(im,2200);                             // QRが小さいので解像度は残す
+        const got=await qrScanCanvas(big,true);
+        if(got.length>0){ finish(got,pic); return; }
+        // ★QRが無い／読めない時は、そのまま文字から読む（記録事項はQRが無いため・2026-10-05）
+        setMsg('QRが見つからないので、文字から読んでみます…');
+      }
+      const txt=await ocrRun(ocrPrep(im,2000),(m,p)=>{ setMsg(m); setProg(p||0); });
+      setOcrText(txt);
+      finish([],pic,shakenOcrParse(txt));
     }catch(e){
-      setErr('写真を読めませんでした。別の写真でお試しください。');
+      setErr(String((e&&e.message)||e)||'写真を読めませんでした。別の写真でお試しください。');
       setStep('pick');
     }
+  };
+  // 撮った写真をそのまま使って、文字からもう一度読む
+  const retryOcr=async()=>{
+    const im=lastImgRef.current;
+    if(!im){ setErr('もう一度、写真を選んでください。'); return; }
+    setErr(''); setProg(0); setMsg('写真の文字を読んでいます…'); setStep('busy');
+    try{
+      const txt=await ocrRun(ocrPrep(im,2000),(m,p)=>{ setMsg(m); setProg(p||0); });
+      setOcrText(txt);
+      finish([],photo,shakenOcrParse(txt));
+    }catch(e){ setErr(String((e&&e.message)||e)); setStep('result'); }
   };
 
   // ── 読み取らずに手で入れる ──
@@ -2199,9 +2329,9 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:3300,display:'flex',alignItems:'flex-end'}}>
       <div style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',maxHeight:'93vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.3)'}}>
         <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}}
-          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x);}}/>
+          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x,wantOcrRef.current);wantOcrRef.current=false;}}/>
         <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:'none'}}
-          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x);}}/>
+          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x,wantOcrRef.current);wantOcrRef.current=false;}}/>
 
         {step==='pick'&&(<>
           <Head title="📷 車検証を読み取る" sub="QRから車両情報を取り込みます"/>
@@ -2218,8 +2348,16 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
             <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>写真から選ぶ</span>
               <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>前に撮った車検証の写真でもOK</span></span>
           </button>
+          {/* ★自動車検査証記録事項（電子車検証に付いてくるA4）はQRが無いので、文字から読む道を用意する */}
+          <button onClick={()=>{setErr('');wantOcrRef.current=true;fileRef.current&&fileRef.current.click();}}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #059669',borderRadius:13,background:'#f0fdf4',textAlign:'left'}}>
+            <span style={{width:36,height:36,borderRadius:11,background:'#bbf7d0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🔤</span>
+            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>文字から読み取る</span>
+              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>自動車検査証記録事項（QRが無い用紙）はこちら</span></span>
+          </button>
           <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
-            車検証の<b>2次元コード（QR）</b>を読みます。明るい所で、QRが大きく写るように近づけてください。<br/>
+            まず車検証の<b>2次元コード（QR）</b>を読みます。明るい所で、QRが大きく写るように近づけてください。<br/>
+            <b>QRが無い用紙（記録事項）は「文字から読み取る」</b>をお使いください。QRが見つからない時は自動で文字読み取りに切り替わります。<br/>
             <b>車種名とグレードは車検証に載っていない</b>ので、読み取ったあとに入れていただきます。
           </div>
           <button onClick={manual}
@@ -2253,14 +2391,30 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
 
         {(step==='busy'||step==='saving')&&(<>
           <Head title="しばらくお待ちください" sub={msg}/>
-          <div style={{padding:'34px 0',textAlign:'center',fontSize:28}}>⏳</div>
+          <div style={{padding:'26px 0 10px',textAlign:'center',fontSize:28}}>⏳</div>
+          {prog>0&&(
+            <div style={{margin:'0 6px'}}>
+              <div style={{height:8,borderRadius:5,background:'#e2e8f0',overflow:'hidden'}}>
+                <div style={{width:prog+'%',height:'100%',background:'#059669',transition:'width .25s'}}/>
+              </div>
+              <div style={{fontSize:11,color:'#64748b',textAlign:'center',marginTop:5}}>{prog}%</div>
+            </div>
+          )}
+          {/^文字/.test(msg||'')&&(
+            <div style={{fontSize:11,color:'#64748b',lineHeight:1.8,margin:'12px 4px 0'}}>
+              文字のデータは<b>初回だけ</b>取りに行きます（少し時間がかかります）。<br/>
+              2回目からは端末が覚えているので、すぐ始まります。
+            </div>
+          )}
         </>)}
 
         {step==='result'&&parsed&&(<>
-          <Head title={found.length?'✓ 読み取れました':'読み取り結果'} sub={'QR '+found.length+'件'}/>
+          <Head title={(found.length||parsed.via==='ocr')?'✓ 読み取れました':'読み取り結果'}
+            sub={parsed.via==='ocr'?'写真の文字から読み取り':('QR '+found.length+'件')}/>
           <Err/>
           <div style={{border:'2px solid #86efac',background:'#f0fdf4',borderRadius:12,padding:'10px 11px'}}>
-            <div style={{fontSize:12,fontWeight:900,color:'#065f46',marginBottom:6}}>車検証から読み取りました</div>
+            <div style={{fontSize:12,fontWeight:900,color:'#065f46',marginBottom:6}}>
+              {parsed.via==='ocr'?'写真の文字から読み取りました':'車検証のQRから読み取りました'}</div>
             {[['ナンバー',parsed.plate],['初度登録',parsed.firstReg],['車検満了',parsed.expiry],['車台番号',parsed.vin],
               ['型式',parsed.model],['メーカー',parsed.maker],['用途',parsed.use],
               ['4ナンバー貨物',parsed.cargo4?'はい':'いいえ']].map(([k,v])=>(
@@ -2270,6 +2424,19 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
               </div>
             ))}
           </div>
+          {parsed.via==='ocr'&&(
+            <div style={{border:'2px solid #fca5a5',background:'#fef2f2',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#b91c1c',lineHeight:1.8,marginTop:9}}>
+              <b>文字から読み取りました。かならず写真と見比べてください。</b><br/>
+              文字の読み取りは、よく似た字（<b>0とO・1とI・5とS・8とB</b>）を取り違えることがあります。
+              とくに<b>車台番号</b>をお確かめください。数字だけの日付は比較的正しく読めます。
+            </div>
+          )}
+          {parsed.via==='ocr'&&photo&&(
+            <div style={{marginTop:8,border:'1.5px solid #e2e8f0',borderRadius:11,overflow:'hidden'}}>
+              <div style={{fontSize:10.5,fontWeight:800,color:'#64748b',padding:'5px 8px',background:'#f8fafc'}}>読み取った写真（見比べてください・指で広げられます）</div>
+              <img src={photo} alt="記録事項" style={{width:'100%',display:'block'}}/>
+            </div>
+          )}
           <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8,marginTop:9}}>
             <b>車種名（スペーシア等）とグレードは車検証に載っていません。</b>次の画面で入れてください。<br/>
             上の内容が違っていたら、次の画面で直せます。
@@ -2283,6 +2450,12 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
                 ?'車検証の2次元コード（QR）がはっきり写るように、明るい所で近づけて撮り直してください。電子車検証（ICチップ付きの小さい用紙）はQRが1つだけです。'
                 :'車検証の並びが想定と違うようです。下の「読み取った中身」をコピーして送っていただければ、読めるように直します。'}
               <br/>このまま次へ進んで、手で入れて登録することもできます。
+              {lastImgRef.current&&parsed.via!=='ocr'&&(
+                <button onClick={retryOcr}
+                  style={{display:'block',width:'100%',marginTop:8,padding:'10px 0',borderRadius:10,border:'2px solid #059669',background:'#f0fdf4',color:'#065f46',fontSize:12.5,fontWeight:900}}>
+                  🔤 同じ写真の文字から読み取ってみる
+                </button>
+              )}
             </div>
           )}
           <div style={{display:'flex',gap:7,marginTop:9}}>
@@ -2290,9 +2463,10 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
               style={{flex:1,padding:'9px 0',borderRadius:11,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12,fontWeight:800}}>
               {showRaw?'▲ 読み取った中身を隠す':'▼ 読み取った中身をすべて見る'}
             </button>
-            {found.length>0&&(
+            {(found.length>0||ocrText)&&(
               <button onClick={async()=>{
-                  const txt=found.map((t,i)=>'【コード'+(i+1)+'】'+String.fromCharCode(10)+t).join(String.fromCharCode(10)+String.fromCharCode(10));
+                  const txt=(found.map((t,i)=>'【コード'+(i+1)+'】'+String.fromCharCode(10)+t).join(String.fromCharCode(10)+String.fromCharCode(10))
+                    +(ocrText?(String.fromCharCode(10)+String.fromCharCode(10)+'【写真から読んだ文字】'+String.fromCharCode(10)+ocrText):'')).trim();
                   try{ await navigator.clipboard.writeText(txt); setCopied('コピーしました'); }
                   catch(e){ setShowRaw(true); setCopied('コピーできないので、下の文字を長押しして選んでください'); }
                   setTimeout(()=>setCopied(''),4000);
@@ -2308,7 +2482,13 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
               <div style={{fontSize:10.5,color:'#64748b',marginBottom:5,lineHeight:1.7}}>
                 並びが違って欄に入らなかった時は、次の画面で<b>この値をタップ</b>して入れられます。
               </div>
-              {found.length===0&&<div style={{fontSize:11.5,color:'#94a3b8'}}>（QRを1つも読み取れませんでした）</div>}
+              {found.length===0&&!ocrText&&<div style={{fontSize:11.5,color:'#94a3b8'}}>（QRを1つも読み取れませんでした）</div>}
+              {ocrText&&(
+                <div style={{marginBottom:7}}>
+                  <div style={{fontSize:10.5,fontWeight:900,color:'#065f46',marginBottom:2}}>【写真から読んだ文字】</div>
+                  <div style={{fontSize:11.5,whiteSpace:'pre-wrap',wordBreak:'break-all',userSelect:'text',WebkitUserSelect:'text',background:'white',border:'1px solid #e2e8f0',borderRadius:7,padding:'5px 6px'}}>{ocrText}</div>
+                </div>
+              )}
               {found.map((t,i)=>(
                 <div key={'raw'+i} style={{marginBottom:7}}>
                   <div style={{fontSize:10.5,fontWeight:900,color:'#1e40af',marginBottom:2}}>【コード{i+1}】全文</div>
