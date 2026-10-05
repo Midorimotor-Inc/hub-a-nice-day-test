@@ -25,19 +25,20 @@ const grab = (name, src) => {
   const S = src || SRC_M;
   const m = S.indexOf(NL + 'const ' + name);
   if (m < 0) throw new Error(name + ' が見つかりません');
-  let i = m + 1, depth = 0, started = false;
+  let i = m + 1, depth = 0, sawEq = false;
   for (; i < S.length; i++) {
     const c = S[i];
-    if (c === '{' || c === '(' || c === '[') { depth++; started = true; }
+    if (c === '{' || c === '(' || c === '[') depth++;
     else if (c === '}' || c === ')' || c === ']') depth--;
-    else if (c === ';' && depth === 0 && started) return S.slice(m + 1, i + 1);
+    else if (c === '=' && depth === 0) sawEq = true;
+    else if (c === ';' && depth === 0 && sawEq) return S.slice(m + 1, i + 1);   // = のあとの「深さ0の ;」で終わり
   }
   throw new Error(name + ' の終わりが分かりません');
 };
 
 // ════════ ① 読み解く部分（純関数） ════════
 head('① 車検証の2次元コードを読み解く');
-const names = ['SHK_ERA', 'shkIso', 'shkDate', 'SHK_MAKERS', 'shkPlate', 'shkVin', 'shkModel', 'shkClass', 'shakenParse', 'vehPlate4', 'vehAddMonths', 'vehBase'];
+const names = ['SHK_ERA', 'shkIso', 'SHK_HK', 'SHK_ZK', 'shkNorm', 'shkDate', 'SHK_MAKERS', 'SHK_PLATE_RE', 'shkPlate', 'shkVin', 'shkModel', 'shkClass', 'shkJoinPlate', 'shakenParse', 'vehPlate4', 'vehAddMonths', 'vehBase'];
 const sandbox = {};
 new Function('exports', names.map(n => grab(n)).join(NL) + NL +
   names.map(n => 'exports.' + n + '=' + n + ';').join('')) (sandbox);
@@ -86,6 +87,44 @@ t('登録日が空でも車検満了日から逆算できる（乗用新車＝�
 t('4ナンバー貨物は−2年で逆算する',
   vehBase({ expiry: '2028-09-16', firstReg: '2026-09', cargo4: true }) === '2026-09-16', vehBase({ expiry: '2028-09-16', firstReg: '2026-09', cargo4: true }));
 
+head('①-2 並びや文字づかいが違っても拾えるか（2026-10-05 の報告への直し）');
+const { shkNorm, shkJoinPlate } = sandbox;
+t('半角カナを全角にそろえる（ｽｽﾞｷ→スズキ）', shkNorm('ｽｽﾞｷ') === 'スズキ', shkNorm('ｽｽﾞｷ'));
+t('半濁点つきも直せる（ﾊﾟｰﾙ→パール）', shkNorm('ﾊﾟ') === 'パ', shkNorm('ﾊﾟ'));
+t('全角の数字・英字を半角にそろえる', shkNorm('５８Ａ') === '58A', shkNorm('５８Ａ'));
+t('全角の空白をつめる', shkNorm('神戸\u300058') === '神戸 58', JSON.stringify(shkNorm('神戸\u300058')));
+
+// 半角カナ＋全角数字で入っていた場合
+const h = shakenParse(['1/神戸５８Ａか３５０３/2/MK53S-123456/R06A', '3/5100916/50709/1/乗用/自家用/箱型/ｽｽﾞｷ/5AA-MK53S/4']);
+t('全角数字のナンバーでも拾える', h.plate === '神戸58Aか3503', h.plate);
+t('半角カナのメーカーでも拾える', h.maker === 'スズキ', h.maker);
+
+// 区切りが「/」でなく「,」の場合
+const c = shakenParse(['1,神戸58Aか3503,2,MK53S-123456,R06A']);
+t('区切りがカンマでも項目に分けられる', c.plate === '神戸58Aか3503' && c.vin === 'MK53S-123456', [c.plate, c.vin]);
+
+// 区切りが無く、1本の長い文字列の場合（全文から探す）
+const n = shakenParse(['神戸58Aか3503 MK53S-123456 5AA-MK53S スズキ 令和7年9月 令和10年9月16日']);
+t('区切りが無くても全文からナンバーを拾える', n.plate === '神戸58Aか3503', n.plate);
+t('区切りが無くても車台番号・型式・メーカーを拾える',
+  n.vin === 'MK53S-123456' && n.model === '5AA-MK53S' && n.maker === 'スズキ', [n.vin, n.model, n.maker]);
+t('区切りが無くても満了日と初度登録を拾える', n.expiry === '2028-09-16' && n.firstReg === '2025-09', [n.expiry, n.firstReg]);
+
+// ナンバーが「地名／分類番号／かな／一連番号」に分かれている場合
+t('分かれたナンバーをつなげる', shkJoinPlate(['神戸', '58A', 'か', '3503']) === '神戸58Aか3503', shkJoinPlate(['神戸', '58A', 'か', '3503']));
+const sp = shakenParse(['1/神戸/58A/か/3503/MK53S-123456']);
+t('分かれて入っていてもナンバーになる', sp.plate === '神戸58Aか3503', sp.plate);
+
+// 元号の頭文字つきの日付
+t('R07.09.16 を読める', sandbox.shkDate('R07.09.16') === '2025-09-16', sandbox.shkDate('R07.09.16'));
+t('R0709（年月）を読める', sandbox.shkDate('R07.09') === '2025-09', sandbox.shkDate('R07.09'));
+t('H30-3-1 を読める', sandbox.shkDate('H30-3-1') === '2018-03-01', sandbox.shkDate('H30-3-1'));
+
+t('まったく関係ない文字列からは何も拾わない', (() => {
+  const x = shakenParse(['https://example.com/abc']);
+  return x.plate === '' && x.vin === '' && x.expiry === '' && x.maker === '';
+})(), shakenParse(['https://example.com/abc']));
+
 // ════════ ソースの決まりごと ════════
 head('② 作りの決まり');
 t('jsQR は CDN から読み込む（iPhone 用）', SRC_M.indexOf('jsQR') > 0 && SRC_M.indexOf('cdnjs.cloudflare.com/ajax/libs/jsQR') > 0);
@@ -98,6 +137,10 @@ t('PC の「次の段階で入れます」の断り書きは消えている', SR
 t('入力欄は16px以上（iPhoneの自動拡大よけ）',
   !/ShakenScanSheet[\s\S]{0,20000}?fontSize:1[0-5][,.}]/.test(SRC_M.slice(SRC_M.indexOf('const INP={width:\'100%\',padding:\'10px 11px\''), SRC_M.indexOf('const INP={width:\'100%\',padding:\'10px 11px\'') + 200)) &&
   SRC_M.indexOf("const INP={width:'100%',padding:'10px 11px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16") > 0);
+t('読めなかった時も結果の画面に進む（何が起きたか見せる）', SRC_M.indexOf('読めなくても結果の画面へ進む') > 0);
+t('足りない時は中身をコピーできる', SRC_M.indexOf('📋 中身をコピー') > 0 && SRC_M.indexOf('navigator.clipboard.writeText') > 0);
+t('読み取れたQRの全文をそのまま見せる', SRC_M.indexOf('】全文') > 0);
+t('文字をそろえてから見分ける（半角カナ・全角数字）', SRC_M.indexOf('const shkNorm=') > 0);
 t('3ファイルのバージョンが揃っている', (() => {
   const a = (SRC_PC.match(/const APP_VERSION = '([\d.]+)'/) || [])[1];
   const b = (fs.readFileSync(path.join(DIR, 'customers.html'), 'utf8').match(/const APP_VERSION='([\d.]+)'/) || [])[1];
