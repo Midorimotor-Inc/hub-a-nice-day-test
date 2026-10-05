@@ -49,14 +49,29 @@ const jp2iso = (s) => {
   return d ? `${y}-${mo}-${d}` : `${y}-${mo}`;
 };
 // 1か月・6か月の実施日（3/3/22 や 2026/2/29 や「やり忘れ」）
+//   ★先の日付（今日より後）は「予定」であって実施済みではない（2026-10-05 ユーザー指摘）
+const TODAY = new Date().toISOString().slice(0, 10);
+const asDone = (iso) => iso > TODAY ? { doneAt: '', planAt: iso, note: '' } : { doneAt: iso, note: '' };
 const doneOf = (s) => {
   const t = String(s || '').trim();
   if (!t || /やり忘れ|無し|貨物/.test(t)) return { doneAt: '', note: t };
   let m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (m) { const y = Number(m[3]) < 100 ? 2000 + Number(m[3]) : Number(m[3]); return { doneAt: `${y}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`, note: '' }; }
+  if (m) { const y = Number(m[3]) < 100 ? 2000 + Number(m[3]) : Number(m[3]); return asDone(`${y}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`); }
   m = t.match(/^(\d{4})[.\/](\d{1,2})[.\/](\d{1,2})$/);
-  if (m) return { doneAt: `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}`, note: '' };
+  if (m) return asDone(`${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}`);
   return { doneAt: '', note: t };
+};
+// メーカー（スズキ車かどうかで点検アラートの有無が変わる）。車名と仕入先から推測し、画面で直せる
+const SUZUKI_RE = /ハスラー|スペーシア|スペカス|スぺカス|アルト|ラパン|ワゴン|ジムニ|ソリオ|バンディット|スイフト|スイスポ|エブリィ|クロスビー|スマイル|ギア|シエラ|ノマド|キャリイ|エスクード/;
+const TOYOTA_RE = /ヴォクシー|ノア|ライズ|アクア|プリウス|ハイエース|カローラ|ヤリス|シエンタ|フォレスター/;
+const makerOf = (name, supplier) => {
+  const t = String(name || '');
+  if (SUZUKI_RE.test(t)) return 'スズキ';
+  if (TOYOTA_RE.test(t)) return /フォレスター/.test(t) ? 'スバル' : 'トヨタ';
+  const sp = String(supplier || '');
+  if (/自販兵庫|スズキ/.test(sp)) return 'スズキ';
+  if (/ネッツ|トヨペット/.test(sp)) return 'トヨタ';
+  return '';
 };
 const plate4 = num => { const m = String(num || '').match(/(\d{1,4})(?!.*\d)/); return m ? m[1] : ''; };
 // 4ナンバー（貨物）かどうか：分類番号の頭が4
@@ -94,7 +109,8 @@ const is4 = num => /[^\d](4\d{2}|4\d|4)[あ-ん]/.test(String(num || '')) || /\s
     const at = (c) => cellFill[XLSX.utils.encode_col(c) + (i + 1)] || '';
     // レンタカーの区画は「ナビ値段」が無く、以降が1つ左へずれる
     const shift = group === 'rental' ? -1 : 0;
-    const col = n => String(r[n + (n >= 7 ? shift : 0)] || '').trim();
+    // ★レンタカーの区画でずれるのは 7〜11 だけ。12（1か月）・13（6か月）は同じ位置（2026-10-05 修正）
+    const col = n => String(r[n + ((n >= 7 && n <= 11) ? shift : 0)] || '').trim();
     const navYen = group === 'rental' ? '' : String(r[7] || '').trim();
     const expiryRaw = col(8), supplier = col(9), firstRaw = col(10), extra = col(11);
     const m1 = doneOf(col(12)), m6 = doneOf(col(13));
@@ -110,16 +126,19 @@ const is4 = num => /[^\d](4\d{2}|4\d|4)[あ-ん]/.test(String(num || '')) || /\s
       purposeRaw: purposeTxt,
       user: userOf(purposeTxt),
       store: storeOf(purposeTxt, extra),
-      tire: /冬/.test(String(r[1] || '')) ? 'winter' : (/夏/.test(String(r[1] || '')) ? 'summer' : ''),
+      tire: 'summer',                       // ★読み込み時は全部「夏」でそろえる（2026-10-05 ユーザー指示）
       insurance: String(r[4] || '').trim() === '○',
       nav: col(6), navYen,
       supplier,
       firstReg: jp2iso(firstRaw) || firstRaw,
       expiry: jp2iso(expiryRaw) || '',
       expiryRaw,
-      maker: '', model: '', cargo4: is4(num),
+      maker: makerOf(name, supplier), model: '', cargo4: is4(num),
       usedNew: false,
-      inspections: { m1, m6, m12: [] },
+      // ★レンタカーは現在すべて点検済み（日付は分からないので「済」だけ付ける。2026-10-05 ユーザー指示）
+      inspections: group === 'rental'
+        ? { m1: { done: true, doneAt: m1.doneAt || '' }, m6: { done: true, doneAt: m6.doneAt || '' }, m12: [{ done: true, doneAt: '' }] }
+        : { m1, m6, m12: [] },
       docs: [],
       note: [extra && !/三田|八多|北神|ハ多/.test(extra) ? extra : '', m1.note, m6.note].filter(Boolean).join(' / '),
       archived, archivedAt: archived ? '2026-10-05' : '',

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791174270769';
+    window.__APP_BUILD='build-1791176725089';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.42';
+const APP_VERSION = '3.43';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8065,21 +8065,27 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
   const BOX={border:'1.5px solid #e5e7eb',borderRadius:9,padding:'9px 11px',background:'#fafafa',fontSize:12,lineHeight:1.9};
   const insRow=(kind,label)=>{
     const st=vehInspState(v,kind,cfg);
-    const done=kind==='m12'?((v.inspections&&Array.isArray(v.inspections.m12)&&v.inspections.m12[0]&&v.inspections.m12[0].doneAt)||''):((v.inspections&&v.inspections[kind]&&v.inspections[kind].doneAt)||'');
+    const rec=(v.inspections||{})[kind];
+    const done=kind==='m12'?(st.s==='done'):!!(rec&&(rec.done||rec.doneAt));
+    const doneTxt=kind==='m12'?(st.doneAt||''):((rec&&rec.doneAt)||'');
     const mark=()=>{
       const today=new Date().toISOString().slice(0,10);
       const ins={...(v.inspections||{})};
-      if(kind==='m12')ins.m12=[{due:st.due,doneAt:done?'':today}];
-      else ins[kind]={...(ins[kind]||{}),doneAt:done?'':today};
+      if(kind==='m12'){
+        const arr=Array.isArray(ins.m12)?[...ins.m12]:[];
+        if(done)arr.pop();                                   // 直前の回を取り消す
+        else arr.push({due:st.due,doneAt:today,done:true});  // 次の回を済にする
+        ins.m12=arr;
+      }else ins[kind]=done?{...(ins[kind]||{}),done:false,doneAt:''}:{...(ins[kind]||{}),done:true,doneAt:today};
       onChange({inspections:ins});
     };
     const col=st.s==='red'?{background:'#dc2626',color:'white'}:st.s==='yellow'?{background:'#fde047',color:'#854d0e'}:st.s==='done'?{background:'#f1f5f9',color:'#94a3b8'}:{background:'#eef2ff',color:'#4f46e5'};
     return(
       <div key={kind} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid #f1f5f9'}}>
-        <span style={{width:74,fontWeight:700}}>{label}</span>
+        <span style={{width:74,fontWeight:700}}>{label}{(kind==='m12'&&st.rounds>1)?<span style={{fontSize:10,color:'#64748b'}}> {Math.min(st.round,st.rounds)}回目/{st.rounds}</span>:null}</span>
         <span style={{color:'#64748b'}}>{vehFmt(st.due)}</span>
         {vehAlertOn(v)&&st.s!=='none'&&<span style={{fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 7px',...col}}>
-          {st.s==='done'?('済 '+vehFmt(done)):st.s==='red'?(st.left<0?Math.abs(st.left)+'日超過':'急ぎ'):st.s==='yellow'?('あと'+st.left+'日'):'予定'}</span>}
+          {st.s==='done'?('済'+(doneTxt?' '+vehFmt(doneTxt):'')):st.s==='red'?(st.left<0?Math.abs(st.left)+'日超過':'急ぎ'):st.s==='yellow'?('あと'+st.left+'日'):'予定'}</span>}
         <button onClick={mark} style={{marginLeft:'auto',padding:'3px 10px',borderRadius:7,fontSize:10.5,fontWeight:800,cursor:'pointer',border:'1.5px solid '+(done?'#fca5a5':'#86efac'),background:done?'#fef2f2':'#f0fdf4',color:done?'#b91c1c':'#065f46'}}>{done?'済を取り消す':'実施した'}</button>
       </div>
     );
@@ -8113,7 +8119,7 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
         <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid #f1f5f9'}}>
           <span style={{width:74,fontWeight:700}}>車検満了</span>
           <span style={{color:ex.s==='red'?'#b91c1c':ex.s==='yellow'?'#d97706':'#047857',fontWeight:700}}>{vehFmt(v.expiry)}</span>
-          {ex.left!=null&&<span style={{fontSize:11,color:'#64748b'}}>{ex.left<0?Math.abs(ex.left)+'日超過':'あと'+ex.left+'日'}</span>}
+          {(ex.left!=null&&ex.left>=0)&&<span style={{fontSize:11,color:'#64748b'}}>あと{ex.left}日</span>}
         </div>
       </div>
       <div style={{fontSize:10.5,color:'#92400e',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:7,padding:'6px 9px',marginTop:6,lineHeight:1.7}}>
@@ -8133,7 +8139,7 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
 
       <div style={LB}>その他</div>
       <div style={BOX}>
-        保険 {v.insurance?<span style={{color:'#047857',fontWeight:800}}>○</span>:<span style={{color:'#b91c1c',fontWeight:800}}>×</span>}
+        保険 {v.insurance?<span style={{color:'#047857',fontWeight:800}}>○</span>:<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:20,height:18,background:'#dc2626',color:'white',fontWeight:900,borderRadius:5}}>×</span>}
         　/　ナビ {v.nav||'無し'}{v.navYen?'（'+v.navYen+'）':''}<br/>
         仕入先 {v.supplier||'—'}　/　初度 {vehFmt(v.firstReg)}　/　登録 {vehFmt(v.regDate)}<br/>
         {v.model&&<>型式 {v.model}　</>}{v.cargo4?'4ナンバー貨物':''}
@@ -8234,7 +8240,10 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
     const st=vehInspState(v,kind,cfg);
     const nm=kind==='m1'?'1か月':kind==='m6'?'6か月':'12か月';
     if(st.s==='none')return <span style={{color:'#cbd5e1'}}>—</span>;
-    const txt=st.s==='done'?('済 '+vehFmt(st.doneAt)):st.s==='red'?(nm+' '+(st.left<0?Math.abs(st.left)+'日超過':'急ぎ')):st.s==='yellow'?(nm+' あと'+st.left+'日'):(nm+' '+vehFmt(st.due));
+    const rd=(kind==='m12'&&st.rounds>1)?(st.round+'回目 '):'';
+    const txt=st.s==='done'?('済'+(st.doneAt?' '+vehFmt(st.doneAt):'')):
+      st.s==='red'?(rd+nm+' '+(st.left<0?Math.abs(st.left)+'日超過':'急ぎ')):
+      st.s==='yellow'?(rd+nm+' あと'+st.left+'日'):(rd+nm+' '+vehFmt(st.due));
     return <span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 6px',...insStyle(st.s)}}>{txt}</span>;
   };
   const Row=({v,rental})=>{
@@ -8255,12 +8264,14 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
           {v.user&&<span style={{marginLeft:4,fontSize:10,color:'#0891b2',fontWeight:700}}>👤{v.user}</span>}
         </td>
         <td style={TD2}>{v.num||'—'}</td>
-        <td style={TD2}>{v.insurance?<span style={{color:'#047857',fontWeight:800}}>○</span>:<span style={{color:'#b91c1c',fontWeight:800,background:'#fee2e2',borderRadius:4,padding:'0 5px'}}>×</span>}</td>
+        <td style={{...TD2,textAlign:'center'}}>{v.insurance
+          ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,color:'#047857',fontWeight:900,fontSize:13}}>○</span>
+          :<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,background:'#dc2626',color:'white',fontWeight:900,fontSize:13,borderRadius:5}}>×</span>}</td>
         <td style={TD2}><span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:20,padding:'1px 7px',color:'white',background:p.color}}>{p.label}</span></td>
         <td style={{...TD2,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis'}}>{v.nav||<span style={{color:'#b91c1c',fontWeight:800,background:'#fee2e2',borderRadius:4,padding:'0 5px'}}>無し</span>}</td>
         {!rental&&<td style={TD2}>{v.navYen||'—'}</td>}
         <td style={{...TD2,color:ex.s==='red'?'#b91c1c':ex.s==='yellow'?'#d97706':'#047857',fontWeight:700}}>
-          {vehFmt(v.expiry)}{ex.left!=null&&<span style={{fontSize:10,fontWeight:600,marginLeft:4}}>{ex.left<0?Math.abs(ex.left)+'日超過':'あと'+ex.left+'日'}</span>}
+          {vehFmt(v.expiry)}{(ex.left!=null&&ex.left>=0)&&<span style={{fontSize:10,fontWeight:600,marginLeft:4}}>あと{ex.left}日</span>}
         </td>
         <td style={TD2}>{v.supplier||'—'}</td>
         <td style={TD2}>{vehFmt(v.firstReg)}</td>
@@ -8390,30 +8401,58 @@ const vehDays=(iso)=>{ if(!iso)return null; const p=String(iso).split('-').map(N
   return Math.ceil((d-t)/86400000); };
 const vehAddMonths=(iso,m)=>{ if(!iso)return ''; const p=String(iso).split('-').map(Number); if(!p[0])return '';
   const d=new Date(p[0],(p[1]||1)-1+m,p[2]||1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+// 12か月点検は車検までに何回か来る（新車の乗用なら1年後・2年後の2回／4ナンバー貨物は1回）。
+//   済んだ数を数えて「次に来る回」を出す。車検満了を過ぎる回は出さない。
+//   ★中古新規は車検満了日から1年ずつ遡って置く（初度登録とずれるため）
+const vehM12List=(v)=>{
+  const out=[];
+  if(v.usedNew&&v.expiry){
+    for(let i=1;i<=3;i++){ const d=vehAddMonths(v.expiry,-12*i); if(!d)break;
+      if(v.regDate&&d<v.regDate)break; if(v.firstReg&&d<v.firstReg+'-01')break; out.unshift(d); }
+    return out;
+  }
+  const base=v.regDate||(v.firstReg?v.firstReg+'-01':'');
+  if(!base)return out;
+  for(let i=1;i<=3;i++){ const d=vehAddMonths(base,12*i); if(!d)break;
+    if(v.expiry&&d>=v.expiry)break; out.push(d); }
+  return out;
+};
+const vehM12Done=(v)=>{const a=(v.inspections||{}).m12;return Array.isArray(a)?a.filter(x=>x&&(x.done||x.doneAt)).length:0;};
 // 点検の期日：新車は登録日（無ければ初度登録）から。中古新規は車検満了日から逆算
 const vehInspDue=(v,kind)=>{
-  const base=v.regDate||v.firstReg||'';
+  const base=v.regDate||(v.firstReg?v.firstReg+'-01':'');
   if(kind==='m1')return v.usedNew?'':vehAddMonths(base,1);
   if(kind==='m6')return v.usedNew?'':vehAddMonths(base,6);
-  // 12か月：中古新規は満了日から1年ごとに遡る。新車は登録から1年ごと
-  if(v.usedNew&&v.expiry)return vehAddMonths(v.expiry,-12);
-  return vehAddMonths(base,12);
+  const list=vehM12List(v);
+  return list[Math.min(vehM12Done(v),list.length-1)]||'';
 };
 // 状態：done／plan（まだ先）／yellow（そろそろ）／red（急ぎ・超過）
 const vehInspState=(v,kind,cfg)=>{
   const c=vehAlertCfg(cfg);
   const rec=(v.inspections||{})[kind];
-  const doneAt=kind==='m12'?((Array.isArray(rec)&&rec[0]&&rec[0].doneAt)||''):((rec&&rec.doneAt)||'');
+  // ★日付が分からない「済」も扱う（done:true）。12か月は「何回済んだか」で見る
+  let done=false,doneAt='';
+  if(kind==='m12'){
+    const list=vehM12List(v), n=vehM12Done(v);
+    done=list.length>0&&n>=list.length;                       // 全部済んだ
+    const last=Array.isArray(rec)?rec[n-1]:null;
+    doneAt=(last&&last.doneAt)||'';
+  }else{
+    done=!!(rec&&(rec.done||rec.doneAt));
+    doneAt=(rec&&rec.doneAt)||'';
+  }
   const due=vehInspDue(v,kind);
-  if(!due)return{s:'none',due:'',left:null};
-  if(doneAt)return{s:'done',due,left:null,doneAt};
+  const round=kind==='m12'?(vehM12Done(v)+1):0;
+  const rounds=kind==='m12'?vehM12List(v).length:0;
+  if(done)return{s:'done',due,left:null,doneAt,round,rounds};
+  if(!due)return{s:'none',due:'',left:null,round,rounds};
   const left=vehDays(due);
   const y=kind==='m1'?c.y1:kind==='m6'?c.y6:c.y12;
   const r=kind==='m1'?c.r1:kind==='m6'?c.r6:c.r12;
-  if(left==null)return{s:'none',due,left:null};
-  if(left<=-r)return{s:'red',due,left};
-  if(left<=y)return{s:'yellow',due,left};
-  return{s:'plan',due,left};
+  if(left==null)return{s:'none',due,left:null,round,rounds};
+  if(left<=-r)return{s:'red',due,left,round,rounds};
+  if(left<=y)return{s:'yellow',due,left,round,rounds};
+  return{s:'plan',due,left,round,rounds};
 };
 const vehExpiryState=(v,cfg)=>{
   const c=vehAlertCfg(cfg); const left=vehDays(v.expiry);

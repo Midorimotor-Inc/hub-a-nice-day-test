@@ -51,6 +51,16 @@ const minus = n => plus(-n);
     { id: 'v3', group: 'rental', name: 'ヴォクシー S-Z（レンタ）', num: '神戸303わ3869', plate4: '3869', maker: 'トヨタ',
       colorHex: '#374151', purpose: 'rental', store: 'honten', tire: 'summer', insurance: true,
       regDate: minus(160), firstReg: minus(160).slice(0, 7), expiry: plus(500), inspections: { m1: { doneAt: minus(120) }, m6: {}, m12: [] }, archived: false },
+    // 日付なしで「済」になっているレンタカー（＝レンタカーは全部点検済み）
+    { id: 'v5', group: 'rental', name: 'ソリオバンディット（済）', num: '神戸505わ4230', plate4: '4230', maker: 'スズキ',
+      colorHex: '#78350f', purpose: 'rental', store: 'honten', tire: 'summer', insurance: true,
+      regDate: minus(400), firstReg: minus(400).slice(0,7), expiry: plus(300),
+      inspections: { m1:{done:true,doneAt:''}, m6:{done:true,doneAt:''}, m12:[{done:true,doneAt:''}] }, archived:false },
+    // 車検が切れている車（「○日超過」を出さないこと）
+    { id: 'v6', group: 'factory', name: '期限切れスペーシア', num: '神戸582あ9999', plate4: '9999', maker: 'スズキ',
+      colorHex: '#f8fafc', purpose: 'exhibit', store: 'honten', tire: 'summer', insurance: false,
+      regDate: minus(1200), firstReg: minus(1200).slice(0,7), expiry: minus(30),
+      inspections: { m1:{}, m6:{}, m12:[] }, archived:false },
     // 売却済み＝アーカイブ
     { id: 'v4', group: 'factory', name: 'ハスラー Jスタ カーキ（売却済）', num: '神戸582は3182', plate4: '3182', maker: 'スズキ',
       colorHex: '', purpose: 'loaner', store: 'honten', tire: 'summer', insurance: false,
@@ -156,6 +166,21 @@ const minus = n => plus(-n);
     const m = (document.body.innerText.match(/入れてください：([^\n]*)/) || [])[1] || '';
     return ['車名', 'ナンバー（FULL）', '登録日', '車検満了日', '初度登録', 'ボディ色'].every(x => m.includes(x));
   }));
+  head('⑧ 直した所（2026-10-05 ユーザー指摘）');
+  // 車検満期は8列目（タイヤ・車名・ナンバー・保険・目的・ナビ・ナビ値段・車検満期）
+  const cellOf=(name,i)=>page.evaluate(([n,k])=>{const r=[...document.querySelectorAll('tr')].find(x=>x.innerText.includes(n));if(!r)return'';const td=r.querySelectorAll('td')[k];return td?td.innerText.replace(/s+/g,' ').trim():'';},[name,i]);
+  const expRow = await cellOf('期限切れスペーシア',7);
+  t('★車検満了の「○日超過」は出さない', !/日超過/.test(expRow), expRow);
+  const insCell = await page.evaluate(() => { const r=[...document.querySelectorAll('tr')].find(x=>x.innerText.includes('期限切れスペーシア')); if(!r)return null;
+    const sp=[...r.querySelectorAll('span')].find(e=>e.innerText.trim()==='×'); if(!sp)return null; const st=getComputedStyle(sp); const td=sp.closest('td');
+    return {bg:st.backgroundColor,color:st.color,align:getComputedStyle(td).textAlign}; });
+  t('★保険×は濃い赤で囲う', !!insCell && insCell.bg === 'rgb(220, 38, 38)' && insCell.color === 'rgb(255, 255, 255)', insCell);
+  t('★保険の欄は中央', !!insCell && insCell.align === 'center', insCell);
+  // レンタカーの表は『ナビ値段』が無いので点検は10・11・12列目
+  const rentalDone = [await cellOf('ソリオバンディット（済）',10),await cellOf('ソリオバンディット（済）',11),await cellOf('ソリオバンディット（済）',12)].join(' / ');
+  t('★日付が無くても「済」と出る', /済/.test(rentalDone) && !/あと|急ぎ|超過/.test(rentalDone), rentalDone);
+  t('★12か月は「○回目」が出る', await page.evaluate(() => /回目/.test(document.body.innerText)));
+
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
   await page.screenshot({ path: path.join(DIR, 'smoke-vehicle-v2.png') });
