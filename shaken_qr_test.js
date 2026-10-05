@@ -184,7 +184,16 @@ const fillLabeled = (page, label, value) => page.evaluate(([lb, v]) => {
   await clickText(page, '🛠 機能');
   await page.waitForTimeout(400);
   t('メニューが出る（車検証を読み取る）', await seeText(page, '車検証を読み取る', 5000));
-  t('今後の拡張枠も並んでいる', await seeText(page, 'タイヤの入れ替え記録', 3000));
+  // ★『今後の予定』は薄くでも出さない（2026-10-05 ユーザー指示）。決まったものだけを並べる
+  t('まだ決まっていない機能は出さない', await page.evaluate(() => {
+    const txt = document.body.innerText;
+    return !/見積書|タイヤの入れ替え|置き場所|（今後）/.test(txt);
+  }), await page.evaluate(() => (document.body.innerText.match(/見積書|タイヤの入れ替え|置き場所|（今後）/g) || [])));
+  t('メニューに並ぶのは車検証の読み取りだけ', await page.evaluate(() => {
+    const sheet = [...document.querySelectorAll('div')].find(e => e.innerText.indexOf('🛠 機能') === 0 && e.offsetParent !== null);
+    if (!sheet) return false;
+    return [...sheet.querySelectorAll('button')].filter(b => b.innerText.trim() && b.innerText.indexOf('✕') < 0).length === 1;
+  }));
 
   await clickText(page, '車検証を読み取る');
   await page.waitForTimeout(400);

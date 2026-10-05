@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791190210772';
+  window.__APP_BUILD='build-1791190581183';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.48';
+const MOBILE_VERSION='3.49';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1928,13 +1928,13 @@ const shkCanvas=(src,max)=>{
   return cv;
 };
 
-// ── 🛠 機能のメニュー（今後ここに便利機能を足していく） ──
+// ── 🛠 機能のメニュー ──
+//   ★中身は決まったものだけを並べること。「今後の予定」を薄く出さない（2026-10-05 ユーザー指示）
 const ToolsSheet=({onScan,onClose})=>{
-  const It=({ic,bg,title,sub,on,soon})=>(
-    <button onClick={soon?undefined:on} disabled={!!soon}
+  const It=({ic,bg,title,sub,on})=>(
+    <button onClick={on}
       style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'12px 11px',marginBottom:8,
-        border:'2px solid '+(soon?'#e5e7eb':'#c2410c'),borderRadius:13,background:soon?'#f8fafc':'#fff7ed',
-        textAlign:'left',opacity:soon?.5:1}}>
+        border:'2px solid #c2410c',borderRadius:13,background:'#fff7ed',textAlign:'left'}}>
       <span style={{width:36,height:36,borderRadius:11,background:bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{ic}</span>
       <span style={{flex:1,minWidth:0}}>
         <span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>{title}</span>
@@ -1950,9 +1950,6 @@ const ToolsSheet=({onScan,onClose})=>{
           <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
         </div>
         <It ic="📷" bg="#dbeafe" title="車検証を読み取る" sub="QRから車両情報を取り込んで車両管理へ" on={onScan}/>
-        <It ic="🧾" bg="#dcfce7" title="見積書を撮って残す" sub="（今後）" soon/>
-        <It ic="🛞" bg="#fef3c7" title="タイヤの入れ替え記録" sub="（今後）" soon/>
-        <It ic="📍" bg="#ede9fe" title="車の置き場所を記録" sub="（今後）" soon/>
       </div>
     </div>
   );
