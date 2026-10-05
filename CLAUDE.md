@@ -219,8 +219,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 入庫制限は店舗ごと（v3.35・2026-10-04・ユーザー指示）
 - タイムスケジュール（整備）の予定は店ごとに立てるので、**入庫制限も店ごと**。**車検の台数制限（`inspLimits`）は今までどおり両店共通**。
 - キー：`honten-schedRestrictions` / `sanda-schedRestrictions`（PC は `useShared('honten-schedRestrictions')` を2本、スマホは MOBILE_KEYS に2つ）。見ている店（`vsId`）で選び分ける。
-- 元の共通キー `schedRestrictions` は**残してある（控え）**。中身は `node fb_split_restrictions.js --write`（`--dev` でテスト版）で**両店へ写し済み**（2026-10-04：テスト版3日ぶん・本番5日ぶん）。店ごとのキーに中身がある時は上書きしない。
-- 検査は `node restriction_save_test.js` の ④（本店で制限→三田店に切り替えると出ない→本店に戻すと出る）。
+- 元の共通キー `schedRestrictions` は**残してある（控え）**。中身は `node fb_split_restrictions.js --write`（`--dev` でテスト版）で写した。店ごとのキーに中身がある時は上書きしない。
+- **【やらかし】2026-10-04 に共通分を本店と三田店の両方へ写したため、三田店に本来いらない入庫制限が4日ぶん出ていた**（2026-10-05 ユーザー報告）。
+  三田店の分は 2026-10-05 に本番・テスト版とも空にした（消した中身の控え：`C:/Users/A/Documents/Hub重要書類/sanda-restrictions-removed-2026-10-05.json`）。`fb_split_restrictions.js` も**既定は本店だけ**に直した（三田店にも入れる時は `--sanda`）。
+- **店をまたいで見せない**：入庫制限・タイムスケジュール（整備）・備考メモは、見ている店（`vsId`）の分だけを出す。**他店の分は絶対に出さない**（2026-10-05 ユーザー指示。混乱のもと）。コードは PC・スマホとも `vsId==='honten'?…H:…S` で選び分けている。
+- 検査は `node restriction_save_test.js` の ④（本店で制限→三田店に切り替えると制限も備考メモも出ない→本店に戻すと両方出る）。
 
 ### 入庫制限は複数の時間帯を持てる（v3.25・2026-10-03・B案＋①）
 - **【重要】v3.25 の消し忘れで、制限を掛けた日は整備の予約が1件も保存できなくなっていた**（v3.33・2026-10-04 で修正）。

@@ -3,7 +3,7 @@
 //   先： {STOR}honten-schedRestrictions / {STOR}sanda-schedRestrictions
 //   すでに店舗別のキーに中身がある時は触らない（上書きしない）。
 //   node fb_split_restrictions.js            … 今の状態を見るだけ
-//   node fb_split_restrictions.js --write    … 本番へ写す
+//   node fb_split_restrictions.js --write    … 本番の本店へ写す（--sanda で三田店にも）
 //   node fb_split_restrictions.js --write --dev … テスト版へ写す
 const fs = require('fs'), path = require('path');
 const KEY_FILE = process.env.HUB_FB_KEY || 'C:/Users/A/Documents/Hub重要書類/firebase-admin.json';
@@ -22,7 +22,10 @@ const days = o => (o && typeof o === 'object') ? Object.keys(o).length : 0;
   console.log((DEV ? 'テスト版' : '本番') + ' / ' + (WRITE ? '書き込みます' : '見るだけ（--write で書き込み）'));
   const old = await read(STOR + 'schedRestrictions');
   console.log('  元（両店共通）: ' + days(old) + '日ぶん');
-  for (const store of ['honten', 'sanda']) {
+  // ★既定は本店だけに写す（2026-10-05）。2026-10-04 に両店へ写してしまい、三田店に
+  //   本来いらない制限が出た。三田店にも入れたい時だけ --sanda を付ける。
+  const stores = (process.argv.indexOf('--sanda') >= 0) ? ['honten', 'sanda'] : ['honten'];
+  for (const store of stores) {
     const k = STOR + store + '-schedRestrictions';
     const cur = await read(k);
     const label = store === 'honten' ? '本店' : '三田店';
