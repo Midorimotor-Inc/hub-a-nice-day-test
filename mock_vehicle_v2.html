@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>モック：車両管理（エクセル表ベース・たたき台）</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:#475569;margin:0 0 14px;line-height:1.8}
+  h2{font-size:15px;margin:22px 0 6px;border-left:5px solid #c2410c;padding-left:8px}
+  .note{font-size:12.5px;color:#475569;margin:0 0 10px;line-height:1.8}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px}
+  /* ヘッダー帯 */
+  .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:linear-gradient(135deg,#7c2d12,#c2410c);border-radius:10px;color:#fff}
+  .bar .ttl{font-weight:900;font-size:15px}
+  .chip{font-size:11px;font-weight:800;border-radius:20px;padding:2px 10px;background:rgba(255,255,255,.18);color:#fff}
+  .chip.warn{background:#fee2e2;color:#b91c1c}
+  .btn{padding:5px 11px;border-radius:7px;font-size:11.5px;font-weight:800;border:2px solid #cbd5e1;background:#fff;color:#334155;cursor:pointer}
+  .btn.p{background:#0891b2;border-color:#0891b2;color:#fff}
+  .btn.g{background:#f0fdf4;border-color:#86efac;color:#065f46}
+  /* フィルタ */
+  .filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 2px}
+  .f{font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 11px;border:1.5px solid #e5e7eb;background:#fff;color:#64748b;cursor:pointer}
+  .f.on{border-color:#c2410c;background:#fff7ed;color:#9a3412}
+  /* 表 */
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th{background:#334155;color:#fff;font-size:11px;font-weight:700;padding:6px 7px;text-align:left;white-space:nowrap;border:1px solid #475569}
+  td{border:1px solid #e5e7eb;padding:5px 7px;vertical-align:middle;background:#fff;white-space:nowrap}
+  tr:hover td{background:#fff7ed}
+  tr.sold td{background:#fef2f2;color:#9ca3af}
+  tr.sold:hover td{background:#fee2e2}
+  .swatch{display:inline-block;width:15px;height:15px;border-radius:4px;border:1px solid rgba(0,0,0,.25);vertical-align:-3px;margin-right:5px}
+  .pp{display:inline-block;font-size:10px;font-weight:800;border-radius:20px;padding:1px 8px;color:#fff;white-space:nowrap}
+  .ok{color:#047857;font-weight:800}
+  .ng{color:#b91c1c;font-weight:800;background:#fee2e2;border-radius:4px;padding:0 6px}
+  .tire{display:inline-flex;border:1.5px solid #cbd5e1;border-radius:20px;overflow:hidden;font-size:10px;font-weight:800}
+  .tire span{padding:2px 8px;color:#94a3b8;background:#fff}
+  .tire span.on.s{background:#fef3c7;color:#b45309}
+  .tire span.on.w{background:#dbeafe;color:#1d4ed8}
+  .d1{color:#b91c1c;font-weight:800}.d2{color:#d97706;font-weight:800}.d3{color:#047857}
+  .ins{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:1px 6px;margin-right:3px}
+  .ins.done{background:#f1f5f9;color:#94a3b8}
+  .ins.soon{background:#fef3c7;color:#b45309}
+  .ins.over{background:#fee2e2;color:#b91c1c}
+  .ins.none{background:#eef2ff;color:#4f46e5}
+  /* 詳細パネル */
+  .detail{display:flex;gap:14px;flex-wrap:wrap}
+  .dcol{flex:1;min-width:300px}
+  .lbl{font-size:10.5px;font-weight:800;color:#64748b;margin:8px 0 3px}
+  .val{font-size:13px;font-weight:700;color:#111827}
+  .box{border:1.5px solid #e5e7eb;border-radius:9px;padding:9px 11px;background:#fafafa}
+  .pdf{border:2px dashed #93c5fd;border-radius:10px;background:#eff6ff;padding:14px;text-align:center;color:#1d4ed8;font-weight:800;font-size:12px}
+  .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
+  .okbox{font-size:12px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
+  .q{font-size:12.5px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.9}
+  .seg{display:inline-flex;border:2px solid #cbd5e1;border-radius:9px;overflow:hidden;font-size:11.5px;font-weight:800}
+  .seg span{padding:5px 12px;background:#fff;color:#64748b}
+  .seg span.on{background:#1d4ed8;color:#fff}
+</style></head><body>
+
+<h1>車両管理（エクセル表をベースに作り変え）— たたき台</h1>
+<p class="lead">
+  お預かりした「代車・レンタカーデータ貸出表.xlsx」を読みました。<b>車両143行</b>・区分は <b>工場代車</b> と <b>鈑金レンタカー</b> の2つの固まり、
+  <b>赤い網掛けが80台</b>（売却済みなど）、残り<b>63台が現役</b>でした。<br>
+  赤以外の色は<b>車体色</b>（カーキ＝緑／ブラック／ベージュ／オフブルー／イエロー…）として使われていましたので、そのまま「車体色の色分け」にします。
+</p>
+
+<h2>① 一覧（PC・1画面）</h2>
+<div class="card">
+  <div class="bar">
+    <span style="font-size:18px">🚗</span><span class="ttl">車両管理</span>
+    <span class="chip">現役 63台</span>
+    <span class="chip warn">⚠ 点検・車検 7台</span>
+    <span class="chip">売却済 80台（隠す）</span>
+    <span style="margin-left:auto;display:flex;gap:6px">
+      <span class="btn p">📷 車検証を読み込む</span>
+      <span class="btn g">＋ 手で追加</span>
+      <span class="btn">⬇ エクセルで出す</span>
+    </span>
+  </div>
+  <div class="filters">
+    <span class="f on">すべて 63</span>
+    <span class="f">🚗 代車 28</span>
+    <span class="f">🔑 レンタカー 12</span>
+    <span class="f">🏢 社用車 4</span>
+    <span class="f">🏪 展示車 17</span>
+    <span class="f">📋 その他 2</span>
+    <span style="width:14px"></span>
+    <span class="f">📍 本店</span><span class="f">📍 三田</span><span class="f">📍 北神</span><span class="f">📍 八多</span>
+    <span style="width:14px"></span>
+    <span class="f">⚠ 期限が近いものだけ</span>
+    <span class="f">🚫 売却済みも表示</span>
+    <span style="margin-left:auto;font-size:11.5px;color:#64748b">並び替え：<b>車検満了が近い順</b></span>
+  </div>
+  <table>
+    <tr>
+      <th>車名</th><th>ナンバー</th><th>目的</th><th>所在地</th><th>保険</th><th>ナビ</th><th>タイヤ</th>
+      <th>車検満了</th><th>初度登録</th><th>1か月</th><th>6か月</th><th>12か月</th><th>書類</th>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#f8fafc"></span>ハスラー タフワイルドTB ホワイト</td><td>神戸58Aい7177</td>
+      <td><span class="pp" style="background:#2563eb">代車</span></td><td>本店</td>
+      <td class="ok">○</td><td>MDV-L308W</td>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td class="d3">R10.02.20<br><span style="font-size:10px">あと 503日</span></td><td>R07.02</td>
+      <td><span class="ins done">済 3/1</span></td><td><span class="ins done">済 5/20</span></td>
+      <td><span class="ins soon">12か月 あと18日</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#0ea5e9"></span>スペーシア X パール</td><td>神戸58Aか3503</td>
+      <td><span class="pp" style="background:#2563eb">代車</span></td><td>八多</td>
+      <td class="ok">○</td><td>2023 MDV-L310W</td>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td class="d3">R10.09.16<br><span style="font-size:10px">あと 711日</span></td><td>R07.09</td>
+      <td><span class="ins done">済 10/15</span></td><td><span class="ins soon">6か月 あと4日</span></td>
+      <td><span class="ins none">12か月 R08.09 予定</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#1f2937"></span>ハスラー G ブラック</td><td>神戸582よ7455</td>
+      <td><span class="pp" style="background:#2563eb">代車</span></td><td>本店</td>
+      <td class="ok">○</td><td>—</td>
+      <td><span class="tire"><span>夏</span><span class="on w">冬</span></span></td>
+      <td class="d2">R09.09.17<br><span style="font-size:10px">あと 77日</span></td><td>R06.09</td>
+      <td><span class="ins done">済</span></td><td><span class="ins done">済</span></td><td><span class="ins done">済</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#f8fafc"></span>スぺカス XS パール</td><td>神戸582わ1741</td>
+      <td><span class="pp" style="background:#7c3aed">レンタカー</span></td><td>三田</td>
+      <td class="ok">○</td><td>CN-RZ875 8インチ</td>
+      <td><span class="tire"><span>夏</span><span class="on w">冬</span></span></td>
+      <td class="d3">R09.10.21<br><span style="font-size:10px">あと 111日</span></td><td>R07.10</td>
+      <td><span class="ins done">済 11/21</span></td><td><span class="ins soon">6か月 あと5日</span></td>
+      <td><span class="ins none">12か月 R08.10 予定</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#f8fafc"></span>ヴォクシー S-Z</td><td>神戸303わ3869</td>
+      <td><span class="pp" style="background:#7c3aed">レンタカー</span></td><td>八多</td>
+      <td class="ok">○</td><td>—</td>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td class="d3">R10.05.06<br><span style="font-size:10px">あと 578日</span></td><td>R08.06</td>
+      <td><span class="ins soon">1か月 あと9日</span></td><td><span class="ins none">6か月 R08.12 予定</span></td>
+      <td><span class="ins none">12か月 R09.06 予定</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#fde047"></span>スペーシア G イエロー</td><td>神戸582あ1234</td>
+      <td><span class="pp" style="background:#0891b2">社用車</span></td><td>本店</td>
+      <td class="ok">○</td><td>—</td>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td class="d1">R07.11.09<br><span style="font-size:10px">あと 35日</span></td><td>R04.11</td>
+      <td><span class="ins done">済</span></td><td><span class="ins done">済</span></td><td><span class="ins over">12か月 42日超過</span></td>
+      <td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="swatch" style="background:#f8fafc"></span>ソリオ MZ パール</td><td>神戸505ち2417</td>
+      <td><span class="pp" style="background:#d97706">展示車</span></td><td>三田</td>
+      <td class="ng">×</td><td class="ng">無し</td>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td class="d3">R11.08.20<br><span style="font-size:10px">あと 1050日</span></td><td>R08.08</td>
+      <td><span class="ins none">—</span></td><td><span class="ins none">—</span></td><td><span class="ins none">—</span></td>
+      <td>📄</td>
+    </tr>
+    <tr class="sold">
+      <td><span class="swatch" style="background:#9ca3af"></span>ハスラー Jスタ カーキ（売却済）</td><td>神戸582は3182</td>
+      <td><span class="pp" style="background:#9ca3af">売却済</span></td><td>—</td>
+      <td>—</td><td>—</td><td>—</td>
+      <td>R07.02.17</td><td>R04.02</td><td>—</td><td>—</td><td>—</td><td>📄</td>
+    </tr>
+  </table>
+  <div class="okbox">
+    ・<b>車体色</b>は左の四角で色分け（今のエクセルの色をそのまま引き継ぎます）。<br>
+    ・<b>目的</b>は色付きバッジで色分け（代車＝青／レンタカー＝紫／社用車＝水色／展示車＝橙／その他＝灰）。<br>
+    ・<b>保険 ×</b>・<b>ナビ 無し</b>は今のエクセルと同じく<span class="ng">赤</span>で出します。<br>
+    ・<b>売却済み</b>はふだん隠し、「🚫 売却済みも表示」で灰色の行として出します（消さずに残す）。
+  </div>
+</div>
+
+<h2>② 1台を開いた時（右側の詳細）</h2>
+<div class="card">
+  <div class="detail">
+    <div class="dcol">
+      <div style="display:flex;align-items:center;gap:8px"><span class="swatch" style="background:#0ea5e9;width:22px;height:22px"></span>
+        <span style="font-size:16px;font-weight:900">スペーシア X パール</span>
+        <span class="pp" style="background:#2563eb">代車</span>
+        <span style="font-size:11px;color:#64748b">神戸58Aか3503</span></div>
+
+      <div class="lbl">📷 車検証</div>
+      <div class="pdf">車検証のPDF・写真をここに入れる<br><span style="font-weight:600;font-size:11px">（読み込むと下の項目が自動で入ります）</span></div>
+      <div class="kome">
+        読み込みで自動で入るもの：<b>車名・ナンバー・初度登録・車検満了日・車台番号・型式・所有者</b>。<br>
+        入らなかった所は手で直せます。原本（PDF・写真）はそのまま保存して、いつでもこの画面で開けます。
+      </div>
+
+      <div class="lbl">📍 所在地</div>
+      <div><span class="seg"><span class="on">本店</span><span>三田</span><span>北神</span><span>八多</span></span></div>
+
+      <div class="lbl">🛞 タイヤ</div>
+      <div><span class="seg"><span class="on">夏</span><span>冬</span></span>　<span style="font-size:11.5px;color:#64748b">保管番号 <b>14</b></span></div>
+
+      <div class="lbl">その他</div>
+      <div class="box" style="font-size:12px;line-height:1.9">
+        保険 <span class="ok">○</span>　／　ナビ <b>2023 MDV-L310W</b>（¥0）　／　仕入先 <b>自販兵庫</b><br>
+        メモ：<span style="color:#64748b">冬タイヤは八多の棚14番</span>
+      </div>
+    </div>
+
+    <div class="dcol">
+      <div class="lbl">🔧 点検の自動アラート</div>
+      <div class="box">
+        <div style="margin-bottom:6px"><span class="seg"><span class="on">新車</span><span>中古新規</span></span>
+          <span style="font-size:11px;color:#64748b;margin-left:8px">どちらから数えるかが変わります</span></div>
+        <div style="font-size:12px;line-height:2">
+          初度登録 <b>R07.09</b>（2025/9/16）から数えます<br>
+          ・1か月点検　<b>2025/10/16</b>　<span class="ins done">済 10/15</span><br>
+          ・6か月点検　<b>2026/3/16</b>　<span class="ins soon">あと4日</span><br>
+          ・12か月点検　<b>2026/9/16</b>　<span class="ins none">予定</span><br>
+          ・車検満了　<b>R10.09.16</b>　<span class="d3">あと711日</span>
+        </div>
+      </div>
+      <div class="kome">
+        <b>中古新規</b>を選ぶと、初度登録と車検満了日がずれます。その時は<br>
+        「初度登録 R04.02 ／ 車検満了 R09.08 → <b>ずれています。12か月点検はどちらから数えますか？</b>
+        <span class="btn" style="padding:2px 8px">登録日から</span> <span class="btn" style="padding:2px 8px">満了日から逆算</span>」<br>
+        と画面で確認してから決めます（黙って決めません）。
+      </div>
+
+      <div class="lbl">🔗 代車管理とのつながり</div>
+      <div class="box" style="font-size:12px;line-height:1.9">
+        この車は <b>代車管理（本店）に登録済み</b> <span class="ins done">リンク中</span><br>
+        <span style="color:#64748b">車名・ナンバー・車体色をこちらで直すと、代車管理の表にもそのまま反映します。</span><br>
+        <span class="btn">代車管理の表で見る</span> <span class="btn">リンクを外す</span>
+      </div>
+
+      <div class="lbl">🧾 履歴</div>
+      <div class="box" style="font-size:12px;line-height:1.9;color:#64748b">
+        2026/10/15　1か月点検 実施（江川）<br>
+        2025/09/16　登録<br>
+        <span class="btn" style="margin-top:6px">＋ 記録を足す</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>③ 今のエクセルと新しい画面の対応</h2>
+<div class="card">
+  <table>
+    <tr><th>エクセルの列</th><th>新しい画面</th><th>備考</th></tr>
+    <tr><td>車名</td><td>車名＋車体色の四角</td><td>色はエクセルの塗り色から読み取って引き継ぎ</td></tr>
+    <tr><td>ナンバー</td><td>ナンバー</td><td>「神戸582は3182」のまま。検索は下4桁でも当たる</td></tr>
+    <tr><td>保険 ○×</td><td>保険 ○×（×は赤）</td><td>赤網掛けの意味をそのまま再現</td></tr>
+    <tr><td>目的</td><td>目的バッジ＋所在地</td><td>「展示車 三田」のように混ざっていたものを<b>目的</b>と<b>所在地</b>に分けます</td></tr>
+    <tr><td>ナビ／ナビ値段</td><td>ナビ（無しは赤）／金額</td><td>そのまま</td></tr>
+    <tr><td>車検満期</td><td>車検満了日＋残り日数の色</td><td>R表記（R10.02.20）のまま入れられます</td></tr>
+    <tr><td>仕入先</td><td>仕入先</td><td>そのまま</td></tr>
+    <tr><td>初度</td><td>初度登録</td><td>点検日の計算の基準</td></tr>
+    <tr><td>タイヤ（夏/冬）</td><td>夏・冬の切替ボタン</td><td>押すだけで切り替え</td></tr>
+    <tr><td>タイヤ（八多・三田・番号）</td><td>所在地／タイヤ保管番号</td><td>混ざっていたので2つに分けます</td></tr>
+    <tr><td>無料1か月／無料6ヵ月</td><td>1か月・6か月・<b>12か月</b>点検</td><td>12か月を新設。予定日は自動、実施したら「済」</td></tr>
+    <tr><td>赤い網掛け</td><td>売却済み（ふだん隠す）</td><td>消さずに残し、必要な時だけ表示</td></tr>
+  </table>
+</div>
+
+<h2>④ 確認させてください</h2>
+<div class="q">
+  <b>1.</b> 所在地は <b>本店・三田・北神・八多</b> の4つでよいですか（エクセルには「ハ多」「八多」の両方がありました。統一します）。<br>
+  <b>2.</b> レンタカーの列にあった数字（6・7・14・15・16・19・20）は<b>タイヤの保管番号</b>という理解で合っていますか。違えば正しい意味を教えてください。<br>
+  <b>3.</b> 目的は <b>代車／レンタカー／社用車／展示車／その他</b> の5つでよいですか。「業販掲載中」「HAA出品」「展示・商品」は<b>その他</b>に入れますか、別立てにしますか。<br>
+  <b>4.</b> 社用車の「○○さん使用中」は、<b>使用者</b>という欄を作って分けてよいですか。<br>
+  <b>5.</b> 143台のうち<b>売却済み80台も最初に取り込みますか</b>（記録として残す）。それとも<b>現役63台だけ</b>にしますか。<br>
+  <b>6.</b> 12か月点検のアラートは<b>何日前</b>から出しますか（1か月・6か月も同じでよいですか）。<br>
+  <b>7.</b> 車検満了のアラートは<b>何日前</b>から出しますか（今は90日前から色が変わります）。
+</div>
+
+</body></html>
