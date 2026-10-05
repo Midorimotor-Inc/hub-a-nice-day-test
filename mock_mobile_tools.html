@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>モック：スマホの「機能」ボタン ／ 車検証QR読み取り</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:#475569;margin:0 0 14px;line-height:1.8}
+  h2{font-size:15px;margin:22px 0 6px;border-left:5px solid #c2410c;padding-left:8px}
+  .note{font-size:12.5px;color:#475569;line-height:1.9;margin:0 0 8px}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  .phone{width:300px;flex-shrink:0;border:10px solid #111827;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .cap{font-size:11.5px;font-weight:800;color:#475569;margin:6px 0 10px;text-align:center}
+  .hd{background:#FF9500;color:#fff;padding:7px 10px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800}
+  .band{background:#fb923c;color:#fff;padding:5px 8px;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800}
+  .stbtn{background:rgba(255,255,255,.22);border-radius:7px;padding:2px 9px;font-size:11px;font-weight:800}
+  .stbtn.on{background:#fff;color:#c2410c}
+  .tool{margin-left:auto;background:#fff;color:#c2410c;border-radius:9px;padding:3px 9px;font-size:12px;font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .body{padding:10px;min-height:330px;background:#f8fafc}
+  .sheet{position:relative;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.18);padding:12px}
+  .sttl{font-weight:900;font-size:13.5px;color:#c2410c;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .item{display:flex;align-items:center;gap:10px;padding:11px 10px;border:2px solid #e5e7eb;border-radius:12px;margin-bottom:8px;font-size:13px;font-weight:800;color:#334155;background:#fff}
+  .item .ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+  .item small{display:block;font-weight:500;font-size:10.5px;color:#64748b;margin-top:2px}
+  .item.soon{opacity:.45}
+  .cam{background:#111827;border-radius:12px;height:200px;position:relative;overflow:hidden}
+  .frame{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:150px;height:150px;border:3px solid #22c55e;border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+  .frame:after{content:'QRをここに';position:absolute;left:0;right:0;bottom:-22px;text-align:center;color:#86efac;font-size:11px;font-weight:800}
+  .shot{display:flex;gap:8px;margin-top:10px}
+  .btn{flex:1;text-align:center;padding:10px 0;border-radius:11px;font-size:12.5px;font-weight:900;border:2px solid #cbd5e1;background:#fff;color:#334155}
+  .btn.p{background:#c2410c;border-color:#c2410c;color:#fff}
+  .btn.g{background:#059669;border-color:#059669;color:#fff}
+  .res{border:2px solid #86efac;background:#f0fdf4;border-radius:12px;padding:10px}
+  .res .ok{font-size:12px;font-weight:900;color:#065f46;margin-bottom:6px}
+  .kv{display:flex;font-size:12px;padding:3px 0;border-top:1px solid #dcfce7}
+  .kv b{width:84px;color:#64748b;font-weight:700;flex-shrink:0}
+  .kv span{font-weight:800}
+  .warnbox{border:2px solid #fcd34d;background:#fffbeb;border-radius:12px;padding:10px;font-size:11.5px;color:#92400e;line-height:1.8}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th{background:#334155;color:#fff;font-size:10.5px;font-weight:700;padding:5px 7px;text-align:left;border:1px solid #475569;white-space:nowrap}
+  td{border:1px solid #e5e7eb;padding:5px 7px;background:#fff;white-space:nowrap}
+  .new{background:#fef9c3!important}
+  .q{font-size:12.5px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.9}
+  .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
+</style></head><body>
+
+<h1>スマホの「機能」ボタン ／ 車検証QRの読み取り</h1>
+<p class="lead">
+  店舗の帯の<b>右端に「🛠 機能」ボタン</b>を置きます。ここから<b>車検証のQRを読んで、そのまま車両管理へ</b>入れます。<br>
+  読み方は<b>①その場でカメラ ②スマホに入っている写真から</b>の2通り。PCへ送って読み込ませる手間が要りません。<br>
+  この「機能」ボタンは、今後いろいろな道具を足していく入口にします。
+</p>
+
+<h2>① 入口（店舗の帯の右端）</h2>
+<div class="row">
+  <div>
+    <div class="phone">
+      <div class="hd"><span>🚗 Hub</span><span style="font-weight:600;font-size:10.5px">v3.47</span><span style="margin-left:auto">🔍 🔄 ✉</span></div>
+      <div class="band">
+        <span class="stbtn on">🏪 本店</span><span class="stbtn">三田店</span>
+        <span class="tool">🛠 機能</span>
+      </div>
+      <div class="body">
+        <div style="font-size:12px;color:#64748b;text-align:center;padding:26px 0">カレンダー／スケジュールの画面</div>
+      </div>
+    </div>
+    <div class="cap">店舗の行から離して右端に「🛠 機能」</div>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="hd"><span>🚗 Hub</span><span style="margin-left:auto">🔍 🔄 ✉</span></div>
+      <div class="band"><span class="stbtn on">🏪 本店</span><span class="stbtn">三田店</span><span class="tool">🛠 機能</span></div>
+      <div class="body" style="padding:0;display:flex;flex-direction:column;justify-content:flex-end;min-height:330px;background:rgba(0,0,0,.35)">
+        <div class="sheet">
+          <div class="sttl">🛠 機能<span style="margin-left:auto;font-weight:700;color:#94a3b8;font-size:12px">✕</span></div>
+          <div class="item"><span class="ic" style="background:#dbeafe">📷</span>
+            <span>車検証を読み取る<small>QRから車両情報を取り込んで車両管理へ</small></span></div>
+          <div class="item soon"><span class="ic" style="background:#dcfce7">🧾</span>
+            <span>見積書を撮って残す<small>（今後）</small></span></div>
+          <div class="item soon"><span class="ic" style="background:#fef3c7">🛞</span>
+            <span>タイヤの入れ替え記録<small>（今後）</small></span></div>
+          <div class="item soon"><span class="ic" style="background:#ede9fe">📍</span>
+            <span>車の置き場所を記録<small>（今後）</small></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">押すと下から出る（今後ここに機能を足せます）</div>
+  </div>
+</div>
+
+<h2>② 読み方は2通り</h2>
+<div class="row">
+  <div>
+    <div class="phone">
+      <div class="hd"><span>📷 車検証を読み取る</span><span style="margin-left:auto">✕</span></div>
+      <div class="body">
+        <div class="item" style="border-color:#c2410c;background:#fff7ed"><span class="ic" style="background:#fed7aa">📸</span>
+          <span>その場で撮る<small>カメラでQRにかざすだけ</small></span></div>
+        <div class="item" style="border-color:#1d4ed8;background:#eff6ff"><span class="ic" style="background:#dbeafe">🖼</span>
+          <span>写真から選ぶ<small>前に撮った車検証の写真でもOK</small></span></div>
+        <div class="warnbox" style="margin-top:10px">
+          車検証の<b>2次元コード（QR）</b>を読みます。<br>
+          読めない時は、そのまま<b>手入力の画面</b >に進めます。
+        </div>
+      </div>
+    </div>
+    <div class="cap">①その場で撮る ②写真から選ぶ</div>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="hd"><span>📸 その場で撮る</span><span style="margin-left:auto">✕</span></div>
+      <div class="body">
+        <div class="cam"><div class="frame"></div></div>
+        <div class="shot">
+          <span class="btn">🖼 写真から</span>
+          <span class="btn p">● シャッター不要（自動で読む）</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.7">
+          QRが枠に入ると<b>自動で読み取ります</b>。暗い時はライトも点けられます。
+        </div>
+      </div>
+    </div>
+    <div class="cap">かざすだけ（シャッター操作なし）</div>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="hd"><span>✓ 読み取れました</span><span style="margin-left:auto">✕</span></div>
+      <div class="body">
+        <div class="res">
+          <div class="ok">✓ 車検証から読み取りました</div>
+          <div class="kv"><b>ナンバー</b><span>神戸58Aか3503</span></div>
+          <div class="kv"><b>初度登録</b><span>令和7年9月</span></div>
+          <div class="kv"><b>車検満了</b><span>令和10年9月16日</span></div>
+          <div class="kv"><b>車台番号</b><span>MK53S-123456</span></div>
+          <div class="kv"><b>型式</b><span>5AA-MK53S</span></div>
+          <div class="kv"><b>車体の色</b><span>パール</span></div>
+          <div class="kv"><b>メーカー</b><span>スズキ</span></div>
+          <div class="kv"><b>用途</b><span>乗用（4ナンバーではない）</span></div>
+        </div>
+        <div class="warnbox" style="margin-top:9px">
+          <b>車種名（スペーシア等）とグレードは車検証に載っていません。</b><br>
+          型式から当てはめ、残りは次の画面で足します。
+        </div>
+        <div class="shot">
+          <span class="btn">もう一度読む</span>
+          <span class="btn g">次へ（車名・目的を入れる）</span>
+        </div>
+      </div>
+    </div>
+    <div class="cap">読めた内容を確認</div>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="hd"><span>車両管理に登録</span><span style="margin-left:auto">✕</span></div>
+      <div class="body">
+        <div style="font-size:11px;font-weight:800;color:#64748b;margin:2px 0 3px">車名（グレード・色まで）*</div>
+        <div style="border:2px solid #c2410c;border-radius:9px;padding:8px;font-size:13px;background:#fff">スペーシア X パール</div>
+        <div style="font-size:10.5px;color:#64748b;margin:3px 0 8px">型式 MK53S から「スペーシア」を当てました。直せます</div>
+        <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:3px">目的*</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:9px">
+          <span style="padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:800;background:#2563eb;color:#fff">代車</span>
+          <span style="padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:800;border:2px solid #e5e7eb;color:#64748b">レンタカー</span>
+          <span style="padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:800;border:2px solid #e5e7eb;color:#64748b">社用車</span>
+          <span style="padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:800;border:2px solid #e5e7eb;color:#64748b">展示車</span>
+        </div>
+        <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:3px">店舗*</div>
+        <div style="display:flex;gap:4px;margin-bottom:9px">
+          <span style="padding:5px 14px;border-radius:20px;font-size:11.5px;font-weight:800;background:#1d4ed8;color:#fff">📍本店</span>
+          <span style="padding:5px 14px;border-radius:20px;font-size:11.5px;font-weight:800;border:2px solid #e5e7eb;color:#64748b">📍三田店</span>
+        </div>
+        <div style="font-size:11px;font-weight:800;color:#64748b;margin-bottom:3px">ボディ色*</div>
+        <div style="display:flex;gap:4px;margin-bottom:10px">
+          <span style="width:28px;height:24px;border-radius:7px;background:#f8fafc;border:3px solid #c2410c;display:inline-block"></span>
+          <span style="width:28px;height:24px;border-radius:7px;background:#1f2937;border:1.5px solid #cbd5e1;display:inline-block"></span>
+          <span style="width:28px;height:24px;border-radius:7px;background:#75923c;border:1.5px solid #cbd5e1;display:inline-block"></span>
+          <span style="width:28px;height:24px;border-radius:7px;background:#7dd3fc;border:1.5px solid #cbd5e1;display:inline-block"></span>
+        </div>
+        <div class="shot"><span class="btn g" style="flex:2">✓ 車両管理に登録</span><span class="btn">やめる</span></div>
+        <div style="font-size:10.5px;color:#64748b;margin-top:7px;line-height:1.7">
+          撮った写真は<b>車検証としてそのまま保存</b>され、PCの車両管理の📄から開けます。
+        </div>
+      </div>
+    </div>
+    <div class="cap">足りない分だけ足して登録</div>
+  </div>
+</div>
+
+<h2>③ PCの車両管理にすぐ出ます</h2>
+<div class="card">
+  <table>
+    <tr><th>タイヤ</th><th>車名</th><th>ナンバー</th><th>保険</th><th>目的</th><th>ナビ</th><th>ナビ値段</th><th>車検満期</th><th>仕入先</th><th>初度</th><th>所在地</th><th>1か月</th><th>6か月</th><th>12か月</th><th>書類</th></tr>
+    <tr class="new">
+      <td>夏</td><td>スペーシア X パール</td><td>神戸58Aか3503</td><td style="text-align:center">○</td><td>代車</td><td>—</td><td>—</td>
+      <td>2028/9/16</td><td>—</td><td>2025/9</td><td>本店</td>
+      <td><span style="background:#f97316;color:#fff;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800">1か月点検 2025/10/16</span></td>
+      <td><span style="background:#f1f5f9;color:#94a3b8;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800">済</span></td>
+      <td><span style="background:#eef2ff;color:#4f46e5;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800">12か月点検 2026/9/16</span></td>
+      <td>📄</td>
+    </tr>
+  </table>
+  <div class="kome">スマホで登録した車が、そのままPCの一覧に出ます（📄に車検証の写真が入っています）。</div>
+</div>
+
+<h2>④ 技術のこと（正直にお伝えします）</h2>
+<div class="card">
+  <p class="note">
+    <b>できます。</b>ただし2つ、確かめたいことがあります。<br><br>
+    <b>(1) iPhone のカメラ</b>… iPhone の Safari でもカメラは使えます。QRの読み取りは、Android は機械任せの仕組み（高速）、
+    iPhone は読み取り用の部品を足して動かします（どちらも追加の費用はありません）。<br>
+    <b>(2) 車検証のQRの中身</b>… 車検証の2次元コードは<b>決まった形式の文字列</b>です。
+    そこから「ナンバー・初度登録・満了日・車台番号・型式」を切り出します。<br>
+    <b>実物のサンプルを1枚いただければ、確実に切り出せるか確かめます</b>（写真でもPDFでも）。<br><br>
+    なお<b>車種名とグレードは車検証に載っていません</b>（型式から当てはめ＋手入力）。<b>ボディ色</b>は「車体の色」欄があるので取れます。
+  </p>
+</div>
+
+<div class="q">
+  <b>この形でよろしければ作ります。</b><br>
+  ・「🛠 機能」は<b>店舗の帯の右端</b>（スマホ）。PCの車両管理にも同じ入口を置きますか？<br>
+  ・読んだあとの登録先は<b>いつも車両管理</b>でよいですか（代車管理へは車両管理から紐づけ）。<br>
+  ・撮った写真は<b>そのまま車検証として保存</b>します（1台あたり数MBまで）。
+</div>
+
+</body></html>

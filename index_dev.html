@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791188589482';
+    window.__APP_BUILD='build-1791190210772';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.47';
+const APP_VERSION = '3.48';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7952,6 +7952,71 @@ const RentalLocationModal=memo(({isOpen,onClose,rentalCars,locationData,onSave})
 const VEH_COLORS=[['パール/白','#f8fafc'],['ブラック','#1f2937'],['シルバー','#cbd5e1'],['グレー','#9ca3af'],
   ['カーキ','#75923c'],['オフブルー','#7dd3fc'],['ブルー','#2563eb'],['デニム','#3687a4'],
   ['ベージュ','#eeece1'],['アイボリー','#ffff99'],['ブラウン','#78350f'],['レッド','#dc2626'],['イエロー','#fde047'],['グリーン','#059669']];
+// ── 車検証の写真（スマホの「🛠 機能」から登録した分）を読む。2026-10-05 ──
+//   Storage が使えないので ${STOR}vehdoc-{id}-index ＋ -chunk-{i} に分けて入れてある
+const vehDocLoad=async(docId)=>{
+  const idx=await sGet(STOR+'vehdoc-'+docId+'-index');
+  const n=idx&&idx.chunks?Number(idx.chunks):0;
+  if(!n)return '';
+  const parts=await Promise.all(Array.from({length:n},(_,i)=>sGet(STOR+'vehdoc-'+docId+'-chunk-'+i)));
+  if(parts.some(p=>typeof p!=='string'))return '';
+  return parts.join('');
+};
+// 車検証の写真を消す（分けて入れてある分も index もすべて）
+const vehDocDelete=async(docId)=>{
+  const idx=await sGet(STOR+'vehdoc-'+docId+'-index');
+  const n=idx&&idx.chunks?Number(idx.chunks):0;
+  for(let i=0;i<Math.max(n,1);i++){ try{ await sSet(STOR+'vehdoc-'+docId+'-chunk-'+i,null); }catch(e){} }
+  try{ await sSet(STOR+'vehdoc-'+docId+'-index',null); }catch(e){}
+};
+const vehKB=n=>{ const b=Number(n||0); if(!b)return '—';
+  return b>=1048576?((b/1048576).toFixed(1)+' MB'):(Math.round(b/1024)+' KB'); };
+const VehDocModal=memo(({doc,onClose,onDelete})=>{
+  const [src,setSrc]=useState('');
+  const [err,setErr]=useState('');
+  const [info,setInfo]=useState(null);
+  const [busy,setBusy]=useState(false);
+  useEffect(()=>{ let dead=false;
+    (async()=>{ try{
+      const ix=await sGet(STOR+'vehdoc-'+doc.id+'-index'); if(!dead)setInfo(ix||null);
+      const d=await vehDocLoad(doc.id); if(dead)return;
+      if(d)setSrc(d); else setErr('この車検証の写真を読み込めませんでした'); }
+      catch(e){ if(!dead)setErr('この車検証の写真を読み込めませんでした'); } })();
+    return ()=>{dead=true;}; },[doc.id]);
+  const del=async()=>{
+    if(!window.confirm('この車検証の写真を消しますか？'+String.fromCharCode(10)+'（車両そのものは消えません。元には戻せません）'))return;
+    setBusy(true);
+    try{ await vehDocDelete(doc.id); onDelete&&onDelete(doc); onClose(); }
+    catch(e){ setErr('消せませんでした：'+String((e&&e.message)||e)); setBusy(false); }
+  };
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.72)',zIndex:2600,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,padding:14,maxWidth:'92vw',maxHeight:'92vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,.4)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+          <span style={{fontWeight:900,fontSize:14}}>📄 {doc.name||'車検証'}</span>
+          <span style={{marginLeft:'auto',display:'flex',gap:7,alignItems:'center'}}>
+            {src&&<a href={src} download={(doc.name||'車検証')+'.jpg'}
+              style={{fontSize:11.5,fontWeight:800,color:'#1d4ed8',textDecoration:'none',border:'1.5px solid #bfdbfe',borderRadius:8,padding:'4px 10px'}}>⬇ 保存</a>}
+            {onDelete&&<button onClick={del} disabled={busy}
+              style={{fontSize:11.5,fontWeight:800,color:'#b91c1c',border:'1.5px solid #fca5a5',background:'#fef2f2',borderRadius:8,padding:'4px 10px',cursor:busy?'wait':'pointer'}}>{busy?'消しています…':'🗑 削除'}</button>}
+            <button onClick={onClose} style={{border:'none',background:'#f1f5f9',borderRadius:'50%',width:28,height:28,fontSize:14,color:'#64748b',cursor:'pointer'}}>✕</button>
+          </span>
+        </div>
+        {/* ★この写真の情報（2026-10-05 ユーザー要望） */}
+        <div style={{display:'flex',flexWrap:'wrap',gap:'2px 14px',fontSize:11,color:'#64748b',marginBottom:8,paddingBottom:6,borderBottom:'1px solid #f1f5f9'}}>
+          <span>撮った日 <b style={{color:'#334155'}}>{doc.at?vehFmt(String(doc.at).slice(0,10)):'—'}</b></span>
+          <span>撮った人 <b style={{color:'#334155'}}>{doc.by||'—'}</b></span>
+          <span>大きさ <b style={{color:'#334155'}}>{vehKB(info&&info.size||doc.size)}</b></span>
+          <span>分けて保存 <b style={{color:'#334155'}}>{(info&&info.chunks)||doc.chunks||1} 個</b></span>
+          <span>取り込み <b style={{color:'#334155'}}>スマホの「🛠 機能」</b></span>
+        </div>
+        {err?<div style={{padding:'30px 40px',color:'#b91c1c',fontWeight:800,fontSize:13}}>⚠️ {err}</div>
+          :src?<img src={src} alt="車検証" style={{display:'block',maxWidth:'86vw',maxHeight:'78vh'}}/>
+          :<div style={{padding:'40px 60px',color:'#64748b',fontWeight:800,fontSize:13}}>⏳ 読み込んでいます…</div>}
+      </div>
+    </div>
+  );
+});
 const VehicleEdit=memo(({v,onSave,onClose})=>{
   const [f,setF]=useState(()=>({
     id:(v&&v.id)||('v'+Date.now()),
@@ -8074,6 +8139,7 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
 // ── 車両管理 v2：右の詳細パネル ──
 const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlink})=>{
   const [edit,setEdit]=useState(false);
+  const [docOpen,setDocOpen]=useState(null);   // 開いている車検証の写真（2026-10-05）
   const p=vehPurpose(v.purpose);
   const ex=vehExpiryState(v,cfg);
   const LB={fontSize:10.5,fontWeight:800,color:'#64748b',margin:'10px 0 3px'};
@@ -8120,10 +8186,21 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlin
       </div>
 
       <div style={LB}>📷 車検証</div>
-      <div style={{border:'2px dashed #93c5fd',borderRadius:10,background:'#eff6ff',padding:'12px',textAlign:'center',color:'#1d4ed8',fontWeight:800,fontSize:11.5}}>
-        {(v.docs||[]).length?((v.docs||[]).map((d,i)=><div key={i}>📄 {d.name}</div>)):'（まだ入っていません）'}
-        <div style={{fontWeight:600,fontSize:10.5,color:'#64748b',marginTop:4}}>※ 読み込みは次の段階で入れます</div>
+      <div style={{border:'2px dashed #93c5fd',borderRadius:10,background:'#eff6ff',padding:'10px',textAlign:'center',color:'#1d4ed8',fontWeight:800,fontSize:11.5}}>
+        {(v.docs||[]).length
+          ?(v.docs||[]).map((d,i)=>(
+            <button key={d.id||i} onClick={()=>setDocOpen(d)}
+              style={{display:'block',width:'100%',margin:'3px 0',padding:'7px 9px',borderRadius:8,border:'1.5px solid #bfdbfe',background:'white',color:'#1d4ed8',fontSize:11.5,fontWeight:800,cursor:'pointer',textAlign:'left'}}>
+              📄 {d.name||'車検証'}{d.at?<span style={{color:'#94a3b8',fontWeight:600,marginLeft:6}}>{String(d.at).slice(0,10)}</span>:null}
+            </button>
+          ))
+          :'（まだ入っていません）'}
+        <div style={{fontWeight:600,fontSize:10.5,color:'#64748b',marginTop:5,lineHeight:1.6}}>
+          スマホの「🛠 機能 → 車検証を読み取る」で撮ると、ここに入ります
+        </div>
       </div>
+      {docOpen&&<VehDocModal doc={docOpen} onClose={()=>setDocOpen(null)}
+        onDelete={d=>onChange({docs:(v.docs||[]).filter(x=>x&&x.id!==d.id)})}/>}
 
       <div style={LB}>🔧 点検</div>
       <div style={{...BOX,padding:'4px 11px'}}>
@@ -8317,7 +8394,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
         <td style={TD2}><InsCell v={v} kind="m1"/></td>
         <td style={TD2}><InsCell v={v} kind="m6"/></td>
         <td style={TD2}><InsCell v={v} kind="m12"/></td>
-        <td style={TD2}>{(v.docs||[]).length?'📄':'—'}</td>
+        <td style={TD2}>{(v.docs||[]).length?('📄'+((v.docs||[]).length>1?(' '+(v.docs||[]).length):'')):'—'}</td>
       </tr>
     );
   };

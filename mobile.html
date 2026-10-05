@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791188589482';
+  window.__APP_BUILD='build-1791190210772';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.47';
+const MOBILE_VERSION='3.48';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1736,6 +1736,605 @@ const CalendarView=({inspData,closedDays,closedDates,overrideOpen,vsId,onSelectD
 
 // ★備考・メモ 1件の見た目（2026-10-05 ユーザー指示で「書いた人」と「完了チェック」を追加）。
 //   チェックの見た目は車検・整備の入庫済みチェックに合わせる（白い丸→黄色地に赤✓）。
+
+// ============================================================
+//  📷 車検証の2次元コード（QR）を読む → 車両管理へ登録   v3.48 / 2026-10-05
+//  ・入口はヘッダーの店舗の帯の右端「🛠 機能」（今後ここに便利機能を足していく）
+//  ・読み方は2通り：①その場でカメラにかざす ②スマホの写真から選ぶ
+//  ・Android は端末の BarcodeDetector（速い）／iPhone は jsQR を読み込んで自前で解く
+//  ・読み取れた項目は確認画面で直せる。足りない分（車名・目的・店舗・色）を入れて登録する
+//  ・撮った写真は車検証として Firestore に分割保存（vehdoc-*）し、PC の車両管理の 📄 から開ける
+// ============================================================
+
+// ── 車両管理 v2 の決まり（PC版 index_dev.html と同じものを置く。直す時は両方） ──
+const VEH_PURPOSE=[
+  {id:'loaner', label:'代車',      color:'#2563eb'},
+  {id:'rental', label:'レンタカー', color:'#7c3aed'},
+  {id:'company',label:'社用車',    color:'#0891b2'},
+  {id:'exhibit',label:'展示車',    color:'#d97706'},
+  {id:'other',  label:'その他',    color:'#6b7280'},
+];
+const VEH_STORES=[{id:'honten',label:'本店'},{id:'sanda',label:'三田店'}];
+const VEH_COLORS=[['パール/白','#f8fafc'],['ブラック','#1f2937'],['シルバー','#cbd5e1'],['グレー','#9ca3af'],
+  ['カーキ','#75923c'],['オフブルー','#7dd3fc'],['ブルー','#2563eb'],['デニム','#3687a4'],
+  ['ベージュ','#eeece1'],['アイボリー','#ffff99'],['ブラウン','#78350f'],['レッド','#dc2626'],['イエロー','#fde047'],['グリーン','#059669']];
+const vehPlate4=num=>{const m=String(num||'').match(/(\d{1,4})(?!.*\d)/);return m?m[1]:'';};
+const vehAddMonths=(iso,m)=>{ if(!iso)return ''; const p=String(iso).split('-').map(Number); if(!p[0])return '';
+  const d=new Date(p[0],(p[1]||1)-1+m,p[2]||1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+// 点検の基準日（＝登録日）。空の時は車検満了日から逆算（PC版 vehBase と同じ）
+const vehBase=(v)=>{
+  if(v&&v.regDate)return v.regDate;
+  const ex=v&&v.expiry;
+  if(!ex)return (v&&v.firstReg)?v.firstReg+'-01':'';
+  const fm=String((v&&v.firstReg)||'').slice(0,7);
+  if(!v.usedNew&&!v.cargo4){ const a=vehAddMonths(ex,-36); if(!fm||a.slice(0,7)===fm)return a; }
+  return vehAddMonths(ex,-24);
+};
+
+// ── QRを解く（Android＝端末の BarcodeDetector／iPhone＝jsQR を読み込む） ──
+let _qrBdP=null;
+const qrDetector=()=>{
+  if(!_qrBdP)_qrBdP=(async()=>{
+    try{
+      if(window.BarcodeDetector&&window.BarcodeDetector.getSupportedFormats){
+        const f=await window.BarcodeDetector.getSupportedFormats();
+        if(f&&f.indexOf('qr_code')>=0)return new window.BarcodeDetector({formats:['qr_code']});
+      }
+    }catch(e){}
+    return null;
+  })();
+  return _qrBdP;
+};
+const JSQR_SRC=['https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js',
+                'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'];
+let _jsqrP=null;
+const qrLoadJsQR=()=>{
+  if(window.jsQR)return Promise.resolve(window.jsQR);
+  if(!_jsqrP)_jsqrP=new Promise(res=>{
+    let i=0;
+    const next=()=>{
+      if(i>=JSQR_SRC.length){res(null);return;}
+      const el=document.createElement('script');
+      el.src=JSQR_SRC[i++];
+      el.onload=()=>res(window.jsQR||null);
+      el.onerror=next;
+      document.head.appendChild(el);
+    };
+    next();
+  });
+  return _jsqrP;
+};
+// 1枚の絵からQRを探す。deep=true（写真から選んだ時）は少しずつ重ねて切り分け、
+// 車検証に並んでいる3つのQRを取りこぼさないようにする（jsQRは1枚につき1つしか見つけられないため）
+const qrScanCanvas=async(cv,deep)=>{
+  const found=[];
+  const push=t=>{const v=String(t||'').trim(); if(v&&found.indexOf(v)<0)found.push(v);};
+  const bd=await qrDetector();
+  if(bd){ try{ (await bd.detect(cv)).forEach(r=>push(r.rawValue)); }catch(e){} }
+  if(found.length>0&&!deep)return found;
+  if(found.length>=3)return found;
+  const js=await qrLoadJsQR();
+  if(!js)return found;
+  const ctx=cv.getContext('2d');
+  const run=(x,y,w,h)=>{
+    if(w<60||h<60)return;
+    try{ const d=ctx.getImageData(x,y,w,h); const r=js(d.data,d.width,d.height,{inversionAttempts:'attemptBoth'}); if(r&&r.data)push(r.data); }catch(e){}
+  };
+  run(0,0,cv.width,cv.height);
+  if(deep){
+    const W=cv.width,H=cv.height;
+    for(const n of [2,3]){
+      if(found.length>=3)break;
+      const tw=Math.floor(W/n),th=Math.floor(H/n);
+      for(let gy=0;gy<n*2-1&&found.length<3;gy++)
+        for(let gx=0;gx<n*2-1&&found.length<3;gx++)
+          run(Math.floor(gx*tw/2),Math.floor(gy*th/2),tw,th);
+    }
+  }
+  return found;
+};
+
+// ── 車検証の2次元コードを読み解く ──
+//  【重要・2026-10-05】並びは国交省の様式に合わせて書いてあるが、**実物でまだ確かめていない**。
+//   そのため「読み取った中身」を確認画面に全部出し、どの欄にも入れ直せるようにしてある。
+//   実物のサンプルが手に入ったら、ここの表を実物に合わせること。
+const SHK_ERA={'令和':2018,'平成':1988,'昭和':1925};
+const shkIso=(y,m,d)=>!y?'':(d?(y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')):(y+'-'+String(m).padStart(2,'0')));
+const shkDate=(raw)=>{
+  const t=String(raw||'').trim(); if(!t)return '';
+  let m=t.match(/(令和|平成|昭和)\s*(\d+)\s*年\s*(\d+)\s*月(?:\s*(\d+)\s*日)?/);
+  if(m&&SHK_ERA[m[1]])return shkIso(SHK_ERA[m[1]]+Number(m[2]),Number(m[3]),m[4]?Number(m[4]):0);
+  m=t.match(/^((?:19|20)\d{2})[-\/.]?(\d{1,2})[-\/.]?(\d{1,2})$/);
+  if(m&&+m[2]>=1&&+m[2]<=12&&+m[3]>=1&&+m[3]<=31)return shkIso(+m[1],+m[2],+m[3]);
+  m=t.match(/^((?:19|20)\d{2})[-\/.]?(\d{1,2})$/);
+  if(m&&+m[2]>=1&&+m[2]<=12)return shkIso(+m[1],+m[2],0);
+  // 元号コード付き（3=昭和・4=平成・5=令和）。7桁＝年月日／5桁＝年月
+  const era=g=>g===5?2018:g===4?1988:g===3?1925:0;
+  if(/^\d{7}$/.test(t)){ const b=era(+t[0]),mo=+t.slice(3,5),d=+t.slice(5,7);
+    if(b&&mo>=1&&mo<=12&&d>=1&&d<=31)return shkIso(b+ +t.slice(1,3),mo,d); }
+  if(/^\d{5}$/.test(t)){ const b=era(+t[0]),mo=+t.slice(3,5);
+    if(b&&mo>=1&&mo<=12)return shkIso(b+ +t.slice(1,3),mo,0); }
+  return '';
+};
+const SHK_MAKERS=['スズキ','トヨタ','ダイハツ','ホンダ','ニッサン','日産','マツダ','スバル','ミツビシ','三菱','レクサス','イスズ','いすゞ','ヒノ','日野','ミツビシフソウ','三菱ふそう','ＵＤ','UD'];
+const shkPlate=t=>/^[^\d\/]{1,8}\s?\d{1,3}[A-Za-z]?\s?[ぁ-んァ-ヶ]\s?\d{1,4}(-\d+)?$/.test(String(t||'').trim());
+const shkVin=t=>/^[A-Za-z0-9]{2,}-\d{6,}$/.test(String(t||'').trim());
+const shkModel=t=>/^[0-9A-Z]{1,5}-[A-Z][A-Z0-9]{2,}$/.test(String(t||'').trim())&&!shkVin(t);
+// ナンバーの分類番号（4ナンバー貨物の判定に使う）
+const shkClass=t=>{ const m=String(t||'').trim().match(/^[^\d]+(\d{1,3})[A-Za-z]?\s?[ぁ-んァ-ヶ]/); return m?m[1]:''; };
+const shakenParse=(texts)=>{
+  const list=(texts||[]).map(t=>String(t||''));
+  const out={plate:'',vin:'',engine:'',model:'',typeNo:'',classNo:'',firstReg:'',expiry:'',maker:'',shape:'',use:''};
+  const fields=[];
+  list.forEach((t,ti)=>{
+    const a=t.split('/').map(x=>String(x||'').trim());
+    a.forEach((v,i)=>{ if(v)fields.push({t:ti,i,v}); });
+    // ① 様式どおりの並びから拾う
+    if(a[0]==='1'){ out.plate=out.plate||a[1]||''; out.vin=out.vin||a[3]||''; out.engine=out.engine||a[4]||''; }
+    if(a[0]==='2'){ out.typeNo=out.typeNo||a[1]||''; out.classNo=out.classNo||a[2]||''; }
+    if(a[0]==='3'){
+      out.expiry=out.expiry||shkDate(a[1]);
+      out.firstReg=out.firstReg||shkDate(a[2]);
+      out.use=out.use||a[4]||''; out.shape=out.shape||a[6]||'';
+      out.maker=out.maker||a[7]||''; out.model=out.model||a[8]||'';
+    }
+  });
+  // ② 形からも拾う（並びが違っていても拾えるように）
+  const dates=[];
+  fields.forEach(f=>{
+    const v=f.v;
+    if(!out.plate&&shkPlate(v))out.plate=v;
+    if(!out.vin&&shkVin(v))out.vin=v;
+    if(!out.model&&shkModel(v))out.model=v;
+    if(!out.maker&&SHK_MAKERS.indexOf(v)>=0)out.maker=v;
+    const d=shkDate(v); if(d)dates.push(d);
+  });
+  if(dates.length){
+    const full=dates.filter(d=>d.length===10).sort();
+    const ym=dates.filter(d=>d.length===7).sort();
+    if(!out.expiry&&full.length)out.expiry=full[full.length-1];           // いちばん先の日付＝車検満了日
+    if(!out.firstReg)out.firstReg=(ym[0]||(full[0]?full[0].slice(0,7):''));// いちばん古い＝初度登録
+  }
+  if(out.expiry&&out.expiry.length===7)out.expiry='';                      // 満了日は日まで必要
+  if(out.firstReg&&out.firstReg.length===10)out.firstReg=out.firstReg.slice(0,7);
+  if(out.maker==='日産')out.maker='ニッサン';
+  const cls=out.classNo||shkClass(out.plate);
+  return {...out, cargo4:/^4/.test(String(cls||'')), fields, raw:list};
+};
+
+// ── 車検証の写真を Firestore に分割して保存する（Storage は使えないため） ──
+const VEHDOC_CHUNK=600000;   // 1ドキュメントの上限（1MB）に余裕を見た文字数
+const vehDocSave=async(docId,dataUrl)=>{
+  const t=String(dataUrl||''); if(!t)return null;
+  const n=Math.max(1,Math.ceil(t.length/VEHDOC_CHUNK));
+  for(let i=0;i<n;i++) await sSet(STOR+'vehdoc-'+docId+'-chunk-'+i, t.slice(i*VEHDOC_CHUNK,(i+1)*VEHDOC_CHUNK));
+  await sSet(STOR+'vehdoc-'+docId+'-index', {id:docId,chunks:n,type:'image/jpeg',size:t.length,at:new Date().toISOString()});
+  return {id:docId,chunks:n,size:t.length};
+};
+try{ window.__hubVehDocSave=vehDocSave; }catch(e){}   // 検査から写真の保存だけを動かすための口
+// 絵を読み込んで、長い辺が max px になるように縮めた canvas を作る
+const shkLoadImage=file=>new Promise((res,rej)=>{
+  const u=URL.createObjectURL(file); const im=new Image();
+  im.onload=()=>{URL.revokeObjectURL(u);res(im);};
+  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('image'));};
+  im.src=u;
+});
+const shkCanvas=(src,max)=>{
+  const w=src.videoWidth||src.naturalWidth||src.width, h=src.videoHeight||src.naturalHeight||src.height;
+  const r=Math.min(1,max/Math.max(w,h));
+  const cv=document.createElement('canvas');
+  cv.width=Math.max(1,Math.round(w*r)); cv.height=Math.max(1,Math.round(h*r));
+  cv.getContext('2d',{willReadFrequently:true}).drawImage(src,0,0,cv.width,cv.height);
+  return cv;
+};
+
+// ── 🛠 機能のメニュー（今後ここに便利機能を足していく） ──
+const ToolsSheet=({onScan,onClose})=>{
+  const It=({ic,bg,title,sub,on,soon})=>(
+    <button onClick={soon?undefined:on} disabled={!!soon}
+      style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'12px 11px',marginBottom:8,
+        border:'2px solid '+(soon?'#e5e7eb':'#c2410c'),borderRadius:13,background:soon?'#f8fafc':'#fff7ed',
+        textAlign:'left',opacity:soon?.5:1}}>
+      <span style={{width:36,height:36,borderRadius:11,background:bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{ic}</span>
+      <span style={{flex:1,minWidth:0}}>
+        <span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>{title}</span>
+        <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>{sub}</span>
+      </span>
+    </button>
+  );
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3200,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+          <div style={{fontWeight:900,fontSize:15,color:'#c2410c'}}>🛠 機能</div>
+          <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+        <It ic="📷" bg="#dbeafe" title="車検証を読み取る" sub="QRから車両情報を取り込んで車両管理へ" on={onScan}/>
+        <It ic="🧾" bg="#dcfce7" title="見積書を撮って残す" sub="（今後）" soon/>
+        <It ic="🛞" bg="#fef3c7" title="タイヤの入れ替え記録" sub="（今後）" soon/>
+        <It ic="📍" bg="#ede9fe" title="車の置き場所を記録" sub="（今後）" soon/>
+      </div>
+    </div>
+  );
+};
+
+// ── 📷 車検証を読み取る → 車両管理へ登録 ──
+const ShakenScanSheet=({store,byName,onClose,onDone})=>{
+  const [step,setStep]=useState('pick');   // pick / cam / busy / result / form / saving
+  const [err,setErr]=useState('');
+  const [msg,setMsg]=useState('');
+  const [found,setFound]=useState([]);     // 読み取れたQRの文字列
+  const [photo,setPhoto]=useState('');     // 車検証の写真（JPEG の dataURL）
+  const [parsed,setParsed]=useState(null);
+  const [showRaw,setShowRaw]=useState(false);
+  const [pick,setPick]=useState(null);     // 生データから欄へ入れる時の選択中の値
+  const [f,setF]=useState(null);
+  const videoRef=useRef(null);
+  const streamRef=useRef(null);
+  const fileRef=useRef(null);
+  const camRef=useRef(null);
+  const liveRef=useRef({hits:[],last:0,dead:false});
+
+  const stopCam=()=>{ try{ (streamRef.current&&streamRef.current.getTracks()||[]).forEach(t=>t.stop()); }catch(e){} streamRef.current=null; };
+  useEffect(()=>()=>{ liveRef.current.dead=true; stopCam(); },[]);
+
+  const finish=(texts,pic)=>{
+    stopCam();
+    const p=shakenParse(texts);
+    setFound(texts); setPhoto(pic||''); setParsed(p);
+    setF({
+      name:'', num:p.plate||'', maker:p.maker||'', model:p.model||'', vin:p.vin||'',
+      firstReg:p.firstReg||'', expiry:p.expiry||'', regDate:'',
+      purpose:'loaner', store:store||'honten', colorHex:'', cargo4:!!p.cargo4, usedNew:false, note:'',
+    });
+    setStep('result');
+  };
+
+  // ── ①その場で撮る（かざすだけで自動で読む） ──
+  useEffect(()=>{
+    if(step!=='cam')return;
+    const L=liveRef.current; L.hits=[]; L.last=0; L.dead=false;
+    let timer=null;
+    (async()=>{
+      try{
+        const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+        if(L.dead){ st.getTracks().forEach(t=>t.stop()); return; }
+        streamRef.current=st;
+        const v=videoRef.current; if(!v){ stopCam(); return; }
+        v.setAttribute('playsinline','true'); v.muted=true; v.srcObject=st;
+        await v.play();
+        setMsg('QRを枠に入れてください');
+        const tick=async()=>{
+          if(L.dead)return;
+          const vv=videoRef.current;
+          if(vv&&vv.videoWidth>0){
+            try{
+              const cv=shkCanvas(vv,1280);
+              const got=await qrScanCanvas(cv,false);
+              let add=0;
+              got.forEach(t=>{ if(L.hits.indexOf(t)<0){ L.hits.push(t); add++; } });
+              if(add>0){ L.last=Date.now(); setMsg('読み取りました（'+L.hits.length+'件）… そのまま他のコードも探しています'); }
+              // ★1つ見つけてから2秒ほど新しいコードが出なければ読み取り完了
+              if(L.hits.length>0&&Date.now()-L.last>2000){
+                const big=shkCanvas(vv,1600);
+                L.dead=true;
+                finish(L.hits.slice(),big.toDataURL('image/jpeg',0.72));
+                return;
+              }
+            }catch(e){}
+          }
+          timer=setTimeout(tick,260);
+        };
+        tick();
+      }catch(e){
+        setErr('カメラを使えませんでした。ブラウザの設定でカメラを許可するか、「写真から選ぶ」をお使いください。');
+        setStep('pick');
+      }
+    })();
+    return ()=>{ L.dead=true; clearTimeout(timer); stopCam(); };
+  },[step]);
+
+  // ── ②写真から選ぶ ──
+  const onFile=async(file)=>{
+    if(!file)return;
+    setErr(''); setMsg('写真からQRを探しています…'); setStep('busy');
+    try{
+      const im=await shkLoadImage(file);
+      const big=shkCanvas(im,2200);                               // QRが小さいので解像度は残す
+      const got=await qrScanCanvas(big,true);
+      const pic=shkCanvas(im,1600).toDataURL('image/jpeg',0.72);
+      if(got.length===0){
+        setPhoto(pic);
+        setErr('この写真からQRを読み取れませんでした。QRがはっきり写るように、明るい所で近づけて撮り直してください。下の「読み取らずに手で入れる」からでも登録できます。');
+        setStep('pick');
+        return;
+      }
+      finish(got,pic);
+    }catch(e){
+      setErr('写真を読めませんでした。別の写真でお試しください。');
+      setStep('pick');
+    }
+  };
+
+  // ── 読み取らずに手で入れる ──
+  const manual=()=>{
+    stopCam();
+    setFound([]); setParsed(shakenParse([]));
+    setF({name:'',num:'',maker:'',model:'',vin:'',firstReg:'',expiry:'',regDate:'',
+      purpose:'loaner',store:store||'honten',colorHex:'',cargo4:false,usedNew:false,note:''});
+    setStep('form');
+  };
+
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const INP={width:'100%',padding:'10px 11px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16,boxSizing:'border-box',background:'white'};
+  const LB={fontSize:11,fontWeight:800,color:'#64748b',margin:'10px 0 4px'};
+  const Chip=({on,children,...p})=>(
+    <button {...p} style={{padding:'7px 13px',borderRadius:20,fontSize:12.5,fontWeight:800,
+      border:'2px solid '+(on?'#c2410c':'#e5e7eb'),background:on?'#c2410c':'white',color:on?'white':'#64748b'}}>{children}</button>
+  );
+  // 入力欄（部品にせず、その場で中身を作る）。読み取った値を選んでいる時は、欄に触れるとその値が入る
+  const fld=(k,label,type,ph,hint)=>(
+    <div key={k}>
+      <div style={LB}>{label}</div>
+      <input type={type||'text'} value={(f&&f[k])||''} placeholder={ph||''}
+        onChange={e=>set(k,e.target.value)}
+        onFocus={()=>{ if(pick){ set(k,pick); setPick(null); } }}
+        style={{...INP,borderColor:pick?'#1d4ed8':'#d1d5db'}}/>
+      {hint?<div style={{fontSize:10,color:'#94a3b8',marginTop:3}}>{hint}</div>:null}
+    </div>
+  );
+
+  const save=async()=>{
+    const need=[['name','車名'],['num','ナンバー（FULL）'],['expiry','車検満了日'],['firstReg','初度登録'],['colorHex','ボディ色']];
+    const miss=need.filter(([k])=>!String((f&&f[k])||'').trim()).map(([,l])=>l);
+    if(miss.length){ setErr('入れてください：'+miss.join('・')); return; }
+    setErr(''); setStep('saving'); setMsg('車両管理に登録しています…');
+    try{
+      const key=STOR+'vehicles-v2';
+      const cur=await sGet(key);
+      const list=Array.isArray(cur)?cur:[];
+      const p4=vehPlate4(f.num);
+      const dup=p4&&list.find(x=>x&&x.id!=='__cfg__'&&!x.archived&&x.plate4===p4);
+      if(dup&&!window.confirm('同じナンバー（下4桁 '+p4+'）の「'+(dup.name||'')+'」がすでに入っています。それでも新しく登録しますか？')){
+        setStep('form'); return;
+      }
+      const id='v'+Date.now();
+      let docs=[];
+      if(photo){
+        try{ const d=await vehDocSave(id,photo); if(d)docs=[{id:d.id,name:'車検証（スマホで撮影）',kind:'shaken',chunks:d.chunks,size:d.size,at:new Date().toISOString(),by:byName||''}]; }
+        catch(e){ /* 写真が保存できなくても車両の登録は通す */ }
+      }
+      const fixed={...f};
+      if(!String(fixed.regDate||'').trim()&&String(fixed.expiry||'').trim())fixed.regDate=vehBase(fixed);
+      const rec={
+        id, group:fixed.purpose==='rental'?'rental':'factory',
+        name:fixed.name.trim(), num:fixed.num.trim(), plate4:p4,
+        maker:fixed.maker.trim(), model:fixed.model.trim(), vin:fixed.vin.trim(),
+        cargo4:!!fixed.cargo4, usedNew:!!fixed.usedNew,
+        colorHex:fixed.colorHex, purpose:fixed.purpose, user:'', store:fixed.store,
+        tire:'summer', insurance:true, nav:'', navYen:'', supplier:'',
+        regDate:fixed.regDate, firstReg:fixed.firstReg, expiry:fixed.expiry,
+        note:fixed.note||'', inspections:{m1:{doneAt:''},m6:{doneAt:''},m12:[]},
+        docs, archived:false, addedFrom:'mobile-qr', addedBy:byName||'',
+        createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
+      };
+      let ok=false;
+      if(FB_ON){
+        const out={};
+        const r=await fbTxn(key,base=>{ const a=Array.isArray(base)?base.slice():[]; a.push(rec); return a; },{out});
+        ok=(r==='ok');
+      }else{
+        const a=list.slice(); a.push(rec); await sSet(key,a); ok=true;
+      }
+      if(!ok)throw new Error('サーバーへの保存を確認できませんでした');
+      onDone&&onDone(rec);
+    }catch(e){
+      setErr('登録できませんでした：'+String((e&&e.message)||e)+'　もう一度お試しください。');
+      setStep('form');
+    }
+  };
+
+  const Head=({title,sub})=>(
+    <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontWeight:900,fontSize:15,color:'#c2410c'}}>{title}</div>
+        {sub&&<div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{sub}</div>}
+      </div>
+      <button onClick={()=>{liveRef.current.dead=true;stopCam();onClose();}}
+        style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+    </div>
+  );
+  const Err=()=>err?(
+    <div style={{border:'2px solid #fca5a5',background:'#fef2f2',color:'#b91c1c',borderRadius:11,padding:'9px 11px',fontSize:12,fontWeight:700,lineHeight:1.7,marginBottom:9}}>⚠️ {err}</div>
+  ):null;
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:3300,display:'flex',alignItems:'flex-end'}}>
+      <div style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',maxHeight:'93vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.3)'}}>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}}
+          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x);}}/>
+        <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:'none'}}
+          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x);}}/>
+
+        {step==='pick'&&(<>
+          <Head title="📷 車検証を読み取る" sub="QRから車両情報を取り込みます"/>
+          <Err/>
+          <button onClick={()=>{setErr('');setStep('cam');}}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #c2410c',borderRadius:13,background:'#fff7ed',textAlign:'left'}}>
+            <span style={{width:36,height:36,borderRadius:11,background:'#fed7aa',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>📸</span>
+            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>その場で撮る</span>
+              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>カメラでQRにかざすだけ</span></span>
+          </button>
+          <button onClick={()=>{setErr('');fileRef.current&&fileRef.current.click();}}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #1d4ed8',borderRadius:13,background:'#eff6ff',textAlign:'left'}}>
+            <span style={{width:36,height:36,borderRadius:11,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🖼</span>
+            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>写真から選ぶ</span>
+              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>前に撮った車検証の写真でもOK</span></span>
+          </button>
+          <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
+            車検証の<b>2次元コード（QR）</b>を読みます。明るい所で、QRが大きく写るように近づけてください。<br/>
+            <b>車種名とグレードは車検証に載っていない</b>ので、読み取ったあとに入れていただきます。
+          </div>
+          <button onClick={manual}
+            style={{width:'100%',marginTop:9,padding:'11px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12.5,fontWeight:800}}>
+            読み取らずに手で入れる
+          </button>
+        </>)}
+
+        {step==='cam'&&(<>
+          <Head title="📸 その場で撮る" sub={msg||'カメラを起動しています…'}/>
+          <div style={{position:'relative',background:'#111827',borderRadius:12,overflow:'hidden',height:260}}>
+            <video ref={videoRef} playsInline muted style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+            <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:180,height:180,border:'3px solid #22c55e',borderRadius:12,boxShadow:'0 0 0 2000px rgba(0,0,0,.35)'}}/>
+          </div>
+          <div style={{fontSize:11.5,color:'#64748b',margin:'9px 2px',lineHeight:1.7}}>
+            QRが枠に入ると<b>自動で読み取ります</b>（シャッターは要りません）。車検証にはQRが3つ並んでいるので、順に写してください。
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>{liveRef.current.dead=true;stopCam();setStep('pick');}}
+              style={{flex:1,padding:'12px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:13,fontWeight:800}}>やめる</button>
+            <button onClick={()=>{ const L=liveRef.current; const vv=videoRef.current;
+                if(L.hits.length===0){ setMsg('まだ読み取れていません。もう少し近づけてください'); return; }
+                L.dead=true; finish(L.hits.slice(), vv?shkCanvas(vv,1600).toDataURL('image/jpeg',0.72):''); }}
+              style={{flex:2,padding:'12px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:13,fontWeight:900}}>読み取り完了</button>
+          </div>
+          <button onClick={()=>{liveRef.current.dead=true;stopCam();camRef.current&&camRef.current.click();}}
+            style={{width:'100%',marginTop:8,padding:'10px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12,fontWeight:800}}>
+            うまく読めない時：いつものカメラで1枚撮る
+          </button>
+        </>)}
+
+        {(step==='busy'||step==='saving')&&(<>
+          <Head title="しばらくお待ちください" sub={msg}/>
+          <div style={{padding:'34px 0',textAlign:'center',fontSize:28}}>⏳</div>
+        </>)}
+
+        {step==='result'&&parsed&&(<>
+          <Head title={found.length?'✓ 読み取れました':'読み取り結果'} sub={'QR '+found.length+'件'}/>
+          <Err/>
+          <div style={{border:'2px solid #86efac',background:'#f0fdf4',borderRadius:12,padding:'10px 11px'}}>
+            <div style={{fontSize:12,fontWeight:900,color:'#065f46',marginBottom:6}}>車検証から読み取りました</div>
+            {[['ナンバー',parsed.plate],['初度登録',parsed.firstReg],['車検満了',parsed.expiry],['車台番号',parsed.vin],
+              ['型式',parsed.model],['メーカー',parsed.maker],['用途',parsed.use],
+              ['4ナンバー貨物',parsed.cargo4?'はい':'いいえ']].map(([k,v])=>(
+              <div key={k} style={{display:'flex',fontSize:12,padding:'3px 0',borderTop:'1px solid #dcfce7'}}>
+                <b style={{width:86,color:'#64748b',fontWeight:700,flexShrink:0}}>{k}</b>
+                <span style={{fontWeight:800,minWidth:0,wordBreak:'break-all',color:v?'#111827':'#cbd5e1'}}>{v||'—'}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8,marginTop:9}}>
+            <b>車種名（スペーシア等）とグレードは車検証に載っていません。</b>次の画面で入れてください。<br/>
+            上の内容が違っていたら、次の画面で直せます。
+          </div>
+          <button onClick={()=>setShowRaw(x=>!x)}
+            style={{width:'100%',marginTop:9,padding:'9px 0',borderRadius:11,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12,fontWeight:800}}>
+            {showRaw?'▲ 読み取った中身を隠す':'▼ 読み取った中身をすべて見る'}
+          </button>
+          {showRaw&&(
+            <div style={{marginTop:7,border:'1.5px solid #e2e8f0',borderRadius:11,padding:'8px 9px',background:'#f8fafc',maxHeight:220,overflowY:'auto'}}>
+              <div style={{fontSize:10.5,color:'#64748b',marginBottom:5,lineHeight:1.7}}>
+                並びが違って欄に入らなかった時は、次の画面で<b>この値をタップ</b>して入れられます。
+              </div>
+              {parsed.fields.length===0&&<div style={{fontSize:11.5,color:'#94a3b8'}}>（読み取れた項目はありません）</div>}
+              {parsed.fields.map((x,i)=>(
+                <div key={i} style={{fontSize:11.5,padding:'3px 0',borderTop:i?'1px solid #e2e8f0':'none',wordBreak:'break-all'}}>
+                  <span style={{color:'#94a3b8',marginRight:6}}>{x.t+1}-{x.i}</span>{x.v}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:10}}>
+            <button onClick={()=>{setErr('');setStep('pick');}}
+              style={{flex:1,padding:'13px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:13,fontWeight:800}}>もう一度読む</button>
+            <button onClick={()=>{setErr('');setStep('form');}}
+              style={{flex:2,padding:'13px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:13,fontWeight:900}}>次へ（車名・目的を入れる）</button>
+          </div>
+        </>)}
+
+        {step==='form'&&f&&(<>
+          <Head title="車両管理に登録" sub="足りない分を入れてください"/>
+          <Err/>
+          {parsed&&parsed.fields.length>0&&(
+            <div style={{border:'1.5px solid #bfdbfe',background:'#eff6ff',borderRadius:11,padding:'8px 9px',marginBottom:6}}>
+              <div style={{fontSize:10.5,color:'#1e40af',fontWeight:800,marginBottom:5}}>
+                読み取った値{pick?'：下の欄をタップすると入ります':'（タップして選ぶ → 入れたい欄をタップ）'}
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:5,maxHeight:96,overflowY:'auto'}}>
+                {parsed.fields.map((x,i)=>(
+                  <button key={i} onClick={()=>setPick(pick===x.v?null:x.v)}
+                    style={{padding:'4px 9px',borderRadius:14,fontSize:11,fontWeight:700,maxWidth:'100%',wordBreak:'break-all',
+                      border:'1.5px solid '+(pick===x.v?'#1d4ed8':'#bfdbfe'),background:pick===x.v?'#1d4ed8':'white',color:pick===x.v?'white':'#1e40af'}}>{x.v}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* ★入力欄は「部品（<Fld/>）」にしないこと。描画のたびに作り直されてカーソルが外れる。
+               ただの関数にして、その場で中身を返させる（2026-10-05） */}
+          {fld('name','車名（グレード・色まで）*','text','例：スペーシア X パール',
+            f.model?('型式 '+f.model+'　※車種名は車検証に載っていないので手で入れてください'):'※車種名は車検証に載っていないので手で入れてください')}
+          {fld('num','ナンバー（FULL）*','text','例：神戸58Aか3503')}
+          <div style={{display:'flex',gap:8}}>
+            <div style={{flex:1}}>{fld('firstReg','初度登録*','month')}</div>
+            <div style={{flex:1}}>{fld('expiry','車検満了日*','date')}</div>
+          </div>
+          {fld('regDate','登録日','date','','空なら車検満了日から自動で入れます')}
+          <div style={{display:'flex',gap:8}}>
+            <div style={{flex:1}}>{fld('maker','メーカー','text','例：スズキ','スズキだと1か月・6か月点検も知らせます')}</div>
+            <div style={{flex:1}}>{fld('model','型式','text','例：5AA-MK53S')}</div>
+          </div>
+          {fld('vin','車台番号','text','例：MK53S-123456')}
+          <div style={LB}>目的*</div>
+          <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+            {VEH_PURPOSE.map(p=>(
+              <button key={p.id} onClick={()=>set('purpose',p.id)}
+                style={{padding:'7px 13px',borderRadius:20,fontSize:12.5,fontWeight:800,
+                  border:'2px solid '+(f.purpose===p.id?p.color:'#e5e7eb'),
+                  background:f.purpose===p.id?p.color:'white',color:f.purpose===p.id?'white':'#64748b'}}>{p.label}</button>
+            ))}
+          </div>
+          <div style={LB}>店舗*</div>
+          <div style={{display:'flex',gap:5}}>
+            {VEH_STORES.map(st=>(
+              <Chip key={st.id} on={f.store===st.id} onClick={()=>set('store',st.id)}>📍{st.label}</Chip>
+            ))}
+          </div>
+          <div style={LB}>ボディ色*</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {VEH_COLORS.map(([lb,hex])=>(
+              <button key={hex} onClick={()=>set('colorHex',hex)} title={lb}
+                style={{width:34,height:30,borderRadius:8,background:hex,
+                  border:(f.colorHex===hex?'3px solid #c2410c':'1.5px solid #cbd5e1')}}/>
+            ))}
+          </div>
+          <div style={LB}>その他</div>
+          <div style={{display:'flex',gap:12,alignItems:'center',fontSize:12.5,paddingTop:3}}>
+            <label style={{display:'flex',alignItems:'center',gap:5}}>
+              <input type="checkbox" checked={!!f.cargo4} onChange={e=>set('cargo4',e.target.checked)} style={{width:18,height:18}}/>4ナンバー貨物</label>
+            <label style={{display:'flex',alignItems:'center',gap:5}}>
+              <input type="checkbox" checked={!!f.usedNew} onChange={e=>set('usedNew',e.target.checked)} style={{width:18,height:18}}/>中古新規</label>
+          </div>
+          {photo&&(
+            <div style={{marginTop:10,border:'1.5px solid #bfdbfe',background:'#eff6ff',borderRadius:11,padding:'8px 9px'}}>
+              <div style={{fontSize:11,fontWeight:800,color:'#1e40af',marginBottom:5}}>📄 車検証の写真もいっしょに保存します</div>
+              <img src={photo} alt="車検証" style={{width:'100%',borderRadius:8,display:'block'}}/>
+            </div>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:12}}>
+            <button onClick={()=>{liveRef.current.dead=true;stopCam();onClose();}}
+              style={{flex:1,padding:'14px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:13,fontWeight:800}}>やめる</button>
+            <button onClick={save}
+              style={{flex:2,padding:'14px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:14,fontWeight:900}}>✓ 車両管理に登録</button>
+          </div>
+          <div style={{fontSize:10.5,color:'#94a3b8',marginTop:7,lineHeight:1.7}}>
+            登録した車は、PCの車両管理の一覧にそのまま出ます（📄から車検証の写真を開けます）。
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+};
+
 const MemoLine=({m,onEdit,onToggle,compact})=>{
   const done=!!(m&&m.done);
   return (
@@ -4200,6 +4799,9 @@ const App=()=>{
   const [saveBanners,setSaveBanners]=useState([]); // 保存状況バナー [{pid,phase:'saving'|'done'|'fail',label,detail,ts}]
   const [mailModal,setMailModal]=useState(false);
   const [restoreModal,setRestoreModal]=useState(false);
+  const [toolsOpen,setToolsOpen]=useState(false);   // 🛠 機能のメニュー（2026-10-05）
+  const [scanOpen,setScanOpen]=useState(false);     // 📷 車検証の読み取り
+  const [vehDone,setVehDone]=useState(null);        // 登録できた時の知らせ
   const inflightRef=useRef(new Set()); // このセッションで進行中の保存pid（起動時チェックの誤検出防止）
   const writeGuardRef=useRef(0);   // 書き込み後70秒はポーリング反映を止める（PC版useSharedと同じ考え方）
   const fetchBusyRef=useRef(false); // 前回の取得が未完了なら次を撃たない（GAS同時実行の積み上がり防止）
@@ -5246,6 +5848,13 @@ const App=()=>{
             );
           })}
           {otherView&&<span style={{marginLeft:'auto',fontSize:9.5,fontWeight:800,color:'white',background:'rgba(0,0,0,.22)',borderRadius:6,padding:'2px 7px',whiteSpace:'nowrap'}}>👁 閲覧中</span>}
+          {/* ★機能ボタン（2026-10-05 ユーザー指示）。店舗の並びから離して右端に置く。
+              今は車検証の読み取りだけ。今後ここに便利機能を足していく */}
+          <button onClick={()=>setToolsOpen(true)} title="機能"
+            style={{marginLeft:otherView?6:'auto',flexShrink:0,padding:'4px 11px',borderRadius:9,fontSize:11.5,fontWeight:900,
+              border:'none',background:'white',color:TH.acc,boxShadow:'0 1px 3px rgba(0,0,0,.2)',whiteSpace:'nowrap'}}>
+            🛠 機能
+          </button>
         </div>
         <div style={{display:'flex',alignItems:'flex-end',gap:2,padding:'0 8px',background:TH.tab}}>
           {TABS.map(t=>{
@@ -5360,6 +5969,25 @@ const App=()=>{
         onClose={()=>setShowFind(false)} headBg={TH.head}/>}
       {mailModal&&<MailModal user={user} onClose={()=>setMailModal(false)} onSaveEmail={saveNotifyEmail}/>}
       {restoreModal&&<MobileRestoreModal user={user} onClose={()=>setRestoreModal(false)} inspData={inspData}/>}
+      {toolsOpen&&<ToolsSheet onClose={()=>setToolsOpen(false)}
+        onScan={()=>{setToolsOpen(false);setScanOpen(true);}}/>}
+      {scanOpen&&<ShakenScanSheet store={vsId} byName={user.name}
+        onClose={()=>setScanOpen(false)}
+        onDone={rec=>{setScanOpen(false);setVehDone(rec);}}/>}
+      {vehDone&&(
+        <div onClick={()=>setVehDone(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3400,display:'flex',alignItems:'center',justifyContent:'center',padding:18}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:'20px 18px',width:'100%',maxWidth:330,textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+            <div style={{fontSize:34}}>✅</div>
+            <div style={{fontWeight:900,fontSize:15,color:'#065f46',marginTop:6}}>車両管理に登録しました</div>
+            <div style={{fontSize:12.5,color:'#334155',marginTop:7,lineHeight:1.8}}>
+              <b>{vehDone.name}</b><br/>{vehDone.num}
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginTop:8,lineHeight:1.7}}>PCの車両管理の一覧に出ます。</div>
+            <button onClick={()=>setVehDone(null)}
+              style={{width:'100%',marginTop:14,padding:'13px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:14,fontWeight:900}}>とじる</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

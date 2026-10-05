@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -102,7 +102,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   何日前から知らせるかは**画面の「⚙ アラートの設定」で変えられる**（既定：黄＝90日前／赤＝期日を過ぎたら。`__cfg__` の行に保存）。
 - 手で追加する時の**最低限**：車名・ナンバー(FULL)・登録日・車検満了日・初度登録・ボディ色・目的・店舗（足りないと保存できない）。
 - 代車管理とのリンク：ナンバー下4桁で照合し、ボタンで代車管理の表へ入れる／内容を更新する。
-- **まだ入れていないもの**：車検証（PDF・写真）の読み込みと保存（Firestore に分割して入れる方針）。車検証の2次元コードから自動入力。
+- 車検証（写真）の保存と2次元コードからの自動入力は **v3.48 でスマホ側に入れた**（下の「スマホの「🛠 機能」」を見ること）。PDF の取り込みはまだ。
 - 直し（v3.43・2026-10-05 ユーザー確認）：
   ・**車検満了の「○日超過」は出さない**（残り日数だけ）。点検の超過は今までどおり出す。
   ・保険の○×は**セルの真ん中**。×は**濃い赤（#dc2626）に白抜き**で囲う。
@@ -111,6 +111,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ・**12か月点検は車検までに来る回数ぶん**（新車の乗用なら2回・4ナンバーは1回）。`vehM12List` が回を作り、「2回目」と出す。済にすると次の回へ進む。
   ・取り込みの直し：**レンタカー区画でずれるのは7〜11列だけ**（12=1か月・13=6か月はずれない）／**先の日付は「予定」**で未実施扱い／**メーカーを車名と仕入先から推測**（スズキ車の判定に必要）。
 - 検査は `node vehicle_v2_test.js`（29件）。
+
+### スマホの「🛠 機能」→ 車検証のQR読み取り（v3.48・2026-10-05・テスト版のみ）
+- **入口**：mobile.html のヘッダー、店舗（本店／三田店）の帯の**右端**に「🛠 機能」。店舗ボタンから離して置く（ユーザー指示）。
+  押すと下からメニュー。今は「📷 車検証を読み取る」だけ有効で、**今後ここに便利機能を足していく**（見積書・タイヤ記録・置き場所の枠を薄く並べてある）。
+  **PC には同じ入口を置かない**（2026-10-05 ユーザー回答：今のところ不要）。
+- **読み方は2通り**（ユーザー指示）：① **その場で撮る**＝カメラにかざすと自動で読む（シャッター不要。1つ見つけてから2秒ほど新しいコードが出なければ読み取り完了）
+  ② **写真から選ぶ**＝前に撮った写真でもよい。どちらも読めない時は「読み取らずに手で入れる」で進める。
+- **QRの解き方**：Android は端末の `BarcodeDetector`（速い・1枚で3つとも拾える）、**iPhone は `jsQR`** を CDN（cdnjs→jsdelivr の順）から読み込んで自前で解く。
+  jsQR は**1枚につき1つしか見つけられない**ので、写真から選んだ時だけ `qrScanCanvas(cv,true)` で**少しずつ重ねて切り分けて**探す（車検証にはQRが3つ並んでいるため）。3つ見つかったら打ち切る。
+- **【要調整】車検証の並びは実物でまだ確かめていない**（2026-10-05 時点。サンプル未入手）。
+  `shakenParse` は ①様式どおりの並び（コード1＝ナンバー・車台番号・原動機／コード2＝型式指定・類別／コード3＝満了日・初度登録・用途・車名・型式）と
+  ②**形からの推測**（ナンバー・車台番号・型式・メーカー・日付）の二段構えで拾う。
+  **読み取った項目は確認画面に全部出し、登録画面では値をタップ→欄をタップで入れ直せる**ので、並びが違っても登録は通る。
+  **実物のサンプルが手に入ったら `shakenParse` の表を実物に合わせること。**
+- 日付は `shkDate` で西暦に直す。**元号コード付き（3=昭和・4=平成・5=令和）の7桁＝年月日／5桁＝年月**にも対応。
+  **西暦の判定は 19xx/20xx に限ること**（限らないと「50709」が西暦5070年9月に読めてしまう。検査で発覚）。
+- **車種名とグレードは車検証に載っていない**ので手入力。**ボディ色**は車検証に「車体の色」欄があるが文字なので、画面の色見本から選ぶ。
+- **登録先はいつも車両管理（`vehicles-v2`）だけ**（2026-10-05 ユーザー回答。代車管理へは車両管理から紐づける。スマホ側を広げる時に他の台帳と繋ぐことはありうる）。
+  必須は PC と同じ：車名・ナンバー(FULL)・車検満了日・初度登録・ボディ色。**登録日が空なら `vehBase` で満了日から逆算**。
+  同じ下4桁の現役車がいれば確認を出す（それでも登録はできる）。書き込みは `fbTxn`（**配列なので `writeShared` は使えない**）。
+- **車検証の写真は Firestore に分割保存**（Storage は Blaze が要るため）：`${STOR}vehdoc-{id}-index`（`{id,chunks,type,size,at}`）＋ `${STOR}vehdoc-{id}-chunk-{i}`。
+  1つ 600,000 文字（`VEHDOC_CHUNK`。Firestore の1MB上限に余裕を見る）。写真は長辺1600pxのJPEG(q0.72)に縮めてから入れる。
+  車両の `docs:[{id,name,kind:'shaken',chunks,size,at,by}]` から辿る。**写真の保存に失敗しても車両の登録は通す**。
+- **PC で見る・消す**（2026-10-05 ユーザー要望）：車両管理の詳細パネル「📷 車検証」の行を押すと `vehDocLoad` で繋ぎ直して `VehDocModal` に出す。
+  上に**撮った日・撮った人・大きさ・分けて保存した数**が出る。**⬇ 保存**（端末へダウンロード）と**🗑 削除**（`vehDocDelete` で chunk と index を全部 null にし、車両の `docs` からも外す。車両そのものは消えない）。
+- **注意（React）**：入力欄を `<Fld/>` のような**描画のたびに作られる部品にしないこと**。1文字打つたびに作り直されてカーソルが外れる。
+  ふつうの関数 `fld(k,label,…)` にして、その場で中身を返させる（2026-10-05 に作り込み中に踏んだ）。
+- 検査は `node shaken_qr_test.js`（69件。読み解く部分の純関数＋スマホの入口・2通りの読み方・手入力での登録・写真の分割保存＋PC の 📄 表示・情報・削除）。
+- **本番にはまだ入れていない**（テスト版のみ）。
 
 ### 本番のデータをテスト版へ写す（開発用・2026-10-05）
 - `node fb_copy_prod_to_dev.js`（下見）／`--write`（実行）。**向きは本番→テスト版の一方通行**。書き先が `hub-v8-dev-` で始まらなければ止まる（逆向きはできない作り）。
