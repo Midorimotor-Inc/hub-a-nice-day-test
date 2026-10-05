@@ -226,6 +226,21 @@ const minus = n => plus(-n);
   const insAfter = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v1').insurance, STOR+'vehicles-v2');
   t('★一覧で保険の○×を切り替えられる', insBefore!==insAfter, {before:insBefore,after:insAfter});
 
+  head('⑫ 期日の表示とナビの印（2026-10-05 ユーザー指示）');
+  const m6cell = await cellOf('ハスラー タフワイルド ホワイト',12);
+  t('★6か月点検は期日も出す', /[0-9]+\/[0-9]+/.test(m6cell), m6cell);
+  const m12cell2 = await cellOf('ハスラーG オフブルー1800',13);
+  t('12か月は予定の時だけ期日', /12か月点検/.test(m12cell2), m12cell2);
+  // ナビの印（車両管理ボタンの△!）
+  await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(e=>/スケジュール/.test(e.innerText)&&e.offsetParent!==null&&e.innerText.replace(/s/g,'').length<12); if(b)b.click(); });
+  await page.waitForTimeout(1200);
+  const mark = await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(e=>/車両管理/.test(e.innerText)); if(!b)return null;
+    const sp=[...b.querySelectorAll('span')].find(e=>e.innerText.trim()==='⚠'); if(!sp)return null; const st=getComputedStyle(sp);
+    return {color:st.color,cnt:st.animationIterationCount,dur:st.animationDuration,num:/[0-9]/.test(b.innerText)}; });
+  t('★ナビの印は △! になっている', !!mark, mark);
+  t('★色は 黄・オレンジ・赤 のどれか', !!mark && ['rgb(234, 179, 8)','rgb(249, 115, 22)','rgb(220, 38, 38)'].includes(mark.color), mark);
+  t('★3秒で止まる', !!mark && mark.cnt==='4' && parseFloat(mark.dur)===0.75, mark);
+
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
   await page.screenshot({ path: path.join(DIR, 'smoke-vehicle-v2.png') });

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791183932873';
+    window.__APP_BUILD='build-1791188589482';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.46';
+const APP_VERSION = '3.47';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3779,6 +3779,7 @@ const GCSS=`
     100%{box-shadow:inset 0 0 0 2px rgba(255,255,255,.95), 0 0 0 0 rgba(255,255,255,0), 0 0 0 2px rgba(15,23,42,.92);}
   }
   .hub-just-added{animation:hubJustPulse 1.4s ease-out 6;position:relative;z-index:3;}
+  @keyframes vehMove{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
   @keyframes hubJustChip{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
   .hub-just-chip{
     position:absolute;top:-9px;right:-5px;z-index:6;pointer-events:none;
@@ -8158,7 +8159,7 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlin
       <div style={LB}>その他</div>
       <div style={BOX}>
         保険 <span onClick={()=>onChange({insurance:!v.insurance})} title="押すと ○⇄× が入れ替わります"
-          style={{cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:20,height:18,padding:'0 4px',borderRadius:5,fontWeight:900,
+          style={{cursor:'pointer',display:'inline-block',width:22,height:19,lineHeight:'19px',textAlign:'center',borderRadius:5,fontWeight:900,verticalAlign:'middle',
             background:v.insurance?'#ecfdf5':'#dc2626',color:v.insurance?'#047857':'white',border:'1.5px solid '+(v.insurance?'#6ee7b7':'#dc2626')}}>{v.insurance?'○':'×'}</span>
         　/　ナビ {v.nav||'無し'}{v.navYen?'（'+v.navYen+'）':''}<br/>
         仕入先 {v.supplier||'—'}　/　初度 {vehFmt(v.firstReg)}　/　登録 {vehFmt(v.regDate)}<br/>
@@ -8273,7 +8274,12 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
     const nm=(kind==='m1'?'1か月':kind==='m6'?'6か月':'12か月')+'点検';
     if(st.s==='none')return <span style={{color:'#cbd5e1'}}>—</span>;
     // ★名前だけ（日数・回数は出さない。2026-10-05 ユーザー指示）。まだ先の時だけ予定日を添える
-    const txt=st.s==='done'?'済':st.s==='plan'?(nm+' '+vehFmt(st.due)):nm;   // ★実施日は出さない（2026-10-05）
+    // ★1か月・6か月は「いつが期日か」が分かるよう、いつでも期日を出す（2026-10-05 ユーザー指示）
+    //   12か月はまだ先の時だけ期日を添える。実施日は出さない
+    const withDue=(kind==='m1'||kind==='m6');
+    const txt=st.s==='done'?'済'
+      :st.s==='plan'?(nm+' '+vehFmt(st.due))
+      :(withDue?(nm+' '+vehFmt(st.due)):nm);
     return <span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:5,padding:'2px 7px',...insStyle(st.s)}}>{txt}</span>;
   };
   const Row=({v,rental})=>{
@@ -8294,10 +8300,11 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
           {v.user&&<span style={{marginLeft:4,fontSize:10,color:'#0891b2',fontWeight:700}}>👤{v.user}</span>}
         </td>
         <td style={TD2}>{v.num||'—'}</td>
-        <td style={{...TD2,textAlign:'center'}} onClick={e=>{e.stopPropagation();upd(v.id,{insurance:!v.insurance});}} title="押すと ○⇄× が入れ替わります">
+        <td style={{...TD2,textAlign:'center',padding:'3px 6px'}} onClick={e=>{e.stopPropagation();upd(v.id,{insurance:!v.insurance});}} title="押すと ○⇄× が入れ替わります">
+          {/* ★文字の高さでズレないよう、箱の真ん中に置く（2026-10-05 ユーザー指摘） */}
           {v.insurance
-          ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,color:'#047857',fontWeight:900,fontSize:13,cursor:'pointer'}}>○</span>
-          :<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:20,background:'#dc2626',color:'white',fontWeight:900,fontSize:13,borderRadius:5,cursor:'pointer'}}>×</span>}</td>
+          ?<span style={{display:'inline-block',width:22,height:20,lineHeight:'20px',textAlign:'center',color:'#047857',fontWeight:900,fontSize:13,cursor:'pointer',verticalAlign:'middle'}}>○</span>
+          :<span style={{display:'inline-block',width:22,height:20,lineHeight:'20px',textAlign:'center',background:'#dc2626',color:'white',fontWeight:900,fontSize:13,borderRadius:5,cursor:'pointer',verticalAlign:'middle'}}>×</span>}</td>
         <td style={TD2}><span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:20,padding:'1px 7px',color:'white',background:p.color}}>{p.label}</span></td>
         <td style={{...TD2,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis'}}>{v.nav||<span style={{color:'#b91c1c',fontWeight:800,background:'#fee2e2',borderRadius:4,padding:'0 5px'}}>無し</span>}</td>
         {!rental&&<td style={TD2}>{v.navYen||'—'}</td>}
@@ -13401,14 +13408,24 @@ function AppInner() {
                   });
                   const ExtMark=()=>(<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.8}}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>);
                   const today=new Date();today.setHours(0,0,0,0);
-                  const alertCnt=Array.isArray(vehicleData)?vehicleData.filter(v=>{
-                    if(!Array.isArray(v.inspections))return false;
-                    return v.inspections.some(ins=>{
-                      if(ins.completed||!ins.scheduledDate)return false;
-                      const d=new Date(ins.scheduledDate);
-                      return Math.ceil((d-today)/(1000*60*60*24))<=90;
+                  // ★車両管理の知らせは「△に！」の印（数字はやめた・2026-10-05 ユーザー指示）。
+                  //   黄色のアラートがあれば黄／オレンジがあればオレンジ／赤があれば赤。3秒だけ動く。
+                  const vehCfg=vehAlertCfg(((Array.isArray(vehicleV2)?vehicleV2:[]).find(x=>x&&x.id==='__cfg__')||{}).cfg);
+                  const vehLevel=(()=>{
+                    let lv=0;
+                    (Array.isArray(vehicleV2)?vehicleV2:[]).forEach(v=>{
+                      if(!v||v.id==='__cfg__'||v.archived)return;
+                      vehAlertKinds(v).forEach(k=>{
+                        const st=vehInspState(v,k,vehCfg).s;
+                        if(st==='red')lv=Math.max(lv,3);
+                        else if(st==='orange')lv=Math.max(lv,2);
+                        else if(st==='yellow')lv=Math.max(lv,1);
+                      });
+                      const ex=vehExpiryState(v,vehCfg).s;
+                      if(ex==='red')lv=Math.max(lv,3); else if(ex==='yellow')lv=Math.max(lv,1);
                     });
-                  }).length:0;
+                    return lv;
+                  })();
                   return(<>
                     <button onClick={()=>setView('calendar')} {...hov(view==='calendar')}
                       style={navSty(view==='calendar',{background:'#FFFFFF',color:'#1A2550'})}>
@@ -13441,7 +13458,13 @@ function AppInner() {
                     <button onClick={()=>setView('vehicle')} {...hov(view==='vehicle')}
                       style={navSty(view==='vehicle',{background:'#F8CACA',color:'#8B2E2E'})}>
                       🔔 車両管理
-                      {alertCnt>0&&<span style={{position:'absolute',top:-6,right:10,width:16,height:16,borderRadius:'50%',background:'#D6363B',color:'#FFFFFF',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{alertCnt}</span>}
+                      {vehLevel>0&&(
+                        <span title={vehLevel===3?'期日を過ぎた点検があります':vehLevel===2?'もうすぐ期日の点検があります':'そろそろ点検の時期です'}
+                          style={{position:'absolute',top:-9,right:4,fontSize:17,lineHeight:1,fontWeight:900,
+                            color:vehLevel===3?'#dc2626':vehLevel===2?'#f97316':'#eab308',
+                            textShadow:'0 0 2px rgba(255,255,255,.95),0 1px 2px rgba(0,0,0,.25)',
+                            animation:'vehMove .75s ease-in-out 4'}}>⚠</span>
+                      )}
                     </button>
                   </>);
                 })()}
