@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791176725089';
+    window.__APP_BUILD='build-1791179949705';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.43';
+const APP_VERSION = '3.44';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8079,13 +8079,13 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
       }else ins[kind]=done?{...(ins[kind]||{}),done:false,doneAt:''}:{...(ins[kind]||{}),done:true,doneAt:today};
       onChange({inspections:ins});
     };
-    const col=st.s==='red'?{background:'#dc2626',color:'white'}:st.s==='yellow'?{background:'#fde047',color:'#854d0e'}:st.s==='done'?{background:'#f1f5f9',color:'#94a3b8'}:{background:'#eef2ff',color:'#4f46e5'};
+    const col=st.s==='red'?{background:'#dc2626',color:'white'}:st.s==='orange'?{background:'#f97316',color:'white'}:st.s==='yellow'?{background:'#fde047',color:'#854d0e'}:st.s==='done'?{background:'#f1f5f9',color:'#94a3b8'}:{background:'#eef2ff',color:'#4f46e5'};
     return(
       <div key={kind} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid #f1f5f9'}}>
-        <span style={{width:74,fontWeight:700}}>{label}{(kind==='m12'&&st.rounds>1)?<span style={{fontSize:10,color:'#64748b'}}> {Math.min(st.round,st.rounds)}回目/{st.rounds}</span>:null}</span>
+        <span style={{width:74,fontWeight:700}}>{label}</span>
         <span style={{color:'#64748b'}}>{vehFmt(st.due)}</span>
-        {vehAlertOn(v)&&st.s!=='none'&&<span style={{fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 7px',...col}}>
-          {st.s==='done'?('済'+(doneTxt?' '+vehFmt(doneTxt):'')):st.s==='red'?(st.left<0?Math.abs(st.left)+'日超過':'急ぎ'):st.s==='yellow'?('あと'+st.left+'日'):'予定'}</span>}
+        {vehAlertOn(v,kind)&&st.s!=='none'&&<span style={{fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 7px',...col}}>
+          {st.s==='done'?('済'+(doneTxt?' '+vehFmt(doneTxt):'')):st.s==='red'?'過ぎています':st.s==='orange'?'まもなく':st.s==='yellow'?'そろそろ':'予定'}</span>}
         <button onClick={mark} style={{marginLeft:'auto',padding:'3px 10px',borderRadius:7,fontSize:10.5,fontWeight:800,cursor:'pointer',border:'1.5px solid '+(done?'#fca5a5':'#86efac'),background:done?'#fef2f2':'#f0fdf4',color:done?'#b91c1c':'#065f46'}}>{done?'済を取り消す':'実施した'}</button>
       </div>
     );
@@ -8112,7 +8112,8 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
 
       <div style={LB}>🔧 点検</div>
       <div style={{...BOX,padding:'4px 11px'}}>
-        {!vehAlertOn(v)&&<div style={{color:'#94a3b8',fontSize:11,padding:'6px 0'}}>スズキ車ではないので点検アラートは出しません（レンタカーを除く）</div>}
+        {vehAlertKinds(v).length===0&&<div style={{color:'#94a3b8',fontSize:11,padding:'6px 0'}}>スズキ車ではないので点検アラートは出しません（レンタカーは12か月点検だけ出します）</div>}
+        {vehAlertKinds(v).length===1&&<div style={{color:'#64748b',fontSize:11,padding:'6px 0'}}>スズキ車以外のレンタカーなので、12か月点検だけ知らせます</div>}
         {insRow('m1','1か月')}
         {insRow('m6','6か月')}
         {insRow('m12','12か月')}
@@ -8193,7 +8194,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
     if(fPurpose!=='all'&&v.purpose!==fPurpose)return false;
     if(fStore!=='all'&&v.store!==fStore)return false;
     if(fAlert){
-      const bad=['m1','m6','m12'].some(k=>vehAlertOn(v)&&['yellow','red'].includes(vehInspState(v,k,cfg).s))||['yellow','red'].includes(vehExpiryState(v,cfg).s);
+      const bad=vehAlertKinds(v).some(k=>['yellow','orange','red'].includes(vehInspState(v,k,cfg).s))||['yellow','red'].includes(vehExpiryState(v,cfg).s);
       if(!bad)return false;
     }
     if(q.trim()){
@@ -8205,7 +8206,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
   const shown=cars.filter(match);
   const factory=shown.filter(v=>v.group!=='rental');
   const rentals=shown.filter(v=>v.group==='rental');
-  const alertCount=cars.filter(v=>!v.archived&&(['m1','m6','m12'].some(k=>vehAlertOn(v)&&['yellow','red'].includes(vehInspState(v,k,cfg).s))||['yellow','red'].includes(vehExpiryState(v,cfg).s))).length;
+  const alertCount=cars.filter(v=>!v.archived&&(vehAlertKinds(v).some(k=>['yellow','orange','red'].includes(vehInspState(v,k,cfg).s))||['yellow','red'].includes(vehExpiryState(v,cfg).s))).length;
   const sel=cars.find(v=>v.id===selId)||null;
 
   // 代車管理とのつながり（ナンバー下4桁で照合）
@@ -8232,19 +8233,20 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
   const TH={background:'#334155',color:'white',fontSize:10.5,fontWeight:700,padding:'5px 6px',textAlign:'left',whiteSpace:'nowrap',border:'1px solid #475569'};
   const THR={...TH,background:'#5b21b6',borderColor:'#6d28d9'};
   const TD2={border:'1px solid #e5e7eb',padding:'4px 6px',whiteSpace:'nowrap',verticalAlign:'middle',fontSize:11.5};
-  const insStyle=(st)=>st==='red'?{background:'#dc2626',color:'white',animation:'vehMoveR 1s ease-in-out infinite'}
+  // ★黄 → オレンジ → 赤。どれも揺れる（赤がいちばん速い）。日数は出さない
+  const insStyle=(st)=>st==='red'?{background:'#dc2626',color:'white',animation:'vehMove .55s ease-in-out infinite'}
+    :st==='orange'?{background:'#f97316',color:'white',animation:'vehMove .8s ease-in-out infinite'}
     :st==='yellow'?{background:'#fde047',color:'#854d0e',animation:'vehMove .9s ease-in-out infinite'}
     :st==='done'?{background:'#f1f5f9',color:'#94a3b8'}:{background:'#eef2ff',color:'#4f46e5'};
   const InsCell=({v,kind})=>{
-    if(!vehAlertOn(v))return <span style={{color:'#cbd5e1'}}>—</span>;
+    if(!vehAlertOn(v,kind))return <span style={{color:'#cbd5e1'}}>—</span>;
     const st=vehInspState(v,kind,cfg);
-    const nm=kind==='m1'?'1か月':kind==='m6'?'6か月':'12か月';
+    const nm=(kind==='m1'?'1か月':kind==='m6'?'6か月':'12か月')+'点検';
     if(st.s==='none')return <span style={{color:'#cbd5e1'}}>—</span>;
-    const rd=(kind==='m12'&&st.rounds>1)?(st.round+'回目 '):'';
+    // ★名前だけ（日数・回数は出さない。2026-10-05 ユーザー指示）。まだ先の時だけ予定日を添える
     const txt=st.s==='done'?('済'+(st.doneAt?' '+vehFmt(st.doneAt):'')):
-      st.s==='red'?(rd+nm+' '+(st.left<0?Math.abs(st.left)+'日超過':'急ぎ')):
-      st.s==='yellow'?(rd+nm+' あと'+st.left+'日'):(rd+nm+' '+vehFmt(st.due));
-    return <span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 6px',...insStyle(st.s)}}>{txt}</span>;
+      st.s==='plan'?(nm+' '+vehFmt(st.due)):nm;
+    return <span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:5,padding:'2px 7px',...insStyle(st.s)}}>{txt}</span>;
   };
   const Row=({v,rental})=>{
     const ex=vehExpiryState(v,cfg);
@@ -8330,15 +8332,21 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
       {cfgOpen&&(
         <div style={{padding:'8px 16px',background:'#fff7ed',borderBottom:'1px solid #fed7aa',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center',fontSize:11.5,flexShrink:0}}>
           <b style={{color:'#9a3412'}}>⚙ 何日前から知らせるか</b>
-          {[['1か月点検','y1','r1'],['6か月点検','y6','r6'],['12か月点検','y12','r12'],['車検満了','yCar','rCar']].map(([lb,yk,rk])=>(
+          {[['1か月点検','y1','o1'],['6か月点検','y6','o6'],['12か月点検','y12','o12']].map(([lb,yk,ok])=>(
             <span key={yk} style={{display:'inline-flex',alignItems:'center',gap:4}}>
               <span style={{color:'#64748b'}}>{lb}</span>
               <span style={{background:'#fde047',borderRadius:4,padding:'0 4px',fontWeight:800}}>黄</span>
-              <input type="number" value={cfg[yk]} onChange={e=>saveCfg({...cfg,[yk]:Number(e.target.value)||0})} style={{width:52,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
-              <span style={{background:'#dc2626',color:'white',borderRadius:4,padding:'0 4px',fontWeight:800,marginLeft:4}}>赤</span>
-              <input type="number" value={cfg[rk]} onChange={e=>saveCfg({...cfg,[rk]:Number(e.target.value)||0})} style={{width:52,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日超過
+              <input type="number" value={cfg[yk]} onChange={e=>saveCfg({...cfg,[yk]:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
+              <span style={{background:'#f97316',color:'white',borderRadius:4,padding:'0 4px',fontWeight:800,marginLeft:3}}>橙</span>
+              <input type="number" value={cfg[ok]} onChange={e=>saveCfg({...cfg,[ok]:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
             </span>
           ))}
+          <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
+            <span style={{color:'#64748b'}}>車検満了</span>
+            <span style={{background:'#fde047',borderRadius:4,padding:'0 4px',fontWeight:800}}>色が変わる</span>
+            <input type="number" value={cfg.yCar} onChange={e=>saveCfg({...cfg,yCar:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
+          </span>
+          <span style={{fontSize:10.5,color:'#9a3412'}}>赤＝期日を過ぎたら（日数は出しません）</span>
         </div>
       )}
       {/* 本体 */}
@@ -8389,13 +8397,25 @@ const VEH_PURPOSE=[
 ];
 const vehPurpose=id=>VEH_PURPOSE.find(p=>p.id===id)||VEH_PURPOSE[4];
 const VEH_STORES=[{id:'honten',label:'本店'},{id:'sanda',label:'三田店'}];
-// ★点検アラートの日取り（設定で変えられる。既定は「黄＝期日の3か月前から／赤＝期日を過ぎたら」）
-const VEH_ALERT_DEF={ y1:90, r1:0, y6:90, r6:0, y12:90, r12:0, yCar:90, rCar:0 };
+// ★点検アラートの日取り（画面の「⚙ アラートの設定」で変えられる。2026-10-05 ユーザー決定）
+//   黄＝期日の3か月前から（1か月点検は登録より前になるので出ない）
+//   オレンジ＝期日の1か月前から／赤＝期日を過ぎたら
+//   12か月点検は黄色を出さず、1か月前からオレンジ
+const VEH_ALERT_DEF={ y1:0, o1:30, y6:90, o6:30, y12:0, o12:30, yCar:90 };
 const vehAlertCfg=(o)=>({...VEH_ALERT_DEF,...(o&&typeof o==='object'?o:{})});
 // スズキ車か（メーカー欄が空の時は車名から推測しない＝出さない）
 const vehIsSuzuki=v=>/スズキ|SUZUKI|suzuki/.test(String(v&&v.maker||''));
-// この車に点検アラートを出すか：スズキ車は全部／それ以外はレンタカーだけ
-const vehAlertOn=v=>!!v&&!v.archived&&(vehIsSuzuki(v)||v.purpose==='rental');
+// ★どの点検を知らせるか（2026-10-05 ユーザー決定）
+//   スズキ車 … 1か月・6か月・12か月（無料点検はスズキの新車点検なので）
+//   スズキ以外のレンタカー … 12か月点検だけ（法定点検）
+//   それ以外 … 出さない
+const vehAlertKinds=v=>{
+  if(!v||v.archived)return[];
+  if(vehIsSuzuki(v))return['m1','m6','m12'];
+  if(v.purpose==='rental'||v.group==='rental')return['m12'];
+  return[];
+};
+const vehAlertOn=(v,kind)=>vehAlertKinds(v).includes(kind||'m12');
 const vehDays=(iso)=>{ if(!iso)return null; const p=String(iso).split('-').map(Number); if(p.length<2||!p[0])return null;
   const d=new Date(p[0],(p[1]||1)-1,p[2]||1); const t=new Date(); t.setHours(0,0,0,0);
   return Math.ceil((d-t)/86400000); };
@@ -8447,11 +8467,12 @@ const vehInspState=(v,kind,cfg)=>{
   if(done)return{s:'done',due,left:null,doneAt,round,rounds};
   if(!due)return{s:'none',due:'',left:null,round,rounds};
   const left=vehDays(due);
-  const y=kind==='m1'?c.y1:kind==='m6'?c.y6:c.y12;
-  const r=kind==='m1'?c.r1:kind==='m6'?c.r6:c.r12;
+  const y=kind==='m1'?c.y1:kind==='m6'?c.y6:c.y12;      // 黄：この日数前から
+  const o=kind==='m1'?c.o1:kind==='m6'?c.o6:c.o12;      // オレンジ：この日数前から
   if(left==null)return{s:'none',due,left:null,round,rounds};
-  if(left<=-r)return{s:'red',due,left,round,rounds};
-  if(left<=y)return{s:'yellow',due,left,round,rounds};
+  if(left<0)return{s:'red',due,left,round,rounds};       // 期日を過ぎた
+  if(left<=o)return{s:'orange',due,left,round,rounds};
+  if(y>0&&left<=y)return{s:'yellow',due,left,round,rounds};
   return{s:'plan',due,left,round,rounds};
 };
 const vehExpiryState=(v,cfg)=>{

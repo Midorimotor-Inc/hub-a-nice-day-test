@@ -147,7 +147,7 @@ const minus = n => plus(-n);
   const toyota = await insOf('ヴォクシー S-Z 中井さん') || await insOf('中井さん');
   t('★スズキ以外の社用車にはアラートを出さない', !/6か月 あと|6か月 急ぎ/.test(toyota), toyota);
   const rental = await insOf('ヴォクシー S-Z（レンタ）');
-  t('★スズキ以外でもレンタカーには出す', /6か月/.test(rental), rental);
+  t('★スズキ以外のレンタカーは12か月点検だけ出す', /12か月点検/.test(rental)&&!/6か月点検/.test(rental)&&!/1か月点検/.test(rental), rental);
   t('動いている（ムーヴ）印がある', await page.evaluate(() => [...document.querySelectorAll('span')].some(e => /vehMove/.test(getComputedStyle(e).animationName || ''))));
 
   head('⑥ 所在地は本店・三田店の2つ');
@@ -179,7 +179,11 @@ const minus = n => plus(-n);
   // レンタカーの表は『ナビ値段』が無いので点検は10・11・12列目
   const rentalDone = [await cellOf('ソリオバンディット（済）',10),await cellOf('ソリオバンディット（済）',11),await cellOf('ソリオバンディット（済）',12)].join(' / ');
   t('★日付が無くても「済」と出る', /済/.test(rentalDone) && !/あと|急ぎ|超過/.test(rentalDone), rentalDone);
-  t('★12か月は「○回目」が出る', await page.evaluate(() => /回目/.test(document.body.innerText)));
+  t('★「○回目」は出さない', !(await page.evaluate(() => /回目/.test(document.body.innerText))));
+  t('★点検バッジに日数を出さない', !(await page.evaluate(() => { const tds=[...document.querySelectorAll('td')];
+    return tds.some(td=>/点検/.test(td.innerText)&&/(日超過|あとd+日)/.test(td.innerText)); })));
+  const colors = await page.evaluate(() => [...document.querySelectorAll('span')].filter(e=>/点検$/.test(e.innerText.trim())).map(e=>getComputedStyle(e).backgroundColor));
+  t('★黄・オレンジ・赤のどれかで出る', colors.length>0 && colors.every(c=>['rgb(253, 224, 71)','rgb(249, 115, 22)','rgb(220, 38, 38)'].includes(c)), colors);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 

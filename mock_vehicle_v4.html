@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>モック：点検アラートの色分け（黄・オレンジ・赤）</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:#475569;margin:0 0 14px;line-height:1.8}
+  h2{font-size:15px;margin:24px 0 6px;border-left:5px solid #c2410c;padding-left:8px}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:13px 15px;margin-bottom:14px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th{background:#334155;color:#fff;font-size:10.5px;font-weight:700;padding:5px 7px;text-align:left;white-space:nowrap;border:1px solid #475569}
+  th.r{background:#5b21b6;border-color:#6d28d9}
+  td{border:1px solid #e5e7eb;padding:5px 7px;vertical-align:middle;background:#fff;white-space:nowrap}
+  .swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:4px}
+  .pp{display:inline-block;font-size:10px;font-weight:800;border-radius:20px;padding:1px 7px;color:#fff}
+  .ok{color:#047857;font-weight:900;display:inline-flex;align-items:center;justify-content:center;width:22px;height:20px;font-size:13px}
+  .ngx{display:inline-flex;align-items:center;justify-content:center;width:22px;height:20px;background:#dc2626;color:#fff;font-weight:900;font-size:13px;border-radius:5px}
+  .tire{display:inline-flex;border:1.5px solid #cbd5e1;border-radius:20px;overflow:hidden;font-size:10px;font-weight:800}
+  .tire span{padding:2px 7px;color:#94a3b8;background:#fff}
+  .tire span.on.s{background:#fef3c7;color:#b45309}
+  .tire span.on.w{background:#dbeafe;color:#1d4ed8}
+  /* 3色のバッジ（揺れる） */
+  @keyframes mv{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}
+  .b{display:inline-block;font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;white-space:nowrap}
+  .b.y{background:#fde047;color:#854d0e;animation:mv .9s ease-in-out infinite}
+  .b.o{background:#f97316;color:#fff;animation:mv .8s ease-in-out infinite}
+  .b.r{background:#dc2626;color:#fff;animation:mv .55s ease-in-out infinite}
+  .b.done{background:#f1f5f9;color:#94a3b8}
+  .b.plan{background:#eef2ff;color:#4f46e5}
+  /* ものさし */
+  .ruler{position:relative;height:66px;margin:10px 0 4px}
+  .line{position:absolute;left:0;right:0;top:26px;height:10px;border-radius:6px;overflow:hidden;display:flex}
+  .line i{display:block;height:100%}
+  .tick{position:absolute;top:0;font-size:10px;color:#475569;transform:translateX(-50%);text-align:center;line-height:1.4}
+  .tick b{display:block;font-size:10.5px;color:#111827}
+  .tick:after{content:'';position:absolute;left:50%;top:26px;width:2px;height:10px;background:#334155}
+  .note{font-size:12.5px;color:#475569;line-height:1.9;margin:0}
+  .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
+  .okbox{font-size:12px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
+  .q{font-size:12.5px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.9}
+</style></head><body>
+
+<h1>点検アラートの色分け（黄 → オレンジ → 赤）</h1>
+<p class="lead">
+  ご指示のとおりに作り替えました。<b>日数（○日超過・あと○日）は出しません。色と動きだけ</b>で知らせます。<br>
+  <b>1回目・2回目の表示もやめ、「12か月点検」とだけ</b>出します。
+</p>
+
+<h2>① 色の決まり</h2>
+<div class="card">
+  <table>
+    <tr><th>点検</th><th>🟡 黄色</th><th>🟠 オレンジ</th><th>🔴 赤</th></tr>
+    <tr>
+      <td><b>1か月点検</b></td>
+      <td style="color:#94a3b8">（3か月前は登録より前なので出ません）</td>
+      <td><span class="b o">1か月点検</span> 期日の1か月前から<br><span style="font-size:10.5px;color:#64748b">＝登録した時から基本オレンジ</span></td>
+      <td><span class="b r">1か月点検</span> 期日を過ぎたら</td>
+    </tr>
+    <tr>
+      <td><b>6か月点検</b></td>
+      <td><span class="b y">6か月点検</span> 期日の3か月前から<br><span style="font-size:10.5px;color:#64748b">＝ここから実施できる</span></td>
+      <td><span class="b o">6か月点検</span> 期日の1か月前から</td>
+      <td><span class="b r">6か月点検</span> 期日を過ぎたら</td>
+    </tr>
+    <tr>
+      <td><b>12か月点検</b></td>
+      <td style="color:#94a3b8">出しません</td>
+      <td><span class="b o">12か月点検</span> 期日の<b>1か月前</b>から</td>
+      <td><span class="b r">12か月点検</span> 期日を過ぎたら</td>
+    </tr>
+    <tr>
+      <td><b>車検満了</b></td>
+      <td>90日前から（日付の色が変わるだけ）</td>
+      <td>—</td>
+      <td>満了日を過ぎたら<span style="font-size:10.5px;color:#64748b">（日数は出しません）</span></td>
+    </tr>
+  </table>
+  <div class="okbox">
+    ・<b>黄色・オレンジ・赤はどれも揺れます</b>（赤がいちばん速く揺れます）。上のバッジが実際に動いています。<br>
+    ・<b>日数は書きません</b>。「6か月点検」のように点検の名前だけ。<br>
+    ・済んだら <span class="b done">済 6/4</span>（日付が分からない時は <span class="b done">済</span>）、まだ先なら <span class="b plan">12か月点検 2027/6/1</span>。
+  </div>
+</div>
+
+<h2>② ものさし（例：2026年6月1日 登録の新車）</h2>
+<div class="card">
+  <div style="font-size:12px;font-weight:800;color:#334155">1か月点検（期日 2026/7/1）</div>
+  <div class="ruler">
+    <div class="line"><i style="flex:1;background:#f97316"></i><i style="flex:3;background:#dc2626"></i></div>
+    <div class="tick" style="left:0%"><b>6/1</b>登録</div>
+    <div class="tick" style="left:25%"><b>7/1</b>期日</div>
+    <div class="tick" style="left:100%"><b>→</b>そのまま</div>
+  </div>
+  <p class="note">登録した時点で<b>すでに1か月前を切っている</b>ので、<span class="b o">1か月点検</span>（オレンジ）で始まります。期日を過ぎると<span class="b r">1か月点検</span>（赤）。</p>
+
+  <div style="font-size:12px;font-weight:800;color:#334155;margin-top:14px">6か月点検（期日 2026/12/1）</div>
+  <div class="ruler">
+    <div class="line"><i style="flex:3;background:#e2e8f0"></i><i style="flex:2;background:#fde047"></i><i style="flex:1;background:#f97316"></i><i style="flex:2;background:#dc2626"></i></div>
+    <div class="tick" style="left:0%"><b>6/1</b>登録</div>
+    <div class="tick" style="left:37.5%"><b>9/1</b>黄色</div>
+    <div class="tick" style="left:62.5%"><b>11/1</b>オレンジ</div>
+    <div class="tick" style="left:75%"><b>12/1</b>期日</div>
+    <div class="tick" style="left:100%"><b>→</b>赤</div>
+  </div>
+
+  <div style="font-size:12px;font-weight:800;color:#334155;margin-top:14px">12か月点検（期日 2027/6/1）</div>
+  <div class="ruler">
+    <div class="line"><i style="flex:11;background:#e2e8f0"></i><i style="flex:1;background:#f97316"></i><i style="flex:3;background:#dc2626"></i></div>
+    <div class="tick" style="left:0%"><b>6/1</b>登録</div>
+    <div class="tick" style="left:73%"><b>2027/5/1</b>オレンジ</div>
+    <div class="tick" style="left:80%"><b>6/1</b>期日</div>
+    <div class="tick" style="left:100%"><b>→</b>赤</div>
+  </div>
+  <div class="kome">
+    12か月点検は<b>1か月前（2027/5/1）からオレンジ</b>。黄色の段階はありません。<br>
+    中古新規は<b>車検満了日から逆算</b>して期日を置きます（初度登録とずれるため）。
+  </div>
+</div>
+
+<h2>③ 一覧での見え方</h2>
+<div class="card">
+  <table>
+    <tr>
+      <th>タイヤ</th><th>車名</th><th>ナンバー</th><th>保険</th><th>目的</th><th>ナビ</th><th>ナビ値段</th>
+      <th>車検満期</th><th>仕入先</th><th>初度</th><th>所在地</th><th>1か月</th><th>6か月</th><th>12か月</th><th>書類</th>
+    </tr>
+    <tr>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td><span class="swatch" style="background:#f8fafc"></span>ソリオ MZ パール</td><td>神戸505ち2417</td>
+      <td style="text-align:center"><span class="ngx">×</span></td><td><span class="pp" style="background:#d97706">展示車</span></td>
+      <td>—</td><td>—</td><td style="color:#047857;font-weight:700">2029/8/20 <span style="font-size:10px;font-weight:600">あと1050日</span></td>
+      <td>スズキ</td><td>2026/8</td><td>本店</td>
+      <td><span class="b o">1か月点検</span></td><td><span class="b plan">6か月点検 2027/2/1</span></td><td><span class="b plan">12か月点検 2027/8/1</span></td><td>—</td>
+    </tr>
+    <tr>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td><span class="swatch" style="background:#75923c"></span>ハスラーG カーキ</td><td>神戸58Aけ5685</td>
+      <td style="text-align:center"><span class="ok">○</span></td><td><span class="pp" style="background:#d97706">展示車</span></td>
+      <td>—</td><td>—</td><td style="color:#047857;font-weight:700">2029/5/25 <span style="font-size:10px;font-weight:600">あと963日</span></td>
+      <td>自販兵庫</td><td>2026/5</td><td>本店</td>
+      <td><span class="b done">済 6/4</span></td><td><span class="b y">6か月点検</span></td><td><span class="b plan">12か月点検 2027/5/1</span></td><td>—</td>
+    </tr>
+    <tr>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td><span class="swatch" style="background:#1f2937"></span>ハスラー G ブラック</td><td>神戸582よ7455</td>
+      <td style="text-align:center"><span class="ok">○</span></td><td><span class="pp" style="background:#2563eb">代車</span></td>
+      <td>—</td><td>—</td><td style="color:#d97706;font-weight:700">2026/12/17 <span style="font-size:10px;font-weight:600">あと73日</span></td>
+      <td>自販兵庫</td><td>2024/9</td><td>三田店</td>
+      <td><span class="b done">済</span></td><td><span class="b done">済</span></td><td><span class="b r">12か月点検</span></td><td>📄</td>
+    </tr>
+    <tr>
+      <td><span class="tire"><span class="on s">夏</span><span>冬</span></span></td>
+      <td><span class="swatch" style="background:#374151"></span>ヴォクシー S-Z<span style="font-size:9.5px;font-weight:800;border-radius:4px;padding:0 5px;background:#fee2e2;color:#991b1b;margin-left:4px">トヨタ</span></td>
+      <td>神戸302あ184</td>
+      <td style="text-align:center"><span class="ok">○</span></td><td><span class="pp" style="background:#0891b2">社用車</span></td>
+      <td>—</td><td>—</td><td style="color:#047857;font-weight:700">2027/6/6</td><td>ネッツ</td><td>2023/6</td><td>本店</td>
+      <td colspan="3" style="color:#94a3b8;font-size:10.5px;background:#fafafa;text-align:center">スズキ車ではないので出しません（レンタカーは除く）</td><td>—</td>
+    </tr>
+  </table>
+  <div class="okbox">
+    上の表のバッジも実際に動いています。<b>黄 → オレンジ → 赤</b>と近づくほど強く目に入ります。
+  </div>
+</div>
+
+<h2>④ 確認</h2>
+<div class="q">
+  この決まりで実装します。よろしければ「これで」とだけお伝えください。<br><br>
+  ・黄色＝期日の<b>3か月前</b>から（1か月・6か月点検のみ）<br>
+  ・オレンジ＝期日の<b>1か月前</b>から（1か月・6か月・<b>12か月</b>）<br>
+  ・赤＝<b>期日を過ぎたら</b>（日数は出さない）<br>
+  ・1回目・2回目の表示は<b>なし</b>。「12か月点検」とだけ<br>
+  ・車検満了は<b>残り日数だけ</b>（超過の日数は出さない）<br><br>
+  ※ この3つの日数（3か月前・1か月前・超過）は画面の「⚙ アラートの設定」でいつでも変えられるようにしておきます。
+</div>
+
+</body></html>
