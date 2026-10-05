@@ -61,6 +61,11 @@ const minus = n => plus(-n);
       colorHex: '#f8fafc', purpose: 'exhibit', store: 'honten', tire: 'summer', insurance: false,
       regDate: minus(1200), firstReg: minus(1200).slice(0,7), expiry: minus(30),
       inspections: { m1:{}, m6:{}, m12:[] }, archived:false },
+    // 取り込み分と同じ形（登録日が無く、初度は年月だけ）。満了から逆算して期日が出るか
+    { id: 'v7', group: 'factory', name: 'ハスラーG オフブルー1800', num: '神戸58Aき1800', plate4: '1800', maker: 'スズキ',
+      colorHex: '#7dd3fc', purpose: 'loaner', store: 'honten', tire: 'summer', insurance: true,
+      regDate: '', firstReg: '2025-11', expiry: '2028-11-20',
+      inspections: { m1:{done:true}, m6:{done:true}, m12:[] }, archived:false },
     // 売却済み＝アーカイブ
     { id: 'v4', group: 'factory', name: 'ハスラー Jスタ カーキ（売却済）', num: '神戸582は3182', plate4: '3182', maker: 'スズキ',
       colorHex: '', purpose: 'loaner', store: 'honten', tire: 'summer', insurance: false,
@@ -162,9 +167,9 @@ const minus = n => plus(-n);
   await clickText(page, '✓ 保存');
   await page.waitForTimeout(500);
   t('★足りないと保存できず、何が足りないか出る', await page.evaluate(() => /入れてください：/.test(document.body.innerText)), await page.evaluate(() => (document.body.innerText.match(/入れてください：[^\n]*/) || [''])[0]));
-  t('必須に 登録日・車検満了日・初度登録・ナンバー・ボディ色 が並ぶ', await page.evaluate(() => {
+  t('必須に 車検満了日・初度登録・ナンバー・ボディ色 が並ぶ（登録日は満了日から入る）', await page.evaluate(() => {
     const m = (document.body.innerText.match(/入れてください：([^\n]*)/) || [])[1] || '';
-    return ['車名', 'ナンバー（FULL）', '登録日', '車検満了日', '初度登録', 'ボディ色'].every(x => m.includes(x));
+    return ['車名', 'ナンバー（FULL）', '車検満了日', '初度登録', 'ボディ色'].every(x => m.includes(x));
   }));
   head('⑧ 直した所（2026-10-05 ユーザー指摘）');
   // 車検満期は8列目（タイヤ・車名・ナンバー・保険・目的・ナビ・ナビ値段・車検満期）
@@ -184,6 +189,30 @@ const minus = n => plus(-n);
     return tds.some(td=>/点検/.test(td.innerText)&&/(日超過|あとd+日)/.test(td.innerText)); })));
   const colors = await page.evaluate(() => [...document.querySelectorAll('span')].filter(e=>/点検$/.test(e.innerText.trim())).map(e=>getComputedStyle(e).backgroundColor));
   t('★黄・オレンジ・赤のどれかで出る', colors.length>0 && colors.every(c=>['rgb(253, 224, 71)','rgb(249, 115, 22)','rgb(220, 38, 38)'].includes(c)), colors);
+
+  head('⑨ 期日は車検満了日から逆算（2026-10-05 ユーザー指摘）');
+  const m12cell = await cellOf('ハスラーG オフブルー1800',13);
+  t('★12か月点検の期日が 2026/11/20 になる', m12cell.indexOf('2026/11/20') >= 0, m12cell);
+  const expCell = await cellOf('ハスラーG オフブルー1800',7);
+  t('★車検満了に「あと○日」を出さない', !/あと/.test(expCell), expCell);
+  const doneCell = await cellOf('ハスラーG オフブルー1800',11);
+  t('★済に実施日を出さない', doneCell.trim()==='済', doneCell);
+
+  head('⑩ 取り込み分も編集して保存できる（登録日が空でも）');
+  await page.evaluate(() => { const r=[...document.querySelectorAll('tr')].find(x=>x.innerText.includes('ハスラーG オフブルー1800')); if(r)r.querySelectorAll('td')[1].click(); });
+  await page.waitForTimeout(700);
+  t('詳細が開く', await seeText(page, '代車管理とのつながり', 6000));
+  await clickText(page, '✎ 直す');
+  await page.waitForTimeout(600);
+  t('編集の画面が開く', await seeText(page, '車両を直す', 6000));
+  await page.evaluate(() => { const i=[...document.querySelectorAll('input')].find(e=>e.offsetParent!==null&&/ハスラーG オフブルー1800/.test(e.value));
+    if(i){const s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;s.call(i,'ハスラーG オフブルー1800（直した）');i.dispatchEvent(new Event('input',{bubbles:true}));} });
+  await clickText(page, '✓ 保存');
+  await page.waitForTimeout(1200);
+  t('★保存すると画面が閉じる', !(await page.evaluate(() => /車両を直す/.test(document.body.innerText))), await page.evaluate(()=>document.body.innerText.slice(0,120)));
+  t('★直した名前が一覧に出る', await seeText(page, '（直した）', 6000));
+  const after = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v7'), STOR + 'vehicles-v2');
+  t('登録日が満了日から入る', !!after && after.regDate === '2025-11-20', after && after.regDate);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 

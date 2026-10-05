@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791179949705';
+    window.__APP_BUILD='build-1791181455252';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.44';
+const APP_VERSION = '3.45';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7969,10 +7969,13 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
   const INP={width:'100%',padding:'7px 9px',border:'2px solid #e5e7eb',borderRadius:7,fontSize:13,boxSizing:'border-box',fontFamily:'inherit'};
   const LB={fontSize:10.5,fontWeight:800,color:'#64748b',margin:'9px 0 3px'};
   const save=()=>{
-    const need=[['name','車名'],['num','ナンバー（FULL）'],['regDate','登録日'],['expiry','車検満了日'],['firstReg','初度登録'],['colorHex','ボディ色']];
-    const miss=need.filter(([k])=>!String(f[k]||'').trim()).map(([,l])=>l);
-    if(miss.length){setErr('入れてください：'+miss.join('・'));return;}
-    onSave({...f,plate4:vehPlate4(f.num),updatedAt:new Date().toISOString()});
+    // ★登録日が空でも、車検満了日が入っていれば逆算して入れる（取り込み分は登録日が無いため）
+    const fixed={...f};
+    if(!String(fixed.regDate||'').trim()&&String(fixed.expiry||'').trim())fixed.regDate=vehBase(fixed);
+    const need=[['name','車名'],['num','ナンバー（FULL）'],['expiry','車検満了日'],['firstReg','初度登録'],['colorHex','ボディ色']];
+    const miss=need.filter(([k])=>!String(fixed[k]||'').trim()).map(([,l])=>l);
+    if(miss.length){setErr('入れてください：'+miss.join('・'));try{window.scrollTo(0,0);}catch(e){}return;}
+    onSave({...fixed,plate4:vehPlate4(fixed.num),updatedAt:new Date().toISOString()});
   };
   return(
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.4)',zIndex:2200,display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -7982,8 +7985,10 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
           <span style={{fontWeight:900,fontSize:15}}>{v?'車両を直す':'車両を手で追加'}</span>
           <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:30,height:30,fontSize:14,color:'#64748b',cursor:'pointer'}}>✕</button>
         </div>
+        {err&&<div style={{fontSize:12.5,fontWeight:800,color:'white',background:'#dc2626',borderRadius:8,padding:'8px 11px',marginBottom:6}}>{err}</div>}
         <div style={{fontSize:11,color:'#9a3412',background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:8,padding:'6px 9px',lineHeight:1.7}}>
-          最低限：<b>車名・ナンバー（FULL）・登録日・車検満了日・初度登録・ボディ色・目的・店舗</b>
+          最低限：<b>車名・ナンバー（FULL）・車検満了日・初度登録・ボディ色・目的・店舗</b><br/>
+          登録日が分からない時は空のままで大丈夫です（車検満了日から入れます）
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 14px'}}>
           <div style={{gridColumn:'1 / -1'}}>
@@ -8046,7 +8051,6 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
           <div><div style={LB}>仕入先</div><input value={f.supplier} onChange={e=>set('supplier',e.target.value)} placeholder="例：自販兵庫" style={INP}/></div>
           <div style={{gridColumn:'1 / -1'}}><div style={LB}>メモ</div><textarea value={f.note} onChange={e=>set('note',e.target.value)} rows={2} style={{...INP,resize:'vertical'}}/></div>
         </div>
-        {err&&<div style={{marginTop:9,fontSize:12,color:'#b91c1c',fontWeight:700}}>{err}</div>}
         <div style={{display:'flex',gap:8,marginTop:14}}>
           <button onClick={save} style={{flex:1,padding:'11px 0',borderRadius:9,border:'none',background:'linear-gradient(135deg,#c2410c,#ea580c)',color:'white',fontWeight:800,fontSize:14,cursor:'pointer'}}>✓ 保存</button>
           <button onClick={onClose} style={{padding:'11px 20px',borderRadius:9,border:'2px solid #e5e7eb',background:'white',color:'#64748b',fontWeight:700,cursor:'pointer'}}>キャンセル</button>
@@ -8057,7 +8061,7 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
 });
 
 // ── 車両管理 v2：右の詳細パネル ──
-const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
+const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlink})=>{
   const [edit,setEdit]=useState(false);
   const p=vehPurpose(v.purpose);
   const ex=vehExpiryState(v,cfg);
@@ -8085,7 +8089,7 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
         <span style={{width:74,fontWeight:700}}>{label}</span>
         <span style={{color:'#64748b'}}>{vehFmt(st.due)}</span>
         {vehAlertOn(v,kind)&&st.s!=='none'&&<span style={{fontSize:10,fontWeight:800,borderRadius:5,padding:'1px 7px',...col}}>
-          {st.s==='done'?('済'+(doneTxt?' '+vehFmt(doneTxt):'')):st.s==='red'?'過ぎています':st.s==='orange'?'まもなく':st.s==='yellow'?'そろそろ':'予定'}</span>}
+          {st.s==='done'?'済':st.s==='red'?'過ぎています':st.s==='orange'?'まもなく':st.s==='yellow'?'そろそろ':'予定'}</span>}
         <button onClick={mark} style={{marginLeft:'auto',padding:'3px 10px',borderRadius:7,fontSize:10.5,fontWeight:800,cursor:'pointer',border:'1.5px solid '+(done?'#fca5a5':'#86efac'),background:done?'#fef2f2':'#f0fdf4',color:done?'#b91c1c':'#065f46'}}>{done?'済を取り消す':'実施した'}</button>
       </div>
     );
@@ -8120,7 +8124,7 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
         <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid #f1f5f9'}}>
           <span style={{width:74,fontWeight:700}}>車検満了</span>
           <span style={{color:ex.s==='red'?'#b91c1c':ex.s==='yellow'?'#d97706':'#047857',fontWeight:700}}>{vehFmt(v.expiry)}</span>
-          {(ex.left!=null&&ex.left>=0)&&<span style={{fontSize:11,color:'#64748b'}}>あと{ex.left}日</span>}
+
         </div>
       </div>
       <div style={{fontSize:10.5,color:'#92400e',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:7,padding:'6px 9px',marginTop:6,lineHeight:1.7}}>
@@ -8135,6 +8139,9 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink})=>{
           <button onClick={onLink} style={{padding:'5px 11px',borderRadius:7,fontSize:11,fontWeight:800,cursor:'pointer',border:'2px solid #86efac',background:'#f0fdf4',color:'#065f46'}}>
             {linked?'代車管理の内容を今の情報で更新':'代車管理に入れる'}
           </button>
+          {linked&&<button onClick={onUnlink} style={{marginLeft:6,padding:'5px 11px',borderRadius:7,fontSize:11,fontWeight:800,cursor:'pointer',border:'2px solid #fca5a5',background:'#fef2f2',color:'#b91c1c'}}>
+            リンクを外す（代車管理から消す）
+          </button>}
         </div>
       </div>
 
@@ -8213,6 +8220,14 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
   const listOf=k=>k==='rental'?(rentalList||[]):(k==='honten'?(loanerH||[]):(loanerS||[]));
   const linkedTo=(v)=>{const n=vehPlate4(v.num);if(!n)return'';
     for(const k of ['rental','honten','sanda'])if(listOf(k).some(c=>String(c.num||'').trim()===n))return k;return'';};
+  // ★代車管理から外す（2026-10-05 ユーザー指示）
+  const unlinkNow=(v)=>{
+    const num=vehPlate4(v.num); if(!num)return;
+    const kind=linkedTo(v); if(!kind){alert('代車管理には入っていません。');return;}
+    const arr=listOf(kind).filter(c=>String(c.num||'').trim()!==num);
+    if(!window.confirm((kind==='rental'?'レンタカー':kind==='honten'?'本店の代車':'三田店の代車')+'の一覧から「'+v.name+'（'+num+'）」を外します。'+String.fromCharCode(10)+'（入っている予約は消えません）'))return;
+    (kind==='rental'?onSaveRental:kind==='honten'?onSaveLoanerH:onSaveLoanerS)(arr);
+  };
   const linkNow=(v)=>{
     const kind=v.purpose==='rental'?'rental':(v.store==='sanda'?'sanda':'honten');
     const num=vehPlate4(v.num);
@@ -8244,8 +8259,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
     const nm=(kind==='m1'?'1か月':kind==='m6'?'6か月':'12か月')+'点検';
     if(st.s==='none')return <span style={{color:'#cbd5e1'}}>—</span>;
     // ★名前だけ（日数・回数は出さない。2026-10-05 ユーザー指示）。まだ先の時だけ予定日を添える
-    const txt=st.s==='done'?('済'+(st.doneAt?' '+vehFmt(st.doneAt):'')):
-      st.s==='plan'?(nm+' '+vehFmt(st.due)):nm;
+    const txt=st.s==='done'?'済':st.s==='plan'?(nm+' '+vehFmt(st.due)):nm;   // ★実施日は出さない（2026-10-05）
     return <span style={{display:'inline-block',fontSize:10,fontWeight:800,borderRadius:5,padding:'2px 7px',...insStyle(st.s)}}>{txt}</span>;
   };
   const Row=({v,rental})=>{
@@ -8273,7 +8287,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
         <td style={{...TD2,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis'}}>{v.nav||<span style={{color:'#b91c1c',fontWeight:800,background:'#fee2e2',borderRadius:4,padding:'0 5px'}}>無し</span>}</td>
         {!rental&&<td style={TD2}>{v.navYen||'—'}</td>}
         <td style={{...TD2,color:ex.s==='red'?'#b91c1c':ex.s==='yellow'?'#d97706':'#047857',fontWeight:700}}>
-          {vehFmt(v.expiry)}{(ex.left!=null&&ex.left>=0)&&<span style={{fontSize:10,fontWeight:600,marginLeft:4}}>あと{ex.left}日</span>}
+          {vehFmt(v.expiry)}
         </td>
         <td style={TD2}>{v.supplier||'—'}</td>
         <td style={TD2}>{vehFmt(v.firstReg)}</td>
@@ -8375,7 +8389,7 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
           )}
         </div>
         {/* 右：詳細 */}
-        {sel&&<VehicleDetail v={sel} cfg={cfg} onChange={patch=>upd(sel.id,patch)} onClose={()=>setSelId(null)}
+        {sel&&<VehicleDetail v={sel} cfg={cfg} onChange={patch=>upd(sel.id,patch)} onClose={()=>setSelId(null)} onUnlink={()=>unlinkNow(sel)}
           onDelete={()=>{if(window.confirm('「'+sel.name+'」を消しますか？（アーカイブに入れるだけなら 🗄 のボタンを使ってください）')){del(sel.id);setSelId(null);}}}
           linked={linkedTo(sel)} onLink={()=>linkNow(sel)}/>}
       </div>
@@ -8421,17 +8435,35 @@ const vehDays=(iso)=>{ if(!iso)return null; const p=String(iso).split('-').map(N
   return Math.ceil((d-t)/86400000); };
 const vehAddMonths=(iso,m)=>{ if(!iso)return ''; const p=String(iso).split('-').map(Number); if(!p[0])return '';
   const d=new Date(p[0],(p[1]||1)-1+m,p[2]||1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+// ★点検の基準日（＝登録日）。登録日が入っていない時は【車検満了日から逆算】して日まで出す。
+//   初度登録が「年月」までしか無いエクセル取り込み分でも、満了日から正しい日が出る。
+//   ・乗用の新車は初回車検が3年後 → 満了−3年が登録日。年月が初度登録と合えばそれを使う
+//   ・それ以外（2回目以降の車検・4ナンバー貨物・中古新規）は満了−2年が「前回の車検日」
+const vehBase=(v)=>{
+  if(v&&v.regDate)return v.regDate;
+  const ex=v&&v.expiry;
+  if(!ex)return (v&&v.firstReg)?v.firstReg+'-01':'';
+  const fm=String((v&&v.firstReg)||'').slice(0,7);
+  if(!v.usedNew&&!v.cargo4){
+    const a=vehAddMonths(ex,-36);                       // 新車の初回車検（3年）
+    if(!fm||a.slice(0,7)===fm)return a;
+  }
+  return vehAddMonths(ex,-24);                          // 前回の車検日（2年周期）
+};
+// その車が「初回車検までの新車」か（1か月・6か月点検が意味を持つのはこの間だけ）
+const vehIsNewPeriod=(v)=>{
+  if(!v||v.usedNew)return false;
+  const b=vehBase(v), ex=v.expiry; if(!b||!ex)return false;
+  const bp=String(b).split('-').map(Number), ep=String(ex).split('-').map(Number);
+  const months=(ep[0]-bp[0])*12+((ep[1]||1)-(bp[1]||1));   // 登録から車検満了までの月数
+  return v.cargo4?(months>=22&&months<=26):(months>=34&&months<=38);
+};
 // 12か月点検は車検までに何回か来る（新車の乗用なら1年後・2年後の2回／4ナンバー貨物は1回）。
 //   済んだ数を数えて「次に来る回」を出す。車検満了を過ぎる回は出さない。
 //   ★中古新規は車検満了日から1年ずつ遡って置く（初度登録とずれるため）
 const vehM12List=(v)=>{
   const out=[];
-  if(v.usedNew&&v.expiry){
-    for(let i=1;i<=3;i++){ const d=vehAddMonths(v.expiry,-12*i); if(!d)break;
-      if(v.regDate&&d<v.regDate)break; if(v.firstReg&&d<v.firstReg+'-01')break; out.unshift(d); }
-    return out;
-  }
-  const base=v.regDate||(v.firstReg?v.firstReg+'-01':'');
+  const base=vehBase(v);
   if(!base)return out;
   for(let i=1;i<=3;i++){ const d=vehAddMonths(base,12*i); if(!d)break;
     if(v.expiry&&d>=v.expiry)break; out.push(d); }
@@ -8440,9 +8472,10 @@ const vehM12List=(v)=>{
 const vehM12Done=(v)=>{const a=(v.inspections||{}).m12;return Array.isArray(a)?a.filter(x=>x&&(x.done||x.doneAt)).length:0;};
 // 点検の期日：新車は登録日（無ければ初度登録）から。中古新規は車検満了日から逆算
 const vehInspDue=(v,kind)=>{
-  const base=v.regDate||(v.firstReg?v.firstReg+'-01':'');
-  if(kind==='m1')return v.usedNew?'':vehAddMonths(base,1);
-  if(kind==='m6')return v.usedNew?'':vehAddMonths(base,6);
+  const base=vehBase(v);
+  // 1か月・6か月（新車の無料点検）は、初回車検までの新車の時だけ
+  if(kind==='m1')return vehIsNewPeriod(v)?vehAddMonths(base,1):'';
+  if(kind==='m6')return vehIsNewPeriod(v)?vehAddMonths(base,6):'';
   const list=vehM12List(v);
   return list[Math.min(vehM12Done(v),list.length-1)]||'';
 };
