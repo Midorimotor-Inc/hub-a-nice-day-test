@@ -165,6 +165,26 @@ const ROWS = [
   t('PDFから読んだ時は「見比べてください」の赤帯を出さない', SRC.indexOf('PDFの文字をそのまま読み取りました') > 0);
   t('pdf.js は使う時だけ読み込む', SRC.indexOf('const pdfLoad=') > 0 && SRC.indexOf('_pdfP') > 0);
 
+  head('⑤ 「📖 PDFの作り方」');
+  t('機能メニューに入口がある', SRC.indexOf('PDFの作り方') > 0 && SRC.indexOf('const PdfHowToSheet=') > 0);
+  t('読み取り画面にも入口がある（2か所）', SRC.indexOf('PDFの作り方を見る') > 0);
+  t('手順は5つ', [1, 2, 3, 4, 5].every(n => SRC.indexOf('{step(' + n + ',') > 0));
+  t('写真を2枚使う', SRC.indexOf('help_shaken_app.jpg') > 0 && SRC.indexOf('help_shaken_code.jpg') > 0);
+  t('紙の車検証の注意が入っている', SRC.indexOf('紙の車検証（2023年より前のもの）にはICチップがありません') > 0);
+  t('手順の画面は読み取り画面より前に出る（かぶらない）', (() => {
+    const z1 = Number((SRC.match(/zIndex:3500/) || []).length);      // 手順
+    const z2 = Number((SRC.match(/zIndex:3300/) || []).length);      // 読み取り
+    return z1 > 0 && z2 > 0;
+  })());
+
+  // 写真がリポジトリに置かれていて、スマホで開ける大きさか
+  const imgs = ['help_shaken_app.jpg', 'help_shaken_code.jpg'].map(f => {
+    const p = path.join(__dirname, f);
+    return { f, exists: fs.existsSync(p), kb: fs.existsSync(p) ? Math.round(fs.statSync(p).size / 1024) : 0 };
+  });
+  t('写真2枚がリポジトリにある', imgs.every(x => x.exists), imgs);
+  t('写真は軽い（1枚100KB未満）', imgs.every(x => x.kb > 0 && x.kb < 100), imgs);
+
   t('画面のエラーは出ていない', errs.length === 0, errs.slice(0, 3));
 
   await browser.close();

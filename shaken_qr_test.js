@@ -291,11 +291,14 @@ const fillLabeled = (page, label, value) => page.evaluate(([lb, v]) => {
     const txt = document.body.innerText;
     return !/見積書|タイヤの入れ替え|置き場所|（今後）/.test(txt);
   }), await page.evaluate(() => (document.body.innerText.match(/見積書|タイヤの入れ替え|置き場所|（今後）/g) || [])));
-  t('メニューに並ぶのは車検証の読み取りだけ', await page.evaluate(() => {
+  // ★メニューに並ぶのは「決まっている機能だけ」。2026-10-06 から2つ（読み取り／PDFの作り方）
+  t('メニューに並ぶのは決まっている機能だけ（2つ）', await page.evaluate(() => {
     const sheet = [...document.querySelectorAll('div')].find(e => e.innerText.indexOf('🛠 機能') === 0 && e.offsetParent !== null);
     if (!sheet) return false;
-    return [...sheet.querySelectorAll('button')].filter(b => b.innerText.trim() && b.innerText.indexOf('✕') < 0).length === 1;
+    const btns = [...sheet.querySelectorAll('button')].filter(b => b.innerText.trim() && b.innerText.indexOf('✕') < 0);
+    return btns.length === 2;
   }));
+  t('PDFの作り方がメニューにある', await seeText(page, 'PDFの作り方', 3000));
 
   await clickText(page, '車検証を読み取る');
   await page.waitForTimeout(400);

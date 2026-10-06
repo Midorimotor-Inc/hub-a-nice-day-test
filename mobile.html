@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791275154641';
+  window.__APP_BUILD='build-1791276028720';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.56.1';
+const MOBILE_VERSION='3.56.2';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -2225,7 +2225,7 @@ const shkCanvas=(src,max)=>{
 
 // ── 🛠 機能のメニュー ──
 //   ★中身は決まったものだけを並べること。「今後の予定」を薄く出さない（2026-10-05 ユーザー指示）
-const ToolsSheet=({onScan,onClose})=>{
+const ToolsSheet=({onScan,onHowTo,onClose})=>{
   const It=({ic,bg,title,sub,on})=>(
     <button onClick={on}
       style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'12px 11px',marginBottom:8,
@@ -2244,14 +2244,78 @@ const ToolsSheet=({onScan,onClose})=>{
           <div style={{fontWeight:900,fontSize:15,color:'#c2410c'}}>🛠 機能</div>
           <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
         </div>
-        <It ic="📷" bg="#dbeafe" title="車検証を読み取る" sub="QRから車両情報を取り込んで車両管理へ" on={onScan}/>
+        <It ic="📄" bg="#ddd6fe" title="車検証を読み取る" sub="記録事項のPDFから車両管理へ" on={onScan}/>
+        {/* ★PDFの作り方（2026-10-06 ユーザー要望。モックで確認済み） */}
+        <button onClick={onHowTo}
+          style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'12px 11px',marginBottom:8,
+            border:'2px solid #cbd5e1',borderRadius:13,background:'#f8fafc',textAlign:'left'}}>
+          <span style={{width:36,height:36,borderRadius:11,background:'#e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>📖</span>
+          <span style={{flex:1,minWidth:0}}>
+            <span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>PDFの作り方</span>
+            <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>車検証閲覧アプリでPDFを出す手順</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── 📖 PDFの作り方（車検証閲覧アプリの手順）──
+//   写真は国土交通省「車検証閲覧アプリ」の画面（2026-10-06 にユーザーから受け取った IMG_3288/3289）。
+//   **リポジトリの一番上に置いた jpg を参照している**ので、本番へ移す時は画像も一緒にコピーすること。
+const PdfHowToSheet=({onClose})=>{
+  const step=(n,title,sub,img,cap)=>(
+    <div key={n} style={{display:'flex',gap:10,marginBottom:13}}>
+      <span style={{width:24,height:24,borderRadius:'50%',background:'#7c3aed',color:'white',fontSize:12,fontWeight:900,
+        display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1}}>{n}</span>
+      <span style={{flex:1,minWidth:0,fontSize:12.5,lineHeight:1.75,color:'#334155'}}>
+        <b style={{color:'#111827'}}>{title}</b><br/>
+        <span style={{color:'#64748b',fontSize:11.5}}>{sub}</span>
+        {img&&(
+          <span style={{display:'block',marginTop:7,border:'1.5px solid #e2e8f0',borderRadius:10,overflow:'hidden',background:'#f8fafc'}}>
+            <img src={img} alt={title} style={{width:'100%',display:'block'}}/>
+            <span style={{display:'block',fontSize:10,color:'#64748b',padding:'4px 7px',background:'#f1f5f9',borderTop:'1px solid #e2e8f0'}}>{cap}</span>
+          </span>
+        )}
+      </span>
+    </div>
+  );
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:3500,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',maxHeight:'93vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.3)'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:12,position:'sticky',top:-14,background:'white',paddingTop:2,paddingBottom:6,zIndex:1}}>
+          <div>
+            <div style={{fontWeight:900,fontSize:15,color:'#6d28d9'}}>📖 PDFの作り方</div>
+            <div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>車検証閲覧アプリでPDFを出す手順</div>
+          </div>
+          <button onClick={onClose}
+            style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+        {step(1,'「車検証閲覧アプリ」を開く',
+          '国土交通省のアプリです。入っていなければ App Store／Google Play で「車検証閲覧アプリ」と探して入れてください。',
+          'help_shaken_app.jpg','このアプリです')}
+        {step(2,'セキュリティコード（4桁）を入れる',
+          '車検証に書いてある4桁の数字です。アプリの図で示された場所にあります。',
+          'help_shaken_code.jpg','4桁はこの位置に書いてあります')}
+        {step(3,'車検証を読み取る',
+          '案内にしたがって、スマホを車検証に当てたまま動かさないでください。')}
+        {step(4,'PDFで保存する',
+          '読み取れたら「自動車検査証記録事項」をPDFで保存します（iPhone は「"ファイル"に保存」）。')}
+        {step(5,'Hub に取り込む',
+          '🛠 機能 → 車検証を読み取る → PDFから読み取る → さきほどのPDFを選ぶ。ナンバー・初度登録・車検満了日・車台番号が入ります。')}
+        <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:11,padding:'9px 10px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
+          <b>紙の車検証（2023年より前のもの）にはICチップがありません。</b><br/>
+          その場合はアプリが使えないので、「読み取らずに手で入れる」から登録してください。
+        </div>
+        <button onClick={onClose}
+          style={{width:'100%',marginTop:12,padding:'13px 0',borderRadius:12,border:'none',background:'#6d28d9',color:'white',fontSize:14,fontWeight:900}}>とじる</button>
       </div>
     </div>
   );
 };
 
 // ── 📷 車検証を読み取る → 車両管理へ登録 ──
-const ShakenScanSheet=({store,byName,onClose,onDone})=>{
+const ShakenScanSheet=({store,byName,onHowTo,onClose,onDone})=>{
   const [step,setStep]=useState('pick');   // pick / cam / busy / result / form / saving
   const [err,setErr]=useState('');
   const [msg,setMsg]=useState('');
@@ -2418,6 +2482,14 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
             <span style={{width:44,height:44,borderRadius:13,background:'#ddd6fe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📄</span>
             <span style={{flex:1}}><span style={{display:'block',fontSize:15,fontWeight:900,color:'#334155'}}>PDFから読み取る</span>
               <span style={{display:'block',fontSize:11,color:'#64748b',marginTop:3}}>車検証閲覧アプリで出したPDF（自動車検査証記録事項）を選んでください</span></span>
+          </button>
+          {/* ★手順はここからも開ける（2026-10-06 ユーザー指示：入口は機能メニューとここの2か所） */}
+          <button onClick={onHowTo}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'11px',marginBottom:9,
+              border:'2px solid #cbd5e1',borderRadius:12,background:'#f8fafc',textAlign:'left'}}>
+            <span style={{fontSize:17}}>📖</span>
+            <span style={{flex:1,fontSize:12.5,fontWeight:800,color:'#334155'}}>PDFの作り方を見る</span>
+            <span style={{color:'#94a3b8',fontWeight:800}}>›</span>
           </button>
           <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
             <b>手順</b>：車検証閲覧アプリで車検証を読み取り → PDFで保存 → ここで選ぶ。<br/>
@@ -5129,7 +5201,8 @@ const App=()=>{
   const [mailModal,setMailModal]=useState(false);
   const [restoreModal,setRestoreModal]=useState(false);
   const [toolsOpen,setToolsOpen]=useState(false);   // 🛠 機能のメニュー（2026-10-05）
-  const [scanOpen,setScanOpen]=useState(false);     // 📷 車検証の読み取り
+  const [scanOpen,setScanOpen]=useState(false);     // 📄 車検証の読み取り
+  const [howtoOpen,setHowtoOpen]=useState(false);   // 📖 PDFの作り方（2026-10-06）
   const [vehDone,setVehDone]=useState(null);        // 登録できた時の知らせ
   const inflightRef=useRef(new Set()); // このセッションで進行中の保存pid（起動時チェックの誤検出防止）
   const writeGuardRef=useRef(0);   // 書き込み後70秒はポーリング反映を止める（PC版useSharedと同じ考え方）
@@ -6299,10 +6372,13 @@ const App=()=>{
       {mailModal&&<MailModal user={user} onClose={()=>setMailModal(false)} onSaveEmail={saveNotifyEmail}/>}
       {restoreModal&&<MobileRestoreModal user={user} onClose={()=>setRestoreModal(false)} inspData={inspData}/>}
       {toolsOpen&&<ToolsSheet onClose={()=>setToolsOpen(false)}
-        onScan={()=>{setToolsOpen(false);setScanOpen(true);}}/>}
+        onScan={()=>{setToolsOpen(false);setScanOpen(true);}}
+        onHowTo={()=>{setToolsOpen(false);setHowtoOpen(true);}}/>}
       {scanOpen&&<ShakenScanSheet store={vsId} byName={user.name}
+        onHowTo={()=>setHowtoOpen(true)}
         onClose={()=>setScanOpen(false)}
         onDone={rec=>{setScanOpen(false);setVehDone(rec);}}/>}
+      {howtoOpen&&<PdfHowToSheet onClose={()=>setHowtoOpen(false)}/>}
       {vehDone&&(
         <div onClick={()=>setVehDone(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3400,display:'flex',alignItems:'center',justifyContent:'center',padding:18}}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:'20px 18px',width:'100%',maxWidth:330,textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>

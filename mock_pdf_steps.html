@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>モック：PDFの作り方（手順）を機能の中に入れる</title>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：PDFの作り方（手順）を機能の中に入れる</title>
 <style>
   body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
   h1{font-size:19px;margin:0 0 4px}
@@ -13,18 +14,19 @@
   .stbtn{background:rgba(255,255,255,.22);border-radius:7px;padding:2px 9px;font-size:11px;font-weight:800}
   .stbtn.on{background:#fff;color:#c2410c}
   .tool{margin-left:auto;background:#fff;color:#c2410c;border-radius:9px;padding:3px 9px;font-size:12px;font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-  .body{padding:0;min-height:430px;background:rgba(0,0,0,.35);display:flex;flex-direction:column;justify-content:flex-end}
-  .sheet{background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.18);padding:12px;max-height:430px;overflow:auto}
+  .body{padding:0;min-height:460px;background:rgba(0,0,0,.35);display:flex;flex-direction:column;justify-content:flex-end}
+  .sheet{background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -6px 20px rgba(0,0,0,.18);padding:12px;max-height:460px;overflow:auto}
   .sttl{font-weight:900;font-size:14px;color:#c2410c;margin-bottom:9px;display:flex;align-items:center}
   .x{margin-left:auto;background:#f1f5f9;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:800;font-size:13px}
   .item{display:flex;align-items:center;gap:11px;padding:13px 11px;border-radius:13px;margin-bottom:9px;font-size:13.5px;font-weight:900;color:#334155}
-  .item .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flexShrink:0}
+  .item .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
   .item small{display:block;font-weight:500;font-size:10.5px;color:#64748b;margin-top:3px}
-  .step{display:flex;gap:10px;margin-bottom:12px}
+  .step{display:flex;gap:10px;margin-bottom:13px}
   .num{width:24px;height:24px;border-radius:50%;background:#7c3aed;color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-  .stxt{flex:1;font-size:12.5px;line-height:1.75;color:#334155}
-  .stxt b{color:#111827}
-  .fig{margin-top:7px;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc}
+  .stxt{flex:1;min-width:0;font-size:12.5px;line-height:1.75;color:#334155}
+  .sub{color:#64748b;font-size:11.5px}
+  .fig{display:block;margin-top:7px;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc}
+  .fig img{width:100%;display:block}
   .figcap{font-size:10px;color:#64748b;padding:4px 7px;background:#f1f5f9;border-top:1px solid #e2e8f0}
   .note{border:2px solid #fcd34d;background:#fffbeb;border-radius:11px;padding:9px 10px;font-size:11.5px;color:#92400e;line-height:1.8}
   .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:14px}
@@ -32,17 +34,17 @@
   .kome{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-top:10px;line-height:1.8}
 </style></head><body>
 
-<h1>「PDFの作り方」を 🛠 機能 の中に入れる</h1>
+<h1>「📖 PDFの作り方」を 🛠 機能 の中に入れる</h1>
 <p class="lead">
-  車検証閲覧アプリで PDF を作る手順を、<b>機能メニューの中からいつでも見られる</b>ようにします。<br>
-  図は<b>こちらで描き起こしたもの</b>です（アプリの画面そのものではなく、同じことが分かる絵）。
+  いただいた写真（IMG_3288／IMG_3289）を<b>そのまま使いました</b>。スマホで軽く開けるよう幅560pxに縮めてあります（21KB／34KB）。<br>
+  入口は<b>機能メニュー</b>と<b>読み取り画面</b>の2か所（ご指示どおり）。
 </p>
 
-<h2>① 機能メニュー（手順の入口を足す）</h2>
+<h2>① 入口は2か所</h2>
 <div class="row">
   <div>
     <div class="phone">
-      <div class="hd"><span>🚗 Hub</span><span style="font-weight:600;font-size:10.5px">v3.56.1</span><span style="margin-left:auto">🔍 🔄 ✉</span></div>
+      <div class="hd"><span>🚗 Hub</span><span style="font-weight:600;font-size:10.5px">v3.56.2</span><span style="margin-left:auto">🔍 🔄 ✉</span></div>
       <div class="band"><span class="stbtn on">🏪 本店</span><span class="stbtn">三田店</span><span class="tool">🛠 機能</span></div>
       <div class="body">
         <div class="sheet">
@@ -58,7 +60,7 @@
         </div>
       </div>
     </div>
-    <div class="cap">機能メニューに「📖 PDFの作り方」を追加</div>
+    <div class="cap">機能メニュー</div>
   </div>
 
   <div>
@@ -72,7 +74,7 @@
             <span class="ic" style="background:#ddd6fe;width:44px;height:44px;font-size:22px">📄</span>
             <span style="font-size:15px">PDFから読み取る<small style="font-size:11px">車検証閲覧アプリで出したPDFを選んでください</small></span>
           </div>
-          <div style="border:2px solid #cbd5e1;background:#f8fafc;border-radius:12px;padding:10px 11px;margin-bottom:9px;display:flex;align-items:center;gap:9px">
+          <div style="border:2px solid #cbd5e1;background:#f8fafc;border-radius:12px;padding:11px;margin-bottom:9px;display:flex;align-items:center;gap:9px">
             <span style="font-size:17px">📖</span>
             <span style="flex:1;font-size:12.5px;font-weight:800;color:#334155">PDFの作り方を見る</span>
             <span style="color:#94a3b8;font-weight:800">›</span>
@@ -81,119 +83,79 @@
             <b>手順</b>：車検証閲覧アプリで車検証を読み取り → PDFで保存 → ここで選ぶ。<br>
             <b>車種名とグレードは車検証に載っていない</b>ので、読み取ったあとに入れていただきます。
           </div>
+          <div style="width:100%;margin-top:9px;padding:11px 0;border-radius:12px;border:2px solid #e2e8f0;background:#fff;color:#64748b;font-size:12.5px;font-weight:800;text-align:center">読み取らずに手で入れる</div>
         </div>
       </div>
     </div>
-    <div class="cap">読み取り画面からも手順を開ける</div>
+    <div class="cap">読み取り画面からも開ける</div>
   </div>
 </div>
 
-<h2>② 手順の画面（図つき）</h2>
+<h2>② 手順の画面（写真2枚つき）</h2>
 <div class="row">
   <div>
     <div class="phone">
       <div class="hd"><span>📖 PDFの作り方</span><span style="margin-left:auto">✕</span></div>
-      <div style="padding:12px;background:#fff;min-height:430px;max-height:430px;overflow:auto">
+      <div style="padding:12px;background:#fff;height:620px;overflow:auto">
 
         <div class="step">
           <span class="num">1</span>
           <span class="stxt"><b>「車検証閲覧アプリ」を開く</b><br>
-            <span style="color:#64748b;font-size:11.5px">国土交通省のアプリです。入っていなければ App Store／Google Play で「車検証閲覧アプリ」を入れてください。</span>
-            <span class="fig" style="display:block">
-              <svg viewBox="0 0 300 150" style="width:100%;display:block;background:linear-gradient(160deg,#c7d2fe,#bae6fd)">
-                <rect x="112" y="18" width="76" height="76" rx="19" fill="#fff"/>
-                <rect x="146" y="30" width="33" height="24" rx="3" fill="none" stroke="#dbeafe" stroke-width="2"/>
-                <rect x="150" y="35" width="16" height="2.5" rx="1" fill="#dbeafe"/><rect x="150" y="40" width="20" height="2.5" rx="1" fill="#dbeafe"/><rect x="150" y="45" width="12" height="2.5" rx="1" fill="#dbeafe"/>
-                <rect x="171" y="34" width="4" height="16" rx="1.5" fill="#dbeafe"/>
-                <path d="M128 72 q0-14 8-16 h18 q8 2 8 16 v8 q0 3-3 3h-28q-3 0-3-3z" fill="#7dd3fc"/>
-                <path d="M133 60 q2-7 6-8h8v8z" fill="#c7d2fe"/>
-                <rect x="131" y="68" width="8" height="5" rx="2" fill="#f1f5f9"/><rect x="155" y="68" width="8" height="5" rx="2" fill="#f1f5f9"/>
-                <rect x="141" y="68" width="12" height="6" rx="1.5" fill="#fff"/>
-                <text x="150" y="117" text-anchor="middle" font-size="17" fill="#fff" letter-spacing="5" font-weight="300">車検証</text>
-                <text x="150" y="134" text-anchor="middle" font-size="10" fill="#fff" letter-spacing="3" font-weight="300">閲覧アプリ</text>
-              </svg>
-              <span class="figcap">アプリのアイコン（国土交通省）</span>
-            </span>
+            <span class="sub">国土交通省のアプリです。入っていなければ App Store／Google Play で「車検証閲覧アプリ」と探して入れてください。</span>
+            <span class="fig"><img src="help_shaken_app.jpg" alt="車検証閲覧アプリ"><span class="figcap">このアプリです</span></span>
           </span>
         </div>
 
         <div class="step">
           <span class="num">2</span>
           <span class="stxt"><b>セキュリティコード（4桁）を入れる</b><br>
-            <span style="color:#64748b;font-size:11.5px">車検証の<b style="color:#dc2626">右下</b>に書いてある4桁の数字です。</span>
-            <span class="fig" style="display:block">
-              <svg viewBox="0 0 300 165" style="width:100%;display:block;background:#f8fafc">
-                <g opacity=".9">
-                  <ellipse cx="100" cy="85" rx="78" ry="56" fill="#c7d2fe"/>
-                  <ellipse cx="205" cy="98" rx="72" ry="50" fill="#bae6fd"/>
-                </g>
-                <rect x="52" y="34" width="196" height="100" rx="9" fill="#fff"/>
-                <g stroke="#e2e8f0" stroke-width="1.4" fill="none">
-                  <rect x="64" y="48" width="150" height="18"/><rect x="64" y="66" width="150" height="16"/>
-                  <rect x="64" y="82" width="150" height="16"/><rect x="64" y="98" width="150" height="16"/>
-                  <line x1="104" y1="48" x2="104" y2="114"/><line x1="152" y1="48" x2="152" y2="114"/>
-                  <rect x="220" y="48" width="18" height="52"/>
-                </g>
-                <rect x="186" y="106" width="56" height="20" rx="4" fill="#fff" stroke="#6366f1" stroke-width="2.5"/>
-                <text x="214" y="120" text-anchor="middle" font-size="12" fill="#475569" letter-spacing="2">1234</text>
-                <text x="214" y="146" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="700">ここの4桁</text>
-              </svg>
-              <span class="figcap">4桁は車検証の右下にあります</span>
-            </span>
+            <span class="sub">車検証に書いてある4桁の数字です。アプリの図で示された場所にあります。</span>
+            <span class="fig"><img src="help_shaken_code.jpg" alt="セキュリティコード入力"><span class="figcap">4桁はこの位置に書いてあります</span></span>
           </span>
         </div>
 
         <div class="step">
           <span class="num">3</span>
-          <span class="stxt"><b>車検証のICチップを読む</b><br>
-            <span style="color:#64748b;font-size:11.5px">スマホの背面を車検証に当てたまま、読み取りが終わるまで動かさないでください。</span></span>
+          <span class="stxt"><b>車検証を読み取る</b><br>
+            <span class="sub">案内にしたがって、スマホを車検証に当てたまま動かさないでください。</span></span>
         </div>
 
         <div class="step">
           <span class="num">4</span>
           <span class="stxt"><b>PDFで保存する</b><br>
-            <span style="color:#64748b;font-size:11.5px">アプリの「共有」や「PDF出力」から、<b>ファイル（iPhoneは「"ファイル"に保存」）</b>に保存します。</span></span>
+            <span class="sub">読み取れたら「自動車検査証記録事項」をPDFで保存します（iPhone は「"ファイル"に保存」）。</span></span>
         </div>
 
         <div class="step">
           <span class="num">5</span>
-          <span class="stxt"><b>Hub の 🛠 機能 → 車検証を読み取る → PDFから読み取る</b><br>
-            <span style="color:#64748b;font-size:11.5px">さきほど保存したPDFを選べば、ナンバー・初度登録・車検満了日・車台番号が入ります。</span></span>
+          <span class="stxt"><b>Hub に取り込む</b><br>
+            <span class="sub">🛠 機能 → 車検証を読み取る → <b>PDFから読み取る</b> → さきほどのPDFを選ぶ。<br>
+            ナンバー・初度登録・車検満了日・車台番号が入ります。</span></span>
         </div>
 
         <div class="note">
-          <b>紙の車検証（2023年より前）には ICチップがありません。</b>その場合はアプリが使えないので、
-          「読み取らずに手で入れる」から登録してください。
+          <b>紙の車検証（2023年より前のもの）にはICチップがありません。</b><br>
+          その場合はアプリが使えないので、「読み取らずに手で入れる」から登録してください。
         </div>
       </div>
     </div>
-    <div class="cap">手順は5つ。図は2つ入れます</div>
+    <div class="cap">手順5つ・写真2枚（指で下へスクロール）</div>
   </div>
 
-  <div style="flex:1;min-width:300px">
+  <div style="flex:1;min-width:320px">
     <div class="card">
-      <h2 style="margin-top:0">お聞きしたいこと</h2>
+      <h2 style="margin-top:0">これでよければ入れます</h2>
       <div class="q">
-        <b>1. 図について</b><br>
-        いただいた画像は<b>チャットに貼られたもの</b>なので、こちらのファイルとして取り込めませんでした。
-        そこで<b>同じ内容を自分で描き起こしました</b>（上の2つの図）。<br>
-        <span style="color:#64748b">このままでよければ、この図で入れます。</span><br>
-        <b>実物のスクリーンショットを入れたい</b>場合は、2枚を<br>
-        <code style="font-size:11px;background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:1px 5px">C:\Users\A\HUB-A-NICE-DAY-DEV\</code>
-        に保存して、ファイル名を教えてください。そのまま埋め込みます。<br><br>
-
-        <b>2. 手順の文面</b><br>
-        ③（ICチップを読む）と ④（PDFで保存）は、実際のアプリの画面と言い回しが違うかもしれません。
-        <b>違っていたら直しますので教えてください。</b><br><br>
-
-        <b>3. 入口は2か所でよいですか</b><br>
-        ・機能メニューに「📖 PDFの作り方」<br>
-        ・読み取り画面にも「📖 PDFの作り方を見る」<br>
-        <span style="color:#64748b">どちらか一方だけにもできます。</span>
+        <b>写真</b>：IMG_3288（アプリ）と IMG_3289（4桁コードの場所）をそのまま使いました。<br>
+        リポジトリに <code style="font-size:11px;background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:1px 5px">help_shaken_app.jpg</code>
+        <code style="font-size:11px;background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:1px 5px">help_shaken_code.jpg</code> として置いてあります。<br><br>
+        <b>入口</b>：機能メニュー＋読み取り画面の2か所（ご指示どおり）。<br><br>
+        <b>手順③④の文面</b>だけ、実際のアプリの言い回しと違うかもしれません。
+        「車検証を読み取る」「PDFで保存する」のあたり、違っていたら教えてください。そのとおりに直します。
       </div>
       <div class="kome">
-        本番（メイン）には先ほど <b>v3.56.1</b> を反映済みです（車両管理v2＋141台の取り込み、PDF読み取り、スマホの電話番号欄）。
-        この手順画面はこのモックを確認いただいてから入れます。
+        本番（メイン）は <b>v3.56.1</b> 反映済みです（車両管理v2＋141台・PDF読み取り・スマホの電話番号欄）。<br>
+        この手順画面は <b>v3.56.2</b> として入れます。
       </div>
     </div>
   </div>
