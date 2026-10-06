@@ -4,9 +4,11 @@
 //   例：本店の休日に「幸田かつのり」が40日ぶん残っていたが、名簿は「幸田桂紀」。
 //
 //   使い方：
-//     node fb_fix_staff_names.js            … 下見（本番。書き込みはしない）
-//     node fb_fix_staff_names.js --dev      … テスト版を見る
-//     node fb_fix_staff_names.js --write    … 実際に直す（控えを Hub重要書類 に保存してから）
+//     node fb_fix_staff_names.js                   … 下見（本番。書き込みはしない）
+//     node fb_fix_staff_names.js --dev             … テスト版を見る
+//     node fb_fix_staff_names.js --write           … 実際に直す（控えを Hub重要書類 に保存してから）
+//     node fb_fix_staff_names.js --retire 宮原      … 退職した人の名前を休日データから消す（下見）
+//     node fb_fix_staff_names.js --retire 宮原 --write … 実際に消す
 //   ※ 苗字が一致する人が1人だけの時にかぎって置き換える。2人以上いる／見つからない時は
 //     触らずに一覧に出すだけ（人を取り違えないため）。
 const path = require('path'), fs = require('fs');
@@ -18,6 +20,8 @@ const BACKUP_DIR = 'C:/Users/A/Documents/Hub重要書類';
 const args = process.argv.slice(2);
 const WRITE = args.includes('--write');
 const DEV = args.includes('--dev');
+// ★退職した人の名前を休日データから消す（名簿にはもう居ない人。2026-10-06）
+const RETIRE = (() => { const i = args.indexOf('--retire'); return (i >= 0 && args[i + 1] && args[i + 1][0] !== '-') ? args[i + 1] : ''; })();
 const P = DEV ? 'hub-v8-dev-' : 'hub-v8-';
 
 admin.initializeApp({ credential: admin.credential.cert(require(KEYFILE)) });
@@ -32,6 +36,56 @@ const seiOf = n => { const t = String(n || '').replace(/[\s\u3000]+/g, ''); retu
 
 (async () => {
   console.log('保存先プレフィックス: ' + P + (WRITE ? '  【書き込みます】' : '  （下見のみ）'));
+
+  // ══ 退職した人の名前を消す ══
+  if (RETIRE) {
+    console.log('退職した人として消します: ' + RETIRE);
+    const snap = {}; const hits = [];
+    for (const store of ['honten', 'sanda']) {
+      const staff = (await get(P + store + '-staff-v2')) || [];
+      if (staff.some(x => String(x.name || '') === RETIRE)) {
+        console.error('  ✖ ' + store + ' の名簿にまだ「' + RETIRE + '」が居ます。先に名簿から外してください。');
+        process.exit(1);
+      }
+      const off = (await get(P + store + '-dayoff')) || {};
+      const pl = (await get(P + store + '-pleave')) || {};
+      const nt = (await get(P + store + '-offnote')) || {};
+      snap[store] = { dayoff: off, pleave: pl, offnote: nt };
+      for (const k in off) if ((off[k] || []).includes(RETIRE)) hits.push([store, 'dayoff', k]);
+      for (const k in pl) if ((pl[k] || []).includes(RETIRE)) hits.push([store, 'pleave', k]);
+      for (const k in nt) if (String(k).endsWith('::' + RETIRE)) hits.push([store, 'offnote', k]);
+    }
+    if (hits.length === 0) { console.log('  見つかりませんでした（すでに消えています）'); process.exit(0); }
+    hits.forEach(([st, kind, k]) => console.log('  ・' + (st === 'honten' ? '本店' : '三田店') + ' ' + kind + '  ' + k));
+    console.log('  合計 ' + hits.length + ' 件' + (WRITE ? '' : '（下見なので消しません。実行は --write）'));
+    if (!WRITE) process.exit(0);
+    const stamp0 = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const bk0 = path.join(BACKUP_DIR, 'staff-retire-' + RETIRE + '-' + (DEV ? 'dev-' : 'prod-') + stamp0 + '.json');
+    fs.writeFileSync(bk0, JSON.stringify(snap, null, 1), 'utf8');
+    console.log('  控えを保存しました: ' + bk0);
+    for (const store of ['honten', 'sanda']) {
+      const strip = (src) => {
+        const out = {};
+        for (const k in (src || {})) {
+          const a = src[k];
+          if (!Array.isArray(a)) { out[k] = a; continue; }
+          const n = a.filter(x => x !== RETIRE);
+          if (n.length) out[k] = n;          // 誰も居なくなった日は、その日ごと消す
+        }
+        return out;
+      };
+      const off = (await get(P + store + '-dayoff')) || {};
+      const pl = (await get(P + store + '-pleave')) || {};
+      const nt = (await get(P + store + '-offnote')) || {};
+      await set(P + store + '-dayoff', strip(off));
+      await set(P + store + '-pleave', strip(pl));
+      const nt2 = {}; for (const k in nt) if (!String(k).endsWith('::' + RETIRE)) nt2[k] = nt[k];
+      await set(P + store + '-offnote', nt2);
+    }
+    console.log('  消しました。各画面はリロードすると反映されます。');
+    process.exit(0);
+  }
+
   const plan = [];     // {store,key,from,to}
   const untouched = [];
   const snapshot = {};
