@@ -139,8 +139,12 @@ const YEST = (() => { const d = new Date(now.getTime() - 86400000); return `${d.
       { uid: 'h5', name: '魚住圭', myNumber: 5, badge: 'mechanic', store: 'honten' },
     ],
     [STOR + 'sanda-staff-v2']: [],
-    [STOR + 'honten-dayoff']: { [TODAY]: ['魚住圭', '幸田かつのり'] },
+    [STOR + 'honten-dayoff']: { [TODAY]: ['魚住圭', '幸田桂紀', '幸田かつのり'] },
     [STOR + 'sanda-dayoff']: {},
+    [STOR + 'honten-pleave']: { [YEST]: ['幸田桂紀'] },
+    [STOR + 'sanda-pleave']: {},
+    [STOR + 'honten-offnote']: { [TODAY + '::幸田桂紀']: '私用' },
+    [STOR + 'sanda-offnote']: {},
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -213,6 +217,52 @@ const YEST = (() => { const d = new Date(now.getTime() - 86400000); return `${d.
   }, [STOR + 'honten-sched', YEST]);
   t('納車日の行を押すと delivered が付く', st2.delivered === true, st2);
   t('そのとき入庫（arrived）は変わらない', st2.arrived === true, st2);
+
+  head('④ 名前を変えたら休日データも一緒に直るか（再発防止）');
+  // スタッフ管理を開いて「幸田かつのり」を「幸田桂紀」に…ではなく、
+  // 今ある「幸田桂紀」を「幸田ひろき」に変えて、休日データが追いかけるかを見る
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('openStaffSettings')));
+  await page.waitForTimeout(900);
+  t('スタッフ管理が開く', await seeText(page, 'スタッフ', 6000));
+  const picked = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('div,button,li')].find(e =>
+      e.innerText.trim() === '幸田桂紀' && e.offsetParent !== null && e.children.length === 0);
+    if (!el) return false;
+    (el.closest('button') || el.closest('div') || el).click();
+    return true;
+  });
+  t('その人を選べる', picked);
+  await page.waitForTimeout(600);
+  const renamed = await page.evaluate(() => {
+    const inp = [...document.querySelectorAll('input')].find(e => e.offsetParent !== null && e.value === '幸田桂紀');
+    if (!inp) return false;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, '幸田ひろき');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  });
+  t('名前の欄を書き換えられる', renamed);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(e => /保存|更新/.test(e.innerText) && e.offsetParent !== null);
+    if (b) b.click();
+  });
+  await page.waitForTimeout(3000);
+  const after = await page.evaluate(([stor, today, yest]) => {
+    const g = k => window.__fakeFb.get(k) || {};
+    return {
+      staff: (g(stor + 'honten-staff-v2') || []).map(x => x.name),
+      dayoff: (g(stor + 'honten-dayoff')[today] || []),
+      pleave: (g(stor + 'honten-pleave')[yest] || []),
+      note: Object.keys(g(stor + 'honten-offnote')),
+    };
+  }, [STOR, TODAY, YEST]);
+  t('名簿の名前が変わる', (after.staff || []).includes('幸田ひろき'), after.staff);
+  t('★休日も新しい名前に付け替わる', (after.dayoff || []).includes('幸田ひろき') && !(after.dayoff || []).includes('幸田桂紀'), after.dayoff);
+  t('★有給も付け替わる', (after.pleave || []).includes('幸田ひろき'), after.pleave);
+  t('★休日メモも付け替わる', (after.note || []).some(k => k.endsWith('::幸田ひろき')), after.note);
+  t('他の人の休日は巻き添えにしない', (after.dayoff || []).includes('魚住圭'), after.dayoff);
+  t('名簿に無いままの名前はそのまま残る（勝手に消さない）', (after.dayoff || []).includes('幸田かつのり'), after.dayoff);
 
   t('画面のエラーは出ていない', errs.length === 0, errs.slice(0, 3));
 

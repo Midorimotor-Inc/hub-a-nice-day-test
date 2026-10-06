@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791255820293';
+    window.__APP_BUILD='build-1791265561115';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.54';
+const APP_VERSION = '3.55';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -13215,9 +13215,13 @@ function AppInner() {
     }else{
       setStaffListS(p=>{const list=p&&p.length>0?p:DEFAULT_STAFF_SANDA;return list.map(s=>s.uid===updated.uid?updated:s);});
     }
-    // ★名前が変わったら休日データも追従させる（2026-10-06 ユーザー報告の再発防止）
-    if(before&&before.name&&updated.name&&before.name!==updated.name)
-      renameStaffInOff(isH?'honten':'sanda',before.name,updated.name);
+    // ★名前が変わったら休日データも追従させる（2026-10-06 ユーザー報告の再発防止）。
+    //   **両店とも見る**：名前と同時に所属店舗を変えた時、古い店に残った休日を取りこぼさないため
+    //   （その名前が居ない店では何も起きない）
+    if(before&&before.name&&updated.name&&before.name!==updated.name){
+      renameStaffInOff('honten',before.name,updated.name);
+      renameStaffInOff('sanda', before.name,updated.name);
+    }
   },[setStaffListH,setStaffListS,staffListH,staffListS,renameStaffInOff]);
   const handleDeleteStaff=useCallback((target)=>{
     if(target.store==='honten'){
