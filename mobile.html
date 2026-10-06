@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791270131894';
+  window.__APP_BUILD='build-1791275154641';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.56';
+const MOBILE_VERSION='3.56.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1740,8 +1740,9 @@ const CalendarView=({inspData,closedDays,closedDates,overrideOpen,vsId,onSelectD
 // ============================================================
 //  📷 車検証の2次元コード（QR）を読む → 車両管理へ登録   v3.48 / 2026-10-05
 //  ・入口はヘッダーの店舗の帯の右端「🛠 機能」（今後ここに便利機能を足していく）
-//  ・読み方は2通り：①その場でカメラにかざす ②スマホの写真から選ぶ
-//  ・Android は端末の BarcodeDetector（速い）／iPhone は jsQR を読み込んで自前で解く
+//  ・読み取りは **自動車検査証記録事項の PDF だけ**（2026-10-06 ユーザー指示。
+//    カメラ・写真からの読み取りは、記録事項を正確に読めなかったので外した）
+//  ・QR と 文字読み取り（OCR）の部品は、文字が入っていない PDF のときの保険として残してある
 //  ・読み取れた項目は確認画面で直せる。足りない分（車名・目的・店舗・色）を入れて登録する
 //  ・撮った写真は車検証として Firestore に分割保存（vehdoc-*）し、PC の車両管理の 📄 から開ける
 // ============================================================
@@ -2212,13 +2213,7 @@ const vehDocSave=async(docId,dataUrl)=>{
   return {id:docId,chunks:n,size:t.length};
 };
 try{ window.__hubVehDocSave=vehDocSave; }catch(e){}   // 検査から写真の保存だけを動かすための口
-// 絵を読み込んで、長い辺が max px になるように縮めた canvas を作る
-const shkLoadImage=file=>new Promise((res,rej)=>{
-  const u=URL.createObjectURL(file); const im=new Image();
-  im.onload=()=>{URL.revokeObjectURL(u);res(im);};
-  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('image'));};
-  im.src=u;
-});
+// 絵の長い辺を max px に縮めた canvas を作る
 const shkCanvas=(src,max)=>{
   const w=src.videoWidth||src.naturalWidth||src.width, h=src.videoHeight||src.naturalHeight||src.height;
   const r=Math.min(1,max/Math.max(w,h));
@@ -2263,23 +2258,15 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
   const [found,setFound]=useState([]);     // 読み取れたQRの文字列
   const [ocrText,setOcrText]=useState(''); // 文字から読み取った時の中身
   const [prog,setProg]=useState(0);        // 文字読み取りの進み具合（％）
-  const lastImgRef=useRef(null);           // 文字読み取りをやり直せるよう、元の絵を覚えておく
-  const wantOcrRef=useRef(false);          // 写真を選ぶ時に「文字から読む」を選んだか
+  // （カメラ・写真からの読み取りは 2026-10-06 に外した。読み取りは PDF だけ）
   const [photo,setPhoto]=useState('');     // 車検証の写真（JPEG の dataURL）
   const [parsed,setParsed]=useState(null);
   const [showRaw,setShowRaw]=useState(false);
   const [copied,setCopied]=useState('');
   const [pick,setPick]=useState(null);     // 生データから欄へ入れる時の選択中の値
   const [f,setF]=useState(null);
-  const videoRef=useRef(null);
-  const streamRef=useRef(null);
-  const fileRef=useRef(null);
-  const camRef=useRef(null);
   const pdfRef=useRef(null);
-  const liveRef=useRef({hits:[],last:0,dead:false});
-
-  const stopCam=()=>{ try{ (streamRef.current&&streamRef.current.getTracks()||[]).forEach(t=>t.stop()); }catch(e){} streamRef.current=null; };
-  useEffect(()=>()=>{ liveRef.current.dead=true; stopCam(); },[]);
+  const stopCam=()=>{};     // カメラは使わなくなった（2026-10-06）。呼び出し側をそのままにするための空の関数
 
   const finish=(texts,pic,pre)=>{
     stopCam();
@@ -2293,51 +2280,6 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
     setStep('result');
   };
 
-  // ── ①その場で撮る（かざすだけで自動で読む） ──
-  useEffect(()=>{
-    if(step!=='cam')return;
-    const L=liveRef.current; L.hits=[]; L.last=0; L.dead=false;
-    let timer=null;
-    (async()=>{
-      try{
-        const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
-        if(L.dead){ st.getTracks().forEach(t=>t.stop()); return; }
-        streamRef.current=st;
-        const v=videoRef.current; if(!v){ stopCam(); return; }
-        v.setAttribute('playsinline','true'); v.muted=true; v.srcObject=st;
-        await v.play();
-        setMsg('QRを枠に入れてください');
-        const tick=async()=>{
-          if(L.dead)return;
-          const vv=videoRef.current;
-          if(vv&&vv.videoWidth>0){
-            try{
-              const cv=shkCanvas(vv,1280);
-              const got=await qrScanCanvas(cv,false);
-              let add=0;
-              got.forEach(t=>{ if(L.hits.indexOf(t)<0){ L.hits.push(t); add++; } });
-              if(add>0){ L.last=Date.now(); setMsg('読み取りました（'+L.hits.length+'件）… そのまま他のコードも探しています'); }
-              // ★1つ見つけてから2秒ほど新しいコードが出なければ読み取り完了
-              if(L.hits.length>0&&Date.now()-L.last>2000){
-                const big=shkCanvas(vv,1600);
-                L.dead=true;
-                finish(L.hits.slice(),big.toDataURL('image/jpeg',0.72));
-                return;
-              }
-            }catch(e){}
-          }
-          timer=setTimeout(tick,260);
-        };
-        tick();
-      }catch(e){
-        setErr('カメラを使えませんでした。ブラウザの設定でカメラを許可するか、「写真から選ぶ」をお使いください。');
-        setStep('pick');
-      }
-    })();
-    return ()=>{ L.dead=true; clearTimeout(timer); stopCam(); };
-  },[step]);
-
-  // ── ②写真から選ぶ ──
   // ── PDF（自動車検査証記録事項）から取り込む ──
   //   いちばん確実な道。文字がそのまま入っているので読み間違えない。
   const onPdf=async(file)=>{
@@ -2367,47 +2309,6 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
       setStep('pick');
     }
   };
-  const isPdf=f=>!!f&&(String(f.type||'')==='application/pdf'||/\.pdf$/i.test(String(f.name||'')));
-  const onFile=async(file,wantOcr)=>{
-    if(!file)return;
-    if(isPdf(file)){ onPdf(file); return; }   // ★PDF はこちらへ（2026-10-06）
-    setErr(''); setProg(0);
-    setMsg(wantOcr?'写真の文字を読んでいます…':'写真からQRを探しています…');
-    setStep('busy');
-    try{
-      const im=await shkLoadImage(file);
-      lastImgRef.current=im;
-      const pic=shkCanvas(im,1600).toDataURL('image/jpeg',0.72);
-      if(!wantOcr){
-        // ★A4の記録事項は下の方にQRが並ぶ。写真の中では小さいので解像度を残す（2026-10-05）
-        const big=shkCanvas(im,2800);
-        const got=await qrScanCanvas(big,true,(p,n)=>{
-          setProg(p); setMsg(n>0?('QRを '+n+'件 見つけました…まだ探しています'):'写真のすみずみからQRを探しています…');
-        });
-        if(got.length>0){ finish(got,pic); return; }
-        // ★QRが無い／読めない時は、そのまま文字から読む（記録事項はQRが無いため・2026-10-05）
-        setMsg('QRが見つからないので、文字から読んでみます…');
-      }
-      const txt=await ocrRun(ocrPrep(im,2000),(m,p)=>{ setMsg(m); setProg(p||0); });
-      setOcrText(txt);
-      finish([],pic,shakenOcrParse(txt));
-    }catch(e){
-      setErr(String((e&&e.message)||e)||'写真を読めませんでした。別の写真でお試しください。');
-      setStep('pick');
-    }
-  };
-  // 撮った写真をそのまま使って、文字からもう一度読む
-  const retryOcr=async()=>{
-    const im=lastImgRef.current;
-    if(!im){ setErr('もう一度、写真を選んでください。'); return; }
-    setErr(''); setProg(0); setMsg('写真の文字を読んでいます…'); setStep('busy');
-    try{
-      const txt=await ocrRun(ocrPrep(im,2000),(m,p)=>{ setMsg(m); setProg(p||0); });
-      setOcrText(txt);
-      finish([],photo,shakenOcrParse(txt));
-    }catch(e){ setErr(String((e&&e.message)||e)); setStep('result'); }
-  };
-
   // ── 読み取らずに手で入れる ──
   const manual=()=>{
     stopCam();
@@ -2492,7 +2393,7 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
         <div style={{fontWeight:900,fontSize:15,color:'#c2410c'}}>{title}</div>
         {sub&&<div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{sub}</div>}
       </div>
-      <button onClick={()=>{liveRef.current.dead=true;stopCam();onClose();}}
+      <button onClick={onClose}
         style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
     </div>
   );
@@ -2503,79 +2404,29 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:3300,display:'flex',alignItems:'flex-end'}}>
       <div style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',maxHeight:'93vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.3)'}}>
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{display:'none'}}
-          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x,wantOcrRef.current);wantOcrRef.current=false;}}/>
-        {/* ★自動車検査証記録事項のPDF（車検証閲覧アプリから出したもの）。2026-10-06 ユーザー要望 */}
+        {/* ★読み取りはPDFだけ（2026-10-06 ユーザー指示）。写真・カメラの入口は外した */}
         <input ref={pdfRef} type="file" accept="application/pdf" style={{display:'none'}}
           onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onPdf(x);}}/>
-        <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:'none'}}
-          onChange={e=>{const x=e.target.files&&e.target.files[0];e.target.value='';onFile(x,wantOcrRef.current);wantOcrRef.current=false;}}/>
 
         {step==='pick'&&(<>
-          <Head title="📷 車検証を読み取る" sub="QRから車両情報を取り込みます"/>
+          <Head title="📄 車検証を読み取る" sub="記録事項のPDFから車両情報を取り込みます"/>
           <Err/>
-          {/* ★PDF がいちばん確実（文字がそのまま入っているので読み間違えない）。先頭に置く */}
+          {/* ★読み取りは PDF だけ（2026-10-06 ユーザー指示）。
+              カメラ・写真からの読み取りは、記録事項を正確に読めなかったので画面から外した。 */}
           <button onClick={()=>{setErr('');pdfRef.current&&pdfRef.current.click();}}
-            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #7c3aed',borderRadius:13,background:'#f5f3ff',textAlign:'left',position:'relative'}}>
-            <span style={{width:36,height:36,borderRadius:11,background:'#ddd6fe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>📄</span>
-            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>PDFから読み取る
-              <span style={{marginLeft:6,fontSize:9.5,fontWeight:800,color:'white',background:'#7c3aed',borderRadius:10,padding:'1px 7px'}}>いちばん確実</span></span>
-              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>車検証閲覧アプリで出したPDF（自動車検査証記録事項）</span></span>
-          </button>
-          <button onClick={()=>{setErr('');setStep('cam');}}
-            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #c2410c',borderRadius:13,background:'#fff7ed',textAlign:'left'}}>
-            <span style={{width:36,height:36,borderRadius:11,background:'#fed7aa',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>📸</span>
-            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>その場で撮る</span>
-              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>カメラでQRにかざすだけ</span></span>
-          </button>
-          <button onClick={()=>{setErr('');fileRef.current&&fileRef.current.click();}}
-            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #1d4ed8',borderRadius:13,background:'#eff6ff',textAlign:'left'}}>
-            <span style={{width:36,height:36,borderRadius:11,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🖼</span>
-            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>写真から選ぶ</span>
-              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>前に撮った写真でもOK（QRが大きく写っているほど確実）</span></span>
-          </button>
-          {/* ★自動車検査証記録事項（電子車検証に付いてくるA4）はQRが無いので、文字から読む道を用意する */}
-          <button onClick={()=>{setErr('');wantOcrRef.current=true;fileRef.current&&fileRef.current.click();}}
-            style={{width:'100%',display:'flex',alignItems:'center',gap:11,padding:'13px 11px',marginBottom:8,border:'2px solid #059669',borderRadius:13,background:'#f0fdf4',textAlign:'left'}}>
-            <span style={{width:36,height:36,borderRadius:11,background:'#bbf7d0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🔤</span>
-            <span style={{flex:1}}><span style={{display:'block',fontSize:13.5,fontWeight:900,color:'#334155'}}>文字から読み取る</span>
-              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:2}}>自動車検査証記録事項（QRが無い用紙）はこちら</span></span>
+            style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'18px 14px',marginBottom:10,border:'2px solid #7c3aed',borderRadius:14,background:'#f5f3ff',textAlign:'left'}}>
+            <span style={{width:44,height:44,borderRadius:13,background:'#ddd6fe',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📄</span>
+            <span style={{flex:1}}><span style={{display:'block',fontSize:15,fontWeight:900,color:'#334155'}}>PDFから読み取る</span>
+              <span style={{display:'block',fontSize:11,color:'#64748b',marginTop:3}}>車検証閲覧アプリで出したPDF（自動車検査証記録事項）を選んでください</span></span>
           </button>
           <div style={{border:'2px solid #fcd34d',background:'#fffbeb',borderRadius:12,padding:'10px 11px',fontSize:11.5,color:'#92400e',lineHeight:1.8}}>
-            <b>おすすめは「PDFから読み取る」</b>です。車検証閲覧アプリで出したPDFには<b>文字がそのまま入っている</b>ので、
-            写真のように読み間違えることがなく、ナンバー・初度登録・車検満了日・車台番号がそろって入ります。<br/>
-            写真から読む場合は<b>QRに近づけて1つずつ</b>写してください（1枚に全部写すとQRが小さく、読めないことがあります）。
-            QRが見つからない時は自動で文字読み取りに切り替わります。<br/>
+            <b>手順</b>：車検証閲覧アプリで車検証を読み取り → PDFで保存 → ここで選ぶ。<br/>
+            PDFには<b>文字がそのまま入っている</b>ので、<b>ナンバー・初度登録・車検満了日・車台番号</b>がそろって入ります。<br/>
             <b>車種名とグレードは車検証に載っていない</b>ので、読み取ったあとに入れていただきます。
           </div>
           <button onClick={manual}
             style={{width:'100%',marginTop:9,padding:'11px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12.5,fontWeight:800}}>
             読み取らずに手で入れる
-          </button>
-        </>)}
-
-        {step==='cam'&&(<>
-          <Head title="📸 その場で撮る" sub={msg||'カメラを起動しています…'}/>
-          <div style={{position:'relative',background:'#111827',borderRadius:12,overflow:'hidden',height:260}}>
-            <video ref={videoRef} playsInline muted style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-            <div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:180,height:180,border:'3px solid #22c55e',borderRadius:12,boxShadow:'0 0 0 2000px rgba(0,0,0,.35)'}}/>
-          </div>
-          <div style={{fontSize:11.5,color:'#64748b',margin:'9px 2px',lineHeight:1.7}}>
-            QRが枠に入ると<b>自動で読み取ります</b>（シャッターは要りません）。<br/>
-            <b>QRに近づけて、1つずつ順に写してください。</b>車検証は右側に3つ、記録事項は下の方に並んでいます。
-            1枚に全部写すより、<b>近づけて1つずつの方が確実</b>です。
-          </div>
-          <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>{liveRef.current.dead=true;stopCam();setStep('pick');}}
-              style={{flex:1,padding:'12px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:13,fontWeight:800}}>やめる</button>
-            <button onClick={()=>{ const L=liveRef.current; const vv=videoRef.current;
-                if(L.hits.length===0){ setMsg('まだ読み取れていません。もう少し近づけてください'); return; }
-                L.dead=true; finish(L.hits.slice(), vv?shkCanvas(vv,1600).toDataURL('image/jpeg',0.72):''); }}
-              style={{flex:2,padding:'12px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:13,fontWeight:900}}>読み取り完了</button>
-          </div>
-          <button onClick={()=>{liveRef.current.dead=true;stopCam();camRef.current&&camRef.current.click();}}
-            style={{width:'100%',marginTop:8,padding:'10px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:12,fontWeight:800}}>
-            うまく読めない時：いつものカメラで1枚撮る
           </button>
         </>)}
 
@@ -2649,12 +2500,6 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
                 ?'車検証の2次元コード（QR）がはっきり写るように、明るい所で近づけて撮り直してください。電子車検証（ICチップ付きの小さい用紙）はQRが1つだけです。'
                 :'車検証の並びが想定と違うようです。下の「読み取った中身」をコピーして送っていただければ、読めるように直します。'}
               <br/>このまま次へ進んで、手で入れて登録することもできます。
-              {lastImgRef.current&&parsed.via!=='ocr'&&(
-                <button onClick={retryOcr}
-                  style={{display:'block',width:'100%',marginTop:8,padding:'10px 0',borderRadius:10,border:'2px solid #059669',background:'#f0fdf4',color:'#065f46',fontSize:12.5,fontWeight:900}}>
-                  🔤 同じ写真の文字から読み取ってみる
-                </button>
-              )}
             </div>
           )}
           <div style={{display:'flex',gap:7,marginTop:9}}>
@@ -2781,7 +2626,7 @@ const ShakenScanSheet=({store,byName,onClose,onDone})=>{
             </div>
           )}
           <div style={{display:'flex',gap:8,marginTop:12}}>
-            <button onClick={()=>{liveRef.current.dead=true;stopCam();onClose();}}
+            <button onClick={onClose}
               style={{flex:1,padding:'14px 0',borderRadius:12,border:'2px solid #e2e8f0',background:'white',color:'#64748b',fontSize:13,fontWeight:800}}>やめる</button>
             <button onClick={save}
               style={{flex:2,padding:'14px 0',borderRadius:12,border:'none',background:'#059669',color:'white',fontSize:14,fontWeight:900}}>✓ 車両管理に登録</button>

@@ -152,7 +152,14 @@ const ROWS = [
   head('④ 画面の作り');
   t('入口に「PDFから読み取る」がある', SRC.indexOf('PDFから読み取る') > 0);
   t('PDFの入口は application/pdf を受ける', SRC.indexOf('accept="application/pdf"') > 0);
-  t('写真の入口もPDFを受ける（ファイルから選んだ時）', SRC.indexOf('accept="image/*,application/pdf"') > 0);
+  // ★2026-10-06：カメラ・写真からの読み取りは外した。入口は PDF だけ
+  t('カメラ・写真からの読み取りの入口は無い',
+    SRC.indexOf('その場で撮る') < 0 && SRC.indexOf('写真から選ぶ') < 0 && SRC.indexOf('文字から読み取る') < 0
+    && SRC.indexOf('accept="image/*') < 0 && SRC.indexOf('capture="environment"') < 0);
+  t('カメラを動かす仕掛けも残っていない', SRC.indexOf('getUserMedia') < 0 && SRC.indexOf('videoRef') < 0);
+  t('QR・文字読み取りの部品は残す（文字が入っていないPDFの保険）',
+    SRC.indexOf('qrScanCanvas') > 0 && SRC.indexOf('const ocrRun=') > 0);
+  t('手で入れる道は残してある', SRC.indexOf('読み取らずに手で入れる') > 0);
   t('文字が入っていないPDFはQR→文字読み取りに進む',
     SRC.indexOf('文字が入っていないPDFのようです') > 0 && SRC.indexOf('PDFのすみずみからQRを探しています') > 0);
   t('PDFから読んだ時は「見比べてください」の赤帯を出さない', SRC.indexOf('PDFの文字をそのまま読み取りました') > 0);

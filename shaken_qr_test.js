@@ -190,7 +190,10 @@ t('入力欄は16px以上（iPhoneの自動拡大よけ）',
   SRC_M.indexOf("const INP={width:'100%',padding:'10px 11px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16") > 0);
 t('文字読み取りは端末の中だけで動く（外へ送らない）', SRC_M.indexOf('tesseract.js') > 0 && SRC_M.indexOf('端末の中だけで動く') > 0);
 t('文字読み取りは必要な時だけ読み込む（毎回取らない）', SRC_M.indexOf('const ocrLoad=') > 0 && SRC_M.indexOf('_tessP') > 0);
-t('QRが見つからなければ自動で文字読み取りに切り替わる', SRC_M.indexOf('QRが見つからないので、文字から読んでみます') > 0);
+// ★読み取りは PDF だけ（2026-10-06 ユーザー指示）。
+//   文字が入っていない PDF のときだけ、中で QR → 文字読み取り の順に試す
+t('文字が入っていないPDFは QR → 文字読み取り に進む',
+  SRC_M.indexOf('文字が入っていないPDFのようです') > 0 && SRC_M.indexOf('PDFのすみずみからQRを探しています') > 0);
 t('文字から読んだ時は写真を並べて見比べさせる', SRC_M.indexOf('かならず写真と見比べてください') > 0);
 t('進み具合（％）を出す', SRC_M.indexOf('prog+') > 0);
 t('読めなかった時も結果の画面に進み、理由を赤帯で出す', SRC_M.indexOf('QRを読み取れませんでした。') > 0 && SRC_M.indexOf('欄に入れられなかった項目があります') > 0);
@@ -296,14 +299,18 @@ const fillLabeled = (page, label, value) => page.evaluate(([lb, v]) => {
 
   await clickText(page, '車検証を読み取る');
   await page.waitForTimeout(400);
-  t('読み方が2通り出る（その場で撮る／写真から選ぶ）',
-    (await seeText(page, 'その場で撮る', 5000)) && (await seeText(page, '写真から選ぶ', 3000)));
+  t('読み取りの入口は「PDFから読み取る」だけ', await seeText(page, 'PDFから読み取る', 5000));
+  t('カメラ・写真からの読み取りは出さない', await page.evaluate(() => {
+    const txt = document.body.innerText;
+    return txt.indexOf('その場で撮る') < 0 && txt.indexOf('写真から選ぶ') < 0 && txt.indexOf('文字から読み取る') < 0;
+  }), await page.evaluate(() => (document.body.innerText.match(/その場で撮る|写真から選ぶ|文字から読み取る/g) || [])));
+  t('手で入れる道は残っている', await seeText(page, '読み取らずに手で入れる', 3000));
   t('車種名は車検証に無いことを先に知らせている', await seeText(page, '車種名とグレードは車検証に載っていない', 3000));
-  t('写真を選ぶ入口がある（撮影用とライブラリ用の2つ）',
+  t('ファイルの入口はPDF用の1つだけ（カメラ起動の入口は無い）',
     await page.evaluate(() => {
       const f = [...document.querySelectorAll('input[type=file]')];
-      return f.length >= 2 && f.some(x => x.hasAttribute('capture')) && f.some(x => !x.hasAttribute('capture'));
-    }));
+      return f.length === 1 && (f[0].getAttribute('accept') || '') === 'application/pdf' && !f[0].hasAttribute('capture');
+    }), await page.evaluate(() => [...document.querySelectorAll('input[type=file]')].map(x => x.getAttribute('accept') + '|' + (x.hasAttribute('capture') ? 'cam' : '-'))));
 
   head('④ スマホ：手で入れて車両管理に登録する');
   await clickText(page, '読み取らずに手で入れる');
