@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node merge_scalar_test.js`（共有データのマージ）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -149,6 +149,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     （コードの全文をそのまま見せる＝**並びを実物に合わせるための唯一の手がかり**。ユーザーに送ってもらうこと）
   ⑦ **電子車検証（2023年1月〜のICチップ付きA6）はQRが1つだけ**で中身も違う。紙のA4（QR3つ）と見分けること
 - **本番にはまだ入れていない**（テスト版のみ）。
+
+### 2026-10-06 の現場報告3件（v3.54 / 本番 v3.42）
+- **① 他の人が動かした予定の「前の時間」が、見ているPCにだけ残る（幽霊の行）**
+  報告：10/6 三田店 小西さんが 11時→13時。本店PCで三田店を見ると11時と13時の2つ。三田店PCとスマホは13時のみ。
+  **サーバーには13時しか無かった＝画面だけの幽霊。**
+  原因は `mergeSharedObjects`：サーバーに無い枠を「記録の時刻が3分以内なら残す」決まりで、**誰が作ったかを見ていなかった**。
+  他店が11時に作って48秒後に13時へ動かすと、見ているPCは消えた11時を**毎回作り直す**。一度手元に戻るとリロードまで消えない。
+  → **サーバーに無い枠を残すのは「自分がさっき書いた分」だけ**にした（`shMineMark` / `shMineHas`。パスは `cid day`、有効は SHARED_FRESH_MS）。
+  **`mergeSharedObjects` を呼ぶ所は必ず第4引数にキーを渡すこと**（渡さないと自分の書き込みが分からず、作りたての代車予約が消える）。
+  `persistLoaner` は `useShared.update` を通らないので、**その場で `shMineMark` を呼んでいる**（2026-08-26「代車が消える」の守りを壊さないため）。
+  ※Kyoshi承認のBLOCK-B変更。検査は `node bugfix_1006_test.js` と `node merge_scalar_test.js`。
+- **② スタッフ名を変えると、休日がカレンダーには出てスケジュールには出ない**
+  報告：10/6 幸田さんが休みなのにスケジュールに出ない。
+  本番データ：本店の休日に **「幸田かつのり」が40日ぶん**、名簿は「幸田桂紀」。**休日は氏名で持っているのに、名簿の名前を変えても休日データを直していなかった。**
+  カレンダーは休日の名前をそのまま出す＝見える／スケジュールは `currentStaffList.filter(s=>offs.includes(s.name))` で絞る＝**黙って消える**。
+  → ⓐ 名前を変えたら `renameStaffInOff` で **dayoff・pleave・offnote も一緒に直す**
+    ⓑ スケジュールのスタッフ帯は **名簿に無い名前も必ず出す**（⚠ 付き・オレンジのバッジ）。**名簿で絞り込んで消さないこと。**
+  既存データの修復：`node fb_fix_staff_names.js`（下見）／`--write`（実行。`--dev` でテスト版）。
+  **頭から2文字以上そろう人が1人だけの時にかぎって置き換える**（同姓が2人いる／見つからない時は触らない）。控えは Hub重要書類 へ自動保存。
+  2026-10-06 に本番で5件修復（幸田かつのり→幸田桂紀40日／河合→河合よっちゃん／芦田→芦田昌則／長谷川→長谷川昌彦／石井→石井光）。**「宮原」1件は相手が見つからないので残してある**（退職者とみられる）。
+- **③ 入庫のチェックが納車日の行にも出る**
+  報告：「入庫後に納車日を設定した顧客でチェックを入れ、納車日を見ると納車が終わっていないのにチェックが入る。納車日はチェックが外れる仕組みに」
+  納車の派生行が入庫済み（`arrived`）をそのまま使っていた。→ **納車は `delivered` という別の印**にした（`toggleInspDelivered`/`toggleSchedDelivered`、覚え書きのキーは `…|D`）。
+  **事前入庫の行は今までどおり `arrived`**（その日に車が入るので入庫の印でよい）。スマホには納車の派生行が無いので変更なし。
+- **本番への出し方（2026-10-06 Kyoshi判断）**：本番は v3.41 のままで新機能（車両管理v2・車検証QR・文字読み取り）を出さないため、
+  `port_to_main.js` は使わず **この3件の直しだけを index_main.html に当てた**（本番 v3.42）。テスト版にも同じ直しが入っているので、次に port_to_main.js を使っても食い違わない。
+  本番へ出す前に `node smoke_main.js` PASS を確認済み。
 
 ### 小さいQR・文字コード（v3.53・2026-10-05・ユーザー指摘から）
 - ユーザー指摘「**自動車検査証記録事項の下部にあるQRは車両情報ではないですか？**」→ そのとおり。記録事項にもQRがあり、**OCRより確実**。
