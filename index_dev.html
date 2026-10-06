@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791194218751';
+    window.__APP_BUILD='build-1791255820293';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.53';
+const APP_VERSION = '3.54';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3337,7 +3337,36 @@ function mergeInspFresh(local, server, nowTs){
   return out;
 }
 
-function mergeSharedObjects(local, server, nowTs){
+// ★自分がさっき書いた所の覚え書き（パス → 書いた時刻）。
+//   「サーバーに無い＝誰かが消した」のか「自分が今作ったばかりでサーバーがまだ知らない」のかを
+//   見分けるために使う（2026-10-06・Kyoshi承認のBLOCK-B変更）。
+const SH_SEP = String.fromCharCode(0);
+const _shMine = {};
+const shMineMark = (key, before, next) => {
+  const ts = Date.now();
+  const obj = x => x && typeof x === 'object' && !Array.isArray(x);
+  if (!obj(before) || !obj(next)) return;
+  const m = (_shMine[key] = _shMine[key] || {});
+  const cids = new Set([...Object.keys(before), ...Object.keys(next)]);
+  cids.forEach(cid => {
+    const b = before[cid], n = next[cid];
+    if (JSON.stringify(b) === JSON.stringify(n)) return;
+    if (obj(b) && obj(n)) {
+      const ks = new Set([...Object.keys(b), ...Object.keys(n)]);
+      ks.forEach(d => { if (JSON.stringify(b[d]) !== JSON.stringify(n[d])) m[cid + SH_SEP + d] = ts; });
+    } else {
+      m[cid] = ts;                                  // 1段目ごと触った（日まるごと等）
+    }
+  });
+  // 古い覚え書きは捨てる（たまるのを防ぐ）
+  for (const p in m) if (ts - m[p] > SHARED_FRESH_MS * 2) delete m[p];
+};
+const shMineHas = (key, cid, day, nowTs) => {
+  const m = _shMine[key]; if (!m) return false;
+  const t = m[cid + SH_SEP + day] || m[cid];
+  return !!t && (nowTs - t) < SHARED_FRESH_MS;
+};
+function mergeSharedObjects(local, server, nowTs, key){
   const mg = {...server};
   for (const cid of Object.keys(local||{})) {
     const lCar = local[cid]||{};
@@ -3350,8 +3379,16 @@ function mergeSharedObjects(local, server, nowTs){
     const merged = {...gCar};
     for (const day of Object.keys(lCar)) {
       const lRec=lCar[day], gRec=gCar[day];
-      const newerLocal = !(day in gCar) || (sharedRecTs(lRec)||0) > (sharedRecTs(gRec)||0);
-      if (newerLocal && sharedRecFresh(lRec,nowTs)) merged[day] = lRec;
+      if (!(day in gCar)) {
+        // ★サーバーに無い＝誰かが消した／動かした可能性がある。
+        //   **自分がさっき書いた分だけ**残す。他の人が作って他の人が動かした分を作り直さない。
+        //   （2026-10-06 ユーザー報告：他店で11時→13時に動かした予定が、見ているPCにだけ
+        //     11時と13時の2つに見えた。ここで消えた11時を毎回作り直していた）
+        if (shMineHas(key, cid, day, nowTs) && sharedRecFresh(lRec,nowTs)) merged[day] = lRec;
+        continue;
+      }
+      // 両方にある時は、新しい方を採る（自分の編集がサーバーの古い写しに負けないように）
+      if ((sharedRecTs(lRec)||0) > (sharedRecTs(gRec)||0) && sharedRecFresh(lRec,nowTs)) merged[day] = lRec;
     }
     mg[cid] = merged;
   }
@@ -3699,7 +3736,7 @@ function useShared(key, def, pollMs=60000) {
           const local = localRef.current;
           if (local && typeof local==='object' && !Array.isArray(local) &&
               v   && typeof v   ==='object' && !Array.isArray(v)) {
-            const mg = mergeSharedObjects(local, v, Date.now());
+            const mg = mergeSharedObjects(local, v, Date.now(), key);
             localRef.current = mg; setVal(mg);
           } else {
             localRef.current = v; setVal(v);
@@ -3712,6 +3749,7 @@ function useShared(key, def, pollMs=60000) {
   const update = useCallback((fn) => {
     const before = localRef.current;                              // 保存前の手元（差分の基準）
     const next = typeof fn === 'function' ? fn(before) : fn;
+    shMineMark(key, before, next);     // ★どこを自分が触ったか覚える（幽霊の行を作らないため）
     localRef.current = next;
     setVal(next);
     writeCount.current += 1;
@@ -11028,8 +11066,16 @@ function AppInner() {
         base=>{
           const seed=(o.getLocal&&o.getLocal())||null;
           const base2=(seed&&base&&typeof base==='object'&&!Array.isArray(base))
-            ?mergeSharedObjects(seed,base,Date.now()):base;
-          const v=mutate(base2); if(v!==undefined)updateLocal(v); return v;
+            ?mergeSharedObjects(seed,base,Date.now(),key):base;
+          const v=mutate(base2);
+          if(v!==undefined){
+            // ★ここで変えた所を「自分が書いた分」として覚える（2026-10-06）。
+            //   次の保存のとき、サーバーがまだ知らないこの予約を土台に足し直せる。
+            //   useShared の update を通らない書き方なので、ここで明示的に覚える必要がある。
+            try{ shMineMark(key, seed||{}, v); }catch(e){}
+            updateLocal(v);
+          }
+          return v;
         },
         back=>{ try{return !!confirmFn(back);}catch(e){return false;} },
         3,{requireBase:true} // 読めなかったサーバー値を「空」とみなして書かない
@@ -11045,7 +11091,7 @@ function AppInner() {
         try{
           const fresh=await sGet(key);
           if(fresh&&typeof fresh==='object'&&!Array.isArray(fresh))
-            updateLocal(prev=>mergeSharedObjects(prev||{},fresh,Date.now()));
+            updateLocal(prev=>mergeSharedObjects(prev||{},fresh,Date.now(),key));
         }catch(e){}
       }else if(o.alert!==false){
         const lbl=o.label||'代車予約';
@@ -11345,13 +11391,15 @@ function AppInner() {
     //   （＝「代車の反映が遅い／消えたり現れたり」の一因。2026-08-25にユーザーが報告）。
     //   mergeSharedObjects は「作られたばかりのローカル専用レコード」だけを残すので、
     //   他PCの削除は従来どおり反映される。
-    const applyIfObj=(fn)=>(v)=>{if(v&&typeof v==='object'&&!Array.isArray(v))fn(prev=>mergeSharedObjects(prev||{},v,Date.now()));};
-    sGet(STOR+'insp').then(applyIfObj(updateLocalInspData));
-    sGet(storKey('sched','honten')).then(applyIfObj(updateLocalSchedH));
-    sGet(storKey('sched','sanda')).then(applyIfObj(updateLocalSchedS));
-    sGet(storKey('lres','honten')).then(applyIfObj(updateLocalLresH));
-    sGet(storKey('lres','sanda')).then(applyIfObj(updateLocalLresS));
-    sGet(STOR+'rres').then(applyIfObj(updateLocalRres));
+    // ★どのキーを読み直したかを渡す。渡さないと「自分が書いた分」が分からず、
+    //   他の人が動かした予定の“前の時間”を作り直してしまう（2026-10-06 の幽霊の件）
+    const applyIfObj=(fn,k)=>(v)=>{if(v&&typeof v==='object'&&!Array.isArray(v))fn(prev=>mergeSharedObjects(prev||{},v,Date.now(),k));};
+    sGet(STOR+'insp').then(applyIfObj(updateLocalInspData,STOR+'insp'));
+    sGet(storKey('sched','honten')).then(applyIfObj(updateLocalSchedH,storKey('sched','honten')));
+    sGet(storKey('sched','sanda')).then(applyIfObj(updateLocalSchedS,storKey('sched','sanda')));
+    sGet(storKey('lres','honten')).then(applyIfObj(updateLocalLresH,storKey('lres','honten')));
+    sGet(storKey('lres','sanda')).then(applyIfObj(updateLocalLresS,storKey('lres','sanda')));
+    sGet(STOR+'rres').then(applyIfObj(updateLocalRres,STOR+'rres'));
     sGet(STOR+'locks').then(applyIfObj(updateLocalLocks));
     // customers.htmlから戻ったとき店舗をログインユーザーに合わせて復元
     try{
@@ -12756,6 +12804,41 @@ function AppInner() {
     }));
   },[schedData,setSchedData,shownArrived,runAfterPaint,markArrivedOv]);
 
+  // ★納車済みチェック（2026-10-06 ユーザー指摘）。
+  //   入庫（arrived）とは**別の印**。納車日の行でだけ押せて、納車が終わってから付ける。
+  //   同じ予約でも「入庫した」と「納車した」は別のことなので、印を分ける。
+  const deliveredKey=(dk,row,idx)=>arrivedKey(dk,row,idx)+'|D';
+  const shownDelivered=useCallback((k,row)=>{
+    const o=arrivedOvRef.current[k];
+    return o?!!o.v:!!(row&&row.delivered);
+  },[]);
+  const toggleInspDelivered=useCallback((dk,idx)=>{
+    const cur=(inspData[dk]||[])[idx];
+    if(!cur||!cur.name)return;
+    const k=deliveredKey(dk,cur,idx);
+    const next=!shownDelivered(k,cur);
+    markArrivedOv(k,next);
+    const _tgt={custId:cur.custId,seq:(cur.seq!=null)?cur.seq:null,name:cur.name,no:cur.no,idx,limit:inspLimits[dk]??6};
+    runAfterPaint(k,()=>persistInsp(
+      base=>patchInspBooking(base,dk,_tgt,{delivered:next||undefined}),
+      back=>{const rows=(back&&back[dk])||[];const j=rows.findIndex(_inspMatcher(_tgt));return j>=0&&!!rows[j].delivered===next;},
+      {name:cur.name,verb:next?'納車チェック':'納車チェックの解除',dk,alert:false}
+    ));
+  },[inspData,inspLimits,persistInsp,shownDelivered,runAfterPaint,markArrivedOv]);
+  const toggleSchedDelivered=useCallback((dk,slotKey)=>{
+    const cur=(schedData[dk]||{})[slotKey];
+    if(!cur||!cur.name)return;
+    const k=deliveredKey(dk,cur,slotKey);
+    const next=!shownDelivered(k,cur);
+    markArrivedOv(k,next);
+    runAfterPaint(k,()=>setSchedData(prev=>{
+      const day={...((prev&&prev[dk])||{})};
+      const r=day[slotKey]; if(!r)return prev;
+      day[slotKey]=next?{...r,delivered:true}:(()=>{const {delivered,...rest}=r;return rest;})();
+      return {...prev,[dk]:day};
+    }));
+  },[schedData,setSchedData,shownDelivered,runAfterPaint,markArrivedOv]);
+
   const handleApprove=useCallback((dk,idx)=>{
     const cur=(inspData[dk]||[])[idx];
     if(!cur)return;
@@ -13093,13 +13176,49 @@ function AppInner() {
     setShowStaffRegister(false);
     setTimeout(()=>setShowStaffSettings(true),80);
   },[setStaffListH,setStaffListS]);
+  // ★名前を変えたら、休日・有給・休日メモに残っている古い名前も一緒に直す（2026-10-06）。
+  //   休日データは「氏名」で持っているので、名簿だけ直すと休日がその人と結びつかなくなり、
+  //   カレンダーには出るのにタイムスケジュールには出ない、という食い違いになる。
+  const renameStaffInOff=useCallback((store,oldName,newName)=>{
+    if(!oldName||!newName||oldName===newName)return;
+    const isH=store==='honten';
+    const off=isH?dayOffDataH:dayOffDataS, setOff=isH?setDayOffDataH:setDayOffDataS;
+    const pl =isH?paidLeaveDataH:paidLeaveDataS, setPl =isH?setPaidLeaveDataH:setPaidLeaveDataS;
+    const nt =isH?offNoteH:offNoteS,          setNt =isH?setOffNoteH:setOffNoteS;
+    const swap=(src)=>{
+      let hit=false; const out={...(src||{})};
+      for(const k in out){
+        const a=out[k]; if(!Array.isArray(a)||a.indexOf(oldName)<0)continue;
+        hit=true;
+        const n=a.map(x=>x===oldName?newName:x);
+        out[k]=n.filter((x,i)=>n.indexOf(x)===i);     // 新旧が両方入っていた時は1つに
+      }
+      return hit?out:null;
+    };
+    const o1=swap(off); if(o1)setOff(o1);
+    const o2=swap(pl);  if(o2)setPl(o2);
+    const n0=nt||{}; let hit3=false; const o3={...n0};
+    for(const k in n0){ const p=String(k).split('::');
+      if(p.length===2&&p[1]===oldName){ o3[p[0]+'::'+newName]=n0[k]; delete o3[k]; hit3=true; } }
+    if(hit3)setNt(o3);
+    const cnt=(o1?Object.keys(o1).filter(k=>(o1[k]||[]).includes(newName)).length:0);
+    if(o1||o2||hit3)console.info('[staff] 名前の変更にあわせて休日データも直しました',oldName,'→',newName,cnt+'日');
+  },[dayOffDataH,dayOffDataS,setDayOffDataH,setDayOffDataS,
+     paidLeaveDataH,paidLeaveDataS,setPaidLeaveDataH,setPaidLeaveDataS,
+     offNoteH,offNoteS,setOffNoteH,setOffNoteS]);
   const handleUpdateStaff=useCallback((updated)=>{
-    if(updated.store==='honten'){
+    const isH=updated.store==='honten';
+    const prevList=isH?staffListH:staffListS;
+    const before=(prevList||[]).find(s=>s.uid===updated.uid);
+    if(isH){
       setStaffListH(p=>{const list=p&&p.length>0?p:DEFAULT_STAFF_HONTEN;return list.map(s=>s.uid===updated.uid?updated:s);});
     }else{
       setStaffListS(p=>{const list=p&&p.length>0?p:DEFAULT_STAFF_SANDA;return list.map(s=>s.uid===updated.uid?updated:s);});
     }
-  },[setStaffListH,setStaffListS]);
+    // ★名前が変わったら休日データも追従させる（2026-10-06 ユーザー報告の再発防止）
+    if(before&&before.name&&updated.name&&before.name!==updated.name)
+      renameStaffInOff(isH?'honten':'sanda',before.name,updated.name);
+  },[setStaffListH,setStaffListS,staffListH,staffListS,renameStaffInOff]);
   const handleDeleteStaff=useCallback((target)=>{
     if(target.store==='honten'){
       setStaffListH(p=>{const list=p&&p.length>0?p:DEFAULT_STAFF_HONTEN;return list.filter(s=>s.uid!==target.uid);});
@@ -14023,7 +14142,15 @@ function AppInner() {
                   const manualOffs=dayOffData[dk]||[];
                   const offs=storeHoliday?currentStaffList.map(s=>s.name):manualOffs;
                   const working=storeHoliday?[]:currentStaffList.filter(s=>!manualOffs.includes(s.name));
-                  const dayoff=storeHoliday?currentStaffList:currentStaffList.filter(s=>manualOffs.includes(s.name));
+                  // ★休日に入っている名前は、名簿に無くても**必ず出す**（2026-10-06 ユーザー報告）。
+                  //   名簿を名前で絞り込んでいたため、名前を変えた人の休日が黙って消えていた。
+                  //   カレンダーは出る／スケジュールは出ない、の食い違いの正体がこれ。
+                  const dayoff=storeHoliday
+                    ?currentStaffList.map(s=>({id:s.id||s.uid||s.name,name:s.name,unknown:false}))
+                    :manualOffs.map(n=>{
+                        const m=currentStaffList.find(x=>x.name===n);
+                        return {id:(m&&(m.id||m.uid))||('x-'+n),name:n,unknown:!m};
+                      });
                   return(
                     <div style={{display:'flex',alignItems:'stretch',border:'1px solid #e5e7eb',borderRadius:8,overflow:'hidden',marginBottom:6}}>
                       <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',background:storeHoliday?'#f3f4f6':vsStore.bg,flex:1,flexWrap:'wrap',minWidth:0}}>
@@ -14048,8 +14175,10 @@ function AppInner() {
                           ? dayoff.map(s=>{
                               const nv=((vsId==='honten'?offNoteH:offNoteS)||{})[dk+'::'+s.name];
                               const note=storeHoliday?'':(typeof nv==='string'?nv:(nv&&nv.memo)||'');
+                              const ttl=s.unknown?'この名前はスタッフ名簿にありません（名前を変えた可能性があります）':(note||undefined);
                               return(
-                              <span key={s.id} title={note||undefined} style={{padding:'2px 9px',borderRadius:20,background:'#9ca3af',color:'white',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+                              <span key={s.id} title={ttl} style={{padding:'2px 9px',borderRadius:20,background:s.unknown?'#f59e0b':'#9ca3af',color:'white',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+                                {s.unknown&&<span style={{marginRight:3}}>⚠</span>}
                                 {s.name}{note&&<span style={{fontWeight:400,opacity:.9}}>（{note.length>8?note.slice(0,8)+'…':note}）</span>}
                               </span>
                               );})
@@ -14547,9 +14676,10 @@ function AppInner() {
                             {/* 納車（この日に納車する車検・予定）を読み取り専用で表示。クリックで元の予約を開く */}
                             {(_dlBySlot[slot]||[]).map((d,di)=>{
                               const r=d.r,wl=d.wdk.split('-');
-                              // ★納車行も同じ予約の姿。ここでのチェックも元の予約に付く。
-                              const _ak=arrivedKey(d.wdk,r,d.kind==='insp'?d.ix:d.sk);
-                              const _arr=arrivedOv[_ak]?!!arrivedOv[_ak].v:!!r.arrived;
+                              // ★納車の印は入庫（arrived）とは別（2026-10-06 ユーザー指摘）。
+                              //   入庫でチェックを入れても、納車の行は外れたまま。納車が終わってから押す。
+                              const _ak=deliveredKey(d.wdk,r,d.kind==='insp'?d.ix:d.sk);
+                              const _arr=arrivedOv[_ak]?!!arrivedOv[_ak].v:!!r.delivered;
                               const loaner=d.kind==='insp'
                                 ?(r.rentalLabel||getLoanerLabel(loanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`)||r.loaner||'')
                                 :(r.rentalLabel||r.loaner||'');
@@ -14560,8 +14690,8 @@ function AppInner() {
                                 <tr key={'dl-'+d.kind+'-'+d.wdk+'-'+(d.ix??d.sk)+'-'+di}
                                   onClick={()=>d.kind==='insp'?handleOpenModal('insp',d.wdk,d.ix,null,false):handleOpenModal('sched',d.wdk,null,d.sk,false)}
                                   style={{background:'#ecfdf5',cursor:'pointer'}} title="納車予定（クリックで元の予約を編集）">
-                                  <td onClick={e=>{e.preventDefault();e.stopPropagation();d.kind==='insp'?toggleInspArrived(d.wdk,d.ix):toggleSchedArrived(d.wdk,d.sk);}}
-                                    title={_arr?'入庫済み（クリックで解除）':'入庫したらクリック'}
+                                  <td onClick={e=>{e.preventDefault();e.stopPropagation();d.kind==='insp'?toggleInspDelivered(d.wdk,d.ix):toggleSchedDelivered(d.wdk,d.sk);}}
+                                    title={_arr?'納車済み（クリックで解除）':'納車が終わったらクリック'}
                                     style={{...TD,width:50,maxWidth:50,cursor:'pointer',textAlign:_arr?'center':undefined,background:_arr?'#fde047':undefined,paddingLeft:6,paddingRight:3,whiteSpace:isSpecialSlot(slot)?'normal':'nowrap',lineHeight:isSpecialSlot(slot)?1.12:undefined,color:'#065f46',fontWeight:700,fontSize:isSpecialSlot(slot)?10:11,borderLeft:'3px solid #059669'}}>
                                     {_arr?<span style={{fontWeight:900,color:'#dc2626',fontSize:15,lineHeight:1}}>✓</span>:(isSpecialSlot(slot)?specialSlotLabel(slot):slot)}</td>
                                   <td style={{...TD,fontWeight:700,color:'#064e3b',whiteSpace:'nowrap'}}>{r.name}</td>

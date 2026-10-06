@@ -11,11 +11,16 @@ const pick = (file) => {
   const i = s.indexOf('const SHARED_FRESH_MS');
   const j = s.indexOf('mergeSharedObjects', i);
   const k = s.indexOf('\n};', j) >= 0 ? s.indexOf('\n};', j) + 3 : s.indexOf('\n}', j) + 2;
-  return new Function(s.slice(i, k) + '\nreturn mergeSharedObjects;')();
+  // index_dev.html からは「自分が書いた所」を覚える仕掛けも一緒に取り出す（2026-10-06）
+  const tail = '\nreturn {merge: mergeSharedObjects, mark: (typeof shMineMark===\u0022function\u0022)?shMineMark:null};';
+  return new Function(s.slice(i, k) + tail)();
 };
 for (const file of ['index_dev.html', 'customers.html']) {
   console.log('=== ' + file);
-  const merge = pick(file);
+  const got = pick(file);
+  const mark = got.mark;
+  const KEY = 'hub-v8-dev-honten-lres';
+  const merge = (local, server, now) => got.merge(local, server, now, KEY);
   const now = Date.now();
   // ① 台数制限（数値）は壊れない
   const r1 = merge({ '2026-11-2': 3 }, { '2026-11-2': 3, '2026-11-3': 5 }, now);
@@ -28,8 +33,15 @@ for (const file of ['index_dev.html', 'customers.html']) {
   t('文字列・null もサーバー値を使う', r3.a === 'y' && r3.b === 2, r3);
   // ④ これまでどおり {車:{日:予約}} はマージする（作りたてのローカル分は残る）
   const rec = { id: now, name: 'テスト' };
+  // ★自分が今入れた代車予約は、サーバーがまだ知らなくても残る（2026-08-26 の「代車が消える」対策）
+  if (mark) mark(KEY, { car1: {} }, { car1: { '2026-9-1': rec } });
   const r4 = merge({ car1: { '2026-9-1': rec } }, { car1: {}, car2: { '2026-9-2': { id: 1, name: 'サーバー' } } }, now);
-  t('代車予約（入れ子）は今までどおりマージする', r4.car1['2026-9-1'] && r4.car1['2026-9-1'].name === 'テスト' && r4.car2['2026-9-2'].name === 'サーバー', r4);
+  t('自分が入れたばかりの代車予約は残る', r4.car1['2026-9-1'] && r4.car1['2026-9-1'].name === 'テスト' && r4.car2['2026-9-2'].name === 'サーバー', r4);
+  // ★他の人が入れて他の人が消した分は作り直さない（2026-10-06 の「幽霊の行」対策）
+  if (mark) {
+    const r4b = got.merge({ car9: { '2026-9-1': { id: now, name: '他の人のもの' } } }, { car9: {} }, now, 'hub-v8-dev-sanda-lres');
+    t('他の人が消した分は作り直さない', !r4b.car9['2026-9-1'], r4b);
+  }
   // ⑤ 配列はサーバー値のまま
   const r5 = merge({ k: [1, 2] }, { k: [3] }, now);
   t('配列はサーバー値のまま', Array.isArray(r5.k) && r5.k.length === 1, r5);
