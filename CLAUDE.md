@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -102,7 +102,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   何日前から知らせるかは**画面の「⚙ アラートの設定」で変えられる**（既定：黄＝90日前／赤＝期日を過ぎたら。`__cfg__` の行に保存）。
 - 手で追加する時の**最低限**：車名・ナンバー(FULL)・登録日・車検満了日・初度登録・ボディ色・目的・店舗（足りないと保存できない）。
 - 代車管理とのリンク：ナンバー下4桁で照合し、ボタンで代車管理の表へ入れる／内容を更新する。
-- 車検証（写真）の保存と2次元コードからの自動入力は **v3.48 でスマホ側に入れた**（下の「スマホの「🛠 機能」」を見ること）。PDF の取り込みはまだ。
+- 車検証（写真）の保存と2次元コードからの自動入力は **v3.48**、**記録事項の PDF 取り込みは v3.56** でスマホ側に入れた（下の各項を見ること）。
 - 直し（v3.43・2026-10-05 ユーザー確認）：
   ・**車検満了の「○日超過」は出さない**（残り日数だけ）。点検の超過は今までどおり出す。
   ・保険の○×は**セルの真ん中**。×は**濃い赤（#dc2626）に白抜き**で囲う。
@@ -225,6 +225,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   **「読み取ったら確定」にしないこと。** 目で確かめる前提の作り。
 - 検査は `node shaken_qr_test.js`（112件。項目名から・次の行から・まぎらわしい字の直し・項目名が読めない時の形からの推測）。
 - **本番にはまだ入れていない**（テスト版のみ）。
+
+### 自動車検査証記録事項の PDF から取り込む（v3.56・2026-10-06・テスト版のみ）
+- **なぜ入れたか**：ユーザー報告「写真では必要な情報まで入ってこない。車検証読み取りアプリから **PDF** に変換できるので、それを読めないか」。
+  **写真より確実**：車検証閲覧アプリが出す PDF には**文字そのもの**が入っているので、OCR のように 0とO・1とI を取り違えない。
+- **道具は `pdf.js`（pdfjs-dist 3.11.174・jsdelivr→cdnjs）**。**v4 系は ESM なので使えない。3系を使うこと。**
+  `pdfLoad` が読み込み時に `GlobalWorkerOptions.workerSrc` も同じ版に合わせる（ずれると開けない）。使う時だけ読み込む。
+- **`pdfText(doc)` は「同じ高さのものを1行にまとめて」から返す**。PDF の文字はばらばらの断片で入っているので、
+  まとめないと**項目名と値が離れて拾えない**（`transform[5]`＝縦位置で ±3 以内を同じ行、`transform[4]`＝横位置で左から並べる）。
+  取り出した文字は `shakenOcrParse(txt,'pdf')` に通す（項目名を手がかりにする拾い方は OCR と共通）。
+- **流れ**（`onPdf`）：① 文字から拾う → ②（文字が無いPDF＝スキャンしただけ）1ページ目を絵にして **QR** を探す → ③ それでも駄目なら**絵の文字を読む（OCR）**。
+  **車検証の控えは1ページ目を絵にしたもの**（JPEG）を使う＝PC の 📄 からそのまま開ける（PDF のままでは PC 側の表示を作り直す必要があるため）。
+- 入口：「📷 車検証を読み取る」の**先頭に「📄 PDFから読み取る」**（いちばん確実の印つき）。
+  写真の入口も `accept="image/*,application/pdf"` にしてあるので、ファイルから PDF を選んでも同じ流れに入る。
+- PDF から読んだ時は**「写真と見比べてください」の赤帯を出さない**（読み間違いが無いため）。代わりに緑の帯で「ほぼそのまま使えます」と出す。
+- 検査は `node shaken_pdf_test.js`（20件・**CDN に実接続**）。**本物の PDF を検査の中で組み立てて**（Type0/Identity-H＋ToUnicode の最小 PDF）、
+  pdf.js で読み直して ナンバー・初度登録・満了日・車台番号 が取れるかを見る。
+- **実物の PDF ではまだ確かめていない**（2026-10-06 時点）。並びが違っていた時のために、読み取った中身は確認画面で全部見られるようにしてある。
+- **本番にはまだ入れていない**（テスト版のみ）。
+
+### スマホの予約カードに電話番号（v3.56・2026-10-06・ユーザー要望）
+- 「スマホの予約カードにも電話番号の入力欄が欲しい。車検・一般共に」。PC版には前からあった（`form.phone`）が、
+  スマホは顧客リストから取った分が入るだけで**手で入れたり直したりできなかった**。
+- 置き場所は「車種／担当」のすぐ下（**PC版と同じ並び**）。**車検は 電話＋住所／一般整備は 電話だけ**（PC と同じ）。
+- 入っている時だけ **📞** が出て、タップでそのままかけられる（`tel:` は記号を外した数字だけにする）。
+- **入力欄は16px以上**（iPhone が勝手に拡大するため。`type="tel"`）。保存は `clean(form)` が拾うので追加の処理は要らない。
+- 検査は `node mobile_phone_test.js`（17件）。
 
 ### 本番のデータをテスト版へ写す（開発用・2026-10-05）
 - `node fb_copy_prod_to_dev.js`（下見）／`--write`（実行）。**向きは本番→テスト版の一方通行**。書き先が `hub-v8-dev-` で始まらなければ止まる（逆向きはできない作り）。
