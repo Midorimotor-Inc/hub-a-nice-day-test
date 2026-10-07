@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791364414489';
+  window.__APP_BUILD='build-1791365745690';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.59.5';
+const MOBILE_VERSION='3.60';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3881,7 +3881,7 @@ const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,sched
 const LOANER_SECTION_COLORS={honten:'#1d4ed8',sanda:'#dc2626',rental:'#7c3aed'};
 const LOANER_PRESS_MS=200;   // ★長押しと判定する時間（2026-10-07 ユーザー指示：0.2秒で反応させる）
 const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,loanerCarsS,vsId,
-                   inspData,schedData,onMoveLoaner,onMoveRental,onFixSync})=>{
+                   inspData,schedData,onMoveLoaner,onMoveRental,onFixSync,onDropSync})=>{
   const today=new Date();
   // ★表示は「月ごと」ではなく起点日からの連続49日（2026-07-30 ユーザー要望）。
   //   既定の起点＝本日の3日前 → 本日が左から4列目に出て、左スワイプ（横スクロール）で
@@ -4055,8 +4055,15 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
   // ══════ スケジュールとのズレ（PC版と同じ突き合わせ）══════
   const [syncOpen,setSyncOpen]=useState(false);
   const carLbl=c=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
-  const syncIssues=useMemo(()=>{
+  const [pastOpen,setPastOpen]=useState(false);   // 過去の分を見るか
+  // ★「本日以降」だけ数える（2026-10-07 ユーザー指示）。
+  //   返却が済んだ貸出まで数えると過去の食い違いが積み上がる（テスト版で119件あった）。
+  //   昔の予約は行の位置がずれて「ズレ」に見えることがあり、消すと貸出の履歴まで消えてしまうので、
+  //   過去の分は件数だけ出して触らない。
+  const syncAll=useMemo(()=>{
     const out=[],seen={};
+    const dkNum=dk=>{const p=String(dk||'').split('-');return p.length===3?(Number(p[0])*10000+Number(p[1])*100+Number(p[2])):0;};
+    const endOf=r=>(r&&r.ty!=null)?(r.ty*10000+(r.tm+1)*100+r.td):0;
     const scan=(kind,resObj,cars)=>{
       Object.keys(resObj||{}).forEach(cid=>{
         const car=(cars||[]).find(c=>String(c.id)===String(cid));
@@ -4065,14 +4072,15 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
           seen[r.bookingKey]=true;
           const f=bkRowM(r.bookingKey), want=carLbl(car);
           if(!f||!f.row||!f.row.name){
-            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,
+            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,resId:r.id,
+              dk:(r.fy!=null?(r.fy+'-'+(r.fm+1)+'-'+r.fd):''),endNum:endOf(r),
               text:'スケジュールに予約が見つかりません'});
             return;
           }
           const have=kind==='rental'?(f.row.rentalLabel||''):(f.row.loaner||'');
           if(String(have).trim()!==String(want).trim())
-            out.push({kind,type:'label',bk:r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,
-              dk:f.dk,at:f.at,rowKind:f.kind,text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
+            out.push({kind,type:'label',bk:r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,resId:r.id,
+              dk:f.dk,at:f.at,rowKind:f.kind,endNum:endOf(r),text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
         });
       });
     };
@@ -4084,13 +4092,26 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
       if(!lbl&&!rlbl)return;
       const bk=kind+'-'+dk+'-'+at;
       if(seen[bk])return;
-      out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,
+      out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,endNum:dkNum(dk),
         text:'予約カードに'+(rlbl?'レンタカー':'代車')+'名があるのに、代車管理に貸出がありません'});
     };
     Object.keys(inspData||{}).forEach(dk=>((inspData[dk]||[]).forEach((row,i)=>rev(dk,String(i),row,'insp'))));
     Object.keys(schedData||{}).forEach(dk=>Object.keys(schedData[dk]||{}).forEach(sk=>rev(dk,sk,schedData[dk][sk],'sched')));
-    return out;
-  },[myLoanerRes,rentalRes,myLoaners,rentals,inspData,schedData]);
+    // 日が分からないものは「本日以降」に入れる（黙って隠さない）
+    return {now:out.filter(x=>!x.endNum||x.endNum>=_todayN), past:out.filter(x=>x.endNum&&x.endNum<_todayN)};
+  },[myLoanerRes,rentalRes,myLoaners,rentals,inspData,schedData,_todayN]);
+  const syncIssues=syncAll.now, syncPast=syncAll.past;
+  const dkSlash=dk=>String(dk||'').replace(/-/g,'/');
+  // 消す前にもう一度たずねる（2026-10-07 ユーザー指示）。何を消すのかを必ず書く
+  const dropAsk=(it)=>{
+    if(!it)return false;
+    const B=String.fromCharCode(10), who=it.user||'（氏名なし）', when=dkSlash(it.dk);
+    const head=it.type==='row'?'代車管理からこの貸出を消します。':('予約カードの'+(it.kind==='rental'?'レンタカー名':'代車名')+'を消します。');
+    const what=who+'　'+(it.type==='row'?(it.want||''):(it.have||''))+(when?('　'+when):'');
+    const why=it.type==='row'?'スケジュールに予約が無いので、代車管理だけに残っている貸出です。'
+                             :'代車管理に貸出が無いので、予約カードだけに名前が残っている状態です。';
+    return window.confirm(head+B+B+what+B+B+why+B+'消すと元に戻せません。よろしいですか？');
+  };
 
   const LCAR_COLORS=['#fca5a5','#86efac','#93c5fd','#fde68a','#c4b5fd','#f9a8d4','#6ee7b7','#fbbf24'];
   const RCAR_COLORS=['#d8b4fe','#a5b4fc','#6ee7b7','#fde68a','#fca5a5','#93c5fd'];
@@ -4240,12 +4261,37 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
                     )}
                     {it.type!=='label'&&(
                       <div style={{fontSize:10.5,color:'#92400e',marginTop:5,lineHeight:1.7}}>
-                        片方にしか無いので自動では直せません。予約カードか代車管理のどちらかを手で合わせてください。
+                        片方にしか無いので自動では直せません。手で合わせるか、下の「消す」で片方だけ残っている分を消せます。
                       </div>
+                    )}
+                    {it.type!=='label'&&onDropSync&&(
+                      <button onClick={()=>{if(dropAsk(it))onDropSync(it);}}
+                        style={{marginTop:7,width:'100%',padding:'9px 0',borderRadius:9,border:'1.5px solid #dc2626',background:'white',color:'#b91c1c',fontWeight:800,fontSize:12}}>
+                        🗑 {it.type==='row'?'この貸出を消す（代車管理から）':'予約カードの代車名を消す'}
+                      </button>
                     )}
                   </div>
                 ))}
               </>)}
+              {syncPast.length>0&&(
+                <div style={{marginTop:12,borderTop:'1px dashed #cbd5e1',paddingTop:10}}>
+                  <div style={{fontSize:10.5,color:'#64748b',lineHeight:1.75}}>
+                    返却が済んだ過去の分 <b>{syncPast.length}件</b> は数えていません。
+                    昔の予約は行の位置がずれて「ズレ」に見えることがあり、消すと貸出の履歴まで消えてしまうので、そのままにしています。
+                  </div>
+                  <button onClick={()=>setPastOpen(v=>!v)}
+                    style={{marginTop:7,padding:'7px 13px',borderRadius:8,border:'1px solid #cbd5e1',background:'white',color:'#475569',fontWeight:700,fontSize:11}}>
+                    {pastOpen?'閉じる':'過去の分を見る'}
+                  </button>
+                  {pastOpen&&syncPast.map((it,i)=>(
+                    <div key={'p'+i} style={{marginTop:6,padding:'7px 9px',borderRadius:8,background:'#f8fafc',border:'1px solid #e2e8f0',fontSize:10.5,color:'#475569',lineHeight:1.7}}>
+                      <b style={{color:'#1e293b'}}>{it.user||'（氏名なし）'}</b>　{dkSlash(it.dk)}　
+                      <span style={{color:'#94a3b8'}}>{it.kind==='rental'?'レンタカー':'代車'}</span><br/>
+                      {it.text}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{padding:'11px 14px 18px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8,flexShrink:0}}>
               {syncIssues.filter(x=>x.type==='label').length>1&&onFixSync&&(
@@ -6155,6 +6201,36 @@ const App=()=>{
     catch(e){ alert('直せませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e)); }
   },[hotInsp,schedDataH,schedDataS,vsId]);
 
+  // ── ズレを消す（2026-10-07 ユーザー要望「任意でズレを削除できるように」）──
+  //   type:'row'  ＝ スケジュールに予約が無いのに代車管理に残っている貸出 → その貸出（帯）を消す
+  //   type:'bar'  ＝ 代車管理に貸出が無いのに予約カードに代車名が残っている → 予約カードの代車名を消す
+  //   どちらも「片方だけ残っている分」を消すだけ。両方そろっているもの（type:'label'）は「直す」で合わせる。
+  //   消す前の確認は画面側（dropAsk）で出している。
+  const dropSyncM=useCallback(async(it)=>{
+    if(!it)return;
+    try{
+      if(it.type==='row'){
+        const isR=it.kind==='rental';
+        const key=isR?(STOR+'rres'):storKey('lres',vsId);
+        const local=isR?rentalResData:(vsId==='honten'?loanerResH:loanerResS);
+        const apply=v=>{ if(isR)setRentalResData(v); else if(vsId==='honten')setLoanerResH(v); else setLoanerResS(v); };
+        await writeShared(key,local,base=>{
+          const out={...(base||{})};
+          const ck=Object.keys(out).find(k=>String(k)===String(it.carId));
+          if(ck==null)return out;
+          const days={...(out[ck]||{})};
+          let hit=false;
+          for(const kk in days){ if(days[kk]&&days[kk].id===it.resId){ delete days[kk]; hit=true; break; } }
+          if(!hit)return out;                       // もう無い（他の端末が先に消した）
+          return {...out,[String(ck)]:days};
+        },apply,null,true);
+      }else if(it.type==='bar'){
+        const isR=it.kind==='rental';
+        await writeCarLabel(it.bk,it.user,isR?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null});
+      }
+    }catch(e){ alert('消せませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e)); }
+  },[vsId,rentalResData,loanerResH,loanerResS,hotInsp,schedDataH,schedDataS]);
+
   const saveCore=async(req,form,loanerAction)=>{
     // ★画面の中だけで使う印（_dk・_slot・_store）は保存しない（2026-10-02）
     const clean=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
@@ -6691,7 +6767,7 @@ const App=()=>{
         {tab==='loaner'&&<LoanerView loanerResH={loanerResH} loanerResS={loanerResS} rentalResData={rentalResData} rentalCars={rentalCars}
           loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId}
           inspData={inspData} schedData={vsId==='honten'?schedDataH:schedDataS}
-          onMoveLoaner={moveLoanerCarM} onMoveRental={moveRentalCarM} onFixSync={fixSyncM}/>}
+          onMoveLoaner={moveLoanerCarM} onMoveRental={moveRentalCarM} onFixSync={fixSyncM} onDropSync={dropSyncM}/>}
         {tab==='cust'&&<CustSheet embedded names={cfNames} cache={cfCache} busy={cfBusy} loadingName={cfLoadingName}
           cfx={cfx} cfxBusy={cfBusy&&!cfx} initCust={custSheet&&custSheet.cust||null} initMode={custSheet&&custSheet.mode||'find'}
           vsId={vsId} isClosedDk={isClosedDk} onNeedFile={needCfFile}

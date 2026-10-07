@@ -39,7 +39,9 @@ const dk = (o) => `${o.y}-${o.m + 1}-${o.d}`;
 const F1 = d(5), T1 = d(7);      // これから貸す（動かせる）
 const F3 = d(12), T3 = d(14);    // はじめからズレている（予約カードとの食い違いを確かめる用）
 const F2 = d(-2), T2 = d(-1);    // 過去（動かせない）。既定の表示（3日前〜）に入る位置に置く
-const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' }];
+// ジムニーは「片方だけ残った貸出」の置き場（入れ替えの行き先には使わない）
+const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' }, { id: 3, name: 'ジムニー', num: '3504' }];
+const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以降の「スケジュールに予約が無い貸出」
 
 (async () => {
   const bk1 = 'insp-' + dk(F1) + '-0', bk2 = 'insp-' + dk(F2) + '-0';
@@ -60,7 +62,12 @@ const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'ス�
         r1: { id: 2001, user: '辻井　博', fy: F1.y, fm: F1.m, fd: F1.d, ty: T1.y, tm: T1.m, td: T1.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk1 },
         r2: { id: 2002, user: '大山　明', fy: F2.y, fm: F2.m, fd: F2.d, ty: T2.y, tm: T2.m, td: T2.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk2 },
         r3: { id: 2003, user: '芝田　一郎', fy: F3.y, fm: F3.m, fd: F3.d, ty: T3.y, tm: T3.m, td: T3.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'insp-' + dk(F3) + '-0' },
-      }, '2': {}
+      }, '2': {},
+      // ★スケジュールに予約が無い貸出（＝片方だけ残っているズレ）。過去の分は数えない・本日以降の分は数える
+      '3': {
+        rp: { id: 2099, user: '過去　太郎', fy: PF.y, fm: PF.m, fd: PF.d, ty: PT.y, tm: PT.m, td: PT.d, carName: 'ジムニー', carNum: '3504', bookingKey: 'insp-' + dk(PF) + '-9' },
+        rn: { id: 2098, user: '未来　花子', fy: NF.y, fm: NF.m, fd: NF.d, ty: NT.y, tm: NT.m, td: NT.d, carName: 'ジムニー', carNum: '3504', bookingKey: 'insp-' + dk(NF) + '-9' },
+      }
     },
     [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
   };
@@ -81,6 +88,10 @@ const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'ス�
   ctx.route('https://script.google.com/**', route => route.fulfill({ status: 200, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'null' }));
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
+  // ★確認（confirm）の返事を検査から切り替える。既定は「はい」
+  const alerts = [];
+  let answerYes = true;
+  page.on('dialog', dd => { alerts.push(dd.message()); answerYes ? dd.accept() : dd.dismiss(); });
   await page.goto('http://localhost:' + PORT + '/mobile.html', { waitUntil: 'domcontentloaded' });
   await seeText(page, '江川京志', 25000); await clickText(page, '江川京志');
   await seeText(page, 'カレンダー', 25000);
@@ -146,6 +157,41 @@ const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'ス�
   };
   const lres = () => page.evaluate(k => window.__fakeFb.get(k), STOR + 'honten-lres');
   const insp = () => page.evaluate(k => window.__fakeFb.get(k), STOR + 'insp');
+
+  head('⑥ ズレは本日以降だけ数える／任意で消せる（2026-10-07 ユーザー要望）');
+  {
+    // 種データのズレは3つ（予約カードとの食い違い1・片方だけ残った貸出が過去1と本日以降1）。
+    // 数えるのは本日以降の2つだけ。
+    t('★返却が済んだ過去のズレは数えない（本日以降の2件だけ）',
+      await page.evaluate(() => /スケジュールとズレ 2件/.test(document.body.innerText)),
+      await page.evaluate(() => (document.body.innerText.match(/スケジュールとズレ[^\n]*/g) || [])[0]));
+    await clickText(page, 'スケジュールとズレ');
+    await page.waitForTimeout(800);
+    t('片方だけ残っていると分かる', await seeText(page, 'スケジュールに予約が見つかりません', 5000));
+    t('過去の分は件数だけ出す', await seeText(page, '過去の分', 5000));
+    t('過去の分は「見る」まで中身を出さない', !(await page.evaluate(() => document.body.innerText)).includes('過去　太郎'));
+    await clickText(page, '過去の分を見る');
+    await page.waitForTimeout(500);
+    t('「見る」で過去の中身も読める', await seeText(page, '過去　太郎', 4000));
+    // 🗑 を押して「いいえ」→ 消えない
+    alerts.length = 0; answerYes = false;
+    const tapTrash = () => page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.indexOf('この貸出を消す') >= 0 && e.offsetParent !== null); if (b) { b.click(); return true; } return false; });
+    t('🗑 消すボタンが出ている', await tapTrash());
+    await page.waitForTimeout(1200);
+    t('★消す前にもう一度たずねる', alerts.some(m => /消すと元に戻せません/.test(m)), alerts.slice(0, 2));
+    t('何を消すのか書いてある', alerts.some(m => /未来　花子/.test(m) && /代車管理からこの貸出を消します/.test(m)), alerts.slice(0, 2));
+    const La = await lres();
+    t('★「いいえ」なら消えない', !!(La && La['3'] && La['3'].rn), Object.keys((La || {})['3'] || {}));
+    // 「はい」→ 消える
+    alerts.length = 0; answerYes = true;
+    await tapTrash();
+    await page.waitForTimeout(3000);
+    const Lb = await lres();
+    t('★「はい」で消える', !(Lb && Lb['3'] && Lb['3'].rn), Object.keys((Lb || {})['3'] || {}));
+    t('過去の分は消していない（貸出の履歴を守る）', !!(Lb && Lb['3'] && Lb['3'].rp));
+    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '閉じる' && e.offsetParent !== null); if (b) b.click(); });
+    await page.waitForTimeout(900);
+  }
 
   head('⑤ スケジュールとのズレ チェック（入れ替えより先に見る＝保存の待ちに引っかからないように）');
   t('★はじめからあるズレを見つけて赤く知らせる', await seeText(page, 'スケジュールとズレ', 8000),

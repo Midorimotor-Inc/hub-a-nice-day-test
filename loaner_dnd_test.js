@@ -260,6 +260,48 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   t('直したあとは「一致」に戻る', await seeText(page, 'スケジュールと一致', 6000),
     await page.evaluate(() => (document.body.innerText.match(/スケジュール[^\n]*/g) || []).slice(0, 3)));
 
+  head('⑥ ズレは本日以降だけ数える／任意で消せる（2026-10-07 ユーザー要望）');
+  {
+    // 片方だけ残った貸出（スケジュールに予約が無い帯）を、過去と本日以降にひとつずつ足す
+    const PF = d(-30), PT = d(-25), NF = d(6), NT = d(8);
+    const addBar = (key, rec) => page.evaluate(([k, kk, r]) => {
+      const v = window.__fakeFb.get(k) || {};
+      const next = { ...v, '4': { ...(v['4'] || {}), [kk]: r } };
+      window.__fakeFb.set(k, next); window.__fakeFb.emit(k, next);
+    }, [STOR + 'honten-lres', key, rec]);
+    await addBar('rp', { id: 1099, user: '過去　太郎', fy: PF.y, fm: PF.m, fd: PF.d, ty: PT.y, tm: PT.m, td: PT.d,
+      carName: 'ジムニー', carNum: '3504', bookingKey: 'insp-' + dk(PF) + '-9' });
+    await page.waitForTimeout(1600);
+    t('★返却が済んだ過去のズレは数えない', await seeText(page, 'スケジュールと一致', 6000),
+      await page.evaluate(() => (document.body.innerText.match(/スケジュール[^\n]*/g) || []).slice(0, 3)));
+    await addBar('rn', { id: 1098, user: '未来　花子', fy: NF.y, fm: NF.m, fd: NF.d, ty: NT.y, tm: NT.m, td: NT.d,
+      carName: 'ジムニー', carNum: '3504', bookingKey: 'insp-' + dk(NF) + '-9' });
+    await page.waitForTimeout(1600);
+    t('★本日以降のズレは数える', await seeText(page, 'スケジュールとズレ', 6000),
+      await page.evaluate(() => (document.body.innerText.match(/スケジュール[^\n]*/g) || []).slice(0, 3)));
+    t('数は本日以降の1件だけ', await page.evaluate(() => /スケジュールとズレ 1件/.test(document.body.innerText)),
+      await page.evaluate(() => (document.body.innerText.match(/スケジュールとズレ[^\n]*/g) || [])[0]));
+    await clickText(page, 'スケジュールとズレ');
+    await page.waitForTimeout(800);
+    t('片方だけ残っていると分かる', await seeText(page, 'スケジュールに予約が見つかりません', 5000));
+    t('過去の分は件数だけ出す', await seeText(page, '過去の分', 5000));
+    // 🗑 を押して「いいえ」→ 消えない
+    alerts.length = 0; answerYes = false;
+    const tapTrash = () => page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.indexOf('この貸出を消す') >= 0 && e.offsetParent !== null); if (b) { b.click(); return true; } return false; });
+    t('🗑 消すボタンが出ている', await tapTrash());
+    await page.waitForTimeout(1200);
+    t('★消す前にもう一度たずねる', alerts.some(m => /消すと元に戻せません/.test(m)), alerts.slice(0, 2));
+    const La = await lres();
+    t('★「いいえ」なら消えない', !!(La && La['4'] && La['4'].rn), Object.keys((La || {})['4'] || {}));
+    // 「はい」→ 消える
+    alerts.length = 0; answerYes = true;
+    await tapTrash();
+    await page.waitForTimeout(3000);
+    const Lb = await lres();
+    t('★「はい」で消える', !(Lb && Lb['4'] && Lb['4'].rn), Object.keys((Lb || {})['4'] || {}));
+    t('過去の分は消していない（貸出の履歴を守る）', !!(Lb && Lb['4'] && Lb['4'].rp));
+  }
+
   head('④ 代車 ⇄ レンタカーはまたがない（作りの確認）');
   const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
   t('入れ替えは同じ表の中だけ（kind が違えば受け付けない）', SRC.indexOf("if(!mvDrag||mvDrag.kind!==kind)return;") > 0);
