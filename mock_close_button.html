@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：PC画面の右上に ✕（閉じる）ボタン</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:#475569;margin:0 0 16px;line-height:1.85}
+  h2{font-size:15px;margin:24px 0 8px;border-left:5px solid #c2410c;padding-left:8px}
+  .win{border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.14);background:#fff;margin-bottom:8px}
+  .hdr{background:linear-gradient(135deg,#c2410c,#9a3412);padding:8px 12px;display:flex;align-items:center;gap:6px;color:#fff}
+  .hdr.blue{background:linear-gradient(135deg,#0284c7,#075985)}
+  .ttl{font-weight:900;font-size:13px;white-space:nowrap}
+  .badge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FFF7ED;color:#9A3412;border:2px solid #EA580C;white-space:nowrap}
+  .ok{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;background:#d1fae5;color:#059669;border:1px solid #6ee7b7}
+  .right{margin-left:auto;display:flex;align-items:center;gap:5}
+  .fsb{display:flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.55);border-radius:8px;font-weight:700;font-size:11;color:#fff;white-space:nowrap}
+  .chip{display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff7ed;border-radius:8px;border:2px solid rgba(194,65,12,.2)}
+  .chip.b{background:#eff6ff;border-color:rgba(2,132,199,.2)}
+  .av{width:20px;height:20px;border-radius:50%;background:#c2410c;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10px}
+  .av.b{background:#0284c7}
+  .nm{font-weight:700;color:#9a3412;font-size:11.5px}
+  .nm.b{color:#075985}
+  .ic{color:#6b7280;font-size:12px}
+  .nav{display:flex;gap:8px;justify-content:center;padding:6px 10px 8px;background:linear-gradient(135deg,#c2410c,#9a3412)}
+  .nav.blue{background:linear-gradient(135deg,#0284c7,#075985)}
+  .nb{width:110px;padding:5px 10px;border-radius:7px;font-size:11.5px;font-weight:700;color:#fff;background:rgba(255,255,255,.18);text-align:center}
+  .nb.on{background:#FFD166;color:#7C2D12;font-weight:900}
+  .stage{height:120px;background:#f8fafc;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px}
+  /* ✕ ボタンの案 */
+  .xb{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;flex-shrink:0;cursor:pointer}
+  .x-a{background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.55);color:#fff}
+  .x-b{background:#dc2626;border:2px solid #fca5a5;color:#fff}
+  .x-c{background:#fff;border:2px solid #fff;color:#c2410c}
+  .sep{width:1px;height:22px;background:rgba(255,255,255,.4);margin:0 4px;flex-shrink:0}
+  .cap{font-size:11.5px;font-weight:800;color:#475569;margin:4px 0 14px}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:13px 15px;margin-bottom:14px}
+  .q{font-size:12.5px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.95}
+  .warn{font-size:12.5px;color:#92400e;background:#fffbeb;border:2px solid #fcd34d;border-radius:8px;padding:10px 12px;line-height:1.95}
+  .dlg{border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);background:#fff;width:330px;padding:16px 18px}
+  .dlg h3{margin:0 0 8px;font-size:14px}
+  .dlg p{margin:0 0 12px;font-size:12.5px;color:#475569;line-height:1.8}
+  .btns{display:flex;gap:8px}
+  .btn{flex:1;text-align:center;padding:9px 0;border-radius:9px;font-size:12.5px;font-weight:800;border:2px solid #e2e8f0;background:#fff;color:#64748b}
+  .btn.p{background:#dc2626;border-color:#dc2626;color:#fff}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  table{border-collapse:collapse;font-size:12.5px;width:100%}
+  th{background:#334155;color:#fff;font-size:11px;padding:6px 9px;text-align:left}
+  td{border:1px solid #e5e7eb;padding:6px 9px;background:#fff;line-height:1.7}
+</style></head><body>
+
+<h1>PC画面の右上に ✕（閉じる）ボタン</h1>
+<p class="lead">
+  いちばん右端、ログアウトのさらに外側に置きます。<br>
+  <b>全画面のときはタブの ✕ が見えない</b>ので、この位置にあると便利だと思います。
+</p>
+
+<h2>① 置き場所（いちばん右端）</h2>
+
+<div class="win">
+  <div class="hdr">
+    <span class="ttl">🚗 Hub a Nice Day</span>
+    <span class="ok">● 接続済</span>
+    <span class="badge">⚠ スケジュールシステム テスト版</span>
+    <span class="right">
+      <span class="fsb">⤢ 全画面</span>
+      <span class="chip"><span class="av">江</span><span class="nm">江川京志</span><span class="ic">👥</span><span class="ic">⚙</span><span class="ic">⏻</span></span>
+      <span class="sep"></span>
+      <span class="xb x-a" title="閉じる">✕</span>
+    </span>
+  </div>
+  <div class="nav"><span class="nb">📅 カレンダー</span><span class="nb on">⏰ スケジュール</span><span class="nb">🚙 代車管理</span><span class="nb">👥 顧客リスト</span></div>
+  <div class="stage">（スケジュール画面）</div>
+</div>
+<div class="cap">A案：まわりと同じ透かしのボタン（いちばん落ち着く）</div>
+
+<div class="win">
+  <div class="hdr blue">
+    <span class="ttl">🚗 Hub a Nice Day</span>
+    <span class="ok">● 接続済</span>
+    <span class="right">
+      <span class="fsb">⤢ 全画面</span>
+      <span class="chip b"><span class="av b">江</span><span class="nm b">江川京志</span><span class="ic">👥</span><span class="ic">⚙</span><span class="ic">⏻</span></span>
+      <span class="sep"></span>
+      <span class="xb x-b" title="閉じる">✕</span>
+    </span>
+  </div>
+  <div class="nav blue"><span class="nb">📅 カレンダー</span><span class="nb on">⏰ スケジュール</span><span class="nb">🚙 代車管理</span><span class="nb">👥 顧客リスト</span></div>
+  <div class="stage">（本番＝青いヘッダー。赤い ✕ にした場合）</div>
+</div>
+<div class="cap">B案：赤い ✕（はっきり分かるが、押し間違いが増えるかも）</div>
+
+<h2>② 押したとき</h2>
+<div class="row">
+  <div>
+    <div class="dlg">
+      <h3>画面を閉じますか？</h3>
+      <p>スケジュールを閉じます。<br>保存していない入力があれば、先に保存してください。</p>
+      <div class="btns"><span class="btn">やめる</span><span class="btn p">閉じる</span></div>
+    </div>
+    <div class="cap">確認を出す（おすすめ）</div>
+  </div>
+  <div>
+    <div class="dlg">
+      <h3>このタブは閉じられませんでした</h3>
+      <p>ブラウザの決まりで、<b>自分で開いたタブはボタンから閉じられない</b>ことがあります。<br>
+        <b>全画面は解除しました</b>ので、画面いちばん上のタブの <b>✕</b> で閉じてください。<br>
+        <span style="color:#64748b">（キーボードの <b>Ctrl</b>＋<b>W</b> でも閉じられます）</span></p>
+      <div class="btns"><span class="btn p" style="flex:none;padding:9px 22px">わかりました</span></div>
+    </div>
+    <div class="cap">閉じられなかったとき</div>
+  </div>
+</div>
+
+<h2>③ 正直にお伝えすること（大事）</h2>
+<div class="card">
+  <div class="warn">
+    <b>ブラウザの決まりで、ボタンから必ず閉じられるとは限りません。</b><br>
+    自分でアドレスを打ったりお気に入りから開いたタブは、ページの中のボタンでは閉じられない作りになっています（安全のため）。
+  </div>
+  <table style="margin-top:10px">
+    <tr><th>開き方</th><th>✕ で閉じられるか</th></tr>
+    <tr><td><b>ホーム画面／デスクトップのアイコン</b>から開いた（アプリとして入れてある）</td><td>✅ 閉じられます</td></tr>
+    <tr><td><b>別のタブから開いた</b>（顧客リストなど、Hub が開いたタブ）</td><td>✅ 閉じられます</td></tr>
+    <tr><td><b>お気に入り・アドレスを打って</b>開いた、ふつうのタブ</td><td>⚠ 閉じられないことがあります</td></tr>
+  </table>
+  <div style="font-size:12.5px;color:#334155;line-height:1.95;margin-top:10px">
+    そこで ✕ を押したときは、この順で動かします：<br>
+    <b>1.</b> 全画面なら<b>まず全画面を解除</b>（タブの ✕ が見えるようになります）<br>
+    <b>2.</b> 閉じてみる<br>
+    <b>3.</b> 閉じられなければ、上の案内を出す<br>
+    <span style="color:#64748b">＝ 少なくとも「全画面から抜けられない」ことは無くなります。</span>
+  </div>
+</div>
+
+<h2>④ お聞きしたいこと</h2>
+<div class="card">
+  <div class="q">
+    <b>1. 見た目</b>　A案（まわりと同じ透かし）か B案（赤）か。<br>
+    <b>2. 確認を出すか</b>　「閉じますか？」を出す／いきなり閉じる。<br>
+    <span style="color:#64748b">　予約カードを開いたまま押すと入力が消えるので、<b>出すほうが安全</b>だと思います。</span><br>
+    <b>3. 顧客リストの画面にも付けますか</b>　（今は「スケジュールに戻る」でタブが閉じます）<br>
+    <b>4. スマホにも付けますか</b>　<span style="color:#64748b">スマホはホーム画面から開くので、付けても効かないことが多いです。おすすめしません。</span>
+  </div>
+</div>
+
+</body></html>

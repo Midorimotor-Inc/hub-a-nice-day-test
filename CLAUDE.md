@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -271,6 +271,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **新機能＝真ん中を+1**（3.56 → 3.57）／**直し・小さな変更＝右端を+1**（3.56.1 → 3.56.2）。
 - 3ファイル（index の `APP_VERSION`・customers の `APP_VERSION`・mobile の `MOBILE_VERSION`）を同じ値に揃えるのは今までどおり。
 - 更新バナーは**文字列の違い**で出している（`mv[1]!==rv`）ので、桁が増えても動く。
+
+### PC画面の右上に ✕（閉じる）ボタン（v3.57・2026-10-07）
+- ユーザー要望：**全画面のときはブラウザのタブの ✕ が見えない**ので、画面の中から閉じられるように。
+- 決めごと（モックで確認・2026-10-07）：**①赤い ✕（B案）／②確認は出さない／③顧客リストにも付ける／④スマホには付けない**。
+- 置き場所：ヘッダー1行目の**いちばん右端**（スケジュールはログアウトより外側／顧客リストは全画面ボタンより外側）。間に細い区切り線。
+- 動き（`hubCloseWindow`。index と customers に同じものを置く）：
+  **① 全画面なら解除**（`fs-pref2` を off にして勝手に戻らないようにする）→ **② `window.close()`** → **③ 0.5秒後にまだ開いていれば案内**（`HubCloseHelp`）。
+  **ブラウザの決まりで、アドレスを打つ／お気に入りから開いたタブはスクリプトから閉じられない**（安全のための仕様。こちらでは変えられない）。
+  アイコン（インストール済み）から開いた時や、別のタブから開かれた時（顧客リストなど）は閉じられる。
+  **少なくとも「全画面から抜けられない」ことは無くなる**のが、この順番にしている理由。
+- **顧客リストの ✕ は保存が終わるまで閉じない**（`closeTabNow` が `savesInFlight()` を見る。「スケジュールに戻る」と同じ守り）。
+- **案内（`HubCloseHelp`）はログイン画面側ではなく本体の画面側に置くこと**（一度ログイン画面側に置いて出なかった）。
+- 検査は `node close_button_test.js`（19件。いちばん右端にあるか・赤いか・確認を出さないか・全画面を解除するか・案内が出るか・スマホには無いか）。
+- **検査の PORT は重複させないこと**（同じ番号だと同時に動かした時に EADDRINUSE で落ちる）。
+  2026-10-07 に 8299・8305・8147 が2本ずつ重なっていたのを一意にした。新しい検査を作る時は `grep -ho "PORT *= *[0-9]*" *_test.js | sort | uniq -d` で確かめる。
 
 ### 本番のデータをテスト版へ写す（開発用・2026-10-05）
 - `node fb_copy_prod_to_dev.js`（下見）／`--write`（実行）。**向きは本番→テスト版の一方通行**。書き先が `hub-v8-dev-` で始まらなければ止まる（逆向きはできない作り）。

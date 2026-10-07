@@ -12,7 +12,7 @@ if (!chromium) { try { chromium = require('playwright').chromium; } catch (e) {}
 if (!chromium) { console.error('playwright が見つかりません'); process.exit(1); }
 
 const NL = String.fromCharCode(10);
-const DIR = __dirname, PORT = 8299, STOR = 'hub-v8-dev-';
+const DIR = __dirname, PORT = 8311, STOR = 'hub-v8-dev-';
 const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 300)); } };

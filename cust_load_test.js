@@ -13,7 +13,7 @@ if (!chromium) { try { chromium = require('playwright').chromium; } catch (e) {}
 if (!chromium) { console.error('playwright が見つかりません'); process.exit(1); }
 
 const DIR = __dirname;
-const PORT = 8147;
+const PORT = 8313;
 const STOR = 'hub-v8-dev-';
 const CHUNK_DELAY = 2500;
 

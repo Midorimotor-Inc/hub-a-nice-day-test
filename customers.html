@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1791333575821';
+  window.__APP_BUILD='build-1791335944760';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -141,7 +141,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.56.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.57'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1050,6 +1050,43 @@ const trackSave=(p)=>{
     try{ window.__hubBusyOps=Math.max(0,(window.__hubBusyOps||1)-1); }catch(e){}
   });
 };
+
+// ★右上の ✕（この画面を閉じる）。2026-10-07 ユーザー要望。
+//   ブラウザの決まりで「アドレスを打つ／お気に入りから開いた」タブは、
+//   ページの中のボタンからは閉じられないことがある（安全のための仕様で、こちらでは変えられない）。
+//   そこで次の順で動かす：
+//     ① 全画面なら解除する（これでタブの ✕ が見えるようになる＝最低限そこは必ず効く）
+//     ② 閉じてみる
+//     ③ 閉じられなければ onFail で案内を出す
+const hubCloseWindow=(onFail)=>{
+  try{
+    if(document.fullscreenElement||document.webkitFullscreenElement){
+      try{sessionStorage.setItem(STOR+'fs-pref2','off');}catch(e){}   // 閉じ損ねても勝手に全画面へ戻らないように
+      const ex=document.exitFullscreen||document.webkitExitFullscreen;
+      if(ex)Promise.resolve(ex.call(document)).catch(()=>{});
+    }
+  }catch(e){}
+  try{ window.close(); }catch(e){}
+  setTimeout(()=>{ let open=true; try{ open=!window.closed; }catch(e){} if(open&&onFail)onFail(); },500);
+};
+// 閉じられなかった時の案内
+const HubCloseHelp=({onClose})=>(
+  <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,padding:'20px 22px',width:'min(420px,92vw)',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+      <div style={{fontWeight:900,fontSize:15,color:'#1e293b',marginBottom:9}}>このタブは閉じられませんでした</div>
+      <div style={{fontSize:13,color:'#475569',lineHeight:1.9}}>
+        ブラウザの決まりで、<b>自分で開いたタブはボタンから閉じられない</b>ことがあります。<br/>
+        <b>全画面は解除しました</b>ので、画面いちばん上のタブの <b>✕</b> で閉じてください。<br/>
+        <span style={{color:'#64748b'}}>（キーボードの <b>Ctrl</b>＋<b>W</b> でも閉じられます）</span>
+      </div>
+      <button onClick={onClose}
+        style={{width:'100%',marginTop:14,padding:'11px 0',borderRadius:10,border:'none',background:'#dc2626',color:'white',fontSize:14,fontWeight:900,cursor:'pointer'}}>
+        わかりました
+      </button>
+    </div>
+  </div>
+);
+
 // ★index_dev.html の mergeSharedObjects と同じ規則。サーバー値で丸ごと置き換えると、
 //   保存した代車がまだGASに届いていない間にタブ復帰が入った時に一瞬消えてしまう。
 //   ローカルにしか無いレコードは「作られたばかり(3分以内)」の間だけ残す。
@@ -2448,6 +2485,21 @@ const App=()=>{
   const [importing,setImporting]=useState(false);
   const [importMsg,setImportMsg]=useState('');   // インポート進捗（どのファイルを保存中か）
   const [closing,setClosing]=useState(null);     // 「スケジュールに戻る」で保存完了を待っている間の表示
+  const [closeHelp,setCloseHelp]=useState(false); // ✕ で閉じられなかった時の案内（2026-10-07）
+  // ★右上の ✕：このタブを閉じる。**保存が終わるまで閉じない**（戻るボタンと同じ守り）
+  const closeTabNow=()=>{
+    const go=()=>hubCloseWindow(()=>setCloseHelp(true));
+    if(savesInFlight()<=0){go();return;}
+    let waited=0;
+    setClosing('保存中です… 完了までお待ちください');
+    const tick=()=>{
+      if(savesInFlight()<=0||waited>=180000){setClosing(null);go();return;}
+      waited+=500;
+      if(waited%2000===0)setClosing('保存中です… 完了までお待ちください（'+Math.round(waited/1000)+'秒）');
+      setTimeout(tick,500);
+    };
+    tick();
+  };
   const [cfWarn,setCfWarn]=useState([]);         // 読み切れなかった顧客ファイル名
   const [cfRetrying,setCfRetrying]=useState(false); // 「サーバーから再読み込み」実行中
   // ★サーバーから読んだファイルを画面へ反映する。取り込みは全員共有なので、
@@ -3666,6 +3718,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           </div>
         </div>
       )}
+      {closeHelp&&<HubCloseHelp onClose={()=>setCloseHelp(false)}/>}
       {/* ── ヘッダー ── */}
       <div style={{flexShrink:0,background:'linear-gradient(135deg,#1e1b4b,#1d4ed8)',padding:'10px 16px',display:'flex',alignItems:'center',gap:10}}>
         <a href="./index.html" onClick={e=>{
@@ -3720,6 +3773,14 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           </svg>
           {isFullscreen?'元に戻す':'全画面'}
         </button>}
+        {/* ★いちばん右端の ✕（このタブを閉じる）。2026-10-07 ユーザー指示：赤・確認は出さない。
+            保存が進んでいる間は閉じない（「スケジュールに戻る」と同じ守り） */}
+        <span style={{width:1,height:22,background:'rgba(255,255,255,.4)',margin:'0 2px',flexShrink:0}}/>
+        <button onClick={closeTabNow} title="閉じる"
+          style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+            background:'#dc2626',border:'2px solid #fca5a5',color:'white',fontSize:15,fontWeight:900,cursor:'pointer',lineHeight:1}}
+          onMouseEnter={e=>e.currentTarget.style.background='#b91c1c'}
+          onMouseLeave={e=>e.currentTarget.style.background='#dc2626'}>✕</button>
       </div>
 
       {/* ── ファイルタブ ── */}

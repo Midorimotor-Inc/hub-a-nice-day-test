@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791333575821';
+    window.__APP_BUILD='build-1791335944760';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.56.3';
+const APP_VERSION = '3.57';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -349,6 +349,43 @@ const COURSES = [
 //   outlineOffset を内側にして、枠線が隣のセルと重なっても崩れないようにする。
 const TODAY_CELL={outline:'4px solid #c2410c',outlineOffset:'-4px',borderRadius:10,zIndex:3};
 const TODAY_NUM={color:'#c2410c',fontWeight:900};
+
+// ★右上の ✕（この画面を閉じる）。2026-10-07 ユーザー要望。
+//   ブラウザの決まりで「アドレスを打つ／お気に入りから開いた」タブは、
+//   ページの中のボタンからは閉じられないことがある（安全のための仕様で、こちらでは変えられない）。
+//   そこで次の順で動かす：
+//     ① 全画面なら解除する（これでタブの ✕ が見えるようになる＝最低限そこは必ず効く）
+//     ② 閉じてみる
+//     ③ 閉じられなければ onFail で案内を出す
+const hubCloseWindow=(onFail)=>{
+  try{
+    if(document.fullscreenElement||document.webkitFullscreenElement){
+      try{sessionStorage.setItem(STOR+'fs-pref2','off');}catch(e){}   // 閉じ損ねても勝手に全画面へ戻らないように
+      const ex=document.exitFullscreen||document.webkitExitFullscreen;
+      if(ex)Promise.resolve(ex.call(document)).catch(()=>{});
+    }
+  }catch(e){}
+  try{ window.close(); }catch(e){}
+  setTimeout(()=>{ let open=true; try{ open=!window.closed; }catch(e){} if(open&&onFail)onFail(); },500);
+};
+// 閉じられなかった時の案内
+const HubCloseHelp=({onClose})=>(
+  <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,padding:'20px 22px',width:'min(420px,92vw)',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+      <div style={{fontWeight:900,fontSize:15,color:'#1e293b',marginBottom:9}}>このタブは閉じられませんでした</div>
+      <div style={{fontSize:13,color:'#475569',lineHeight:1.9}}>
+        ブラウザの決まりで、<b>自分で開いたタブはボタンから閉じられない</b>ことがあります。<br/>
+        <b>全画面は解除しました</b>ので、画面いちばん上のタブの <b>✕</b> で閉じてください。<br/>
+        <span style={{color:'#64748b'}}>（キーボードの <b>Ctrl</b>＋<b>W</b> でも閉じられます）</span>
+      </div>
+      <button onClick={onClose}
+        style={{width:'100%',marginTop:14,padding:'11px 0',borderRadius:10,border:'none',background:'#dc2626',color:'white',fontSize:14,fontWeight:900,cursor:'pointer'}}>
+        わかりました
+      </button>
+    </div>
+  </div>
+);
+
 // ── 休業日の見た目（全画面共通）──
 //   定休日・第2火曜・手動の休業日は「色分けせず同じ見た目」にする（2026-07-30 ユーザー決定・A案）。
 //   従来は極薄の斜線（#f9fafb/#f3f4f6）で、しかも空の6コマが営業日と同じに描かれるため
@@ -10787,6 +10824,7 @@ function AppInner() {
   const [schedCollapsed,setSchedCollapsed]=useState(false); // スケジュール畳む/開く（デフォルト：開く）
   // 全画面表示（ブラウザFullscreen API。タブ・ブックマークバーごと隠れる）
   const [isFullscreen,setIsFullscreen]=useState(false);
+  const [closeHelp,setCloseHelp]=useState(false);   // ✕ で閉じられなかった時の案内（2026-10-07）
   // ★全画面のお誘い（2026-09-24 ユーザー要望）：開いた直後に一度だけ出す案内。
   //   以前は画面のどこを触っても全画面に入ったため「意図しない時に全画面になる」状態だった。
   //   この案内が出ている間のワンクリックだけで入る（案内を消せば、あとはヘッダーの「全画面」ボタンだけ）。
@@ -13585,6 +13623,13 @@ function AppInner() {
                   {/* 📋クリップボードコピーは廃止（戻せず一部データのみで紛らわしいため）。バックアップは自動保存＋🕒復旧に一本化。 */}
                   <button onClick={()=>{releaseLock(curLockKey);setAuthAutoOff(true);setCurrentUserPersist(null);setCurLockKey(null);setModalOpen(false);}} title="ログアウト" style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center'}}><LogOut size={14}/></button>
                 </div>
+                {/* ★いちばん右端の ✕（この画面を閉じる）。2026-10-07 ユーザー指示：赤・確認は出さない */}
+                <span style={{width:1,height:22,background:'rgba(255,255,255,.4)',margin:'0 3px',flexShrink:0}}/>
+                <button onClick={()=>hubCloseWindow(()=>setCloseHelp(true))} title="閉じる"
+                  style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                    background:'#dc2626',border:'2px solid #fca5a5',color:'white',fontSize:15,fontWeight:900,cursor:'pointer',lineHeight:1}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#b91c1c'}
+                  onMouseLeave={e=>e.currentTarget.style.background='#dc2626'}>✕</button>
               </div>
             </div>
             {/* 2行目：ナビ（同じ幅・中央揃え）＋ 店舗切替（2026-09-24 仕様書どおりに作り直し） */}
@@ -14999,6 +15044,8 @@ function AppInner() {
           setShowDayOff(false);
         }}/>
 
+      {/* ★右上の ✕ で閉じられなかった時の案内（2026-10-07）。本体の画面側に置くこと */}
+      {closeHelp&&<HubCloseHelp onClose={()=>setCloseHelp(false)}/>}
       {/* -- 検索（顧客・車両） -- */}
       <FindModal isOpen={showFind} onClose={()=>setShowFind(false)}
         inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS}
