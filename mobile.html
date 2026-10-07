@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791276028720';
+  window.__APP_BUILD='build-1791333575821';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.56.2';
+const MOBILE_VERSION='3.56.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -6371,9 +6371,13 @@ const App=()=>{
         onClose={()=>setShowFind(false)} headBg={TH.head}/>}
       {mailModal&&<MailModal user={user} onClose={()=>setMailModal(false)} onSaveEmail={saveNotifyEmail}/>}
       {restoreModal&&<MobileRestoreModal user={user} onClose={()=>setRestoreModal(false)} inspData={inspData}/>}
+      {/* ★手順（PDFの作り方）を開く時は**メニューを閉じない**（2026-10-06 ユーザー指示）。
+          手順を上に重ねて出し、✕ で閉じたら下のメニューがそのまま見える
+          ＝機能ボタンを押し直さなくてよい。
+          ※JSXのコメントは開くタグの中（属性の並び）には置けないので、ここに書くこと。 */}
       {toolsOpen&&<ToolsSheet onClose={()=>setToolsOpen(false)}
         onScan={()=>{setToolsOpen(false);setScanOpen(true);}}
-        onHowTo={()=>{setToolsOpen(false);setHowtoOpen(true);}}/>}
+        onHowTo={()=>setHowtoOpen(true)}/>}
       {scanOpen&&<ShakenScanSheet store={vsId} byName={user.name}
         onHowTo={()=>setHowtoOpen(true)}
         onClose={()=>setScanOpen(false)}

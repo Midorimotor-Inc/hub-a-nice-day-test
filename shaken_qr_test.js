@@ -300,6 +300,33 @@ const fillLabeled = (page, label, value) => page.evaluate(([lb, v]) => {
   }));
   t('PDFの作り方がメニューにある', await seeText(page, 'PDFの作り方', 3000));
 
+  // ★手順を開いて ✕ で閉じたら、機能メニューに戻る（2026-10-06 ユーザー指示）
+  const menuShown = () => page.evaluate(() =>
+    [...document.querySelectorAll('div')].some(e => e.innerText.indexOf('🛠 機能') === 0 && e.offsetParent !== null));
+  await clickText(page, 'PDFの作り方');
+  await page.waitForTimeout(700);
+  t('手順の画面が開く', await seeText(page, 'PDFの作り方', 4000) && await page.evaluate(() =>
+    document.body.innerText.indexOf('セキュリティコード') >= 0));
+  t('手順には写真が2枚出る', await page.evaluate(() =>
+    [...document.querySelectorAll('img')].filter(i => /help_shaken_(app|code)\.jpg/.test(i.getAttribute('src') || '')).length === 2),
+    await page.evaluate(() => [...document.querySelectorAll('img')].map(i => i.getAttribute('src'))));
+  // ✕（手順の画面のもの）を押す
+  await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('button')].filter(b => b.innerText.trim() === '✕' && b.offsetParent !== null);
+    if (btns.length) btns[btns.length - 1].click();     // 一番上に出ている画面の ✕
+  });
+  await page.waitForTimeout(700);
+  t('★✕ で閉じると機能メニューに戻る（押し直さなくてよい）', await menuShown(),
+    await page.evaluate(() => document.body.innerText.slice(0, 120)));
+  t('手順の画面はもう出ていない', await page.evaluate(() =>
+    document.body.innerText.indexOf('セキュリティコード') < 0));
+  // 「とじる」ボタンでも同じ
+  await clickText(page, 'PDFの作り方');
+  await page.waitForTimeout(600);
+  await clickText(page, 'とじる');
+  await page.waitForTimeout(600);
+  t('「とじる」でも機能メニューに戻る', await menuShown());
+
   await clickText(page, '車検証を読み取る');
   await page.waitForTimeout(400);
   t('読み取りの入口は「PDFから読み取る」だけ', await seeText(page, 'PDFから読み取る', 5000));
