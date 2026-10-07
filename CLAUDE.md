@@ -156,7 +156,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   **サーバーには13時しか無かった＝画面だけの幽霊。**
   原因は `mergeSharedObjects`：サーバーに無い枠を「記録の時刻が3分以内なら残す」決まりで、**誰が作ったかを見ていなかった**。
   他店が11時に作って48秒後に13時へ動かすと、見ているPCは消えた11時を**毎回作り直す**。一度手元に戻るとリロードまで消えない。
-  → **サーバーに無い枠を残すのは「自分がさっき書いた分」だけ**にした（`shMineMark` / `shMineHas`。パスは `cid day`、有効は SHARED_FRESH_MS）。
+  → **サーバーに無い枠を残すのは「自分がさっき書いた分」だけ**にした（`shMineMark` / `shMineHas`。パスは `cid＋区切り＋day`（区切りは NUL＝文字コード0）、有効は SHARED_FRESH_MS）。
   **`mergeSharedObjects` を呼ぶ所は必ず第4引数にキーを渡すこと**（渡さないと自分の書き込みが分からず、作りたての代車予約が消える）。
   `persistLoaner` は `useShared.update` を通らないので、**その場で `shMineMark` を呼んでいる**（2026-08-26「代車が消える」の守りを壊さないため）。
   ※Kyoshi承認のBLOCK-B変更。検査は `node bugfix_1006_test.js` と `node merge_scalar_test.js`。
@@ -263,7 +263,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 手順の画面は読み取り画面（`zIndex:3300`）より前に出す（`zIndex:3500`）。
 - **手順を開く時に機能メニューを閉じないこと**（v3.56.3・2026-10-06 ユーザー指示）。閉じると ✕ のあと機能ボタンを押し直すことになる。
   メニューは開いたままにして手順を**上に重ねる**＝ ✕ でも「とじる」でも下のメニューがそのまま出てくる。読み取り画面から開いた時も同じ（下に読み取り画面が残る）。
-- **JSX のコメント  は開くタグの属性の並びの中に置けない**（ここで一度 白画面にした）。要素の前（子どもの位置）に書くこと。
+- **JSX のコメント（波かっこ＋スラッシュ星）は、開くタグの属性の並びの中には置けない**（ここで一度 白画面にした）。
+  要素の**前**（子どもの位置）に書くこと。`smoke_dev_check.js` が「JSXの変換に失敗」で拾う。
 - 検査は `node shaken_pdf_test.js`（31件。入口2か所・手順5つ・写真2枚がリポジトリにあって軽いか）。
 
 ### バージョン番号は3桁（2026-10-06 ユーザー決定）
