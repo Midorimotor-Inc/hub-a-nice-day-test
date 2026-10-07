@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791362300926';
+  window.__APP_BUILD='build-1791363205002';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.59.3';
+const MOBILE_VERSION='3.59.4';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -793,11 +793,15 @@ const hubSignInWithCode = async (email, code) => {
     const ref = fbDb.collection('users').doc(fbAuth.currentUser.uid);
     const s = await ref.get(); const d = s.exists ? (s.data() || {}) : {};
     if (!d.pw) await ref.set({ email: mail, pw: c, inviteAt: Date.now() }, { merge: true });
-    else if (hubIsCodePw(d.pw) && Date.now() - (d.inviteAt || 0) > 7 * 86400000) {
-      const pw = hubRandom(24);
-      await fbAuth.currentUser.updatePassword(pw);
-      await ref.set({ pw, rotatedAt: Date.now() }, { merge: true });
-    }
+    // ★ここで合言葉を付け替えないこと（2026-10-07 ユーザー決定）。
+    //   以前は「7日を過ぎたコードで登録したら長い合言葉に付け替える」としていたが、
+    //   **合言葉を変えるとその人の端末のサインインが全部切れる**（Firebase がトークンを失効させる）。
+    //   そのため端末を1台増やしただけで、本人の店のPC・スマホまで入り直しになり、
+    //   予約の電話に出られなくなる（2026-10-07 に実際に起きた：12:09 の登録で 675931 が失効し、
+    //   本番のスマホと管理者コンソールまで入れなくなった）。
+    //   コードの期限は「**管理者が招待し直すまで**」。古いコードを止めたい時は
+    //   コンソールの「招待を送る」で作り直す＝止める時期を管理者が決められる（その時だけ入り直しになる）。
+    //   端末ごとのサインインはもともと別々なので、合言葉を触らなければ巻き添えは起きない。
   } catch (e) { console.warn('[FB] 合言葉の控えを更新できません', e && e.message); }
   return { ok: true };
 };const fbKvRef = k => fbDoc(k);   // 時点保存などから「キーのドキュメント」を指す別名

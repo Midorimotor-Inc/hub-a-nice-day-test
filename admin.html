@@ -1256,7 +1256,8 @@ function bind(){
         title:'このアドレスに招待を送ります', okLabel:'送る',
         body:'<p>宛先に間違いはありませんか。1文字違うと、本人には「何も届かない」としか分かりません。</p>'
           + '<div class="addr">' + esc(s.loginEmail) + '</div>'
-          + '<p style="font-size:12px;color:var(--ink-3)">' + esc(s.name) + ' さん宛</p>',
+          + '<p style="font-size:12px;color:var(--ink-3)">' + esc(s.name) + ' さん宛</p>'
+          + '<p style="font-size:12px;color:var(--ink-3)">新しいコードを出すと、<b>この人がすでに登録している端末は入り直しになります</b>（他の人には影響しません）。</p>',
         onOk: function(){
           inviteByCode(s.loginEmail, {name:s.name, store:s.store, uid:s.uid, kind:'staff'}).then(function(r){
             var t = inviteResult(r, s.name + ' さん（' + s.loginEmail + '）'); toast(t[0], t[1]);

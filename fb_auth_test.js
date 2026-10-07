@@ -247,7 +247,14 @@ const SEED = {
     t('コード：自動ログインしてスケジュールが出る', await seeText(p2, '前村', 20000));
     t('コード：JSエラーなし', e2.length === 0, e2.slice(0, 3));
     // 2台目（スマホ）も同じコード
-    const st2 = await p2.evaluate(() => localStorage.getItem('__fakeFbStore'));
+    // 招待を「10日前」に戻してから2台目を登録する（2026-10-07）。
+    //   以前は7日を過ぎたコードで登録すると合言葉を長いものに付け替えていたが、
+    //   合言葉を変えると**その人の端末のサインインが全部切れる**ので、やめた。ここでそれを見張る。
+    const st2 = await p2.evaluate(() => localStorage.getItem('__fakeFbStore')).then(x => {
+      const o = JSON.parse(x);
+      Object.keys(o).forEach(k => { if (k.indexOf('users/') === 0 && o[k] && o[k].inviteAt) o[k].inviteAt = Date.now() - 10 * 86400000; });
+      return JSON.stringify(o);
+    });
     const c3 = await browser.newContext({ viewport: { width: 400, height: 850 }, isMobile: true, hasTouch: true, userAgent: IPHONE_UA });
     await c3.addInitScript(s => { if (!localStorage.getItem('__fakeFbStore')) localStorage.setItem('__fakeFbStore', s); }, st2);
     await c3.route('https://www.gstatic.com/firebasejs/**', route => route.fulfill({ status: 200, contentType: 'application/javascript', body: route.request().url().indexOf('firebase-app-compat') >= 0 ? FAKE_FB : '' }));
@@ -258,6 +265,9 @@ const SEED = {
     t('QR：アドレスと6桁が最初から入っている（打ち込み不要）', await p3.evaluate(() => { const e = document.querySelector('input[type=email]'); const c = document.querySelector('input[inputmode=numeric]'); return !!e && !!c && e.value === 'tikurin@midori-m.com' && /^[0-9]{6}$/.test(c.value); }), await p3.evaluate(() => { const c = document.querySelector('input[inputmode=numeric]'); return c ? c.value : '(欄なし)'; }));
     await clickText(p3, '登録する');
     t('コード：スマホも同じコードで登録できる', await seeText(p3, '竹林直行', 30000), await bodyText(p3).then(x => x.slice(0, 300)));
+    t('★コード：7日を過ぎた招待でも合言葉は変わらない（本人の他の端末が切れない）',
+      (await p3.evaluate(() => window.__fakeFb.pwOf('tikurin@midori-m.com'))) === code1,
+      await p3.evaluate(() => window.__fakeFb.pwOf('tikurin@midori-m.com')));
     t('コード：台帳に2台目の行が増える', (await p3.evaluate(() => window.__fakeFb.docs('devices'))).filter(d => (d.data.names || []).includes('竹林直行')).length === 2);
     t('コード：スマホ JSエラーなし', e3.length === 0, e3.slice(0, 3));
     // 再招待 → 新しいコード。古いコードでは入れない

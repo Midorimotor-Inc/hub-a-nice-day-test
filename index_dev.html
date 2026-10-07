@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791362300926';
+    window.__APP_BUILD='build-1791363205002';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.59.3';
+const APP_VERSION = '3.59.4';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2954,11 +2954,15 @@ const hubSignInWithCode = async (email, code) => {
     const ref = fbDb.collection('users').doc(fbAuth.currentUser.uid);
     const s = await ref.get(); const d = s.exists ? (s.data() || {}) : {};
     if (!d.pw) await ref.set({ email: mail, pw: c, inviteAt: Date.now() }, { merge: true });
-    else if (hubIsCodePw(d.pw) && Date.now() - (d.inviteAt || 0) > 7 * 86400000) {
-      const pw = hubRandom(24);
-      await fbAuth.currentUser.updatePassword(pw);
-      await ref.set({ pw, rotatedAt: Date.now() }, { merge: true });
-    }
+    // ★ここで合言葉を付け替えないこと（2026-10-07 ユーザー決定）。
+    //   以前は「7日を過ぎたコードで登録したら長い合言葉に付け替える」としていたが、
+    //   **合言葉を変えるとその人の端末のサインインが全部切れる**（Firebase がトークンを失効させる）。
+    //   そのため端末を1台増やしただけで、本人の店のPC・スマホまで入り直しになり、
+    //   予約の電話に出られなくなる（2026-10-07 に実際に起きた：12:09 の登録で 675931 が失効し、
+    //   本番のスマホと管理者コンソールまで入れなくなった）。
+    //   コードの期限は「**管理者が招待し直すまで**」。古いコードを止めたい時は
+    //   コンソールの「招待を送る」で作り直す＝止める時期を管理者が決められる（その時だけ入り直しになる）。
+    //   端末ごとのサインインはもともと別々なので、合言葉を触らなければ巻き添えは起きない。
   } catch (e) { console.warn('[FB] 合言葉の控えを更新できません', e && e.message); }
   return { ok: true };
 };
