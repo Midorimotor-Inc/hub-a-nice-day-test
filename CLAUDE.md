@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -317,6 +317,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   限定／貸出中は動かせないこと・ズレを見つけて直せること・最適化が消えていることを見る）。
 - **本番にはまだ入れていない**（2026-10-07 ユーザー指示：テスト版のみ）。
 
+### テスト版と本番でサインインを分ける（v3.59.2・2026-10-07・Kyoshi承認のBLOCK-B変更）
+- **症状**：ユーザー報告「スマホログインし直しになったのですが…」。スマホで**テスト版と本番の両方**がログインし直しになった。
+  端末台帳を調べると、同じ端末が**テスト版 12:09 → 本番 12:19**（JST）に作り直されていた（本日の再登録は江川さんのみ。台帳60件・許可簿20人は無事）。
+- **原因**：テスト版と本番は**同じ住所（`midorimotor-inc.github.io`）でフォルダが違うだけ**。
+  Firebase Authentication のサインインは「**住所＋APIキー＋アプリ名**」ごとに保たれるので、アプリ名が同じ（既定）だと2つで**共有**される。
+  そのため **テスト版の `hubCheckDevice` が端末の取り消しで `fbAuth.signOut()` すると、同じ端末の本番まで道連れでログアウト**されていた。
+  Firebase プロジェクトも APIキーも DEV・本番で同じなので、`STOR` でデータを分けてもサインインは分かれない。
+- **やってはいけない直し（試して取り消した）**：「テスト版では signOut しない」。
+  `fb_auth_test.js` で5件不合格＝**テスト版で管理者の『取り消し』が効かなくなる**（取り消された端末が登録画面に戻らない）。
+  テスト版にも本物の顧客情報が入っているので認証は弱められない。**認証を弱める方向の直しは入れないこと。**
+- **入れた直し**：**アプリ名を環境ごとに分ける**。`HUB_FB_APP_NAME = (STOR === 'hub-v8-') ? '' : 'hub-dev'`（本番＝既定／テスト版＝`hub-dev`）。
+  `hubFbApp()` を通して `firestore()`・`auth()` を取る。招待用の2本目も `HUB_FB_INVITE_NAME`（`hub-invite` / `hub-invite-hub-dev`）で分ける。
+  **アプリ名は STOR から決めるので `port_to_main.js` の変換ルールを増やさなくてよい**（STOR を直せば自動で既定名になる）。
+  3ファイル（`index_dev.html` / `customers.html` / `mobile.html`）に同じものを置いてある。**Firestore のデータ・ルール・台帳は何も変わらない**（分かれるのはサインインだけ）。
+- **一度だけ起きること**：この版から**テスト版の端末登録だけ全員分リセット**される（テスト版を使う人は登録し直し）。**本番は影響なし。**
+- **admin.html は既定の名前のまま**（＝本番と同じサインインを使う）。管理者が admin で「サインアウト」を押すと本番も切れるが、
+  これは管理者が自分で押した時だけで、分けると管理者が admin で登録し直すことになるため今回は触っていない。取り消しの効き方は両環境とも変わらない。
+- `fake_firebase.js` も本物に合わせた：名前付きで初期化しても**本体（hub-dev）は同じサインイン・保存**を返し、`hub-invite…` だけ別インスタンス。
+  `window.__fakeFbIsolate = true` を立てた検査の時だけ、サインインの控えを**アプリ名ごとのキー**にする（他の検査は `__fakeFbUser` を先に書いておく作りなので既定は今までどおり）。
+  `__fakeFb.inits()` でどの名前で繋いだかが読める。
+- 検査は `node auth_crossenv_test.js`（30件）。**テスト版の端末を取り消すと、テスト版は登録画面に戻るが本番はそのまま入れる**／その逆／3画面のアプリ名／招待用の別名。
+  あわせて `node fb_auth_test.js`（75件 PASS を維持＝取り消しは両方で今までどおり効く）も必ず通すこと。
 ### スマホも代車の入れ替え（長押しドラッグ）とズレのチェック（v3.59・2026-10-07・テスト版のみ）
 - ユーザー指示：**A案（長押ししてドラッグ）・反応は0.2秒**・**決まりはPCと同じ**・**ズレのチェックもしっかり**。
 - **長押しは `LOANER_PRESS_MS=200`**（0.2秒）。短いタップは今までどおり予約の詳細が出る。

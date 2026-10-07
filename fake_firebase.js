@@ -4,6 +4,13 @@
 //   window.__fakeFb で検査側から読み書きできる。
 (function(){
   const LS_STORE = '__fakeFbStore', LS_USER = '__fakeFbUser';
+  // 本物の Firebase はサインインを「住所＋アプリ名」ごとに保つ。2026-10-07 にテスト版と本番で
+  //   アプリ名を分けたので、その様子（片方を切ってもう片方は無事）も確かめられるようにする。
+  //   ただし控えの名前を常に分けると今までの検査（__fakeFbUser を先に書いておく作り）が通らなくなるので、
+  //   __fakeFbIsolate を立てた検査（auth_crossenv_test.js）の時だけ名前を分ける。
+  let mainAppName = '';
+  const ISO = (() => { try { return !!window.__fakeFbIsolate; } catch (e) { return false; } })();
+  const userKey = () => LS_USER + ((ISO && mainAppName) ? '-' + mainAppName : '');
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const store = load(LS_STORE, {});           // { 'col/id': {fields} }
   const save = () => { try { localStorage.setItem(LS_STORE, JSON.stringify(store)); } catch (e) {} };
@@ -69,7 +76,7 @@
       languageCode: '', _user: null, _listeners: [],
       get currentUser() { return this._user; },
       _set(u) { this._user = u ? Object.assign({}, u, { updatePassword: async pw => { store['__pw/' + u.email] = { pw }; save(); } }) : null;
-        if (persist) { try { if (u) localStorage.setItem(LS_USER, JSON.stringify(u)); else localStorage.removeItem(LS_USER); } catch (e) {} }
+        if (persist) { try { if (u) localStorage.setItem(userKey(), JSON.stringify(u)); else localStorage.removeItem(userKey()); } catch (e) {} }
         this._listeners.forEach(cb => { try { cb(this._user); } catch (e) {} }); },
       onAuthStateChanged(cb) { this._listeners.push(cb); setTimeout(() => cb(this._user), 30); return () => {}; },
       isSignInWithEmailLink: href => /[?&]oobCode=/.test(String(href)),
@@ -97,7 +104,7 @@
     return auth;
   };
   const auth = makeAuth(true);
-  auth._set(load(LS_USER, null)); auth._listeners = [];
+  auth._set(load(userKey(), null)); auth._listeners = [];
   const db = makeDb(auth);
   const apps = {};   // 名前付きの別インスタンス（招待用）
   window.__fakeFb = {
@@ -122,14 +129,32 @@
     setAccount: (email, pw) => { store['__acct/' + email] = { at: Date.now() }; if (pw) store['__pw/' + email] = { pw }; save(); },
     stats: () => Object.assign({}, stats),
     writes: () => wlog.slice(),
-    reset: () => { try { localStorage.removeItem(LS_STORE); localStorage.removeItem(LS_USER); localStorage.removeItem('__fakeFbSent'); } catch (e) {} },
+    reset: () => { try { localStorage.removeItem(LS_STORE); localStorage.removeItem('__fakeFbSent');
+      Object.keys(localStorage).forEach(k => { if (k.indexOf(LS_USER) === 0) localStorage.removeItem(k); }); } catch (e) {} },
+    // 検査用：どの名前で Firebase に繋いだか（テスト版は hub-dev、本番は [DEFAULT]）
+    inits: () => { try { return (window.__fakeFbInits || []).slice(); } catch (e) { return []; } },
   };
   const FieldValue = { serverTimestamp: () => 'ts', delete: () => ({ __delete: true }) };
   const FieldPath = { documentId: () => '__id__' };
+  // 本物と同じく「名前ごとに別インスタンス」。ただし画面が使う本体の名前（テスト版は hub-dev）は
+  //   本体のサインイン・保存をそのまま使う。別にするのは招待用（hub-invite…）だけ。
+  //   2026-10-07：テスト版と本番でサインインを分けたので、画面は名前付きで初期化するようになった。
+  const mainApp = { name: '[DEFAULT]', auth: () => auth, firestore: () => db };
+  const isInvite = (name) => String(name || '').indexOf('hub-invite') === 0;
   window.firebase = {
     apps: [],
-    initializeApp(cfg, name) { if (name) { const a2 = makeAuth(false); const app = { name, auth: () => a2, firestore: () => makeDb(a2) }; apps[name] = app; return app; } this.apps.push({}); return {}; },
-    app(name) { if (name && apps[name]) return apps[name]; throw Object.assign(new Error('no app ' + name), { code: 'app/no-app' }); },
+    initializeApp(cfg, name) {
+      try { if (isInvite(name)) (window.__fakeFbInits = window.__fakeFbInits || []).push(name); } catch (e) {}
+      if (isInvite(name)) { const a2 = makeAuth(false); const app = { name, auth: () => a2, firestore: () => makeDb(a2) }; apps[name] = app; return app; }
+      try { (window.__fakeFbInits = window.__fakeFbInits || []).push(name || '[DEFAULT]'); } catch (e) {}
+      if (String(name || '') !== mainAppName) { mainAppName = String(name || ''); if (ISO) auth._set(load(userKey(), null)); }
+      this.apps.push({}); if (name) { apps[name] = mainApp; return mainApp; } return {};
+    },
+    app(name) {
+      if (!name) { if (!this.apps.length) throw Object.assign(new Error('no app'), { code: 'app/no-app' }); return mainApp; }
+      if (apps[name]) return apps[name];
+      throw Object.assign(new Error('no app ' + name), { code: 'app/no-app' });
+    },
     firestore: Object.assign(() => db, { FieldValue, FieldPath }),
     auth: () => auth,
   };

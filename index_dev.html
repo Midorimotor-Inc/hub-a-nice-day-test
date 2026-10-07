@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791355860766';
+    window.__APP_BUILD='build-1791358713735';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.59';
+const APP_VERSION = '3.59.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2253,6 +2253,11 @@ const LOCK_TTL = 30*1000; // 30秒でロック期限切れ（ページ離脱時�
 // ╚══════════════════════════════════════════════════════════════════╝
 
 const STOR = 'hub-v8-dev-';
+// ★Firebase に繋ぐ時のアプリ名。**本番は既定（空）／テスト版は hub-dev**（2026-10-07）。
+//   同じ住所でフォルダが違うだけなので、アプリ名を分けないとサインインが共有され、
+//   片方のサインアウトでもう片方まで道連れでログアウトされる。
+const HUB_FB_APP_NAME = (STOR === 'hub-v8-') ? '' : 'hub-dev';
+const hubFbApp = () => (HUB_FB_APP_NAME ? firebase.app(HUB_FB_APP_NAME) : firebase.app());
 const storKey = (base, storeId) => `${STOR}${storeId}-${base}`;
 
 // ── 未反映の予約控え（端末が落ちても未反映を見失わない。customers.html の list-pending と同じ仕組みの insp 版）──
@@ -2591,8 +2596,13 @@ let fbDb = null;
 const FB_ON = (() => {
   try {
     if (BACKEND !== 'firebase' || typeof firebase === 'undefined' || !firebase.firestore || typeof HUB_FIREBASE_CONFIG === 'undefined') return false;
-    if (!firebase.apps.length) firebase.initializeApp(HUB_FIREBASE_CONFIG);
-    fbDb = firebase.firestore();
+    // ★テスト版と本番で Firebase のサインインを分ける（2026-10-07・Kyoshi承認のBLOCK-B変更）。
+    //   同じ住所なので、アプリ名が同じだとサインインが共有され、
+    //   テスト版のサインアウトで本番まで道連れでログアウトされていた。
+    //   アプリ名は STOR から決める（port_to_main.js の変換ルールを増やさずに済む）。
+    if (!HUB_FB_APP_NAME) { if (!firebase.apps.length) firebase.initializeApp(HUB_FIREBASE_CONFIG); }
+    else { try { firebase.app(HUB_FB_APP_NAME); } catch (e) { firebase.initializeApp(HUB_FIREBASE_CONFIG, HUB_FB_APP_NAME); } }
+    fbDb = hubFbApp().firestore();
     return true;
   } catch (e) { console.error('[FB] 初期化に失敗したため GAS 版で動きます', e); return false; }
 })();
@@ -2656,7 +2666,7 @@ const fbTxn = async (k, mutate, opts) => {
 //   ・この端末に登録した人の一覧（名前を選ぶログイン画面に並べる）は今までどおり端末内（auth-mine）に持つ。
 //   ・端末の台帳は devices/{端末ID}。管理者コンソールの「取り消し」はこの行を消す＝端末は次に開いた時に登録を捨てる。
 //   ・SDK が読めない時（fbAuth が無い）は認証なしで動く＝緊急時の GAS 版と同じふるまい。
-const fbAuth = (FB_ON && firebase.auth) ? firebase.auth() : null;
+const fbAuth = (FB_ON && firebase.auth) ? hubFbApp().auth() : null;
 let fbUser = null, fbAuthReady = !fbAuth;
 const fbAuthWaiters = [], fbUserWaiters = [], fbAuthListeners = new Set();
 if (fbAuth) {
@@ -2840,7 +2850,8 @@ const hubTakeHandoff = async () => {
 //   長いものに付け替える（6桁のまま放置しない）。以後の登録は管理者がもう一度招待する（新しい6桁）。
 //   Firebase は失敗を繰り返すアドレスをしばらく止めるので、6桁を総当たりで当てることはできない。
 //   メールのリンクを開く方式も残す（コードが無い時・メールを開いた端末でそのまま登録したい時）。
-const fbSecondaryApp = () => { try { return firebase.app('hub-invite'); } catch (e) { return firebase.initializeApp(HUB_FIREBASE_CONFIG, 'hub-invite'); } };
+const HUB_FB_INVITE_NAME = 'hub-invite' + (HUB_FB_APP_NAME ? ('-' + HUB_FB_APP_NAME) : '');
+const fbSecondaryApp = () => { try { return firebase.app(HUB_FB_INVITE_NAME); } catch (e) { return firebase.initializeApp(HUB_FIREBASE_CONFIG, HUB_FB_INVITE_NAME); } };
 const hubGasMailInvite = async (email, code, name, kind) => {
   try {
     const q = new URLSearchParams({ action: 'mailInvite', email, code, prefix: STOR, apiKey: GAS_API_KEY, name: String(name || ''), kind: String(kind || '') });   // name/kind：GAS のシートに無い人にも送れるように（2026-09-20）
