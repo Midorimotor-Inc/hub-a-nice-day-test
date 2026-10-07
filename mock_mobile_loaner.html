@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>モック：スマホで代車を入れ替える</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:#f1f5f9;margin:0;padding:12px;color:#111827}
+  h1{font-size:16px;margin:0 0 4px}
+  .lead{font-size:12px;color:#475569;margin:0 0 12px;line-height:1.8}
+  h2{font-size:14px;margin:18px 0 7px;border-left:5px solid #2563eb;padding-left:7px}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:11px 12px;margin-bottom:12px}
+  .try{background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;padding:9px 11px;font-size:12px;color:#1e40af;line-height:1.85;margin-bottom:10px}
+  .wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #e5e7eb;border-radius:8px}
+  table{border-collapse:collapse;user-select:none;-webkit-user-select:none}
+  td,th{border:1px solid #e5e7eb;padding:0;box-sizing:border-box}
+  .carh{width:104px;min-width:104px;font-size:11px;font-weight:800;color:#334155;text-align:left;padding:3px 6px;background:#f8fafc;position:sticky;left:0;z-index:3}
+  .carh small{display:block;font-weight:600;color:#94a3b8;font-size:9px}
+  .dh{width:34px;min-width:34px;font-size:9px;color:#64748b;text-align:center;padding:2px 0;background:#f8fafc;font-weight:700}
+  .dh.sun{color:#dc2626}.dh.sat{color:#2563eb}
+  .cell{width:34px;min-width:34px;height:36px;position:relative;background:#fff}
+  .cell.today{background:#fef08a}
+  .bar{position:absolute;inset:0;display:flex;align-items:center;padding-left:2px;font-size:8px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);white-space:nowrap;overflow:hidden}
+  .okdrop{outline:3px solid #22c55e;outline-offset:-3px;background:#dcfce7 !important}
+  .ngdrop{outline:3px solid #dc2626;outline-offset:-3px;background:#fee2e2 !important}
+  .lift{animation:lift .25s ease both}
+  @keyframes lift{from{transform:scale(1)}to{transform:scale(1.04)}}
+  .ghost{position:fixed;pointer-events:none;z-index:999;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:800;color:#fff;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+  .msg{margin-top:9px;font-size:12px;font-weight:800;min-height:34px;line-height:1.6}
+  .msg.ok{color:#047857}.msg.ng{color:#b91c1c}
+  .btn{padding:8px 14px;border-radius:9px;border:2px solid #cbd5e1;background:#fff;font-size:12px;font-weight:800;color:#475569}
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;display:flex;align-items:flex-end}
+  .sbox{background:#fff;width:100%;border-radius:16px 16px 0 0;padding:14px 14px 20px;max-height:80vh;overflow:auto}
+  .sttl{font-weight:900;font-size:14px;color:#1d4ed8;margin-bottom:3px}
+  .ssub{font-size:11px;color:#94a3b8;margin-bottom:10px}
+  .pick{display:flex;align-items:center;gap:10px;width:100%;padding:12px 11px;border-radius:12px;border:2px solid #e2e8f0;background:#fff;margin-bottom:8px;font-size:13.5px;font-weight:800;color:#334155;text-align:left}
+  .pick.ng{opacity:.45}
+  .dot{width:12px;height:12px;border-radius:4px;flex-shrink:0}
+  .tag{margin-left:auto;font-size:10px;font-weight:800;border-radius:10px;padding:2px 8px}
+  .tag.ok{background:#dcfce7;color:#047857}.tag.ng{background:#fee2e2;color:#b91c1c}
+  .q{font-size:12px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 11px;line-height:1.95}
+  .warn{font-size:12px;color:#92400e;background:#fffbeb;border:2px solid #fcd34d;border-radius:8px;padding:9px 11px;line-height:1.9}
+</style></head><body>
+
+<h1>スマホで代車を入れ替える</h1>
+<p class="lead">
+  PC版と同じ入れ替えを、スマホでもできるようにします。<br>
+  <b>やり方を2つ用意しました。実際に触って、どちらがよいか教えてください。</b>
+</p>
+
+<div class="try">
+  <b>A案：長押ししてドラッグ</b><br>
+  帯を<b>0.4秒ほど長押し</b>すると浮き上がります。そのまま上下の車へ動かして離すと入れ替わります。<br>
+  <span style="color:#1e40af">※すぐ指を動かすと横スクロールになります（長押しが目印）</span><br><br>
+  <b>B案：帯をタップ → 車を選ぶ</b><br>
+  帯を<b>軽くタップ</b>すると下から車の一覧が出ます。空いている車を選ぶだけ。
+</div>
+
+<div class="card">
+  <div class="wrap"><table id="g"></table></div>
+  <div class="msg" id="msg">　</div>
+  <button class="btn" id="undo">↶ 戻す</button>
+  <button class="btn" id="reset">最初に戻す</button>
+</div>
+
+<h2>どちらがよいですか</h2>
+<div class="card">
+  <div class="warn">
+    <b>正直なところ、スマホでは B案のほうが確実です。</b><br>
+    画面が狭く、表は横スクロールするので、<b>ドラッグは横スクロールと取り合い</b>になります。
+    長押しで見分けていますが、走っている車の中や手袋ではうまくいかないことがあります。<br>
+    B案は<b>タップ2回で終わり</b>、空いている車／ふさがっている車もその場で分かります。
+  </div>
+  <div class="q" style="margin-top:10px">
+    <b>1. どちらにしますか</b>　A案だけ／B案だけ／<b>両方入れる</b>（長押しでドラッグ、タップで一覧）<br><br>
+    <b>2. 決まりはPCと同じでよいですか</b><br>
+    　・代車 ⇄ レンタカーはまたがない<br>
+    　・🔒 限定は動かせない<br>
+    　・過去は動かせない／本日は入庫時間より前なら動かせる<br>
+    　・入庫時間が未定の本日分は、確認してから動かせる<br><br>
+    <b>3. スマホにも「スケジュールとのズレ」チェックを付けますか</b><br>
+    　<span style="color:#64748b">PC版には付けました。スマホは画面が狭いので、件数だけ出して詳しくはPCで見る形もできます。</span>
+  </div>
+</div>
+
+<div id="sheetHost"></div>
+
+<script>
+const CARS=[
+  {id:1,name:'ハスラー',num:'7074',col:'#75923c'},
+  {id:2,name:'スペーシア',num:'8967',col:'#1f2937'},
+  {id:3,name:'ワゴンR',num:'3503',col:'#2563eb'},
+  {id:4,name:'アルト',num:'1188',col:'#dc2626'},
+  {id:5,name:'ジムニー',num:'6674',col:'#d97706'},
+];
+const D0=new Date(); D0.setDate(D0.getDate()-3);
+const DAYS=[...Array(21)].map((_,i)=>{const d=new Date(D0);d.setDate(d.getDate()+i);return d;});
+const TODAY_I=3;
+const START={
+  r1:{car:1,from:5,to:8,user:'辻井　博',col:'#2563eb'},
+  r2:{car:2,from:6,to:9,user:'大山　明',col:'#7c3aed'},
+  r3:{car:3,from:1,to:4,user:'小西　怜史',col:'#0891b2'},
+  r4:{car:3,from:9,to:12,user:'桑田　陽子',col:'#059669'},
+  r5:{car:5,from:11,to:15,user:'河内　すみお',col:'#d97706'},
+};
+let RES=JSON.parse(JSON.stringify(START));
+const hist=[];
+const msg=document.getElementById('msg');
+const say=(t,ok)=>{msg.textContent=t;msg.className='msg '+(ok===true?'ok':ok===false?'ng':'');};
+const occupied=(carId,from,to,skip)=>Object.entries(RES).some(([id,r])=>id!==skip&&r.car===carId&&!(r.to<from||r.from>to));
+
+function draw(){
+  let h='<tr><th class="carh">代車<small>長押しで移動／タップで選ぶ</small></th>';
+  DAYS.forEach(d=>{const w=d.getDay();h+='<th class="dh '+(w===0?'sun':w===6?'sat':'')+'">'+(d.getMonth()+1)+'/'+d.getDate()+'</th>';});
+  h+='</tr>';
+  CARS.forEach(c=>{
+    h+='<tr data-car="'+c.id+'"><td class="carh"><span class="dot" style="display:inline-block;background:'+c.col+'"></span> '+c.name+'<small>'+c.num+'</small></td>';
+    DAYS.forEach((d,i)=>{
+      const hit=Object.entries(RES).find(([id,r])=>r.car===c.id&&i>=r.from&&i<=r.to);
+      if(hit){const [id,r]=hit;
+        h+='<td class="cell" data-car="'+c.id+'" data-i="'+i+'" data-res="'+id+'" style="background:'+r.col+'">'
+          +'<div class="bar">'+(i===r.from?r.user.replace(/\s+/g,'').slice(0,4):'')+'</div></td>';
+      }else h+='<td class="cell'+(i===TODAY_I?' today':'')+'" data-car="'+c.id+'" data-i="'+i+'"></td>';
+    });
+    h+='</tr>';
+  });
+  document.getElementById('g').innerHTML=h;
+}
+draw();
+
+// ───────── B案：タップで車を選ぶ ─────────
+function openPicker(id){
+  const r=RES[id];
+  const host=document.getElementById('sheetHost');
+  host.innerHTML='<div class="sheet"><div class="sbox">'
+    +'<div class="sttl">🚙 代車を変える</div>'
+    +'<div class="ssub">'+r.user+'　'+(DAYS[r.from].getMonth()+1)+'/'+DAYS[r.from].getDate()+'〜'+(DAYS[r.to].getMonth()+1)+'/'+DAYS[r.to].getDate()+'（'+(r.to-r.from+1)+'日間）</div>'
+    +CARS.map(c=>{
+      const now=c.id===r.car;
+      const ok=now||!occupied(c.id,r.from,r.to,id);
+      return '<button class="pick'+(ok?'':' ng')+'" data-to="'+c.id+'"'+(ok?'':' disabled')+'>'
+        +'<span class="dot" style="background:'+c.col+'"></span>'+c.name+' <span style="font-weight:600;color:#94a3b8">'+c.num+'</span>'
+        +'<span class="tag '+(now?'ok':ok?'ok':'ng')+'">'+(now?'いま この車':ok?'空いています':'ふさがっています')+'</span></button>';
+    }).join('')
+    +'<button class="btn" style="width:100%;margin-top:4px" data-close="1">やめる</button>'
+    +'</div></div>';
+  host.querySelectorAll('[data-to]').forEach(b=>b.onclick=()=>{
+    const to=Number(b.dataset.to);
+    host.innerHTML='';
+    if(to===r.car){say('同じ車なので、そのままです');return;}
+    hist.push(JSON.parse(JSON.stringify(RES)));
+    const fromName=CARS.find(c=>c.id===r.car).name, toName=CARS.find(c=>c.id===to).name;
+    RES[id].car=to; draw();
+    say('✓ '+r.user+' の代車を '+fromName+' → '+toName+' に変えました（予約カードの代車名も書き換わります）',true);
+  });
+  host.querySelector('[data-close]').onclick=()=>{host.innerHTML='';};
+  host.querySelector('.sheet').onclick=e=>{if(e.target.classList.contains('sheet'))host.innerHTML='';};
+}
+
+// ───────── A案：長押ししてドラッグ ─────────
+let press=null, drag=null, ghost=null;
+const pt=e=>e.touches?e.touches[0]:e;
+const start=e=>{
+  const cell=e.target.closest('.cell'); if(!cell||!cell.dataset.res)return;
+  const p=pt(e);
+  press={id:cell.dataset.res,x:p.clientX,y:p.clientY,
+    timer:setTimeout(()=>{
+      press.long=true;
+      drag={id:press.id,r:RES[press.id]};
+      document.querySelectorAll('.cell[data-res="'+drag.id+'"]').forEach(c=>c.classList.add('lift'));
+      ghost=document.createElement('div');
+      ghost.className='ghost'; ghost.style.background=drag.r.col;
+      ghost.textContent=drag.r.user+'（'+(drag.r.to-drag.r.from+1)+'日間）';
+      document.body.appendChild(ghost);
+      ghost.style.left=(press.x-40)+'px'; ghost.style.top=(press.y-44)+'px';
+      if(navigator.vibrate)navigator.vibrate(12);
+      say('持ち上げました。移したい車の行へ動かして離してください');
+    },400)};
+};
+const move=e=>{
+  if(!press)return;
+  const p=pt(e);
+  if(!press.long){
+    if(Math.abs(p.clientX-press.x)>8||Math.abs(p.clientY-press.y)>8){clearTimeout(press.timer);press=null;}
+    return;
+  }
+  e.preventDefault();
+  ghost.style.left=(p.clientX-40)+'px'; ghost.style.top=(p.clientY-44)+'px';
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('okdrop','ngdrop'));
+  const over=document.elementFromPoint(p.clientX,p.clientY);
+  const row=over&&over.closest('tr[data-car]'); if(!row)return;
+  const carId=Number(row.dataset.car);
+  const ok=carId===drag.r.car||!occupied(carId,drag.r.from,drag.r.to,drag.id);
+  for(let i=drag.r.from;i<=drag.r.to;i++){
+    const c=row.querySelector('.cell[data-i="'+i+'"]'); if(c)c.classList.add(ok?'okdrop':'ngdrop');
+  }
+};
+const end=e=>{
+  if(!press)return;
+  clearTimeout(press.timer);
+  const wasLong=press.long, id=press.id; press=null;
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('okdrop','ngdrop','lift'));
+  if(!wasLong){ openPicker(id); return; }          // 短いタップ＝車を選ぶ一覧
+  const d=drag; drag=null;
+  if(ghost){ghost.remove();ghost=null;}
+  const p=e.changedTouches?e.changedTouches[0]:e;
+  const over=document.elementFromPoint(p.clientX,p.clientY);
+  const row=over&&over.closest('tr[data-car]');
+  draw();
+  if(!row){say('表の外なので、そのままにしました');return;}
+  const carId=Number(row.dataset.car);
+  if(carId===d.r.car){say('同じ車なので、そのままです');return;}
+  if(occupied(carId,d.r.from,d.r.to,d.id)){say('その期間、'+CARS.find(c=>c.id===carId).name+' はふさがっています',false);return;}
+  hist.push(JSON.parse(JSON.stringify(RES)));
+  const fromName=CARS.find(c=>c.id===d.r.car).name, toName=CARS.find(c=>c.id===carId).name;
+  RES[d.id].car=carId; draw();
+  say('✓ '+d.r.user+' の代車を '+fromName+' → '+toName+' に入れ替えました',true);
+};
+document.addEventListener('touchstart',start,{passive:true});
+document.addEventListener('touchmove',move,{passive:false});
+document.addEventListener('touchend',end);
+document.addEventListener('mousedown',start);
+document.addEventListener('mousemove',move);
+document.addEventListener('mouseup',end);
+
+document.getElementById('undo').onclick=()=>{if(!hist.length){say('戻すものはありません');return;}RES=hist.pop();draw();say('↶ 戻しました');};
+document.getElementById('reset').onclick=()=>{RES=JSON.parse(JSON.stringify(START));hist.length=0;draw();say('最初に戻しました');};
+</script>
+</body></html>
