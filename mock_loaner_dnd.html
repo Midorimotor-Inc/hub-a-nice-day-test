@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：代車管理をドラッグで入れ替える</title>
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#111827}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:#475569;margin:0 0 14px;line-height:1.85}
+  h2{font-size:15px;margin:22px 0 8px;border-left:5px solid #2563eb;padding-left:8px}
+  .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:13px 15px;margin-bottom:14px}
+  .try{background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#1e40af;line-height:1.9;margin-bottom:12px}
+  table{border-collapse:collapse;user-select:none}
+  th,td{border:1px solid #e5e7eb;padding:0;box-sizing:border-box}
+  .carh{width:150px;min-width:150px;font-size:11.5px;font-weight:800;color:#334155;text-align:left;padding:4px 8px;background:#f8fafc;position:relative}
+  .carh small{display:block;font-weight:600;color:#94a3b8;font-size:10px}
+  .dh{width:44px;min-width:44px;font-size:10px;color:#64748b;text-align:center;padding:3px 0;background:#f8fafc;font-weight:700}
+  .dh.sun{color:#dc2626}.dh.sat{color:#2563eb}
+  .cell{width:44px;min-width:44px;height:40px;position:relative;background:#fff}
+  .cell.today{background:#fef08a}
+  .bar{position:absolute;inset:0;display:flex;align-items:center;padding-left:3px;font-size:9px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.55);white-space:nowrap;overflow:visible;cursor:grab}
+  .bar.drag{opacity:.35}
+  .grip{position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:10px;color:rgba(255,255,255,.85);display:none}
+  .cell:hover .grip{display:block}
+  .okdrop{outline:3px solid #22c55e;outline-offset:-3px;background:#dcfce7 !important}
+  .ngdrop{outline:3px solid #dc2626;outline-offset:-3px;background:#fee2e2 !important}
+  .rowhl{background:#eff6ff !important}
+  .ghost{position:fixed;pointer-events:none;z-index:999;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.3)}
+  .msg{margin-top:10px;font-size:12.5px;font-weight:800;min-height:20px}
+  .msg.ok{color:#047857}.msg.ng{color:#b91c1c}
+  .q{font-size:12.5px;color:#1e293b;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;line-height:1.95}
+  .warn{font-size:12.5px;color:#92400e;background:#fffbeb;border:2px solid #fcd34d;border-radius:8px;padding:10px 12px;line-height:1.95}
+  .wrap{overflow-x:auto;padding-bottom:4px}
+  .btn{padding:6px 14px;border-radius:8px;border:2px solid #cbd5e1;background:#fff;font-size:12px;font-weight:800;color:#475569;cursor:pointer}
+</style></head><body>
+
+<h1>代車管理：予約をドラッグして車を入れ替える</h1>
+<p class="lead">
+  <b>できます。</b>しかも「別の車へ移す」仕組みは<b>すでに中にあります</b>（最適化の機能が同じことをしています）。<br>
+  下の表は<b>本当に動くモック</b>です。帯をつかんで上下の車へ動かしてみてください。
+</p>
+
+<div class="try">
+  <b>試し方</b>：色の付いた帯を<b>押したまま上下へ</b>動かすと、移せる車は<b style="color:#047857">緑</b>、ふさがっている車は<b style="color:#b91c1c">赤</b>になります。離すと入れ替わります。<br>
+  <b>短くクリック</b>しただけなら、今までどおり予約の中身が出るだけで動きません（押し間違い防止）。
+</div>
+
+<div class="card">
+  <div class="wrap">
+    <table id="g"></table>
+  </div>
+  <div class="msg" id="msg">　</div>
+  <button class="btn" id="undo">↶ 戻す</button>
+  <button class="btn" id="reset">最初の状態に戻す</button>
+</div>
+
+<h2>できること・できないこと</h2>
+<div class="card">
+  <table style="width:100%;font-size:12.5px">
+    <tr><th style="background:#334155;color:#fff;padding:6px 9px;text-align:left;width:46%">できること</th><th style="background:#334155;color:#fff;padding:6px 9px;text-align:left">どうなるか</th></tr>
+    <tr><td style="padding:7px 9px">帯を上下にドラッグ</td><td style="padding:7px 9px"><b>車だけ入れ替わる</b>（期間はそのまま）</td></tr>
+    <tr><td style="padding:7px 9px">ふさがっている車へ落とす</td><td style="padding:7px 9px"><b>赤くなって落とせない</b>（上書きしない）</td></tr>
+    <tr><td style="padding:7px 9px">入れ替えたあと</td><td style="padding:7px 9px"><b>予約カードの代車名も自動で書き換わる</b>（スケジュール側と食い違わない）</td></tr>
+    <tr><td style="padding:7px 9px">まちがえた</td><td style="padding:7px 9px"><b>↶ 戻す</b> で元どおり（今ある機能がそのまま効きます）</td></tr>
+  </table>
+  <div class="warn" style="margin-top:11px">
+    <b>期間（日にち）は変えません。</b>横に動かす＝貸出期間の変更は、今までどおり帯をクリックして出る画面で直します。<br>
+    上下だけにしておくと「動かすつもりが無いのに日がずれた」という事故が起きません。<br>
+    <span style="color:#64748b">（ご希望があれば、横へのドラッグも後から足せます）</span>
+  </div>
+</div>
+
+<h2>決めていただきたいこと</h2>
+<div class="card">
+  <div class="q">
+    <b>1. つかみ方</b><br>
+    　A案：<b>帯をそのまま押して動かす</b>（上のモックはこれ。短いクリックは今までどおり中身が出る）<br>
+    　B案：帯の右に出る <b>⇅</b> のつまみを押して動かす（誤操作がさらに減るが、ひと手間）<br><br>
+
+    <b>2. 代車 ⇄ レンタカー をまたいで動かせるようにしますか</b><br>
+    　代車の表とレンタカーの表は別物なので、またぐ移動は少し作りが違います。<br>
+    　<span style="color:#64748b">まずは<b>それぞれの表の中だけ</b>にしておくのが安全だと思います。</span><br><br>
+
+    <b>3. 🔒 限定（最適化で動かさない印）が付いた予約</b><br>
+    　手で動かすのは許す／動かせないようにする、どちらにしますか。<br>
+    　<span style="color:#64748b">手で動かすのは意図があってのことなので、<b>許す</b>のがよいと思います。</span><br><br>
+
+    <b>4. もう貸出が始まっている予約（今日より前から始まっている分）</b><br>
+    　動かせるようにする／止める。<span style="color:#64748b">実際に車が出ているので、<b>確認を出してから動かす</b>のが安全かもしれません。</span>
+  </div>
+</div>
+
+<script>
+const CARS=[
+  {id:1,name:'ハスラー',num:'7074',col:'#75923c'},
+  {id:2,name:'スペーシア',num:'8967',col:'#1f2937'},
+  {id:3,name:'ワゴンR',num:'3503',col:'#2563eb'},
+  {id:4,name:'アルト',num:'1188',col:'#dc2626'},
+  {id:5,name:'ジムニー',num:'6674',col:'#d97706'},
+];
+const D0=new Date(2026,9,5);
+const DAYS=[...Array(16)].map((_,i)=>{const d=new Date(D0);d.setDate(d.getDate()+i);return d;});
+const key=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+const START={
+  r1:{car:1,from:1,to:4,user:'辻井　博',col:'#2563eb'},
+  r2:{car:2,from:3,to:6,user:'大山　明',col:'#7c3aed'},
+  r3:{car:3,from:0,to:2,user:'小西　怜史',col:'#0891b2'},
+  r4:{car:3,from:6,to:9,user:'桑田　陽子',col:'#059669'},
+  r5:{car:5,from:8,to:12,user:'河内　すみお',col:'#d97706'},
+};
+let RES=JSON.parse(JSON.stringify(START));
+const hist=[];
+const msg=document.getElementById('msg');
+const say=(t,ok)=>{msg.textContent=t;msg.className='msg '+(ok===true?'ok':ok===false?'ng':'');};
+
+const occupied=(carId,from,to,skip)=>Object.entries(RES).some(([id,r])=>
+  id!==skip&&r.car===carId&&!(r.to<from||r.from>to));
+
+function draw(){
+  const t=document.getElementById('g');
+  let h='<tr><th class="carh">代車<small>クリックで中身／ドラッグで入れ替え</small></th>';
+  DAYS.forEach(d=>{const w=d.getDay();h+='<th class="dh '+(w===0?'sun':w===6?'sat':'')+'">'+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+'日月火水木金土'[w]+'</th>';});
+  h+='</tr>';
+  CARS.forEach(c=>{
+    h+='<tr data-car="'+c.id+'"><td class="carh"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:'+c.col+';margin-right:5px"></span>'+c.name+'<small>神戸 '+c.num+'</small></td>';
+    DAYS.forEach((d,i)=>{
+      const hit=Object.entries(RES).find(([id,r])=>r.car===c.id&&i>=r.from&&i<=r.to);
+      const today=i===2;
+      if(hit){
+        const [id,r]=hit;
+        const first=i===r.from;
+        h+='<td class="cell" data-car="'+c.id+'" data-i="'+i+'" data-res="'+id+'" style="background:'+r.col+'">'
+          +'<div class="bar" data-res="'+id+'">'+(first?r.user.replace(/\s+/g,'').slice(0,5):'')+'</div>'
+          +(first?'<span class="grip">⇅</span>':'')+'</td>';
+      }else{
+        h+='<td class="cell'+(today?' today':'')+'" data-car="'+c.id+'" data-i="'+i+'"></td>';
+      }
+    });
+    h+='</tr>';
+  });
+  t.innerHTML=h;
+}
+draw();
+
+// ── ドラッグで入れ替え ──
+let dragging=null, ghost=null, downAt=null, moved=false;
+document.addEventListener('mousedown',e=>{
+  const cell=e.target.closest('.cell'); if(!cell||!cell.dataset.res)return;
+  e.preventDefault();
+  downAt={x:e.clientX,y:e.clientY}; moved=false;
+  const id=cell.dataset.res, r=RES[id];
+  dragging={id,r,span:r.to-r.from};
+});
+document.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  if(!moved){
+    if(Math.abs(e.clientX-downAt.x)<4&&Math.abs(e.clientY-downAt.y)<4)return;
+    moved=true;
+    document.querySelectorAll('.cell[data-res="'+dragging.id+'"]').forEach(c=>c.querySelector('.bar')?.classList.add('drag'));
+    ghost=document.createElement('div');
+    ghost.className='ghost'; ghost.style.background=dragging.r.col;
+    ghost.textContent=dragging.r.user+'（'+(dragging.span+1)+'日間）';
+    document.body.appendChild(ghost);
+  }
+  ghost.style.left=(e.clientX+12)+'px'; ghost.style.top=(e.clientY+12)+'px';
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('okdrop','ngdrop'));
+  document.querySelectorAll('.carh').forEach(c=>c.classList.remove('rowhl'));
+  const over=document.elementFromPoint(e.clientX,e.clientY);
+  const row=over&&over.closest('tr[data-car]');
+  if(!row)return;
+  const carId=Number(row.dataset.car);
+  row.querySelector('.carh').classList.add('rowhl');
+  const ok=carId===dragging.r.car||!occupied(carId,dragging.r.from,dragging.r.to,dragging.id);
+  for(let i=dragging.r.from;i<=dragging.r.to;i++){
+    const c=row.querySelector('.cell[data-i="'+i+'"]');
+    if(c)c.classList.add(ok?'okdrop':'ngdrop');
+  }
+});
+document.addEventListener('mouseup',e=>{
+  if(!dragging)return;
+  const d=dragging; dragging=null;
+  if(ghost){ghost.remove();ghost=null;}
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('okdrop','ngdrop'));
+  document.querySelectorAll('.carh').forEach(c=>c.classList.remove('rowhl'));
+  if(!moved){
+    say('「'+d.r.user+'」の予約を開きました（クリックだけでは動きません）');
+    draw(); return;
+  }
+  const over=document.elementFromPoint(e.clientX,e.clientY);
+  const row=over&&over.closest('tr[data-car]');
+  if(!row){draw();say('表の外なので、そのままにしました');return;}
+  const carId=Number(row.dataset.car);
+  if(carId===d.r.car){draw();say('同じ車なので、そのままです');return;}
+  if(occupied(carId,d.r.from,d.r.to,d.id)){
+    draw(); say('その期間、'+CARS.find(c=>c.id===carId).name+' はふさがっています。入れ替えできません',false); return;
+  }
+  hist.push(JSON.parse(JSON.stringify(RES)));
+  const fromName=CARS.find(c=>c.id===d.r.car).name;
+  const toName=CARS.find(c=>c.id===carId).name;
+  RES[d.id].car=carId;
+  draw();
+  say('✓ '+d.r.user+' の代車を '+fromName+' → '+toName+' に入れ替えました（予約カードの代車名も書き換わります）',true);
+});
+document.getElementById('undo').onclick=()=>{
+  if(!hist.length){say('戻すものはありません');return;}
+  RES=hist.pop(); draw(); say('↶ 戻しました');
+};
+document.getElementById('reset').onclick=()=>{
+  RES=JSON.parse(JSON.stringify(START)); hist.length=0; draw(); say('最初の状態に戻しました');
+};
+</script>
+</body></html>

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791335944760';
+    window.__APP_BUILD='build-1791346609454';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.57';
+const APP_VERSION = '3.58';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9388,7 +9388,7 @@ const LoanerSettingsModal = memo(({isOpen, onClose, listH, listS, onSaveH, onSav
 // ============================================
 //  代車管理グリッド（閲覧専用 + モーダル編集）
 // ============================================
-const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onApplyOptimize,pendingDeleteBk='',justAddedIds=[]})=>{
+const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onMoveLoanerRes,onMoveRentalRes,onFixSync,pendingDeleteBk='',justAddedIds=[]})=>{
   const LOANERS_LOCAL=storeLoaners||LOANERS;
   const RENTAL_LOCAL=rentalCars||DEFAULT_RENTAL_CARS;
   // 表示色：期間の重なる予約どうしは必ず違う色（同じお客様は同じ色）。描画のたびに全予約から決める
@@ -9399,74 +9399,6 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   const [editForm,setEditForm]=useState({user:'',startDate:'',endDate:''});
   const [rentalEditModal,setRentalEditModal]=useState(null);
   const [rentalEditForm,setRentalEditForm]=useState({user:'',startDate:'',endDate:''});
-  const [optResult,setOptResult]=useState(null); // ⑤最適化のプレビュー
-  // ⑤最適化の基準日（この日以降を並べ替え・これより前は対象外）。既定は今日。カレンダーの日付ヘッダークリックで変更。
-  const [optBaseDate,setOptBaseDate]=useState(()=>{const n=new Date();return{year:n.getFullYear(),month:n.getMonth(),day:n.getDate()};});
-
-  // ⑤ 代車最適化：歯抜けを減らすよう非限定の予約を車ごとに詰め直す（限定は現状維持）。
-  // 貪欲法：開始日順に、重複しない車のうち「直前の返却が今回の貸出に最も近い車」へ割り当て（＝すき間最小・車を集約）。
-  const computeOptimize=()=>{
-    const cars=LOANERS_LOCAL||[];
-    const all=[];
-    Object.keys(loanerRes||{}).forEach(cid=>{
-      const day=loanerRes[cid]||{};
-      Object.keys(day).forEach(k=>{const r=day[k]; if(r&&r.user) all.push({...r,_curCar:String(cid),_key:k});});
-    });
-    const toN=(y,m,d)=>toNum(y,m,d);
-    // 基準日（既定は今日／カレンダーの日付クリックで変更）。基準日より前は対象外、
-    // 基準日をまたぐ貸出中・限定は動かさず枠だけ占有、基準日以降の貸出だけ並べ替える。
-    const todayD=toN(optBaseDate.year,optBaseDate.month,optBaseDate.day);
-    const past=[],fixed=[],movable=[];
-    all.forEach(r=>{
-      const s=toN(r.fy,r.fm,r.fd), e=toN(r.ty,r.tm,r.td);
-      if(e<todayD) past.push(r);                       // 返却済み → 触らない・考慮しない
-      else if(r.locked||s<todayD) fixed.push(r);       // 貸出中 or 限定 → 動かさない（枠は占有）
-      else movable.push(r);                            // これから貸す → 最適化対象
-    });
-    const carById={}; cars.forEach(c=>carById[String(c.id)]=c);
-    const carInt={}; cars.forEach(c=>carInt[String(c.id)]=[]);
-    fixed.forEach(r=>{const cid=r._curCar; if(carInt[cid]) carInt[cid].push({s:toN(r.fy,r.fm,r.fd),e:toN(r.ty,r.tm,r.td)});});
-    movable.sort((a,b)=>toN(a.fy,a.fm,a.fd)-toN(b.fy,b.fm,b.fd));
-    const assign={};
-    movable.forEach(r=>{
-      const s=toN(r.fy,r.fm,r.fd), e=toN(r.ty,r.tm,r.td);
-      let best=null,bestScore=-Infinity;
-      for(const c of cars){
-        const cid=String(c.id); const ints=carInt[cid]||[];
-        if(ints.some(iv=> s<=iv.e && iv.s<=e)) continue; // 重複する車は不可
-        const lastEnd=ints.reduce((mx,iv)=> iv.e<s?Math.max(mx,iv.e):mx, -Infinity); // 直前の返却
-        if(lastEnd>bestScore){best=cid;bestScore=lastEnd;} // 直前返却が最も近い＝すき間最小。全空きは車順で先頭
-      }
-      if(best==null) best=r._curCar; // 万一入らなければ現状維持
-      assign[r.id]=best;
-      (carInt[best]=carInt[best]||[]).push({s,e});
-    });
-    const newLR={}; Object.keys(loanerRes||{}).forEach(cid=>{newLR[String(cid)]={};}); cars.forEach(c=>{if(!newLR[String(c.id)])newLR[String(c.id)]={};});
-    const moves=[];
-    // ★キーは衝突しない「年-月-日」を使う（"日"だけだと別の月で同じ日に始まる予約を
-    //   同じ車にまとめた時にキーが衝突して予約が消える。同じ車に同じ開始日=重複なので一意）。
-    const rkey=(r)=>`${r.fy}-${r.fm}-${r.fd}`;
-    // ★同じ車・同じ開始日は本来ありえない（＝重複予約）が、過去データや別経路の書き込みで
-    //   ぶつかることがある。素直に代入すると片方が無言で消えるので、埋まっていたら横へ逃がす。
-    const rput=(cid,r,res)=>{
-      const days=(newLR[cid]=newLR[cid]||{});
-      let k=rkey(r);
-      if(days[k]&&days[k].id!==res.id)k=`${k}_${res.id}`;
-      days[k]=res;
-    };
-    // 過去・貸出中・限定はそのままの車に残す（触らない）
-    past.forEach(r=>{const {_curCar,_key,...res}=r; rput(_curCar,r,res);});
-    fixed.forEach(r=>{const {_curCar,_key,...res}=r; rput(_curCar,r,res);});
-    movable.forEach(r=>{
-      const cid=assign[r.id]; const car=carById[cid]; const {_curCar,_key,...res}=r;
-      rput(cid,r,{...res,carName:car?car.name:res.carName,carNum:car?car.num:res.carNum});
-      if(String(_curCar)!==String(cid)){
-        const oldCar=carById[_curCar];
-        moves.push({user:r.user,fromCarId:_curCar,toCarId:cid,fromName:(oldCar&&oldCar.name)||res.carName||'?',toName:(car&&car.name)||'?',period:`${r.fm+1}/${r.fd}〜${r.tm+1}/${r.td}`,bookingKey:r.bookingKey});
-      }
-    });
-    return {moves,newLoanerRes:newLR,movableCount:movable.length,fixedCount:fixed.length,pastCount:past.length};
-  };
   // pinnedRes/hoverResは親から受け取る（グリッドの再レンダリングを防いでscrollLeftを保持）
   // pickMode用ドラッグ状態
   const [drag,setDrag]=useState(null);
@@ -9586,6 +9518,133 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       current.setDate(current.getDate()+1);
     }
     return false;
+  };
+
+  // ★★ スケジュールとの食い違いチェック（2026-10-07 ユーザー要望）★★
+  //   代車管理の帯 ⇄ スケジュールの予約カードの代車名 を突き合わせる。
+  //   入れ替え・削除・日にち変更のあとでも「代車管理では移ったのに予約カードは古いまま」を残さないための見張り。
+  const [syncOpen,setSyncOpen]=useState(false);
+  const carLabelOf=(c)=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
+  const bkRow=(bk)=>{
+    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    if(!m)return null;
+    if(m[1]==='insp'){
+      const rows=(inspData||{})[m[2]]||[];
+      return {kind:'insp',dk:m[2],at:m[3],row:rows[Number(m[3])]||null};
+    }
+    const day=(schedData||{})[m[2]]||{};
+    return {kind:'sched',dk:m[2],at:m[3],row:day[m[3]]||null};
+  };
+  const syncIssues=useMemo(()=>{
+    const out=[];
+    const seen={};
+    const scan=(kind,resObj,cars)=>{
+      Object.keys(resObj||{}).forEach(cid=>{
+        const car=(cars||[]).find(c=>String(c.id)===String(cid));
+        Object.values(resObj[cid]||{}).forEach(r=>{
+          if(!r||!r.bookingKey)return;                      // 手で足した帯は突き合わせない
+          seen[r.bookingKey]=true;
+          const f=bkRow(r.bookingKey);
+          const want=carLabelOf(car);
+          if(!f||!f.row||!f.row.name){
+            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,
+              text:'スケジュールに予約が見つかりません（予約が消された／日にちが変わった可能性）'});
+            return;
+          }
+          const row=f.row;
+          const have=kind==='rental'?(row.rentalLabel||''):(row.loaner||'');
+          if(String(have).trim()!==String(want).trim()){
+            out.push({kind,type:'label',bk:r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,
+              dk:f.dk,at:f.at,rowKind:f.kind,
+              text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
+          }
+        });
+      });
+    };
+    scan('loaner',loanerRes,LOANERS_LOCAL);
+    scan('rental',rentalRes,RENTAL_LOCAL);
+    // 逆向き：予約カードには代車名があるのに、代車管理に帯が無い
+    const rev=(dk,at,row,kind)=>{
+      if(!row||!row.name)return;
+      const lbl=(row.loaner||'').trim(), rlbl=(row.rentalLabel||'').trim();
+      if(!lbl&&!rlbl)return;
+      const bk=kind+'-'+dk+'-'+at;
+      if(seen[bk])return;
+      out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,
+        text:'予約カードに'+(rlbl?'レンタカー':'代車')+'名があるのに、代車管理に貸出がありません'});
+    };
+    Object.keys(inspData||{}).forEach(dk=>((inspData[dk]||[]).forEach((row,i)=>rev(dk,String(i),row,'insp'))));
+    Object.keys(schedData||{}).forEach(dk=>Object.keys(schedData[dk]||{}).forEach(sk=>rev(dk,sk,schedData[dk][sk],'sched')));
+    return out;
+  },[loanerRes,rentalRes,inspData,schedData,LOANERS_LOCAL,RENTAL_LOCAL]);
+
+  // ★★ 予約の帯をドラッグして「車を入れ替える」（2026-10-07 ユーザー要望）★★
+  //   期間はそのまま。上下＝車の入れ替えだけ。横（日にち）は今までどおり帯をクリックして直す。
+  //   動かせないもの：🔒限定／もう貸出が始まっている（開始日が今日以前）／過去
+  const [mvDrag,setMvDrag]=useState(null);      // {kind,fromCar,res,overCar,ok}
+  const mvPend=useRef(null);                    // 押したところ（まだ動かしていない）
+  const mvJust=useRef(false);                   // 直前に動かした＝そのあとの click を無視する
+  const _todayNum=(()=>{const n=new Date();return n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();})();
+  const resStartNum=(r)=>r?(r.fy*10000+(r.fm+1)*100+r.fd):0;
+  // この予約を動かしてよいか（だめな時は理由を返す）
+  const mvWhyNot=(r)=>{
+    if(!r)return '予約が見つかりません';
+    if(r.locked)return '🔒 限定の予約は入れ替えできません。先に限定を外してください。';
+    if(resStartNum(r)<=_todayNum)return 'すでに貸出が始まっている（または過去の）予約は入れ替えできません。';
+    return '';
+  };
+  // 移り先の車がその期間あいているか（自分自身は除く）
+  const mvFree=(kind,carId,r)=>{
+    const obj=kind==='rental'?(rentalRes||{}):(loanerRes||{});
+    const list=Object.values((obj[carId]||obj[String(carId)]||{}));
+    const s0=toNum(r.fy,r.fm,r.fd), e0=toNum(r.ty,r.tm,r.td);
+    return !list.some(x=>x&&x.id!==r.id&&!(toNum(x.ty,x.tm,x.td)<s0||toNum(x.fy,x.fm,x.fd)>e0));
+  };
+  const mvDown=(kind,carId,res,e)=>{
+    if(pickMode||!res)return;
+    mvPend.current={kind,carId,res,x:e.clientX,y:e.clientY};
+  };
+  const mvOver=(kind,carId)=>{
+    if(!mvDrag||mvDrag.kind!==kind)return;
+    if(mvDrag.overCar===carId)return;
+    setMvDrag(p=>p?{...p,overCar:carId,ok:carId===p.fromCar||mvFree(kind,carId,p.res)}:p);
+  };
+  useEffect(()=>{
+    const mv=(e)=>{
+      const p=mvPend.current;
+      if(!p||mvDrag)return;
+      if(Math.abs(e.clientX-p.x)<5&&Math.abs(e.clientY-p.y)<5)return;
+      const why=mvWhyNot(p.res);
+      if(why){ mvPend.current=null; alert(why); return; }
+      setMvDrag({kind:p.kind,fromCar:p.carId,res:p.res,overCar:p.carId,ok:true});
+    };
+    const up=()=>{
+      const d=mvDrag; mvPend.current=null;
+      if(!d){return;}
+      setMvDrag(null);
+      mvJust.current=true; setTimeout(()=>{mvJust.current=false;},250);
+      if(d.overCar==null||d.overCar===d.fromCar)return;
+      if(!d.ok){
+        const cars=d.kind==='rental'?RENTAL_LOCAL:LOANERS_LOCAL;
+        const nm=(cars||[]).find(c=>String(c.id)===String(d.overCar));
+        alert('その期間、'+((nm&&nm.name)||'その車')+' は空いていません。'+String.fromCharCode(10)+'別の車を選んでください。');
+        return;
+      }
+      if(d.kind==='rental')onMoveRentalRes&&onMoveRentalRes(d.fromCar,d.overCar,d.res);
+      else onMoveLoanerRes&&onMoveLoanerRes(d.fromCar,d.overCar,d.res);
+    };
+    window.addEventListener('mousemove',mv);
+    window.addEventListener('mouseup',up);
+    return()=>{window.removeEventListener('mousemove',mv);window.removeEventListener('mouseup',up);};
+  });
+  // 入れ替え中の見た目（移り先の行を緑／赤に）
+  const mvCellStyle=(kind,carId,dateObj)=>{
+    if(!mvDrag||mvDrag.kind!==kind||mvDrag.overCar!==carId)return null;
+    const r=mvDrag.res, n=toNum(dateObj.year,dateObj.month,dateObj.day);
+    if(n<toNum(r.fy,r.fm,r.fd)||n>toNum(r.ty,r.tm,r.td))return null;
+    return mvDrag.ok
+      ?{boxShadow:'inset 0 0 0 3px #22c55e',background:'#dcfce7'}
+      :{boxShadow:'inset 0 0 0 3px #dc2626',background:'#fee2e2'};
   };
 
   // -- pickModeのドラッグ操作 --
@@ -9766,10 +9825,15 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
           {!pickMode&&<span style={{fontSize:12,color:'#6b7280',marginLeft:8,fontWeight:500}}>（閲覧専用）</span>}
         </h2>
         {!pickMode&&<div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-          {onApplyOptimize&&<button onClick={()=>setOptResult(computeOptimize())} title="基準日以降の代車の割り当てを詰め直す（過去・貸出中・限定は動かさない）。基準日はカレンダーの日付をクリックで変更。"
-            style={{padding:'6px 12px',background:'#4f46e5',color:'white',border:'none',borderRadius:6,fontWeight:700,cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',gap:5}}
-            onMouseEnter={e=>e.currentTarget.style.background='#4338ca'}
-            onMouseLeave={e=>e.currentTarget.style.background='#4f46e5'}>✨ 最適化<span style={{fontSize:10,fontWeight:600,background:'rgba(255,255,255,0.25)',borderRadius:4,padding:'1px 6px'}}>基準 {optBaseDate.month+1}/{optBaseDate.day}〜</span></button>}
+          {/* ★スケジュールとの食い違いチェック（2026-10-07 ユーザー要望）。ズレが無ければ緑、あれば赤 */}
+          <button onClick={()=>setSyncOpen(true)}
+            title="代車管理の貸出と、スケジュールの予約カードに書かれている代車名が合っているか調べます"
+            style={{padding:'6px 12px',borderRadius:6,fontWeight:800,cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',gap:5,
+              border:'2px solid '+(syncIssues.length?'#dc2626':'#86efac'),
+              background:syncIssues.length?'#fee2e2':'#f0fdf4',
+              color:syncIssues.length?'#b91c1c':'#047857'}}>
+            {syncIssues.length?('⚠ スケジュールとズレ '+syncIssues.length+'件'):'✓ スケジュールと一致'}
+          </button>
           <button onClick={onUndo} style={{padding:'6px 13px',background:'#f59e0b',color:'white',border:'none',borderRadius:6,fontWeight:700,cursor:'pointer',fontSize:12}}>↶ 戻す</button>
           <button onClick={onOpenTireEdit} title="タイヤ種別 一括設定"
             style={{padding:'6px 10px',background:'#fef3c7',border:'2px solid #fbbf24',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,color:'#d97706'}}
@@ -9840,13 +9904,11 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                 const isHol=isHoliday(year,month,day);
                 // 月が変わるタイミング
                 const isMonthStart=i===0||(dateRange[i-1]&&dateRange[i-1].month!==month);
-                // ⑤最適化の基準日か（クリックで設定・紫で強調）
-                const isOptBase=optBaseDate&&optBaseDate.year===year&&optBaseDate.month===month&&optBaseDate.day===day;
-                return <th key={i} onClick={()=>setOptBaseDate({year,month,day})} title="クリックで最適化の基準日に設定"
-                  style={{width:44,minWidth:44,maxWidth:44,textAlign:'center',padding:'3px 0',border:isOptBase?'2px solid #4f46e5':'1px solid #e5e7eb',cursor:'pointer',fontSize:9,background:isOptBase?'#ede9fe':h2?'#fef08a':isMonthStart?'#ddd6fe':'#fff7ed',color:dow===0||isHol?'#dc2626':dow===6?'#1d4ed8':'#374151',fontWeight:isOptBase||h2?800:600,boxSizing:'border-box',position:'relative'}}>
+                // ★最適化は廃止したので「基準日」も無い（2026-10-07 ユーザー指示）
+                return <th key={i}
+                  style={{width:44,minWidth:44,maxWidth:44,textAlign:'center',padding:'3px 0',border:'1px solid #e5e7eb',fontSize:9,background:h2?'#fef08a':isMonthStart?'#ddd6fe':'#fff7ed',color:dow===0||isHol?'#dc2626':dow===6?'#1d4ed8':'#374151',fontWeight:h2?800:600,boxSizing:'border-box',position:'relative'}}>
                   {isMonthStart&&<div style={{fontSize:7,fontWeight:800,color:'#c2410c'}}>{month+1}月</div>}
                   <div>{day}</div><div style={{fontSize:7}}>{DOW[dow]}</div>
-                  {isOptBase&&<div style={{fontSize:7,fontWeight:800,color:'#4f46e5',lineHeight:1}}>基準</div>}
                 </th>;
               })}
             </tr>
@@ -9904,10 +9966,12 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                         onMouseDown={e=>{
                           e.preventDefault();
                           if(!isBlocked)handleMD(car.id,dateObj,e);
+                          if(isObj)mvDown('loaner',car.id,st,e);   // ★帯を押した＝入れ替えドラッグの構え
                         }}
                         onMouseEnter={()=>{
                           if(!isBlocked)handleME(car.id,dateObj);
-                          if(!pickMode&&isObj)setHoverRes({car,res:st});
+                          mvOver('loaner',car.id);                 // ★入れ替え中はこの行を移り先にする
+                          if(!pickMode&&isObj&&!mvDrag)setHoverRes({car,res:st});
                         }}
                         onMouseLeave={()=>{
                           if(!pickMode&&isObj)setHoverRes(null);
@@ -9916,6 +9980,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           if(!pickMode&&isObj){
                             e.preventDefault();
                             e.stopPropagation();
+                            if(mvJust.current)return;               // ★入れ替えた直後は中身を出さない
                             setPinnedRes({car,res:st});
                             setHoverRes(null);
                           }
@@ -9927,11 +9992,13 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           ...(sepT?{borderTop:SEP}:{}),
                           boxShadow:isDrag?'inset 0 0 0 2px #65a30d':isConf?'inset 0 0 0 2px #2563eb':'none',
                           background:bg,
-                          cursor:isBlocked?'not-allowed':isFree?'crosshair':!pickMode&&isObj?'pointer':'default',
+                          cursor:isBlocked?'not-allowed':isFree?'crosshair':(!pickMode&&isObj?(mvDrag?'grabbing':'grab'):'default'),
                           padding:0,
                           overflow:(showName||isJust)?'visible':'hidden',
                           position:'relative',
-                          boxSizing:'border-box'
+                          boxSizing:'border-box',
+                          opacity:(mvDrag&&mvDrag.kind==='loaner'&&mvDrag.res&&isObj&&st.id===mvDrag.res.id&&car.id===mvDrag.fromCar)?.35:1,
+                          ...(mvCellStyle('loaner',car.id,dateObj)||{})
                         }}>
                         {/* ★たった今登録した予約の目印。開始位置にだけ出す */}
                         {isJust&&showName&&(<div className="hub-just-chip">たった今</div>)}
@@ -10069,43 +10136,66 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       )}
 
       {/* ⑤ 最適化：変更内容の確認モーダル */}
-      {optResult&&(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:5000,display:'flex',alignItems:'center',justifyContent:'center',padding:14}} onClick={()=>setOptResult(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'min(560px,96vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.35)',overflow:'hidden'}}>
-            <div style={{background:'linear-gradient(135deg,#3730a3,#4f46e5)',color:'white',padding:'14px 20px'}}>
-              <div style={{fontSize:16,fontWeight:800}}>✨ 代車の最適化</div>
-              <div style={{fontSize:11,opacity:0.85,marginTop:2}}>基準日（{optBaseDate.month+1}/{optBaseDate.day}）以降の貸出を詰め直します（それ以前・貸出中・限定は動かしません）</div>
+      {/* ★スケジュールとの食い違い 一覧（2026-10-07） */}
+      {syncOpen&&(
+        <div onClick={()=>setSyncOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:2100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'min(720px,95vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+            <div style={{padding:'15px 20px',background:syncIssues.length?'linear-gradient(135deg,#b91c1c,#dc2626)':'linear-gradient(135deg,#047857,#059669)',borderRadius:'14px 14px 0 0',color:'white'}}>
+              <div style={{fontWeight:900,fontSize:15}}>{syncIssues.length?'⚠ スケジュールとのズレ':'✓ スケジュールと一致しています'}</div>
+              <div style={{fontSize:11,opacity:.9,marginTop:3}}>代車管理の貸出と、予約カードに書かれている代車名を突き合わせました</div>
             </div>
-            <div style={{flex:1,overflowY:'auto',padding:'16px 20px'}}>
-              {optResult.moves.length===0?(
-                <div style={{textAlign:'center',padding:'24px 8px',color:'#334155'}}>
-                  <div style={{fontSize:30,marginBottom:8}}>👍</div>
-                  <div style={{fontWeight:700}}>すでに最適です</div>
-                  <div style={{fontSize:12,color:'#64748b',marginTop:6}}>動かせる予約はありませんでした（これから貸す {optResult.movableCount} 件／貸出中・限定 {optResult.fixedCount} 件／過去は対象外 {optResult.pastCount} 件）。</div>
+            <div style={{flex:1,overflowY:'auto',padding:'14px 18px'}}>
+              {syncIssues.length===0?(
+                <div style={{textAlign:'center',padding:'26px 10px',color:'#047857'}}>
+                  <div style={{fontSize:34}}>✓</div>
+                  <div style={{fontWeight:800,fontSize:14,marginTop:8}}>ズレはありません</div>
+                  <div style={{fontSize:12,color:'#64748b',marginTop:6,lineHeight:1.8}}>
+                    代車管理の貸出と、スケジュールの予約カードの代車名は全部そろっています。
+                  </div>
                 </div>
               ):(<>
-                <div style={{fontSize:13,color:'#334155',marginBottom:12}}><b>{optResult.moves.length}件</b>の予約の代車が変わります：</div>
-                <div style={{display:'flex',flexDirection:'column',gap:7}}>
-                  {optResult.moves.map((mv,i)=>(
-                    <div key={i} style={{border:'1px solid #e5e7eb',borderRadius:9,padding:'9px 12px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                      <span style={{fontWeight:800,fontSize:14,color:'#1e293b'}}>👤 {mv.user}</span>
-                      <span style={{fontSize:12,color:'#64748b'}}>{mv.period}</span>
-                      <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:7,fontWeight:700,fontSize:13}}>
-                        <span style={{color:'#94a3b8',textDecoration:'line-through'}}>{mv.fromName}</span>
-                        <span style={{color:'#4f46e5'}}>→ {mv.toName}</span>
-                      </span>
+                <div style={{fontSize:12.5,color:'#334155',marginBottom:10,lineHeight:1.8}}>
+                  <b>{syncIssues.length}件</b>見つかりました。「直す」を押すと、<b>スケジュール側を代車管理に合わせます</b>。
+                </div>
+                {syncIssues.map((it,i)=>(
+                  <div key={i} style={{border:'1.5px solid '+(it.type==='label'?'#fca5a5':'#fcd34d'),background:it.type==='label'?'#fef2f2':'#fffbeb',borderRadius:10,padding:'10px 12px',marginBottom:8}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                      <span style={{fontWeight:900,fontSize:13,color:'#1e293b'}}>{it.user||'（氏名なし）'}</span>
+                      <span style={{fontSize:11,color:'#64748b'}}>{String(it.dk||'').replace(/^(\d+)-(\d+)-(\d+)$/,'$2/$3')}</span>
+                      <span style={{fontSize:10,fontWeight:800,borderRadius:10,padding:'1px 7px',background:it.kind==='rental'?'#ede9fe':'#dbeafe',color:it.kind==='rental'?'#6d28d9':'#1d4ed8'}}>
+                        {it.kind==='rental'?'レンタカー':'代車'}</span>
                     </div>
-                  ))}
-                </div>
-                <div style={{marginTop:12,fontSize:11,color:'#64748b',background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:8,padding:'8px 11px'}}>
-                  ※ お客様が使う代車が変わります。実行後に「↶ 戻す」で元に戻せます。特定の車で貸したい予約は、予約カードの「🔒 限定」で固定してください。
-                </div>
+                    <div style={{fontSize:12,color:'#475569',marginTop:5,lineHeight:1.8}}>{it.text}</div>
+                    {it.type==='label'&&(
+                      <div style={{fontSize:12,marginTop:5}}>
+                        <span style={{color:'#b91c1c'}}>予約カード：{it.have}</span>
+                        <span style={{color:'#94a3b8',margin:'0 7px'}}>→</span>
+                        <span style={{color:'#047857',fontWeight:800}}>代車管理：{it.want}</span>
+                      </div>
+                    )}
+                    {it.type==='label'&&onFixSync&&(
+                      <button onClick={()=>onFixSync(it)}
+                        style={{marginTop:8,padding:'7px 16px',borderRadius:8,border:'none',background:'#059669',color:'white',fontWeight:800,fontSize:12,cursor:'pointer'}}>
+                        ✓ 直す（予約カードを「{it.want}」にする）
+                      </button>
+                    )}
+                    {it.type!=='label'&&(
+                      <div style={{fontSize:11,color:'#92400e',marginTop:6,lineHeight:1.7}}>
+                        片方にしか無いので自動では直せません。予約カードか代車管理のどちらかを手で合わせてください。
+                      </div>
+                    )}
+                  </div>
+                ))}
               </>)}
             </div>
-            <div style={{padding:'12px 20px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8,flexShrink:0}}>
-              {optResult.moves.length>0&&<button onClick={()=>{onApplyOptimize(optResult.newLoanerRes,optResult.moves);setOptResult(null);}}
-                style={{flex:1,padding:'12px',background:'linear-gradient(135deg,#3730a3,#4f46e5)',color:'white',border:'none',borderRadius:9,fontWeight:800,fontSize:14,cursor:'pointer'}}>✓ この内容で最適化する</button>}
-              <button onClick={()=>setOptResult(null)} style={{padding:'12px 18px',background:'#f3f4f6',border:'none',borderRadius:9,fontWeight:700,fontSize:13,color:'#475569',cursor:'pointer'}}>{optResult.moves.length>0?'キャンセル':'閉じる'}</button>
+            <div style={{padding:'12px 20px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8}}>
+              {syncIssues.filter(x=>x.type==='label').length>1&&onFixSync&&(
+                <button onClick={()=>{syncIssues.filter(x=>x.type==='label').forEach(it=>onFixSync(it));}}
+                  style={{flex:1,padding:'12px',background:'linear-gradient(135deg,#047857,#059669)',color:'white',border:'none',borderRadius:9,fontWeight:800,fontSize:14,cursor:'pointer'}}>
+                  ✓ 名前のズレ {syncIssues.filter(x=>x.type==='label').length}件 をまとめて直す
+                </button>
+              )}
+              <button onClick={()=>setSyncOpen(false)} style={{padding:'12px 20px',background:'#f3f4f6',border:'none',borderRadius:9,fontWeight:700,fontSize:13,color:'#475569',cursor:'pointer'}}>閉じる</button>
             </div>
           </div>
         </div>
@@ -10251,19 +10341,21 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           if(isObj&&isStart){for(let j=i+1;j<dateRange.length;j++){const s=getRDragState(car.id,dateRange[j]);if(s&&typeof s==='object'&&s.id===st.id)rNameSpan++;else break;}}
                           return (
                             <td key={i}
-                              onMouseDown={e=>{e.preventDefault();if(!isBlocked)rHandleMD(car.id,dateObj);}}
-                              onMouseEnter={()=>{rHandleME(car.id,dateObj);if(!pickMode&&isObj)setHoverRes({car,res:{...st,_rental:true}});}}
+                              onMouseDown={e=>{e.preventDefault();if(!isBlocked)rHandleMD(car.id,dateObj);if(isObj)mvDown('rental',car.id,st,e);}}
+                              onMouseEnter={()=>{rHandleME(car.id,dateObj);mvOver('rental',car.id);if(!pickMode&&isObj&&!mvDrag)setHoverRes({car,res:{...st,_rental:true}});}}
                               onMouseLeave={()=>{if(!pickMode&&isObj)setHoverRes(null);}}
                               onClick={e=>{
-                                if(!pickMode&&isObj){e.preventDefault();e.stopPropagation();setPinnedRes({car,res:{...st,_rental:true}});}
+                                if(!pickMode&&isObj){e.preventDefault();e.stopPropagation();if(mvJust.current)return;setPinnedRes({car,res:{...st,_rental:true}});}
                               }}
                               style={{
                                 width:44,minWidth:44,maxWidth:44,height:40,
                                 border:'1px solid #a7f3d0',
                                 boxShadow:isDrag?'inset 0 0 0 2px #65a30d':isConf?'inset 0 0 0 2px #2563eb':'none',
                                 background:bg,
-                                cursor:isBlocked?'not-allowed':isFree?'crosshair':!pickMode&&isObj?'pointer':'default',
-                                padding:0,overflow:(isObj&&isStart)?'visible':'hidden',position:'relative',boxSizing:'border-box'}}>
+                                cursor:isBlocked?'not-allowed':isFree?'crosshair':(!pickMode&&isObj?(mvDrag?'grabbing':'grab'):'default'),
+                                padding:0,overflow:(isObj&&isStart)?'visible':'hidden',position:'relative',boxSizing:'border-box',
+                                opacity:(mvDrag&&mvDrag.kind==='rental'&&mvDrag.res&&isObj&&st.id===mvDrag.res.id&&car.id===mvDrag.fromCar)?.35:1,
+                                ...(mvCellStyle('rental',car.id,dateObj)||{})}}>
                               {isObj&&isStart&&(
                                 <div style={{position:'absolute',left:3,top:'50%',transform:'translateY(-50%)',width:rNameSpan*44-6,fontSize:11,color:'white',fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'clip',textShadow:'-1px -1px 1px rgba(0,0,0,.85),1px -1px 1px rgba(0,0,0,.85),-1px 1px 1px rgba(0,0,0,.85),1px 1px 1px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)',zIndex:2,pointerEvents:'none'}}>
                                   {shortenCorpName(st.user)}
@@ -13090,7 +13182,91 @@ function AppInner() {
   // ⑤ 最適化の適用：現在店舗の代車予約を丸ごと差し替えるだけ（実行前に戻す用スナップショットを積む）。
   //   スケジュール行の表示は bookingKey 一致の getLoanerLabel が予約側の carName から再計算するため
   //   自動で新しい車に追従する（insp側は触らないので「↶ 戻す」で完全に元へ戻せる）。
-  const applyLoanerOptimize=useCallback((newLoanerRes,moves)=>{
+  // ★★ 代車・レンタカーの「車の入れ替え」（2026-10-07 ユーザー要望・ドラッグで移す）★★
+  //   期間はそのまま、別の車へ移すだけ。**予約カードの代車名も必ず一緒に書き換える**
+  //   （書き換えは applyLoanerMove＝旧・最適化の反映処理をそのまま使う。実績のある道）。
+  const moveLoanerResCar=useCallback((fromCar,toCar,res)=>{
+    if(!res||String(fromCar)===String(toCar))return;
+    const base=_resObj(loanerRes);
+    const fromKey=Object.keys(base).find(k=>String(k)===String(fromCar));
+    const from={...(base[fromKey]||{})};
+    let k=null; for(const kk in from){ if(from[kk]&&from[kk].id===res.id){k=kk;break;} }
+    if(k==null){alert('入れ替える予約が見つかりませんでした。画面を読み直してもう一度お試しください。');return;}
+    const car=(currentLoaners||[]).find(c=>String(c.id)===String(toCar))||{};
+    const moved={...from[k],carName:car.name||'',carNum:car.num||'',savedAt:Date.now()};
+    delete from[k];
+    const toKey=String(toCar);
+    const to={...(base[toKey]||{}),[k]:moved};
+    applyLoanerMove({...base,[String(fromKey)]:from,[toKey]:to},[{bookingKey:moved.bookingKey,user:moved.user}]);
+  },[loanerRes,currentLoaners]);
+
+  // レンタカーの入れ替え。予約カード側は rentalLabel / rentalCarId を書き換える
+  const moveRentalResCar=useCallback((fromCar,toCar,res)=>{
+    if(!res||String(fromCar)===String(toCar))return;
+    const base=_resObj(rentalResData);
+    const fromKey=Object.keys(base).find(k=>String(k)===String(fromCar));
+    const from={...(base[fromKey]||{})};
+    let k=null; for(const kk in from){ if(from[kk]&&from[kk].id===res.id){k=kk;break;} }
+    if(k==null){alert('入れ替える予約が見つかりませんでした。画面を読み直してもう一度お試しください。');return;}
+    const car=(dynRentalCars||[]).find(c=>String(c.id)===String(toCar))||{};
+    const label=car.name?(car.name+(car.num?' ('+car.num+')':'')):'';
+    const moved={...from[k],carName:car.name||'',carNum:car.num||'',savedAt:Date.now()};
+    delete from[k];
+    const toKey=String(toCar);
+    const next={...base,[String(fromKey)]:from,[toKey]:{...(base[toKey]||{}),[k]:moved}};
+    setLoanerUndo(u=>[...u,{prevRental:rentalResData}]);
+    persistRres(()=>next,back=>JSON.stringify(back)===JSON.stringify(next),{verb:'レンタカーの入れ替え',name:moved.user});
+    // 予約カード側のラベルも書き換える（食い違いを残さない）
+    const m=String(moved.bookingKey||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    if(!m)return;
+    const dk=m[2], at=m[3], who=moved.user;
+    if(m[1]==='insp'){
+      persistInsp(b=>{
+        const out={...(b||{})}; const rows=[...(out[dk]||[])]; const i=Number(at);
+        if(!rows[i]||!rows[i].name||rows[i].name!==who)return undefined;
+        rows[i]={...rows[i],rentalLabel:label,rentalCarId:Number(toCar)};
+        out[dk]=rows; return out;
+      },b=>{const r=((b||{})[dk]||[])[Number(at)];return !r||r.name!==who||r.rentalLabel===label;},{verb:'レンタカー名の更新',alert:false});
+    }else{
+      setSchedData(prev=>{
+        const out={...(prev||{})}; const day={...(out[dk]||{})};
+        const sk=Object.keys(day).find(x=>day[x]&&day[x].name===who);
+        if(!sk)return prev;
+        day[sk]={...day[sk],rentalLabel:label,rentalCarId:Number(toCar)};
+        out[dk]=day; return out;
+      });
+    }
+  },[rentalResData,dynRentalCars,persistRres,persistInsp,setSchedData]);
+
+  // ★スケジュールとのズレを直す（2026-10-07 ユーザー要望）。
+  //   代車管理が正。予約カードの代車名（loaner/loanerId・rentalLabel/rentalCarId）をそれに合わせる。
+  //   **氏名が一致する行にだけ書く**（行番号がずれている時に別人へ書き込まないため）。
+  const fixLoanerSync=useCallback((it)=>{
+    if(!it||it.type!=='label')return;
+    const isR=it.kind==='rental';
+    const cid=Number(it.carId);
+    const patch=isR?{rentalLabel:it.want,rentalCarId:cid}:{loaner:it.want,loanerId:cid};
+    const who=it.user;
+    if(it.rowKind==='insp'){
+      persistInsp(b=>{
+        const out={...(b||{})}; const rows=[...(out[it.dk]||[])]; const i=Number(it.at);
+        if(!rows[i]||!rows[i].name||rows[i].name!==who)return undefined;   // 取り違え防止
+        rows[i]={...rows[i],...patch}; out[it.dk]=rows; return out;
+      },b=>{
+        const r=((b||{})[it.dk]||[])[Number(it.at)];
+        return !r||r.name!==who||String(isR?r.rentalLabel:r.loaner)===String(it.want);
+      },{verb:'代車名をそろえる',name:who,alert:false});
+    }else{
+      setSchedData(prev=>{
+        const out={...(prev||{})}; const day={...(out[it.dk]||{})};
+        const r=day[it.at];
+        if(!r||!r.name||r.name!==who)return prev;
+        day[it.at]={...r,...patch}; out[it.dk]=day; return out;
+      });
+    }
+  },[persistInsp,setSchedData]);
+
+  const applyLoanerMove=useCallback((newLoanerRes,moves)=>{
     setLoanerUndo(u=>[...u,{prevState:loanerRes}]);
     persistLres(()=>newLoanerRes,back=>JSON.stringify(back)===JSON.stringify(newLoanerRes),{verb:'最適化の適用'});
     // ★最適化は代車予約(lres)だけを動かすが、予約カード側にも代車名(loaner/loanerId)が
@@ -14840,9 +15016,11 @@ function AppInner() {
               onOpenSettings={()=>setShowLoanerSettings(true)}
               tireData={carTireData}
               locationData={rentalLocData}
+              onMoveLoanerRes={moveLoanerResCar}
+              onMoveRentalRes={moveRentalResCar}
+              onFixSync={fixLoanerSync}
               onOpenTireEdit={()=>setShowTireEdit(true)}
               onOpenLocationEdit={()=>setShowLocationEdit(true)}
-              onApplyOptimize={applyLoanerOptimize}
               justAddedIds={justAddedIds}/>
           </div>
         )}
