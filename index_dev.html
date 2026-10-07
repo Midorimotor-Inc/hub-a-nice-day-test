@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791346609454';
+    window.__APP_BUILD='build-1791349350554';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.58';
+const APP_VERSION = '3.58.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9586,11 +9586,31 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   const mvJust=useRef(false);                   // 直前に動かした＝そのあとの click を無視する
   const _todayNum=(()=>{const n=new Date();return n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();})();
   const resStartNum=(r)=>r?(r.fy*10000+(r.fm+1)*100+r.fd):0;
+  // その予約の「入庫時間」を分で返す（分からなければ null）
+  //   車検は予約カードの time、整備は枠の時刻。どちらも `09:00` の形（サブ枠は __1 が付く）
+  const bkEntryMin=(bk)=>{
+    const f=bkRow(bk);
+    if(!f||!f.row)return null;
+    const raw=f.kind==='insp'?String(f.row.time||''):String(getBaseSlot(f.at)||'');
+    const m=raw.match(/^(\d{1,2}):(\d{2})$/);
+    return m?(Number(m[1])*60+Number(m[2])):null;       // 「未定」などは null
+  };
   // この予約を動かしてよいか（だめな時は理由を返す）
+  //   ★本日の分は「入庫時間より前なら動かせる」（2026-10-07 ユーザー指示。判断は時刻だけ）
   const mvWhyNot=(r)=>{
     if(!r)return '予約が見つかりません';
     if(r.locked)return '🔒 限定の予約は入れ替えできません。先に限定を外してください。';
-    if(resStartNum(r)<=_todayNum)return 'すでに貸出が始まっている（または過去の）予約は入れ替えできません。';
+    const sNum=resStartNum(r);
+    if(sNum<_todayNum)return '過去の予約は入れ替えできません。';
+    if(sNum===_todayNum){
+      const mins=bkEntryMin(r.bookingKey);
+      if(mins==null)return '本日の予約ですが、入庫時間が分からないので入れ替えできません。'+String.fromCharCode(10)+'（入庫時間が未定、または予約が見つかりません）';
+      const n=new Date(), nowM=n.getHours()*60+n.getMinutes();
+      if(nowM>=mins){
+        const hh=String(Math.floor(mins/60)).padStart(2,'0'), mm=String(mins%60).padStart(2,'0');
+        return '本日の入庫時間（'+hh+':'+mm+'）を過ぎているので入れ替えできません。'+String.fromCharCode(10)+'（すでに代車をお渡ししている可能性があります）';
+      }
+    }
     return '';
   };
   // 移り先の車がその期間あいているか（自分自身は除く）

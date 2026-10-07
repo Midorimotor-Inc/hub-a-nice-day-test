@@ -42,6 +42,12 @@ const dk = (o) => `${o.y}-${o.m + 1}-${o.d}`;
 const F1 = d(5), T1 = d(7);      // これから貸す（動かせる）
 const F2 = d(-2), T2 = d(1);     // もう貸出中（動かせない）
 const F3 = d(9), T3 = d(11);     // これから貸す・限定（動かせない）
+const TD = d(0), TDe = d(2);     // 本日はじまり（入庫時間で動かせるか決まる）
+// 「まだ先の時刻」と「もう過ぎた時刻」を今の時刻から作る（検査を走らせる時刻に左右されないように）
+const pad = n => String(n).padStart(2, '0');
+const mkTime = (plusMin) => { const x = new Date(N.getTime() + plusMin * 60000); return pad(x.getHours()) + ':' + pad(x.getMinutes()); };
+const T_SOON = mkTime(90);       // 1時間半後＝まだ入庫していない
+const T_PAST = mkTime(-90);      // 1時間半前＝もう入庫時間を過ぎた
 
 // 代車2台・レンタカー1台
 const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' }];
@@ -56,6 +62,10 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
       [dk(F1)]: [{ name: '辻井　博', carType: 'アルト', time: '09:00', course: 2, store: 'honten', seq: 1, id: 1, loaner: 'ハスラー (7074)', loanerId: 1 }],
       [dk(F2)]: [{ name: '大山　明', carType: 'ワゴンR', time: '09:00', course: 2, store: 'honten', seq: 2, id: 2, loaner: 'ハスラー (7074)', loanerId: 1 }],
       [dk(F3)]: [{ name: '桑田　陽子', carType: 'スペーシア', time: '09:00', course: 2, store: 'honten', seq: 3, id: 3, loaner: 'ハスラー (7074)', loanerId: 1 }],
+      [dk(TD)]: [
+        { name: '河内　すみお', carType: 'ワゴンR', time: T_SOON, course: 2, store: 'honten', seq: 4, id: 4, loaner: 'ハスラー (7074)', loanerId: 1 },
+        { name: '芝田　一郎', carType: 'アルト', time: T_PAST, course: 2, store: 'honten', seq: 5, id: 5, loaner: 'ハスラー (7074)', loanerId: 1 },
+      ],
     },
     [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
     [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
@@ -68,6 +78,8 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
         r1: { id: 1001, user: '辻井　博', fy: F1.y, fm: F1.m, fd: F1.d, ty: T1.y, tm: T1.m, td: T1.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk1 },
         r2: { id: 1002, user: '大山　明', fy: F2.y, fm: F2.m, fd: F2.d, ty: T2.y, tm: T2.m, td: T2.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk2 },
         r3: { id: 1003, user: '桑田　陽子', fy: F3.y, fm: F3.m, fd: F3.d, ty: T3.y, tm: T3.m, td: T3.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk3, locked: true },
+        r4: { id: 1004, user: '河内　すみお', fy: TD.y, fm: TD.m, fd: TD.d, ty: TDe.y, tm: TDe.m, td: TDe.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'insp-' + dk(TD) + '-0' },
+        r5: { id: 1005, user: '芝田　一郎', fy: TD.y, fm: TD.m, fd: TD.d, ty: TDe.y, tm: TDe.m, td: TDe.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'insp-' + dk(TD) + '-1' },
       }, '2': {}
     },
     [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
@@ -151,8 +163,8 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   const c2 = await cellOf('大山');
   const y1 = await rowY('ハスラー');
   if (c2) await drag(c2, (await rowY('スペーシア')));
-  t('もう貸出が始まっている予約は動かせない（理由を出す）',
-    alerts.some(m => /貸出が始まっている|過去/.test(m)), alerts.slice(0, 2));
+  t('過去の予約は動かせない（理由を出す）',
+    alerts.some(m => /過去の予約は入れ替えできません/.test(m)), alerts.slice(0, 2));
   const L2 = await lres();
   t('データも動いていない', !!(L2 && L2['1'] && Object.values(L2['1']).some(r => r.user === '大山　明')), Object.keys((L2 && L2['1']) || {}));
 
@@ -162,6 +174,30 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   t('🔒限定の予約は動かせない（理由を出す）', alerts.some(m => /限定/.test(m)), alerts.slice(0, 2));
   const L3 = await lres();
   t('データも動いていない', !!(L3 && L3['1'] && Object.values(L3['1']).some(r => r.user === '桑田　陽子')), Object.keys((L3 && L3['1']) || {}));
+
+  head('②-2 本日の予約は「入庫時間より前なら」入れ替えできる（2026-10-07 ユーザー指示）');
+  alerts.length = 0;
+  const cToday = await cellOf('河内');
+  t('本日の帯が見つかる', !!cToday, cToday);
+  if (cToday) await drag(cToday, (await rowY('スペーシア')));
+  const L4 = await lres();
+  t('★入庫時間より前なら入れ替えできる',
+    !!(L4 && L4['2'] && Object.values(L4['2']).some(r => r.user === '河内　すみお')),
+    { 止められた理由: alerts.slice(0, 1), スペーシア: Object.values((L4 && L4['2']) || {}).map(r => r.user) });
+  t('止める理由は出ていない', alerts.length === 0, alerts.slice(0, 2));
+  const I3 = await insp();
+  const rowT = ((I3 || {})[dk(TD)] || [])[0] || {};
+  t('★本日分でも予約カードの代車名が一緒に書き換わる', rowT.loaner === 'スペーシア (8967)', { loaner: rowT.loaner });
+
+  alerts.length = 0;
+  const cPast = await cellOf('芝田');
+  t('入庫時間を過ぎた本日の帯が見つかる', !!cPast, cPast);
+  if (cPast) await drag(cPast, (await rowY('スペーシア')));
+  t('★入庫時間を過ぎていたら入れ替えできない（理由を出す）',
+    alerts.some(m => /入庫時間/.test(m) && /過ぎている/.test(m)), alerts.slice(0, 2));
+  const L5 = await lres();
+  t('データも動いていない', !!(L5 && L5['1'] && Object.values(L5['1']).some(r => r.user === '芝田　一郎')),
+    Object.values((L5 && L5['1']) || {}).map(r => r.user));
 
   head('⑤ スケジュールとのズレ チェック');
   t('「一致」のボタンが出ている', await seeText(page, 'スケジュールと一致', 6000),
