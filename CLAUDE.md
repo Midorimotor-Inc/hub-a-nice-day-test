@@ -363,6 +363,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   Firebase のアカウントは1つで合言葉も1つなので、端末ごとに別の合言葉を持たせることはできない）。
   引き換えに、**漏れた6桁は招待し直すまで有効なまま**になる。気になる人は招待を作り直す。
   見張りは `fb_auth_test.js` の「★コード：7日を過ぎた招待でも合言葉は変わらない」（直す前のファイルだと落ちることを確認済み）。
+  **本番にも同じ直しだけを当てて push 済み（v3.57.1・2026-10-07）**＝`port_to_main.js` は使わず新機能は入れていない。端末の登録は本番のほうが多いため（本番34台／テスト版26台）。
 - **ここを触る時の注意**：`updatePassword` を呼ぶコード（`hubSignInWithCode` の付け替え・`hubHandoffSecret`・`hubInviteByCode`）は、
   **その人の他の端末を全部ログアウトさせる**。登録や引き取りの流れで安易に呼ばないこと。
 - 全員のコードの状態は読み取りだけで確かめられる（`users` の `pw` が6桁か長いか・`inviteAt`）。
