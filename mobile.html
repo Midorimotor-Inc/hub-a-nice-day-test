@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791349893679';
+  window.__APP_BUILD='build-1791355860766';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.58.2';
+const MOBILE_VERSION='3.59';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3812,7 +3812,9 @@ const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,sched
 };
 
 const LOANER_SECTION_COLORS={honten:'#1d4ed8',sanda:'#dc2626',rental:'#7c3aed'};
-const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,loanerCarsS,vsId})=>{
+const LOANER_PRESS_MS=200;   // ★長押しと判定する時間（2026-10-07 ユーザー指示：0.2秒で反応させる）
+const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,loanerCarsS,vsId,
+                   inspData,schedData,onMoveLoaner,onMoveRental,onFixSync})=>{
   const today=new Date();
   // ★表示は「月ごと」ではなく起点日からの連続49日（2026-07-30 ユーザー要望）。
   //   既定の起点＝本日の3日前 → 本日が左から4列目に出て、左スワイプ（横スクロール）で
@@ -3861,16 +3863,179 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
     });
     return out;
   },[myLoaners,myLoanerRes,rentals,rentalRes,dates]);
+  // ══════ 入れ替え（長押ししてドラッグ）と、スケジュールとのズレ チェック（2026-10-07）══════
+  //   決まりは PC 版とまったく同じ：
+  //     ・代車 ⇄ レンタカーはまたがない／🔒限定は動かせない
+  //     ・過去は動かせない／本日は入庫時間より前なら動かせる
+  //     ・入庫時間が未定の本日分は、たずねてから動かす
+  //     ・移り先がその期間あいていること
+  const _todayN=(()=>{const n=new Date();return n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();})();
+  const resStartN=r=>r?(r.fy*10000+(r.fm+1)*100+r.fd):0;
+  // bookingKey からスケジュールの行を引く（入庫時間とズレのチェックに使う）
+  const bkRowM=(bk)=>{
+    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    if(!m)return null;
+    if(m[1]==='insp'){const rows=(inspData||{})[m[2]]||[];return{kind:'insp',dk:m[2],at:m[3],row:rows[Number(m[3])]||null};}
+    const day=(schedData||{})[m[2]]||{};
+    return {kind:'sched',dk:m[2],at:m[3],row:day[m[3]]||null};
+  };
+  const bkEntryMinM=(bk)=>{
+    const f=bkRowM(bk); if(!f||!f.row)return null;
+    const raw=f.kind==='insp'?String(f.row.time||''):String(String(f.at).split('__')[0]||'');
+    const mm=raw.match(/^(\d{1,2}):(\d{2})$/);
+    return mm?(Number(mm[1])*60+Number(mm[2])):null;
+  };
+  const mvWhyNotM=(r)=>{
+    if(!r)return '予約が見つかりません';
+    if(r.locked)return '🔒 限定の予約は入れ替えできません。先に限定を外してください。';
+    const sN=resStartN(r);
+    if(sN<_todayN)return '過去の予約は入れ替えできません。';
+    if(sN===_todayN){
+      const mins=bkEntryMinM(r.bookingKey);
+      if(mins!=null){
+        const n=new Date(), nowM=n.getHours()*60+n.getMinutes();
+        if(nowM>=mins){
+          const hh=String(Math.floor(mins/60)).padStart(2,'0'), mi=String(mins%60).padStart(2,'0');
+          return '本日の入庫時間（'+hh+':'+mi+'）を過ぎているので入れ替えできません。'+String.fromCharCode(10)+'（すでに代車をお渡ししている可能性があります）';
+        }
+      }
+    }
+    return '';
+  };
+  const mvNeedAskM=(r)=>!!r&&resStartN(r)===_todayN&&bkEntryMinM(r.bookingKey)==null;
+  const freeForM=(res,cid,r)=>!Object.values(res[cid]||{}).some(x=>x&&x.id!==r.id&&
+    !(toNumL(x.ty,x.tm,x.td)<toNumL(r.fy,r.fm,r.fd)||toNumL(x.fy,x.fm,x.fd)>toNumL(r.ty,r.tm,r.td)));
+
+  const [mv,setMv]=useState(null);          // {kind,fromCar,res,overCar,ok}
+  const pressRef=useRef(null);
+  const [mvMsg,setMvMsg]=useState('');
+  const barDown=(kind,carId,r,e)=>{
+    if(!r)return;
+    const p=(e.touches&&e.touches[0])||e;
+    const st={kind,carId,res:r,x:p.clientX,y:p.clientY,long:false};
+    st.timer=setTimeout(()=>{
+      const why=mvWhyNotM(r);
+      if(why){ pressRef.current=null; setMvMsg(why); setTimeout(()=>setMvMsg(''),4000); return; }
+      st.long=true;
+      setMv({kind,fromCar:carId,res:r,overCar:carId,ok:true});
+      try{ if(navigator.vibrate)navigator.vibrate(12); }catch(err){}
+    },LOANER_PRESS_MS);
+    pressRef.current=st;
+  };
+  useEffect(()=>{
+    const pos=e=>(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e;
+    const onMove=(e)=>{
+      const st=pressRef.current; if(!st)return;
+      const p=pos(e);
+      if(!st.long){
+        // まだ長押しになっていないのに指が動いた＝横スクロールなので、入れ替えはやめる
+        if(Math.abs(p.clientX-st.x)>8||Math.abs(p.clientY-st.y)>8){clearTimeout(st.timer);pressRef.current=null;}
+        return;
+      }
+      if(e.cancelable)e.preventDefault();            // 持ち上げたあとは画面を動かさない
+      const el=document.elementFromPoint(p.clientX,p.clientY);
+      const row=el&&el.closest('[data-lcar]');
+      if(!row)return;
+      const kind=row.getAttribute('data-lkind'), carId=row.getAttribute('data-lcar');
+      setMv(prev=>{
+        if(!prev||prev.kind!==kind)return prev;
+        if(String(prev.overCar)===String(carId))return prev;
+        const res=kind==='rental'?rentalRes:myLoanerRes;
+        return {...prev,overCar:carId,ok:String(carId)===String(prev.fromCar)||freeForM(res||{},carId,prev.res)};
+      });
+    };
+    const onUp=(e)=>{
+      const st=pressRef.current; pressRef.current=null;
+      if(st)clearTimeout(st.timer);
+      if(!st||!st.long){ setMv(null); return; }       // 短いタップは今までどおり中身が出る
+      const d=mv; setMv(null);
+      if(!d||d.overCar==null||String(d.overCar)===String(d.fromCar))return;
+      if(!d.ok){
+        const cars=d.kind==='rental'?rentals:myLoaners;
+        const nm=(cars||[]).find(c=>String(c.id)===String(d.overCar));
+        setMvMsg('その期間、'+((nm&&nm.name)||'その車')+' は空いていません');
+        setTimeout(()=>setMvMsg(''),4000);
+        return;
+      }
+      if(mvNeedAskM(d.res)){
+        if(!window.confirm('【本日の予約です】'+String.fromCharCode(10)
+          +(d.res.user||'この予約')+' さん　入庫時間が未定のため、代車がもう出ているか分かりません。'+String.fromCharCode(10)+String.fromCharCode(10)
+          +'代車はまだお渡しになっていませんか？'+String.fromCharCode(10)
+          +'（すでにお渡ししている場合は入れ替えないでください）'+String.fromCharCode(10)+String.fromCharCode(10)
+          +'このまま入れ替えますか？'))return;
+      }
+      if(d.kind==='rental')onMoveRental&&onMoveRental(d.fromCar,d.overCar,d.res);
+      else onMoveLoaner&&onMoveLoaner(d.fromCar,d.overCar,d.res);
+      setMvMsg('✓ 入れ替えました（予約カードの代車名も書き換わります）');
+      setTimeout(()=>setMvMsg(''),4000);
+    };
+    window.addEventListener('touchmove',onMove,{passive:false});
+    window.addEventListener('touchend',onUp);
+    window.addEventListener('touchcancel',onUp);
+    window.addEventListener('mousemove',onMove);
+    window.addEventListener('mouseup',onUp);
+    return()=>{
+      window.removeEventListener('touchmove',onMove);
+      window.removeEventListener('touchend',onUp);
+      window.removeEventListener('touchcancel',onUp);
+      window.removeEventListener('mousemove',onMove);
+      window.removeEventListener('mouseup',onUp);
+    };
+  });
+
+  // ══════ スケジュールとのズレ（PC版と同じ突き合わせ）══════
+  const [syncOpen,setSyncOpen]=useState(false);
+  const carLbl=c=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
+  const syncIssues=useMemo(()=>{
+    const out=[],seen={};
+    const scan=(kind,resObj,cars)=>{
+      Object.keys(resObj||{}).forEach(cid=>{
+        const car=(cars||[]).find(c=>String(c.id)===String(cid));
+        Object.values(resObj[cid]||{}).forEach(r=>{
+          if(!r||!r.bookingKey)return;
+          seen[r.bookingKey]=true;
+          const f=bkRowM(r.bookingKey), want=carLbl(car);
+          if(!f||!f.row||!f.row.name){
+            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,
+              text:'スケジュールに予約が見つかりません'});
+            return;
+          }
+          const have=kind==='rental'?(f.row.rentalLabel||''):(f.row.loaner||'');
+          if(String(have).trim()!==String(want).trim())
+            out.push({kind,type:'label',bk:r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,
+              dk:f.dk,at:f.at,rowKind:f.kind,text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
+        });
+      });
+    };
+    scan('loaner',myLoanerRes,myLoaners);
+    scan('rental',rentalRes,rentals);
+    const rev=(dk,at,row,kind)=>{
+      if(!row||!row.name)return;
+      const lbl=(row.loaner||'').trim(), rlbl=(row.rentalLabel||'').trim();
+      if(!lbl&&!rlbl)return;
+      const bk=kind+'-'+dk+'-'+at;
+      if(seen[bk])return;
+      out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,
+        text:'予約カードに'+(rlbl?'レンタカー':'代車')+'名があるのに、代車管理に貸出がありません'});
+    };
+    Object.keys(inspData||{}).forEach(dk=>((inspData[dk]||[]).forEach((row,i)=>rev(dk,String(i),row,'insp'))));
+    Object.keys(schedData||{}).forEach(dk=>Object.keys(schedData[dk]||{}).forEach(sk=>rev(dk,sk,schedData[dk][sk],'sched')));
+    return out;
+  },[myLoanerRes,rentalRes,myLoaners,rentals,inspData,schedData]);
+
   const LCAR_COLORS=['#fca5a5','#86efac','#93c5fd','#fde68a','#c4b5fd','#f9a8d4','#6ee7b7','#fbbf24'];
   const RCAR_COLORS=['#d8b4fe','#a5b4fc','#6ee7b7','#fde68a','#fca5a5','#93c5fd'];
-  const renderGrid=(cars,res,sectionColor,label)=>(
+  const renderGrid=(cars,res,sectionColor,label,kind)=>(
     <div style={{marginBottom:0}}>
       <div style={{background:sectionColor,padding:'5px 10px',display:'flex',alignItems:'center',gap:6}}>
         <span style={{color:'white',fontWeight:800,fontSize:11}}>{label}</span>
         <span style={{color:'rgba(255,255,255,.7)',fontSize:10}}>{cars.length}台</span>
       </div>
       {cars.map((car,ci)=>(
-        <div key={car.id} style={{display:'flex',borderBottom:'1px solid #f1f5f9'}}>
+        <div key={car.id} data-lkind={kind} data-lcar={String(car.id)}
+          style={{display:'flex',borderBottom:'1px solid #f1f5f9',
+            ...(mv&&mv.kind===kind&&String(mv.overCar)===String(car.id)
+              ?{outline:'3px solid '+(mv.ok?'#22c55e':'#dc2626'),outlineOffset:'-3px',background:mv.ok?'#dcfce7':'#fee2e2'}:{})}}>
           <div style={{width:80,minWidth:80,padding:'6px 7px',background:'#f8fafc',borderRight:'2px solid #e5e7eb',display:'flex',flexDirection:'column',justifyContent:'center',position:'sticky',left:0,zIndex:2}}>
             <div style={{fontWeight:700,fontSize:10,color:'#1e293b',lineHeight:1.3}}>{car.name}</div>
             <div style={{fontSize:10,color:'#111827',fontWeight:800}}>{car.num}</div>
@@ -3886,7 +4051,13 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
             const endIdx=r?dates.findIndex(x=>x.num>toNumL(r.ty,r.tm,r.td)):-1;
             const nameSpan=isStart&&r?Math.max(1,(endIdx<0?dates.length:endIdx)-di):1;
             return(
-              <div key={di} onClick={()=>r&&setSelRes({r,car,isRental:label.includes('レンタカー')})} style={{width:32,minWidth:32,height:36,background:color,borderRight:'1px solid #f1f5f9',borderLeft:isTd?`2px solid ${sc}`:'none',position:'relative',overflow:isStart&&r?'visible':'hidden',cursor:r?'pointer':'default'}}>
+              <div key={di}
+                onClick={()=>{ if(r&&!mv)setSelRes({r,car,isRental:label.includes('レンタカー')}); }}
+                onTouchStart={e=>r&&barDown(kind,car.id,r,e)}
+                onMouseDown={e=>r&&barDown(kind,car.id,r,e)}
+                style={{width:32,minWidth:32,height:36,background:color,borderRight:'1px solid #f1f5f9',borderLeft:isTd?`2px solid ${sc}`:'none',position:'relative',overflow:isStart&&r?'visible':'hidden',cursor:r?'pointer':'default',
+                  opacity:(mv&&mv.res&&r&&r.id===mv.res.id&&String(car.id)===String(mv.fromCar))?.35:1,
+                  touchAction:mv?'none':'auto'}}>
                 {isStart&&r&&(
                   // 帯の日数分に広げ、2行まで使う。法人格を落として固有名だけ出す。入りきらなければ尻切れ。
                   <div style={{position:'absolute',left:1,top:'50%',transform:'translateY(-50%)',width:nameSpan*32-2,fontSize:8,fontWeight:800,color:'white',textShadow:'0 1px 2px rgba(0,0,0,.85)',lineHeight:1.1,display:'-webkit-box',WebkitBoxOrient:'vertical',WebkitLineClamp:2,overflow:'hidden',wordBreak:'break-all',zIndex:3,pointerEvents:'none'}}>
@@ -3929,6 +4100,17 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
               );
             })}
           </div>
+          {/* ★スケジュールとのズレ（2026-10-07 ユーザー要望・PC版と同じ突き合わせ） */}
+          <div style={{margin:'6px 8px',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <button onClick={()=>setSyncOpen(true)}
+              style={{padding:'6px 11px',borderRadius:8,fontWeight:800,fontSize:11,
+                border:'2px solid '+(syncIssues.length?'#dc2626':'#86efac'),
+                background:syncIssues.length?'#fee2e2':'#f0fdf4',
+                color:syncIssues.length?'#b91c1c':'#047857'}}>
+              {syncIssues.length?('⚠ スケジュールとズレ '+syncIssues.length+'件'):'✓ スケジュールと一致'}
+            </button>
+            {mvMsg&&<span style={{fontSize:11,fontWeight:800,color:/^✓/.test(mvMsg)?'#047857':'#b91c1c',lineHeight:1.5,flex:1,minWidth:0}}>{mvMsg}</span>}
+          </div>
           {dupWarn.length>0&&(
             <div style={{margin:'6px 8px',padding:'7px 9px',borderRadius:8,background:'#fef2f2',
               border:'1px solid #fecaca',color:'#991b1b',fontSize:10,fontWeight:700,lineHeight:1.5}}>
@@ -3937,16 +4119,76 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
               {dupWarn.length>5&&<div style={{fontWeight:600}}>ほか {dupWarn.length-5} 件</div>}
             </div>
           )}
-          {renderGrid(myLoaners,myLoanerRes,vsId==='honten'?'#1d4ed8':'#dc2626',vsId==='honten'?'本店 代車':'三田店 代車')}
+          {renderGrid(myLoaners,myLoanerRes,vsId==='honten'?'#1d4ed8':'#dc2626',vsId==='honten'?'本店 代車':'三田店 代車','loaner')}
           <div style={{height:3,background:'#e5e7eb'}}/>
-          {renderGrid(rentals,rentalRes,'#7c3aed','レンタカー（共通）')}
+          {renderGrid(rentals,rentalRes,'#7c3aed','レンタカー（共通）','rental')}
         </div>
         <div style={{padding:'10px 12px 20px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',minWidth:`${82+dim*32}px`}}>
           <span style={{display:'flex',alignItems:'center',gap:3,fontSize:10}}><span style={{width:12,height:12,background:'#fca5a5',borderRadius:2,display:'inline-block'}}/>使用中</span>
           <span style={{display:'flex',alignItems:'center',gap:3,fontSize:10}}><span style={{width:12,height:12,background:'white',border:'1px solid #e2e8f0',borderRadius:2,display:'inline-block'}}/>空き</span>
-          <span style={{fontSize:10,color:'#94a3b8'}}>帯をタップで詳細（貸出〜返却）</span>
+          <span style={{fontSize:10,color:'#94a3b8'}}>帯をタップで詳細／<b style={{color:'#1d4ed8'}}>長押しして上下へ動かすと代車を入れ替え</b></span>
         </div>
       </div>
+      {syncOpen&&(
+        <div onClick={()=>setSyncOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:260,display:'flex',alignItems:'flex-end'}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'16px 16px 0 0',maxHeight:'88vh',display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'13px 15px',background:syncIssues.length?'linear-gradient(135deg,#b91c1c,#dc2626)':'linear-gradient(135deg,#047857,#059669)',borderRadius:'16px 16px 0 0',color:'white',flexShrink:0}}>
+              <div style={{fontWeight:900,fontSize:14}}>{syncIssues.length?'⚠ スケジュールとのズレ':'✓ スケジュールと一致しています'}</div>
+              <div style={{fontSize:10.5,opacity:.9,marginTop:3}}>代車管理の貸出と、予約カードの代車名を突き合わせました</div>
+            </div>
+            <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
+              {syncIssues.length===0?(
+                <div style={{textAlign:'center',padding:'22px 8px',color:'#047857'}}>
+                  <div style={{fontSize:30}}>✓</div>
+                  <div style={{fontWeight:800,fontSize:13.5,marginTop:7}}>ズレはありません</div>
+                  <div style={{fontSize:11.5,color:'#64748b',marginTop:6,lineHeight:1.8}}>代車管理と予約カードの代車名は全部そろっています。</div>
+                </div>
+              ):(<>
+                <div style={{fontSize:12,color:'#334155',marginBottom:9,lineHeight:1.8}}>
+                  <b>{syncIssues.length}件</b>見つかりました。「直す」を押すと<b>予約カードを代車管理に合わせます</b>。
+                </div>
+                {syncIssues.map((it,i)=>(
+                  <div key={i} style={{border:'1.5px solid '+(it.type==='label'?'#fca5a5':'#fcd34d'),background:it.type==='label'?'#fef2f2':'#fffbeb',borderRadius:10,padding:'9px 11px',marginBottom:8}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap'}}>
+                      <span style={{fontWeight:900,fontSize:12.5,color:'#1e293b'}}>{it.user||'（氏名なし）'}</span>
+                      <span style={{fontSize:10.5,color:'#64748b'}}>{String(it.dk||'').replace(/^(\d+)-(\d+)-(\d+)$/,'$2/$3')}</span>
+                      <span style={{fontSize:9.5,fontWeight:800,borderRadius:10,padding:'1px 7px',background:it.kind==='rental'?'#ede9fe':'#dbeafe',color:it.kind==='rental'?'#6d28d9':'#1d4ed8'}}>
+                        {it.kind==='rental'?'レンタカー':'代車'}</span>
+                    </div>
+                    <div style={{fontSize:11.5,color:'#475569',marginTop:4,lineHeight:1.75}}>{it.text}</div>
+                    {it.type==='label'&&(
+                      <div style={{fontSize:11.5,marginTop:4,lineHeight:1.7}}>
+                        <span style={{color:'#b91c1c'}}>予約カード：{it.have}</span><br/>
+                        <span style={{color:'#047857',fontWeight:800}}>代車管理：{it.want}</span>
+                      </div>
+                    )}
+                    {it.type==='label'&&onFixSync&&(
+                      <button onClick={()=>onFixSync(it)}
+                        style={{marginTop:7,width:'100%',padding:'9px 0',borderRadius:9,border:'none',background:'#059669',color:'white',fontWeight:800,fontSize:12}}>
+                        ✓ 直す（予約カードを「{it.want}」にする）
+                      </button>
+                    )}
+                    {it.type!=='label'&&(
+                      <div style={{fontSize:10.5,color:'#92400e',marginTop:5,lineHeight:1.7}}>
+                        片方にしか無いので自動では直せません。予約カードか代車管理のどちらかを手で合わせてください。
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>)}
+            </div>
+            <div style={{padding:'11px 14px 18px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8,flexShrink:0}}>
+              {syncIssues.filter(x=>x.type==='label').length>1&&onFixSync&&(
+                <button onClick={()=>{syncIssues.filter(x=>x.type==='label').forEach(it=>onFixSync(it));}}
+                  style={{flex:1,padding:'12px 0',background:'linear-gradient(135deg,#047857,#059669)',color:'white',border:'none',borderRadius:10,fontWeight:800,fontSize:13}}>
+                  ✓ {syncIssues.filter(x=>x.type==='label').length}件 まとめて直す
+                </button>
+              )}
+              <button onClick={()=>setSyncOpen(false)} style={{padding:'12px 18px',background:'#f1f5f9',border:'none',borderRadius:10,fontWeight:700,fontSize:12.5,color:'#475569'}}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
       {selRes&&(()=>{
         const {r,car,isRental}=selRes;
         const fmt=(y,m,d)=>`${m+1}/${d}（${DOW[new Date(y,m,d).getDay()]}）`;
@@ -5783,6 +6025,66 @@ const App=()=>{
   };
 
   // サーバー保存の本体（読み返し検証つき）。handleSaveから切り離されてバックグラウンドで実行される
+  // ══════ 代車・レンタカーの入れ替え（2026-10-07 ユーザー要望・長押しドラッグ）══════
+  //   期間はそのまま、別の車へ移すだけ。**予約カードの代車名も必ず一緒に書き換える**。
+  const carLabelM=(c)=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
+  // 予約カード側の代車名を書き換える（氏名が一致する行にだけ書く＝取り違え防止）
+  const writeCarLabel=async(bookingKey,user,patch)=>{
+    const m=String(bookingKey||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    if(!m)return;
+    const dk=m[2], at=m[3];
+    if(m[1]==='insp'){
+      await writeShared(STOR+'insp',hotInsp,base=>{
+        const out={...(base||{})}; const rows=[...(out[dk]||[])]; const i=Number(at);
+        if(!rows[i]||!rows[i].name||rows[i].name!==user)return out;
+        rows[i]={...rows[i],...patch}; out[dk]=rows; return out;
+      },v=>setInspData(v),null,true);
+    }else{
+      const key=storKey('sched',vsId);
+      await writeShared(key,vsId==='honten'?schedDataH:schedDataS,base=>{
+        const out={...(base||{})}; const day={...(out[dk]||{})};
+        if(!day[at]||!day[at].name||day[at].name!==user)return out;
+        day[at]={...day[at],...patch}; out[dk]=day; return out;
+      },v=>(vsId==='honten'?setSchedDataH(v):setSchedDataS(v)),null,true);
+    }
+  };
+  const moveResCar=async(isRental,fromCar,toCar,res)=>{
+    if(!res||String(fromCar)===String(toCar))return;
+    const key=isRental?(STOR+'rres'):storKey('lres',vsId);
+    const local=isRental?rentalResData:(vsId==='honten'?loanerResH:loanerResS);
+    const cars=isRental?(rentalCars||[]):((vsId==='honten'?loanerCarsH:loanerCarsS)||[]);
+    const car=cars.find(c=>String(c.id)===String(toCar))||{};
+    const apply=v=>{ if(isRental)setRentalResData(v); else if(vsId==='honten')setLoanerResH(v); else setLoanerResS(v); };
+    try{
+      await writeShared(key,local,base=>{
+        const out={...(base||{})};
+        const fk=Object.keys(out).find(k=>String(k)===String(fromCar));
+        const from={...(out[fk]||{})};
+        let rk=null; for(const kk in from){ if(from[kk]&&from[kk].id===res.id){rk=kk;break;} }
+        if(rk==null)return out;                       // 見つからなければ何もしない
+        const moved={...from[rk],carName:car.name||'',carNum:car.num||'',savedAt:Date.now()};
+        delete from[rk];
+        const tk=String(toCar);
+        return {...out,[String(fk)]:from,[tk]:{...(out[tk]||{}),[rk]:moved}};
+      },apply,null,true);
+      const patch=isRental?{rentalLabel:carLabelM(car),rentalCarId:car.id}
+                          :{loaner:carLabelM(car),loanerId:car.id};
+      await writeCarLabel(res.bookingKey,res.user,patch);
+    }catch(e){
+      alert('入れ替えを保存できませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e));
+    }
+  };
+  const moveLoanerCarM=useCallback((f,t,r)=>moveResCar(false,f,t,r),[vsId,loanerResH,loanerResS,loanerCarsH,loanerCarsS,hotInsp,schedDataH,schedDataS]);
+  const moveRentalCarM=useCallback((f,t,r)=>moveResCar(true,f,t,r),[rentalResData,rentalCars,hotInsp,schedDataH,schedDataS,vsId]);
+  // ズレを直す（代車管理が正。予約カードをそれに合わせる）
+  const fixSyncM=useCallback(async(it)=>{
+    if(!it||it.type!=='label')return;
+    const isR=it.kind==='rental';
+    const patch=isR?{rentalLabel:it.want,rentalCarId:it.carId}:{loaner:it.want,loanerId:Number(it.carId)};
+    try{ await writeCarLabel(it.bk,it.user,patch); }
+    catch(e){ alert('直せませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e)); }
+  },[hotInsp,schedDataH,schedDataS,vsId]);
+
   const saveCore=async(req,form,loanerAction)=>{
     // ★画面の中だけで使う印（_dk・_slot・_store）は保存しない（2026-10-02）
     const clean=o=>Object.fromEntries(Object.entries(o||{}).filter(([k])=>String(k).charAt(0)!==String.fromCharCode(95)));
@@ -6317,7 +6619,9 @@ const App=()=>{
           mySched={mySched} privItems={myPriv.items} uid={user.uid}
           onSelectDate={(dk,y,m,d)=>setDayDetail({dk,y,m,d})}/>}
         {tab==='loaner'&&<LoanerView loanerResH={loanerResH} loanerResS={loanerResS} rentalResData={rentalResData} rentalCars={rentalCars}
-          loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId}/>}
+          loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId}
+          inspData={inspData} schedData={vsId==='honten'?schedDataH:schedDataS}
+          onMoveLoaner={moveLoanerCarM} onMoveRental={moveRentalCarM} onFixSync={fixSyncM}/>}
         {tab==='cust'&&<CustSheet embedded names={cfNames} cache={cfCache} busy={cfBusy} loadingName={cfLoadingName}
           cfx={cfx} cfxBusy={cfBusy&&!cfx} initCust={custSheet&&custSheet.cust||null} initMode={custSheet&&custSheet.mode||'find'}
           vsId={vsId} isClosedDk={isClosedDk} onNeedFile={needCfFile}

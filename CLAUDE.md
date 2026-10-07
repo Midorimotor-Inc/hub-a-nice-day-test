@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -317,6 +317,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   限定／貸出中は動かせないこと・ズレを見つけて直せること・最適化が消えていることを見る）。
 - **本番にはまだ入れていない**（2026-10-07 ユーザー指示：テスト版のみ）。
 
+### スマホも代車の入れ替え（長押しドラッグ）とズレのチェック（v3.59・2026-10-07・テスト版のみ）
+- ユーザー指示：**A案（長押ししてドラッグ）・反応は0.2秒**・**決まりはPCと同じ**・**ズレのチェックもしっかり**。
+- **長押しは `LOANER_PRESS_MS=200`**（0.2秒）。短いタップは今までどおり予約の詳細が出る。
+  長押しになる前に指が8px動いたら**横スクロールとみなして入れ替えをやめる**（代車の表は横に長いため、取り合いになる）。
+  持ち上げたあとは `touchAction:'none'` ＋ `preventDefault` で画面を動かさない。持ち上げた時に軽く振動（`navigator.vibrate`）。
+- 行に `data-lkind`（loaner/rental）と `data-lcar` を付け、`elementFromPoint` → `closest('[data-lcar]')` で移り先を決める。
+  移り先の行は緑（空いている）／赤（ふさがっている）。**kind が違う行は受け付けない**＝代車 ⇄ レンタカーはまたがない。
+- 決まりは PC とまったく同じ（`mvWhyNotM`/`mvNeedAskM`）：🔒限定は不可／過去は不可／本日は入庫時間より前なら可／
+  本日・入庫時間が未定は**たずねてから**可。入庫時間は `bkEntryMinM`（車検は `time`、整備は枠の時刻）。
+- 保存は `moveResCar`：`writeShared` で lres/rres を書き、そのあと **`writeCarLabel` で予約カードの代車名も必ず直す**
+  （**氏名が一致する行にだけ書く**＝取り違え防止）。
+- **ズレのチェック**は PC と同じ突き合わせ（`syncIssues`）。代車の表の上にボタン、押すと下からシートで一覧＋「直す」＋まとめて直す。
+- 検査は `node mobile_loaner_dnd_test.js`（20件）。
+  **注意①：検査で手作りの `TouchEvent` を投げるとブラウザごと落ちる**（2026-10-07 に踏んだ）。
+  **Chrome の本物の入力経路（CDP の `Input.dispatchTouchEvent`）を使うこと**＝実機と同じ道。
+  **注意②：スマホは自分が保存した直後70秒はサーバーの変更を取り込まない**（`writeGuardRef`）。
+  そのため「入れ替えたあとにサーバーへズレを差し込んで確かめる」はできない。**ズレの検査は入れ替えより先に、種データのズレで確かめる**。
+  **注意③：代車の表の既定の表示は「3日前〜45日先」**。検査で過去の予約を使う時は -3日 より後に置かないと画面に出ない。
+- **本番にはまだ入れていない**（テスト版のみ）。
+
 ### 本番のデータをテスト版へ写す（開発用・2026-10-05）
 - `node fb_copy_prod_to_dev.js`（下見）／`--write`（実行）。**向きは本番→テスト版の一方通行**。書き先が `hub-v8-dev-` で始まらなければ止まる（逆向きはできない作り）。
 - 写すのは kv の `hub-v8-*` のデータ一式（車検 insp・整備 sched・備考 memo・代車 lres/rres・顧客ファイル cf-*・入庫制限・休日 など）。
@@ -324,6 +344,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 実行前に**テスト版の今の中身を控えに保存**する（`C:/Users/A/Documents/Hub重要書類/dev-backup-<日時>.json`。顧客名や電話が入るのでリポジトリの外）。戻す時はこの控えから。
 - 2026-10-05 に初回実行：64件・743KB（車検223件／整備87件／顧客ファイル4本）。**テスト版にも本物の顧客情報が入っている**ので、テスト版の `AUTH_REQUIRED` は true のままにすること。
 - これは**その時点の写し**（自動では同期しない）。新しくしたい時はもう一度実行する。
+- **PC とスマホで分かれていない。** どちらも同じ kv を読むので、1回写せば両方に効く
+  （2026-10-07 にユーザーから「モバイル版もコピーする設計に」と要望。調べたところ**スマホが読む30キーすべてが既にテスト版にある**＝対応不要だった）。
 
 ### GAS→Firestore の移行
 `node fb_migrate.js [--prod] [--write|--verify]`（キー一覧はスナップショット＋cf-index＋既知キーから集める）。DEV は 2026-09-18、本番も同日に写し済み。
