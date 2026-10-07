@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1791358713735';
+  window.__APP_BUILD='build-1791362300926';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -146,7 +146,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.59.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.59.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -662,14 +662,61 @@ const HUB_HANDOFF_ID='';   // 顧客リストは引き継ぎ（?hand=）を扱�
 const fbAuth = (FB_ON && firebase.auth) ? hubFbApp().auth() : null;
 let fbUser = null, fbAuthReady = !fbAuth;
 const fbAuthWaiters = [], fbUserWaiters = [], fbAuthListeners = new Set();
+// ── アプリ名を分ける前のサインインを引き取る（2026-10-07・一度だけ・Kyoshi承認のBLOCK-B変更）──
+//   テスト版だけ Firebase のアプリ名を hub-dev に分けた（本番を道連れでログアウトさせない直し）。
+//   名前が変わると、それまでのサインイン（既定の名前で端末に保たれていた分）はこの画面から見えなくなる。
+//   そのままだと**テスト版を使う人は全員が登録し直し**になる。そして招待コード（6桁）は
+//   **7日を過ぎると最初の登録で長い合言葉に付け替わる**ので、手元の6桁が使えない人が出る
+//   （2026-10-07 に実際に起きた：江川さんの 675931 が 12:09 の登録で付け替わり、以後使えなくなった）。
+//   そこで「同じ端末・同じ人の、既定の名前のサインインが残っていれば、それでこの名前にもサインインし直す」。
+//   **入れる人を増やす仕掛けではない**：
+//    ・対象はこの環境の台帳に行がある端末だけ（管理者が「取り消し」した端末は行が無い＝引き取らない）
+//    ・使うのはその人自身の合言葉の控え（users/{uid}＝本人だけが読める）。引き継ぎ（?hand=）と同じ道
+//    ・**合言葉は書き換えない**（＝6桁の招待コードを無駄にしない。ここが肝）
+//    ・引き取ったあとも必ず hubCheckDevice（取り消しの確認）を通る
+const hubAdoptLegacySignIn = async () => {
+  if (!fbAuth || !HUB_FB_APP_NAME) return false;   // 本番（既定の名前）では何もしない
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(HUB_FIREBASE_CONFIG);
+    const old = firebase.app();
+    const u = await new Promise(res => {
+      let done = false; const fin = x => { if (!done) { done = true; res(x || null); } };
+      try { old.auth().onAuthStateChanged(x => fin(x)); } catch (e) { fin(null); }
+      setTimeout(() => fin(null), 8000);   // 読めない時に画面を待たせ続けない
+    });
+    if (!u || !u.email) return false;
+    if (!hubLoadMine().length) {
+      // この端末の登録一覧が消えている時は、台帳にこの環境の行が残っているかで見分ける
+      //   残っている＝アプリ名を分けたせい（引き取る）／無い＝管理者が取り消した（引き取らない）
+      let id = ''; try { id = localStorage.getItem(STOR + 'auth-devid') || ''; } catch (e) {}
+      if (!id) return false;
+      const s = await old.firestore().collection('devices').doc(id).get();
+      const d = s.exists ? (s.data() || {}) : null;
+      if (!d || d.env !== STOR || String(d.e || '').toLowerCase() !== String(u.email).toLowerCase()) return false;
+    }
+    const s2 = await old.firestore().collection('users').doc(u.uid).get();
+    const pw = s2.exists ? ((s2.data() || {}).pw || '') : '';
+    if (!pw) return false;
+    await fbAuth.signInWithEmailAndPassword(u.email, pw);
+    return true;
+  } catch (e) { console.warn('[FB] 前のサインインを引き取れません', e && e.message); return false; }
+};
 if (fbAuth) {
   try { fbAuth.languageCode = 'ja'; } catch (e) {}
-  fbAuth.onAuthStateChanged(u => {
+  const fbApplyUser = u => {
     fbUser = u || null; fbAuthReady = true;
     try { window.__hubFbUser = u ? { email: u.email, uid: u.uid } : null; } catch (e) {}
     fbAuthWaiters.splice(0).forEach(cb => { try { cb(fbUser); } catch (e) {} });
     if (fbUser) fbUserWaiters.splice(0).forEach(cb => { try { cb(fbUser); } catch (e) {} });
     fbAuthListeners.forEach(cb => { try { cb(fbUser); } catch (e) {} });
+  };
+  let adoptOnce = !!HUB_FB_APP_NAME;   // 「サインインなし」と最初に出た時だけ引き取りを試す
+  fbAuth.onAuthStateChanged(u => {
+    if (!u && adoptOnce) { adoptOnce = false;
+      // 引き取れたら次の通知で本人が入る。駄目なら「サインインなし」として進む
+      hubAdoptLegacySignIn().then(ok => { if (!ok) fbApplyUser(null); }, () => fbApplyUser(null));
+      return; }
+    adoptOnce = false; fbApplyUser(u);
   });
 }
 const fbWhenReady = () => new Promise(res => { if (fbAuthReady) res(fbUser); else fbAuthWaiters.push(res); });

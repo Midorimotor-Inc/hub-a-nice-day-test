@@ -32,16 +32,20 @@ const bodyText = page => page.evaluate(() => document.body.innerText);
 const FAKE_FB = fs.readFileSync(path.join(DIR, 'fake_firebase.js'), 'utf8');
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
-const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin' };
+const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa_midori_m_com', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin' };
 const now = new Date();
 const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
 
 // 「サーバー」と端末の中身を、テスト版・本番の両方ぶん作っておく（1回だけ）
-const seedInit = ([me, dev, main, dk, ukey, ukeyDev]) => {
+const ACCT_PW = 'kept-secret-48';   // その人の合言葉の控え（users/{uid}.pw）。引き取りはこれを使う
+const seedInit = ([me, dev, main, dk, ukey, ukeyDev, pw]) => {
   window.__fakeFbIsolate = true;   // 偽firebaseにも「サインインをアプリ名ごとに分ける」本物の振る舞いをさせる
   if (localStorage.getItem('__xenvSeeded')) return;
   const kv = (k, v) => ({ k: 'kv/' + k, d: { v: JSON.stringify(v), u: Date.now() } });
   const st = {};
+  st['users/' + me.fbuid] = { email: me.email, pw: pw, inviteAt: Date.now() };   // 本人だけが読める合言葉の控え
+  st['__acct/' + me.email] = { at: Date.now() };
+  st['__pw/' + me.email] = { pw: pw };
   st['meta/allowed'] = {};
   st['meta/allowed'][me.email.replace(/\./g, ',')] = { email: me.email, name: me.name, store: me.store, uid: me.uid, role: me.role, active: true, kind: 'staff' };
   [[dev, 'dev-test'], [main, 'dev-main']].forEach(function (pair) {
@@ -88,7 +92,7 @@ const asMain = (src) => src.replace(/const STOR ?= ?'hub-v8-dev-';/, (m) => m.re
   const U = p => 'http://localhost:' + PORT + '/' + p;
   const newCtx = async (opts) => {
     const ctx = await browser.newContext(Object.assign({ viewport: { width: 1500, height: 900 } }, opts || {}));
-    await ctx.addInitScript(seedInit, [ME, DEV, MAIN, DK, UKEY, UKEY_DEV]);
+    await ctx.addInitScript(seedInit, [ME, DEV, MAIN, DK, UKEY, UKEY_DEV, ACCT_PW]);
     await ctx.route('https://www.gstatic.com/firebasejs/**', route => route.fulfill({ status: 200, contentType: 'application/javascript',
       body: route.request().url().indexOf('firebase-app-compat') >= 0 ? FAKE_FB : '' }));
     await ctx.route('https://script.google.com/**', route => route.fulfill({ status: 200, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'null' }));
@@ -173,6 +177,57 @@ const asMain = (src) => src.replace(/const STOR ?= ?'hub-v8-dev-';/, (m) => m.re
         /const HUB_FB_INVITE_NAME = 'hub-invite' \+ \(HUB_FB_APP_NAME \? \('-' \+ HUB_FB_APP_NAME\) : ''\);/.test(src));
       t(f + '：本番に移すと既定の名前になる（port_to_main.js の差し替えで確認）',
         /const STOR ?= ?'hub-v8-';/.test(asMain(src)));
+    }
+  }
+
+  // ════ ⑤ アプリ名を分けた時に「前のサインイン」を引き取る（全員の登録し直しを避ける） ════
+  head('⑤ アプリ名を分ける前のサインインを引き取る');
+  {
+    const ctx = await newCtx(); const page = await ctx.newPage(); const errs = watch(page);
+    const rm = (...keys) => page.evaluate(ks => ks.forEach(k => localStorage.removeItem(k)), keys);
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('下準備：テスト版に入れている', await seeText(page, '前村'));
+    // (a) アプリ名を分けた直後＝テスト版のサインインだけ無くなった（登録一覧は残っている）
+    await rm(UKEY_DEV);
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('★(a) 名前を分けてもそのまま入れる（登録し直しが要らない）', await seeText(page, '前村'), await bodyText(page).then(x => x.slice(0, 300)));
+    t('(a) テスト版のサインインが作り直されている', !!(await lsUser(page, UKEY_DEV)));
+    t('(a) 本番の控えは触っていない', !!(await lsUser(page, UKEY)));
+    // (b) 登録一覧まで消えてしまった人（2026-10-07 の江川さんのケース）。台帳に行は残っている
+    await rm(UKEY_DEV, DEV + 'auth-mine');
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('★(b) 登録一覧が消えていても引き取って使える（コードは要らない）', await seeText(page, '前村'), await bodyText(page).then(x => x.slice(0, 300)));
+    t('(b) 招待コードの入力は出ない', !(await bodyText(page)).includes('招待コード'));
+    t('(b) テスト版のサインインが作り直されている', !!(await lsUser(page, UKEY_DEV)));
+    t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
+    await ctx.close();
+  }
+  // (c) 管理者が「取り消し」した端末は引き取らない（＝認証は弱まっていない）
+  {
+    const ctx = await newCtx(); const page = await ctx.newPage(); const errs = watch(page);
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('下準備：テスト版に入れている', await seeText(page, '前村'));
+    await page.evaluate(() => window.__fakeFb.del('dev-test', 'devices'));
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('(c) 取り消しで登録画面に戻る', await seeText(page, 'ご自分のメールアドレス'), await bodyText(page).then(x => x.slice(0, 200)));
+    await page.goto(U('index_dev.html'), { waitUntil: 'domcontentloaded' });
+    t('★(c) 開き直しても引き取らず、アドレスとコードを聞く', await seeText(page, 'ご自分のメールアドレス'), await bodyText(page).then(x => x.slice(0, 200)));
+    t('(c) サインインも引き取っていない', (await lsUser(page, UKEY_DEV)) === null, await lsUser(page, UKEY_DEV));
+    t('(c) 本番の控えは触っていない', !!(await lsUser(page, UKEY)));
+    t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
+    await ctx.close();
+  }
+
+  // ════ ⑥ 引き取りの決まりがコードに入っているか ════
+  head('⑥ 引き取りは本番では動かない・合言葉を書き換えない');
+  {
+    for (const f of ['index_dev.html', 'mobile.html', 'customers.html']) {
+      const src = fs.readFileSync(path.join(DIR, f), 'utf8');
+      const fn = (src.split('const hubAdoptLegacySignIn = async () => {')[1] || '').split(NL + '};')[0];
+      t(f + '：引き取りがある', !!fn);
+      t(f + '：本番（既定の名前）では何もしない', /if \(!fbAuth \|\| !HUB_FB_APP_NAME\) return false;/.test(fn));
+      t(f + '：台帳にこの環境の行が無ければ引き取らない', /d\.env !== STOR/.test(fn));
+      t(f + '：合言葉を書き換えない（updatePassword を呼ばない）', fn.indexOf('updatePassword') < 0);
     }
   }
 

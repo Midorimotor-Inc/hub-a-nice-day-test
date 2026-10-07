@@ -71,12 +71,14 @@
   }; };
   // ── Authentication ──
   const uidOf = email => 'uid_' + email.replace(/[^a-z0-9]/gi, '_');
-  const makeAuth = persist => {
+  const makeAuth = (persist, fixedKey) => {
+    // fixedKey を渡すとその名前の控えを使う（'' ＝ 既定の名前）。渡さなければ本体（mainAppName）に従う
+    const myKey = () => (fixedKey === undefined) ? userKey() : (LS_USER + ((ISO && fixedKey) ? '-' + fixedKey : ''));
     const auth = {
       languageCode: '', _user: null, _listeners: [],
       get currentUser() { return this._user; },
       _set(u) { this._user = u ? Object.assign({}, u, { updatePassword: async pw => { store['__pw/' + u.email] = { pw }; save(); } }) : null;
-        if (persist) { try { if (u) localStorage.setItem(userKey(), JSON.stringify(u)); else localStorage.removeItem(userKey()); } catch (e) {} }
+        if (persist) { try { if (u) localStorage.setItem(myKey(), JSON.stringify(u)); else localStorage.removeItem(myKey()); } catch (e) {} }
         this._listeners.forEach(cb => { try { cb(this._user); } catch (e) {} }); },
       onAuthStateChanged(cb) { this._listeners.push(cb); setTimeout(() => cb(this._user), 30); return () => {}; },
       isSignInWithEmailLink: href => /[?&]oobCode=/.test(String(href)),
@@ -141,6 +143,13 @@
   //   2026-10-07：テスト版と本番でサインインを分けたので、画面は名前付きで初期化するようになった。
   const mainApp = { name: '[DEFAULT]', auth: () => auth, firestore: () => db };
   const isInvite = (name) => String(name || '').indexOf('hub-invite') === 0;
+  // 既定の名前（本番側）のアプリ。ISO の検査でだけ本体と別のサインインを持つ
+  let defAuth = null;
+  const defaultApp = () => {
+    if (!ISO) return mainApp;
+    if (!defAuth) { defAuth = makeAuth(true, ''); defAuth._set(load(LS_USER, null)); defAuth._listeners = []; }
+    return { name: '[DEFAULT]', auth: () => defAuth, firestore: () => makeDb(defAuth) };
+  };
   window.firebase = {
     apps: [],
     initializeApp(cfg, name) {
@@ -151,7 +160,7 @@
       this.apps.push({}); if (name) { apps[name] = mainApp; return mainApp; } return {};
     },
     app(name) {
-      if (!name) { if (!this.apps.length) throw Object.assign(new Error('no app'), { code: 'app/no-app' }); return mainApp; }
+      if (!name) { if (!this.apps.length) throw Object.assign(new Error('no app'), { code: 'app/no-app' }); return defaultApp(); }
       if (apps[name]) return apps[name];
       throw Object.assign(new Error('no app ' + name), { code: 'app/no-app' });
     },
