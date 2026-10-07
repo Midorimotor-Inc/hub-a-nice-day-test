@@ -382,7 +382,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 保存は `moveResCar`：`writeShared` で lres/rres を書き、そのあと **`writeCarLabel` で予約カードの代車名も必ず直す**
   （**氏名が一致する行にだけ書く**＝取り違え防止）。
 - **ズレのチェック**は PC と同じ突き合わせ（`syncIssues`）。代車の表の上にボタン、押すと下からシートで一覧＋「直す」＋まとめて直す。
-- 検査は `node mobile_loaner_dnd_test.js`（20件）。
+- **【2026-10-07 ユーザー報告】「タップで押し続けると文字のコピーが現れます」＝長押しドラッグが動かない。**
+  iPhone は長押しで**「コピー」の吹き出しと文字選択（虫めがね）**を出し、それでタッチが取り消されて入れ替えができなかった。
+  → 代車の表では文字を選べないようにした（`[data-lcar],[data-lcar] *` に `-webkit-touch-callout:none` と `user-select:none`）。
+  **両方切らないと出る**（`-webkit-user-select` だけでは吹き出しが残る）。`pointerEvents:none` では文字選択は止まらない。
+  あわせて**長押しの直後の click を無視**するようにした（`mvJust`・400ms。PC版と同じ守り）。長押しして指を離しただけで詳細が開くのを防ぐ。
+  `-webkit-touch-callout` は **Chrome が持っていない**ので、検査では画面の計算値ではなく**ファイルの中身**で見る。
+- 検査は `node mobile_loaner_dnd_test.js`（23件）。
   **注意①：検査で手作りの `TouchEvent` を投げるとブラウザごと落ちる**（2026-10-07 に踏んだ）。
   **Chrome の本物の入力経路（CDP の `Input.dispatchTouchEvent`）を使うこと**＝実機と同じ道。
   **注意②：スマホは自分が保存した直後70秒はサーバーの変更を取り込まない**（`writeGuardRef`）。

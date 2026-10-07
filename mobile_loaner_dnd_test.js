@@ -96,6 +96,21 @@ const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'ス�
     SRC.indexOf('限定の予約は入れ替えできません') > 0 && SRC.indexOf('過去の予約は入れ替えできません') > 0 && SRC.indexOf('本日の入庫時間（') > 0);
   t('時間未定の本日分は確認してから', SRC.indexOf('入庫時間が未定のため') > 0);
   t('代車 ⇄ レンタカーはまたがない', SRC.indexOf("if(!prev||prev.kind!==kind)return prev;") > 0);
+  // ★2026-10-07 ユーザー報告「タップで押し続けると文字のコピーが現れます」。
+  //   iPhone は長押しで「コピー」の吹き出しと文字選択を出し、それで入れ替えが取り消されていた。
+  //   代車の表では文字を選べないようにしてある（画面で実際に効いているかも見る）。
+  t('代車の表は文字を選べない（iPhone の「コピー」も出ない）', SRC.indexOf("[data-lcar],[data-lcar] *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}") > 0);
+  {
+    const st = await page.evaluate(() => {
+      const row = document.querySelector('[data-lcar]');
+      if (!row) return null;
+      const inner = row.querySelector('div') || row;
+      const g = el => { const c = getComputedStyle(el); return { sel: c.webkitUserSelect || c.userSelect, callout: c.webkitTouchCallout }; };
+      return { row: g(row), inner: g(inner) };
+    });
+    t('帯も車名の欄も文字選択が切れている', !!st && st.row.sel === 'none' && st.inner.sel === 'none', st);
+  }
+  t('長押しの直後のタップで詳細を開かない', SRC.indexOf('Date.now()-mvJust.current<400') > 0);
 
   // 帯のまんなかを掴む道具
   const barPos = (user) => page.evaluate(u => {

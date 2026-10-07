@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791363205002';
+  window.__APP_BUILD='build-1791364414489';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -85,6 +85,11 @@ button{cursor:pointer;font-family:inherit;}
 /* ★iPhone の自動拡大よけ：入力欄の文字は必ず16px以上にする（2026-10-02）。
    16px未満だと触った時に画面が拡大され、そのまま戻らない。インラインで小さく指定しても効かないよう !important */
 input,select,textarea{font-family:inherit;font-size:16px !important;}
+/* ★代車の表は文字を選べないようにする（2026-10-07 ユーザー報告）。
+   iPhone は帯を押し続けると「コピー」の吹き出しと文字選択（虫めがね）を出し、
+   そのせいで長押しドラッグが取り消されて入れ替えができなかった。
+   -webkit-touch-callout と user-select の両方を切る（片方だけでは出る）。 */
+[data-lcar],[data-lcar] *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 </style>
 </head>
 <body>
@@ -92,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.59.4';
+const MOBILE_VERSION='3.59.5';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3970,6 +3975,7 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
 
   const [mv,setMv]=useState(null);          // {kind,fromCar,res,overCar,ok}
   const pressRef=useRef(null);
+  const mvJust=useRef(0);   // 長押しの直後に出る click を無視する（PC版と同じ）
   const [mvMsg,setMvMsg]=useState('');
   const barDown=(kind,carId,r,e)=>{
     if(!r)return;
@@ -4009,6 +4015,7 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
     const onUp=(e)=>{
       const st=pressRef.current; pressRef.current=null;
       if(st)clearTimeout(st.timer);
+      if(st&&st.long)mvJust.current=Date.now();
       if(!st||!st.long){ setMv(null); return; }       // 短いタップは今までどおり中身が出る
       const d=mv; setMv(null);
       if(!d||d.overCar==null||String(d.overCar)===String(d.fromCar))return;
@@ -4114,7 +4121,8 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
             const nameSpan=isStart&&r?Math.max(1,(endIdx<0?dates.length:endIdx)-di):1;
             return(
               <div key={di}
-                onClick={()=>{ if(r&&!mv)setSelRes({r,car,isRental:label.includes('レンタカー')}); }}
+                onClick={()=>{ if(Date.now()-mvJust.current<400)return;
+                  if(r&&!mv)setSelRes({r,car,isRental:label.includes('レンタカー')}); }}
                 onTouchStart={e=>r&&barDown(kind,car.id,r,e)}
                 onMouseDown={e=>r&&barDown(kind,car.id,r,e)}
                 style={{width:32,minWidth:32,height:36,background:color,borderRight:'1px solid #f1f5f9',borderLeft:isTd?`2px solid ${sc}`:'none',position:'relative',overflow:isStart&&r?'visible':'hidden',cursor:r?'pointer':'default',
