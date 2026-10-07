@@ -50,7 +50,8 @@ const T_SOON = mkTime(90);       // 1時間半後＝まだ入庫していない
 const T_PAST = mkTime(-90);      // 1時間半前＝もう入庫時間を過ぎた
 
 // 代車2台・レンタカー1台
-const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' }];
+const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' },
+              { id: 3, name: 'ワゴンR', num: '3503' }, { id: 4, name: 'アルト', num: '1188' }];
 const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 
 (async () => {
@@ -65,6 +66,7 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
       [dk(TD)]: [
         { name: '河内　すみお', carType: 'ワゴンR', time: T_SOON, course: 2, store: 'honten', seq: 4, id: 4, loaner: 'ハスラー (7074)', loanerId: 1 },
         { name: '芝田　一郎', carType: 'アルト', time: T_PAST, course: 2, store: 'honten', seq: 5, id: 5, loaner: 'ハスラー (7074)', loanerId: 1 },
+        { name: '両澤　花子', carType: 'ジムニー', time: '未定', course: 2, store: 'honten', seq: 6, id: 6, loaner: 'ハスラー (7074)', loanerId: 1 },
       ],
     },
     [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
@@ -80,7 +82,10 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
         r3: { id: 1003, user: '桑田　陽子', fy: F3.y, fm: F3.m, fd: F3.d, ty: T3.y, tm: T3.m, td: T3.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk3, locked: true },
         r4: { id: 1004, user: '河内　すみお', fy: TD.y, fm: TD.m, fd: TD.d, ty: TDe.y, tm: TDe.m, td: TDe.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'insp-' + dk(TD) + '-0' },
         r5: { id: 1005, user: '芝田　一郎', fy: TD.y, fm: TD.m, fd: TD.d, ty: TDe.y, tm: TDe.m, td: TDe.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'insp-' + dk(TD) + '-1' },
-      }, '2': {}
+      }, '2': {},
+      '3': {
+        r6: { id: 1006, user: '両澤　花子', fy: TD.y, fm: TD.m, fd: TD.d, ty: TDe.y, tm: TDe.m, td: TDe.d, carName: 'ワゴンR', carNum: '3503', bookingKey: 'insp-' + dk(TD) + '-2' },
+      }, '4': {}
     },
     [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
   };
@@ -101,7 +106,10 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   ctx.route('https://script.google.com/**', route => route.fulfill({ status: 200, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'null' }));
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
-  const alerts = []; page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+  const alerts = [];
+  // ★確認（confirm）の返事を検査から切り替える。既定は「はい」
+  let answerYes = true;
+  page.on('dialog', d => { alerts.push(d.message()); answerYes ? d.accept() : d.dismiss(); });
   await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
   await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   await seeText(page, 'スケジュール', 25000);
@@ -198,6 +206,29 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   const L5 = await lres();
   t('データも動いていない', !!(L5 && L5['1'] && Object.values(L5['1']).some(r => r.user === '芝田　一郎')),
     Object.values((L5 && L5['1']) || {}).map(r => r.user));
+
+  head('②-3 本日・入庫時間が未定の分は「確認してから」入れ替えられる（2026-10-07 ユーザー指示）');
+  // まず「いいえ」を選ぶ＝動かない
+  alerts.length = 0; answerYes = false;
+  const cUd = await cellOf('両澤');
+  t('時間未定の帯が見つかる', !!cUd, cUd);
+  if (cUd) await drag(cUd, (await rowY('アルト')));
+  t('★確認がきちんと出る（代車を渡していないか聞く）',
+    alerts.some(m => /入庫時間が未定/.test(m) && /お渡し/.test(m)), alerts.slice(0, 1));
+  const L6 = await lres();
+  t('★「いいえ」なら入れ替えない', !!(L6 && L6['3'] && Object.values(L6['3']).some(r => r.user === '両澤　花子')),
+    { ワゴンR: Object.values((L6 && L6['3']) || {}).map(r => r.user) });
+
+  // つぎに「はい」を選ぶ＝動く
+  alerts.length = 0; answerYes = true;
+  const cUd2 = await cellOf('両澤');
+  if (cUd2) await drag(cUd2, (await rowY('アルト')));
+  const L7 = await lres();
+  t('★「はい」なら入れ替えられる', !!(L7 && L7['4'] && Object.values(L7['4']).some(r => r.user === '両澤　花子')),
+    { アルト: Object.values((L7 && L7['4']) || {}).map(r => r.user) });
+  const I4 = await insp();
+  const rowU = ((I4 || {})[dk(TD)] || [])[2] || {};
+  t('★予約カードの代車名も書き換わる', rowU.loaner === 'アルト (1188)', { loaner: rowU.loaner });
 
   head('⑤ スケジュールとのズレ チェック');
   t('「一致」のボタンが出ている', await seeText(page, 'スケジュールと一致', 6000),
