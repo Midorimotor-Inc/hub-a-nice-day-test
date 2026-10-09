@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791365745690';
+    window.__APP_BUILD='build-1791553379470';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.60';
+const APP_VERSION = '3.61';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5428,6 +5428,166 @@ const cfxDigits = s => String(s == null ? '' : s).normalize('NFKC').replace(/[^0
 //     1件にまとめて隠していた。満了日まで見れば、車ごと・1台ごとに出る。
 const cfxPersonKey = r => 'v:' + cfxNorm(r.n) + '/' + cfxNorm(r.c) + '/' + cfxNorm(r.no) + '/' + cfxNorm(r.e);
 // 索引を読む（sGet を渡す）。無ければ null＝まだ作られていない
+// ══════════════════════════════════════════════════════════════════
+// オフライン予定表（2026-10-09 ユーザー要望：ネットが止まった時に紙でしのぐ）
+//   ・でき上がりは「外から何も読み込まない1枚の HTML」。CDN も画像もフォントも使わない＝回線が死んでいても必ず開く。
+//   ・**店ごとに別ファイル**（三田店は三田店の紙だけ刷る）。
+//   ・**エクセルが入っていない PC がある**ので（2026-10-09 ユーザー確認）、顧客の検索までこの HTML に入れる。
+//   ・読み取りだけ。認証にも予約データにも触らない。
+//   ・**script の閉じタグは必ず分けて書くこと**（外側の script が途中で終わって白画面になる）。
+const offEsc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const OFF_CSS = [
+  ":root{--ink:#1b2129;--ink2:#475569;--ink3:#94a3b8;--line:#e2e8f0;--blue:#1d4ed8}",
+  "*{box-sizing:border-box;margin:0;padding:0}",
+  "body{font-family:-apple-system,Yu Gothic,Hiragino Sans,Meiryo,sans-serif;color:var(--ink);background:#f1f5f9;font-size:13px;line-height:1.6}",
+  ".wrap{max-width:1040px;margin:0 auto;padding:14px 16px 60px}",
+  ".top{background:#fff;border:2px solid var(--blue);border-radius:12px;padding:12px 14px;margin-bottom:12px}",
+  ".top h1{font-size:17px;font-weight:900}.top .sub{font-size:12px;color:var(--ink2);margin-top:4px}",
+  ".stamp{display:inline-block;background:#eff6ff;color:var(--blue);border:1px solid #bfdbfe;border-radius:8px;padding:3px 9px;font-weight:800;font-size:12px;margin-top:7px}",
+  ".stamp.old{background:#fef2f2;color:#b91c1c;border-color:#fecaca}",
+  ".warn{margin-top:9px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:12px;color:#b45309}",
+  ".pick{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:12px}",
+  ".pick .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.pick label{font-weight:800;font-size:12.5px}",
+  "input[type=search],select{font:inherit;font-size:14px;padding:7px 9px;border:1.5px solid #cbd5e1;border-radius:8px;background:#fff}",
+  "input[type=search]{min-width:230px}",
+  ".days{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;max-height:116px;overflow:auto}",
+  ".day{border:1px solid #cbd5e1;background:#fff;border-radius:7px;padding:4px 8px;font-size:12px;cursor:pointer;white-space:nowrap}",
+  ".day.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:800}",
+  ".day .n{color:var(--ink3);margin-left:5px;font-size:11px}.day.on .n{color:#c7d8ff}",
+  ".day.closed{background:#f8fafc;color:var(--ink3)}",
+  ".btn{font:inherit;font-weight:800;font-size:13px;padding:8px 15px;border-radius:9px;border:none;cursor:pointer;background:var(--blue);color:#fff}",
+  ".btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid #cbd5e1}",
+  ".sheet{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;display:none}",
+  ".sheet.on{display:block}",
+  ".sheet h2{font-size:19px;font-weight:900;border-bottom:3px solid var(--ink);padding-bottom:6px;margin-bottom:4px}",
+  ".sheet .meta{font-size:12px;color:var(--ink2);margin-bottom:12px}",
+  "h3{font-size:13.5px;font-weight:900;margin:16px 0 6px;padding-left:8px;border-left:4px solid var(--blue)}",
+  "h3.r{border-left-color:#dc2626}h3.g{border-left-color:#047857}h3.a{border-left-color:#b45309}",
+  "table{width:100%;border-collapse:collapse}",
+  "th,td{border:1px solid #cbd5e1;padding:5px 6px;font-size:12px;vertical-align:top}",
+  "th{background:#f1f5f9;font-weight:800;font-size:11.5px;white-space:nowrap}",
+  "td.c{text-align:center;white-space:nowrap}",
+  ".tel{font-variant-numeric:tabular-nums;white-space:nowrap}",
+  ".chk{display:inline-block;width:13px;height:13px;border:1.5px solid #64748b;border-radius:3px}",
+  ".tag{display:inline-block;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569}",
+  ".none{color:var(--ink3);font-size:12px;padding:6px 2px}",
+  ".memo{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:12px}",
+  ".blank td{height:30px}.blank th{font-size:11px}",
+  "@media print{@page{size:A4 portrait;margin:11mm 10mm}",
+  "body{background:#fff;font-size:11px}.wrap{max-width:none;padding:0}",
+  ".noprint{display:none !important}",
+  ".sheet{border:none;border-radius:0;padding:0;margin:0}",
+  ".sheet.on+.sheet.on{page-break-before:always}",
+  "th,td{font-size:10.5px;padding:3px 4px}.sheet h2{font-size:16px}h3{margin:10px 0 4px}}"
+].join("");
+// 控えの中で動く小さな仕掛け（外部の部品は一切使わない）
+const OFF_JS = [
+  "function HUBOFF(days,cust,madeDk){",
+  "  var sel=document.getElementById('d'),box=document.getElementById('days');",
+  "  var sheets=[].slice.call(document.querySelectorAll('.sheet[data-dk]'));",
+  "  var blank=document.getElementById('blank');",
+  "  function show(dks,withBlank){",
+  "    sheets.forEach(function(s){s.className=dks.indexOf(s.getAttribute('data-dk'))>=0?'sheet on':'sheet';});",
+  "    blank.className=withBlank?'sheet on':'sheet';",
+  "    [].slice.call(box.children).forEach(function(b){",
+  "      var base=b.getAttribute('data-cl')==='1'?'day closed':'day';",
+  "      b.className=(b.getAttribute('data-dk')===dks[0])?base+' on':base;});",
+  "  }",
+  "  days.forEach(function(x){",
+  "    var o=document.createElement('option');o.value=x.dk;o.textContent=x.label+(x.dk===madeDk?'　本日':'');sel.appendChild(o);",
+  "    var b=document.createElement('span');b.className=x.closed?'day closed':'day';",
+  "    b.setAttribute('data-dk',x.dk);b.setAttribute('data-cl',x.closed?'1':'0');",
+  "    b.innerHTML=x.short+'<span class=n>'+(x.closed?'休':x.n)+'</span>';",
+  "    b.onclick=function(){sel.value=x.dk;show([x.dk]);};box.appendChild(b);",
+  "  });",
+  "  sel.onchange=function(){show([sel.value]);};",
+  "  document.getElementById('p1').onclick=function(){show([sel.value]);print();};",
+  "  document.getElementById('p2').onclick=function(){var ks=days.map(function(x){return x.dk;});var i=ks.indexOf(sel.value);show(ks.slice(i,i+2));print();};",
+  "  document.getElementById('p3').onclick=function(){show([],true);print();};",
+  "  var q=document.getElementById('q'),qr=document.getElementById('qr'),qn=document.getElementById('qn');",
+  "  function find(){",
+  "    var v=(q.value||'').trim();",
+  "    if(!v){qr.innerHTML='';qn.textContent='（全'+cust.length+'件。氏名・車種・ナンバー・電話でさがせます）';return;}",
+  "    var hit=[];for(var i=0;i<cust.length&&hit.length<200;i++){var c=cust[i];",
+  "      if((c.n+' '+c.c+' '+c.no+' '+c.p).indexOf(v)>=0)hit.push(c);}",
+  "    qn.textContent=hit.length+'件'+(hit.length>=200?'以上':'');",
+  "    qr.innerHTML=hit.length?'<table><thead><tr><th>氏名</th><th>車種</th><th>ナンバー</th><th>電話</th><th>車検満了</th></tr></thead><tbody>'",
+  "      +hit.map(function(c){return '<tr><td>'+c.n+'</td><td>'+c.c+'</td><td class=c>'+c.no+'</td><td class=tel>'+c.p+'</td><td class=c>'+c.e+'</td></tr>';}).join('')",
+  "      +'</tbody></table>':'<div class=none>見つかりません</div>';",
+  "  }",
+  "  q.oninput=find;find();",
+  "  var st=document.getElementById('stamp'),made=new Date(madeDk.replace(/-/g,'/'));",
+  "  if((Date.now()-made.getTime())/86400000>3){st.className='stamp old';st.textContent='⚠ '+st.textContent+'　← この写しは古いです';}",
+  "  var first=madeDk;var has=false;days.forEach(function(x){if(x.dk===madeDk)has=true;});",
+  "  if(!has&&days.length)first=days[0].dk;",
+  "  if(days.length)show([first]);",
+  "}"
+].join("");
+const offSheetHtml = (d) => {
+  const J = (o) => JSON.stringify(o).replace(/</g, "\\u003c");   // 中に閉じタグを作らせない
+  const cell = (v, cls) => "<td" + (cls ? " class=" + cls : "") + ">" + offEsc(v) + "</td>";
+  const table = (arr, cols) => arr.length
+    ? "<table><thead><tr>" + cols.map(c => "<th" + (c.w ? " style='width:" + c.w + "px'" : "") + ">" + c.t + "</th>").join("") + "</tr></thead><tbody>"
+      + arr.map(r => "<tr>" + cols.map(c => c.chk ? "<td class=c><span class=chk></span></td>" : cell(c.v(r), c.c ? "c" : (c.tel ? "tel" : ""))).join("") + "</tr>").join("")
+      + "</tbody></table>"
+    : "<div class=none>（ありません）</div>";
+  const dayHtml = (day) =>
+    "<div class=sheet data-dk=" + offEsc(day.dk) + ">"
+    + "<h2>" + offEsc(day.label) + "　" + offEsc(d.storeName) + (day.closed ? "　<span style='color:#b45309'>【休業日】</span>" : "") + "</h2>"
+    + "<div class=meta>車検 " + day.insp.length + "台 ／ 整備 " + day.sched.length + "件 ／ 代車の貸出 " + day.loan.length + "台　|　この写しは " + offEsc(d.stamp) + " 時点</div>"
+    + "<h3 class=r>🚗 車検（入庫予定）</h3>"
+    + table(day.insp, [{ t: "入庫", w: 52, c: 1, v: r => r.time || "未定" }, { t: "済", w: 34, chk: 1 },
+        { t: "氏名", v: r => r.name }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
+        { t: "コース", w: 78, c: 1, v: r => r.course }, { t: "電話", w: 110, tel: 1, v: r => r.phone },
+        { t: "代車", w: 112, v: r => r.loaner }, { t: "担当", w: 60, c: 1, v: r => r.staff }, { t: "備考", v: r => r.note }])
+    + "<h3>⏰ 整備（タイムスケジュール）</h3>"
+    + table(day.sched, [{ t: "時間", w: 52, c: 1, v: r => r.time }, { t: "済", w: 34, chk: 1 },
+        { t: "氏名", v: r => r.name }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
+        { t: "電話", w: 110, tel: 1, v: r => r.phone }, { t: "内容", v: r => r.content }, { t: "担当", w: 60, c: 1, v: r => r.staff }])
+    + "<h3 class=g>🚙 代車・レンタカー（この日に貸している分）</h3>"
+    + table(day.loan, [{ t: "車", w: 120, v: r => r.car }, { t: "ナンバー", w: 60, c: 1, v: r => r.num },
+        { t: "貸出先", v: r => r.user }, { t: "期間", w: 150, c: 1, v: r => r.span }, { t: "区分", w: 70, c: 1, v: r => r.kind }])
+    + (day.free.length ? "<div style='margin-top:6px;font-size:12px;color:#475569'><b>空いている代車：</b>" + offEsc(day.free.join(" ／ ")) + "</div>" : "")
+    + "<h3 class=a>📝 備考・スタッフ休日</h3>"
+    + ((day.memo.length || day.off.length)
+        ? "<div class=memo>"
+          + (day.memo.length ? "<b>備考：</b>" + day.memo.map(offEsc).join("<br>") + (day.off.length ? "<br>" : "") : "")
+          + (day.off.length ? "<b>休日：</b>" + day.off.map(x => "<span class=tag>" + offEsc(x) + "</span>").join(" ") : "")
+          + "</div>"
+        : "<div class=none>（ありません）</div>")
+    + "</div>";
+  const blank = (rowsN) => "<div class=sheet id=blank><h2>オフライン受付メモ</h2>"
+    + "<div class=meta>ネットが止まっている間に受けた予約を手書きしてください。<br>"
+    + "戻ったら上の行から順にスケジュールへ入力し、入力できた行の「入力済」に ✓ を付けてください。"
+    + "この用紙は入力後1週間ほど保管してから、シュレッダーで破棄してください（電話番号が入ります）。</div>"
+    + "<table class=blank><thead><tr>"
+    + ["受けた日", "受けた人", "お客様の氏名", "電話", "車種", "ナンバー", "区分", "希望の日時", "代車", "内容・ご要望", "入力済"]
+        .map(t => "<th>" + t + "</th>").join("") + "</tr></thead><tbody>"
+    + Array.from({ length: rowsN }, () => "<tr>" + "<td></td>".repeat(10) + "<td class=c><span class=chk></span></td></tr>").join("")
+    + "</tbody></table></div>";
+  const chips = d.days.map(x => ({ dk: x.dk, label: x.label, short: x.short, n: x.insp.length + x.sched.length, closed: !!x.closed }));
+  return "<!doctype html>" + String.fromCharCode(10)
+    + "<html lang=ja><head><meta charset=utf-8>"
+    + "<meta name=viewport content='width=device-width,initial-scale=1'>"
+    + "<title>" + offEsc(d.storeName) + " 予定表（オフライン） " + offEsc(d.stamp) + "</title>"
+    + "<style>" + OFF_CSS + "</style></head><body><div class=wrap>"
+    + "<div class=top><h1>Hub a Nice Day ／ " + offEsc(d.storeName) + " オフライン予定表</h1>"
+    + "<div class=sub>ネットが使えない時用の写しです。この1ファイルに<b>全部の日付</b>が入っています。見たい日を選んで「この日を印刷」を押してください。</div>"
+    + "<span class=stamp id=stamp>📅 この写しをつくった時刻：" + offEsc(d.stamp) + "</span>"
+    + "<div class=warn><b>ここに書き込んでも、システムには反映されません。</b>"
+    + "止まっている間に受けた予約は、いちばん下の<b>「オフライン受付メモ」を印刷して手書き</b>し、ネットが戻ってから入力してください。</div></div>"
+    + "<div class='pick noprint'><div class=row><label for=d>日にち</label><select id=d></select>"
+    + "<button class=btn id=p1>🖨 この日を印刷</button>"
+    + "<button class='btn ghost' id=p2>🖨 この日＋次の日を印刷</button>"
+    + "<button class='btn ghost' id=p3>🖨 受付メモ用紙を印刷</button></div>"
+    + "<div class=days id=days></div></div>"
+    + d.days.map(dayHtml).join("")
+    + "<div class='pick noprint'><div class=row><label for=q>お客様をさがす</label>"
+    + "<input id=q type=search placeholder='氏名・車種・ナンバー・電話'><span id=qn style='font-size:12px;color:#64748b'></span></div>"
+    + "<div id=qr></div></div>"
+    + blank(14)
+    + "</div><" + "script>" + OFF_JS + "HUBOFF(" + J(chips) + "," + J(d.customers) + "," + J(d.madeDk) + ");" + "<" + "/script></body></html>";
+};
 const cfxLoad = async (sGet) => {
   const idx = await sGet(cfxIndexKey());
   if (!idx || !Number(idx.chunks)) return null;
@@ -12133,6 +12293,100 @@ function AppInner() {
     return false;
   },[closedDays,closedDates,overrideOpenDates]);
 
+  // ══ オフライン予定表の控え（2026-10-09 ユーザー要望：ネットが止まった時に紙でしのぐ）══
+  //   読み取りだけ。画面が今もっているデータと顧客の索引から、1枚の HTML を組み立てて端末に保存する。
+  //   **店ごとに別ファイル**。三田店は三田店の紙だけ刷れる。
+  //   エクセルが入っていない PC でも開けるよう、顧客の検索までこの HTML に入れてある。
+  const [offlineOpen,setOfflineOpen]=useState(false);
+  const [offlineMsg,setOfflineMsg]=useState("");
+  const offlineCollect=useCallback(async(sid)=>{
+    const sched =sid==="honten"?schedDataH:schedDataS;
+    const memo  =sid==="honten"?memoDataH:memoDataS;
+    const lres  =sid==="honten"?loanerResH:loanerResS;
+    const cars  =(sid==="honten"?loanerListH:loanerListS)||[];
+    const dayoff=(sid==="honten"?dayOffDataH:dayOffDataS)||{};
+    const pleave=(sid==="honten"?paidLeaveDataH:paidLeaveDataS)||{};
+    const cDays =(sid==="honten"?closedDaysH:closedDaysS)||[];
+    const cDates=(sid==="honten"?closedDatesH:closedDatesS)||[];
+    const ov=Array.isArray(overrideOpenDates)?overrideOpenDates:[];
+    const now=new Date();
+    const madeDk=dateKey(now.getFullYear(),now.getMonth(),now.getDate());
+    const p2=x=>String(x).padStart(2,"0");
+    const stamp=now.getFullYear()+"年"+(now.getMonth()+1)+"月"+now.getDate()+"日 "+p2(now.getHours())+":"+p2(now.getMinutes());
+    const dkNum=dk=>{const q=String(dk||"").split("-");return q.length===3?(Number(q[0])*10000+Number(q[1])*100+Number(q[2])):0;};
+    // 過去7日より前は入れない（紙にしても使わないため）
+    const back=new Date(now);back.setDate(back.getDate()-7);
+    const fromN=toNum(back.getFullYear(),back.getMonth(),back.getDate());
+    const keys={};const add=dk=>{if(dk&&dkNum(dk)>=fromN)keys[dk]=1;};
+    add(madeDk);
+    Object.keys(inspData||{}).forEach(dk=>{if((inspData[dk]||[]).some(r=>r&&r.name&&(r.store||"honten")===sid))add(dk);});
+    Object.keys(sched||{}).forEach(dk=>{if(Object.values(sched[dk]||{}).some(r=>r&&r.name))add(dk);});
+    Object.keys(memo||{}).forEach(dk=>{if((memo[dk]||[]).some(m=>m&&m.content))add(dk);});
+    Object.keys(dayoff).forEach(add);Object.keys(pleave).forEach(add);
+    const dks=Object.keys(keys).sort((a,b)=>dkNum(a)-dkNum(b));
+    // 代車・レンタカーの帯（レンタカーは会社共通なので両店に入れる）
+    const bars=[];
+    const grab=(obj,list,kind)=>Object.keys(obj||{}).forEach(cid=>{
+      const car=(list||[]).find(c=>String(c.id)===String(cid))||{};
+      Object.values(obj[cid]||{}).forEach(r=>{if(!r||r.fy==null)return;
+        bars.push({kind,carId:String(cid),car:r.carName||car.name||"",num:r.carNum||car.num||"",user:r.user||"",
+          f:toNum(r.fy,r.fm,r.fd),t:toNum(r.ty,r.tm,r.td),
+          span:(r.fm+1)+"/"+r.fd+" → "+(r.tm+1)+"/"+r.td});});});
+    grab(lres,cars,"代車");
+    grab(rentalResData,rentalCars,"レンタカー");
+    const WD="日月火水木金土";
+    const cName=id=>{const c=COURSES.find(x=>x.id===Number(id));return c?c.name:"";};
+    const days=dks.map(dk=>{
+      const q=dk.split("-").map(Number);const dt=new Date(q[0],q[1]-1,q[2]);const n=dkNum(dk);
+      const ds=q[0]+"-"+p2(q[1])+"-"+p2(q[2]);
+      const closed=cDays.includes(dt.getDay())||cDates.includes(ds)||isSecondTuesdayHoliday(q[0],q[1]-1,q[2],ov);
+      const wd=WD.charAt(dt.getDay());
+      const insp=(inspData[dk]||[]).filter(r=>r&&r.name&&(r.store||"honten")===sid).map(r=>({
+        time:r.time||"",name:r.name,carType:r.carType||"",no:r.no||"",course:cName(r.course),
+        phone:r.phone||"",loaner:r.loaner||r.rentalLabel||"",staff:r.staff||"",note:r.note||""}));
+      const day=sched[dk]||{};
+      const schedRows=Object.keys(day).filter(k=>day[k]&&day[k].name)
+        .sort((a,b)=>String(getBaseSlot(a)).localeCompare(String(getBaseSlot(b))))
+        .map(k=>({time:specialSlotLabel(getBaseSlot(k)),name:day[k].name,carType:day[k].carType||"",no:day[k].no||"",
+          phone:day[k].phone||"",content:[day[k].work,day[k].content].filter(Boolean).join(" ／ "),staff:day[k].staff||""}));
+      const loan=bars.filter(b=>b.f<=n&&n<=b.t).map(b=>({car:b.car,num:b.num,user:b.user,span:b.span,kind:b.kind}));
+      const busy={};bars.forEach(b=>{if(b.kind==="代車"&&b.f<=n&&n<=b.t)busy[b.carId]=1;});
+      const free=cars.filter(c=>!busy[String(c.id)]).map(c=>((c.name||"")+" "+(c.num||"")).trim());
+      const offs=[].concat((dayoff[dk]||[]),((pleave[dk]||[]).map(x=>x+"（有給）")));
+      return {dk,label:q[1]+"月"+q[2]+"日（"+wd+"）",short:q[1]+"/"+q[2]+"（"+wd+"）",closed,
+        insp,sched:schedRows,loan,free,memo:(memo[dk]||[]).map(m=>m&&m.content).filter(Boolean),off:offs};
+    });
+    let customers=[];
+    try{const cx=await cfxLoad(sGet);
+      if(cx&&Array.isArray(cx.rows))customers=cx.rows.map(r=>({n:r.n||"",c:r.c||"",no:r.no||"",p:r.p||"",e:r.e||""}));
+    }catch(e){console.warn("[控え] 顧客の索引を読めません",e&&e.message);}
+    return {storeName:sid==="honten"?"本店":"三田店",stamp,madeDk,days,customers};
+  },[inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerListH,loanerListS,
+     dayOffDataH,dayOffDataS,paidLeaveDataH,paidLeaveDataS,closedDaysH,closedDaysS,closedDatesH,closedDatesS,
+     overrideOpenDates,rentalResData,rentalCars]);
+  const offlineDownload=(name,text)=>{
+    try{
+      const b=new Blob([text],{type:"text/html;charset=utf-8"});
+      const u=URL.createObjectURL(b);const a=document.createElement("a");
+      a.href=u;a.download=name;document.body.appendChild(a);a.click();
+      setTimeout(()=>{try{URL.revokeObjectURL(u);a.remove();}catch(e){}},1500);
+      return true;
+    }catch(e){console.error("[控え] 保存できません",e);return false;}
+  };
+  const offlineSave=useCallback(async(which)=>{
+    const list=which==="both"?["honten","sanda"]:[which];
+    setOfflineMsg("作っています…");
+    const made=[];
+    for(const sid of list){
+      try{
+        const d=await offlineCollect(sid);
+        const name="予定表_"+d.storeName+"_"+d.madeDk+".html";
+        if(offlineDownload(name,offSheetHtml(d)))made.push(name+"（"+d.days.length+"日分・顧客"+d.customers.length+"件）");
+      }catch(e){console.error("[控え]",e);setOfflineMsg("作れませんでした："+String((e&&e.message)||e));return;}
+    }
+    setOfflineMsg(made.length?("保存しました　"+made.join("　/　")):"作れませんでした");
+  },[offlineCollect]);
+
   const getInsps   =useCallback(dk=>Array.from({length:8},(_,i)=>((inspData[dk]||[])[i]||null)||blankInsp()),[inspData]);
   const getSchedRow=useCallback((dk,slot)=>schedData[dk]?.[slot]||blankSched(),[schedData]);
   // 指定baseSlotの全サブキー取得
@@ -13975,6 +14229,12 @@ function AppInner() {
                       🕒 復旧
                     </button>
                   )}
+                  <button onClick={()=>{setOfflineMsg("");setOfflineOpen(true);}} title="オフライン予定表の控えを保存（ネットが止まった時に紙で使う）"
+                    style={{display:"flex",alignItems:"center",gap:3,padding:"2px 8px",background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:10,color:"#047857"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#d1fae5"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#ecfdf5"}>
+                    💾 控え
+                  </button>
                   {/* 📋クリップボードコピーは廃止（戻せず一部データのみで紛らわしいため）。バックアップは自動保存＋🕒復旧に一本化。 */}
                   <button onClick={()=>{releaseLock(curLockKey);setAuthAutoOff(true);setCurrentUserPersist(null);setCurLockKey(null);setModalOpen(false);}} title="ログアウト" style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center'}}><LogOut size={14}/></button>
                 </div>
@@ -15388,6 +15648,44 @@ function AppInner() {
 
       {/* -- データ復旧（4名のみ） -- */}
       <RestoreModal isOpen={showRestore} onClose={()=>setShowRestore(false)} currentUser={currentUser} inspData={inspData}/>
+      {/* ── オフライン予定表の控え（2026-10-09）。押した時にどの店の分を出すか選ぶ ── */}
+      {offlineOpen&&(
+        <div onClick={()=>setOfflineOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:14,width:"min(560px,95vw)",boxShadow:"0 20px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
+            <div style={{padding:"15px 20px",background:"linear-gradient(135deg,#047857,#059669)",color:"white"}}>
+              <div style={{fontWeight:900,fontSize:15}}>💾 オフライン予定表の控えを保存</div>
+              <div style={{fontSize:11,opacity:.9,marginTop:3}}>ネットが止まった時に、この控えを開いて紙に印刷して使います</div>
+            </div>
+            <div style={{padding:"16px 20px"}}>
+              <div style={{fontSize:12.5,color:"#334155",lineHeight:1.9,marginBottom:12}}>
+                <b>どの店の分を出しますか？</b><br/>
+                <span style={{fontSize:11.5,color:"#64748b"}}>
+                  店ごとに別のファイルになります。三田店は三田店の紙だけ印刷できます。
+                </span>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={()=>offlineSave("honten")} style={{flex:1,minWidth:150,padding:"13px 10px",borderRadius:10,border:"none",background:"#1d4ed8",color:"white",fontWeight:800,fontSize:13.5,cursor:"pointer"}}>🏠 本店の分</button>
+                <button onClick={()=>offlineSave("sanda")} style={{flex:1,minWidth:150,padding:"13px 10px",borderRadius:10,border:"none",background:"#b91c1c",color:"white",fontWeight:800,fontSize:13.5,cursor:"pointer"}}>🏪 三田店の分</button>
+                <button onClick={()=>offlineSave("both")} style={{flex:1,minWidth:150,padding:"13px 10px",borderRadius:10,border:"1.5px solid #cbd5e1",background:"white",color:"#334155",fontWeight:800,fontSize:13.5,cursor:"pointer"}}>両店の分</button>
+              </div>
+              {offlineMsg&&(
+                <div style={{marginTop:12,padding:"9px 11px",borderRadius:9,background:offlineMsg.indexOf("保存しました")===0?"#ecfdf5":"#fffbeb",border:"1px solid "+(offlineMsg.indexOf("保存しました")===0?"#a7f3d0":"#fde68a"),fontSize:12,color:"#334155",lineHeight:1.8}}>
+                  {offlineMsg}
+                </div>
+              )}
+              <div style={{marginTop:13,fontSize:11.5,color:"#64748b",lineHeight:1.9,borderTop:"1px dashed #e2e8f0",paddingTop:11}}>
+                ・保存先は、このパソコンの<b>「ダウンロード」フォルダ</b>です（ファイル名に日付が入ります）。<br/>
+                ・中身は<b>全部の日付</b>。開いてから見たい日を選び、<b>その日だけ印刷</b>できます。<br/>
+                ・<b>お客様の検索</b>と<b>受付メモ用紙</b>も入っています。エクセルは要りません。<br/>
+                ・古い控えは週に1回まとめて消してください（電話番号が入っています）。
+              </div>
+            </div>
+            <div style={{padding:"12px 20px",borderTop:"1px solid #e5e7eb",display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>setOfflineOpen(false)} style={{padding:"10px 20px",background:"#f3f4f6",border:"none",borderRadius:9,fontWeight:700,fontSize:13,color:"#475569",cursor:"pointer"}}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* -- 休日スタッフモーダル -- */}
       <DayOffModal

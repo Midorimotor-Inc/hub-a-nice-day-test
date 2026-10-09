@@ -45,9 +45,17 @@ const F3 = d(9), T3 = d(11);     // これから貸す・限定（動かせな�
 const TD = d(0), TDe = d(2);     // 本日はじまり（入庫時間で動かせるか決まる）
 // 「まだ先の時刻」と「もう過ぎた時刻」を今の時刻から作る（検査を走らせる時刻に左右されないように）
 const pad = n => String(n).padStart(2, '0');
-const mkTime = (plusMin) => { const x = new Date(N.getTime() + plusMin * 60000); return pad(x.getHours()) + ':' + pad(x.getMinutes()); };
-const T_SOON = mkTime(90);       // 1時間半後＝まだ入庫していない
-const T_PAST = mkTime(-90);      // 1時間半前＝もう入庫時間を過ぎた
+// ★日をまたがせないこと（2026-10-09）。「1時間半後」が 0時を回ると、その時刻は“今日の過去”になり、
+//   『入庫時間より前なら入れ替えできる』が夜（22:30以降）に必ず落ちていた。同じ日の中に収める。
+const mkTime = (plusMin) => {
+  const m0 = N.getHours() * 60 + N.getMinutes();
+  let m = m0 + plusMin;
+  if (m > 23 * 60 + 59) m = 23 * 60 + 59;   // 今日のいちばん遅い時刻で止める
+  if (m < 0) m = 0;                          // 今日のいちばん早い時刻で止める
+  return pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+};
+const T_SOON = mkTime(90);       // 1時間半後＝まだ入庫していない（深夜は 23:59 で止まる）
+const T_PAST = mkTime(-90);      // 1時間半前＝もう入庫時間を過ぎた（早朝は 00:00 で止まる）
 
 // 代車2台・レンタカー1台
 const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' },

@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -333,6 +333,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   限定／貸出中は動かせないこと・ズレを見つけて直せること・最適化が消えていることを見る）。
 - **本番にはまだ入れていない**（2026-10-07 ユーザー指示：テスト版のみ）。
 
+### オフライン予定表の控え（v3.61・2026-10-09・テスト版のみ）
+- ユーザー要望：「**インターネットが使えない状況**になった時…業務が出来ないくらい止まった時の措置として**毎日上書き更新**で全データを…**紙ベースでその場をしのぐ方法**」。
+- **ネットが止まるとアプリ自体が開けない**（GitHub Pages から読む作り）ので、「ブラウザの中のバックアップ」は役に立たない。**端末のディスク上のファイル**だけが使える。
+- **【重要】江川さんのPCにエクセルが入っていない**（Web版だけ＝ネットが要る）。2026-10-09 ユーザー確認。
+  そのため**エクセルは当てにしない**。出すのは**外から何も読み込まない1枚の HTML**（CDN・画像・フォントを使わない）＝ブラウザさえあれば必ず開く。
+- **店ごとに別ファイル**（三田店は三田店の紙だけ刷る）。ユーザー要望「三田店は三田店で別店舗として同じような作業が必要」。
+  車検は行の `store` で分け、整備・代車・備考・休日・休業日は `honten-` / `sanda-` のキーで分ける。**レンタカーは会社共通なので両方に入れる**。
+- **日数は決め打ちしない**（ユーザー指摘「どこを切り取っても出せる感じに。10/25 の予定、11/20 の予定…」）。
+  **過去7日〜先の、予定がある日すべて**を1冊に入れ、開いてから日を選んで**その日だけ印刷**する。毎朝つくり直すのは「日々予約が入るから」。
+- 中身：車検／整備（どちらも**手書きチェック欄つき**）／代車・レンタカーの貸出＋空き／備考・スタッフ休日／**顧客リスト全件の検索**／**オフライン受付メモ用紙**（空欄14行・「入力済 ✓」つき）。
+  **電話番号は載せる**（2026-10-09 ユーザー決定。止まっている間にお客様へ連絡するため。紙は事務所から持ち出さない運用）。
+- **古い控えに気づける**：作成時刻を上に出し、**3日以上古いと帯が赤くなる**（黙って古い紙を使う事故が一番怖い）。
+- 実装：`offSheetHtml(d)`＋`OFF_CSS`／`OFF_JS`（純関数・index_dev.html の上の方）と、本体の `offlineCollect(sid)`／`offlineSave(which)`。
+  ヘッダーの「💾 控え」→ 本店／三田店／両店 を選んで保存（**ダウンロードフォルダに日付つきの名前**で落ちる）。**読み取りだけ**＝認証にも予約データにも触らない。
+- **`offSheetHtml` の中で script の閉じタグをそのまま書かないこと**（外側の `<script type="text/babel">` が途中で終わって白画面になる）。`"<" + "/script>"` と分ける。
+- 検査は `node offline_sheet_test.js`（35件）。**保存したファイルを `file://` で開き直して**「外へ1回も取りに行かない」「日を切り替えられる」「顧客をさがせる」まで見る。
+- **進め方（2026-10-09 ユーザー決定）**：① いまはテスト版・江川さんのPC・**手で押すボタン**で中身を固める → ② 本番へ → ③ 最後に**共有PCで自動**（毎朝）に移す。
+  自動（方法A）は Windows のタスクスケジューラ＋Node＋**読み取り専用のサービスアカウント鍵**が要る。**ブラウザだけでは「毎日・自動・同じファイルに上書き」はできない**
+  （勝手にファイルを書き換えられない／保存先を覚えさせても日によって許可を聞かれる／ふつうのダウンロードは上書きされず `(1)(2)` と増える）。
 ### テスト版と本番でサインインを分ける（v3.59.2・2026-10-07・Kyoshi承認のBLOCK-B変更）
 - **症状**：ユーザー報告「スマホログインし直しになったのですが…」。スマホで**テスト版と本番の両方**がログインし直しになった。
   端末台帳を調べると、同じ端末が**テスト版 12:09 → 本番 12:19**（JST）に作り直されていた（本日の再登録は江川さんのみ。台帳60件・許可簿20人は無事）。
