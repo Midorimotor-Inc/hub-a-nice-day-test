@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791553379470';
+    window.__APP_BUILD='build-1791864193374';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.61';
+const APP_VERSION = '3.61.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2033,6 +2033,8 @@ const CustomerListView = memo(({custFiles, setCustFiles, currentUser}) => {
 });
 
 
+// 全角の数字（０-９）を半角に直す。日本語入力（ひらがな）のまま打っても数字欄に入るようにするため（2026-10-13）。
+const toHankakuNum = (v) => String(v == null ? '' : v).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 const blankInsp  = () => ({name:'',staff:'',carType:'',no:'',phone:'',address:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
 
 // ── 「この保存で日付が変わったか」の判定（必ずこれを使う）──────────────
@@ -7398,10 +7400,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             <div>
               <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>4桁</span></label>
               <input ref={carNoRef} value={form.no==null?'':String(form.no)}
-                onChange={e=>setForm({...form,no:e.target.value.replace(/[^0-9]/g,'').slice(0,4)})}
+                onChange={e=>setForm({...form,no:toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4)})}
                 onFocus={()=>setKbField('carno')} onBlur={()=>setKbField('')}
                 onKeyDown={e=>onKbNav(e,'carno')}
-                inputMode="numeric" maxLength={4}
+                maxLength={4}
                 placeholder="例：3310" style={{...INP,...KB('carno')}}/>
             </div>
           </div>

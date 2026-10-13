@@ -121,6 +121,44 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   await page.waitForTimeout(400);
   const after = await fieldByLabel(page, 'ナンバー');
   t('数字だけ・4桁までに直される', !!after && after.value === '1234', after);
+
+  // ★日本語入力（ひらがな）が解除されないこと（2026-10-13 ユーザー報告）
+  //   Windows は inputMode="numeric" の欄に入ると IME を英数にし、**次の欄へ移っても戻らない**。
+  //   そのため予約カードの数字欄には inputMode を付けない（電話欄は 2026-09-23 に同じ理由で外した）。
+  const imeAttrs = await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const pick = (label) => {
+      const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith(label) && d.querySelector(':scope > input'); });
+      const i = wrap && wrap.querySelector(':scope > input');
+      return i ? { inputmode: i.getAttribute('inputmode') || '', type: i.getAttribute('type') || 'text' } : null;
+    };
+    return { no: pick('ナンバー'), tel: pick('電話') };
+  });
+  t('★ナンバー欄は日本語入力を解除しない（inputmode を付けない）', !!imeAttrs.no && !imeAttrs.no.inputmode, imeAttrs.no);
+  t('ナンバー欄は number 型でもない（これも解除してしまう）', !!imeAttrs.no && imeAttrs.no.type !== 'number', imeAttrs.no);
+  t('電話欄も解除しない（2026-09-23 の直しが残っている）', !!imeAttrs.tel && !imeAttrs.tel.inputmode && imeAttrs.tel.type !== 'tel', imeAttrs.tel);
+  // 全角で打っても半角4桁になる（ひらがなのまま打てる）
+  await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const inp = wrap.querySelector(':scope > input');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, '３３１０');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+  const zen = await fieldByLabel(page, 'ナンバー');
+  t('★全角で打っても半角の4桁になる', !!zen && zen.value === '3310', zen);
+  // 元に戻してから保存へ進む
+  await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const inp = wrap.querySelector(':scope > input');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, '1234');
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
   // 保存するとサーバーに入る
   await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const b = [...box.querySelectorAll('button')].find(x => /確定|保存/.test(x.innerText)); if (b) b.click(); });
   t('保存するとナンバーが残る', await page.waitForFunction(([k, dk]) => {
