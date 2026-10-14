@@ -227,6 +227,38 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
   t('★予約カードの代車名も一緒に書き換わる', row1.loaner === 'スペーシア (8967)' && Number(row1.loanerId) === 2,
     { loaner: row1.loaner, loanerId: row1.loanerId });
 
+  head('②-2 何度も続けて入れ替えてもデータが壊れない（2026-10-14 ユーザー要望）');
+  {
+    // 「入れ替えるとき何度も入れ替えるとバグが起きそう」への答え。
+    // スマホは自分の保存の直後70秒サーバーの変更を取り込まないので、続けて動かすと一番あやうい。
+    const carName = { 1: 'ハスラー (7074)', 2: 'スペーシア (8967)' };
+    const count = async () => {
+      const Lr = (await lres()) || {}; const all = [];
+      Object.keys(Lr).forEach(cid => Object.values(Lr[cid] || {}).forEach(r => { if (r) all.push({ car: cid, id: r.id, user: r.user, name: r.carName }); }));
+      const ids = all.map(x => x.id);
+      return { n: all.length, dup: ids.length !== new Set(ids).size, all };
+    };
+    const start = await count();
+    let ok = true, bad = null;
+    for (const to of [1, 2, 1, 2, 1, 2]) {   // ★最後はスペーシア（②のあとの位置）に戻して終わる＝後の検査を壊さない
+      const p = await barPos('辻井'); const y = await rowPos(to);
+      if (!p || y == null) { ok = false; bad = { 行き先: to, 理由: '帯か行が見つからない' }; break; }
+      await longDrag(p, y, 300);
+      const c = await count();
+      const me = c.all.find(x => x.user === '辻井　博');
+      const I = await insp();
+      const row = ((I || {})[dk(F1)] || [])[0] || {};
+      if (c.n !== start.n || c.dup || !me || String(me.car) !== String(to) || row.loaner !== carName[to]) {
+        ok = false; bad = { 行き先: to, 本数: c.n, 重複: c.dup, 帯: me, カード: row.loaner }; break;
+      }
+    }
+    t('★6回続けて入れ替えても、毎回ただしく移る（本数・車名・カードの代車名）', ok, bad);
+    const end = await count();
+    t('貸出の本数は増えも減りもしない', end.n === start.n && !end.dup, end.all);
+    t('★続けて入れ替えたあとも「一致」のまま', await seeText(page, 'スケジュールと一致', 8000),
+      await page.evaluate(() => (document.body.innerText.match(/スケジュール(と一致|とズレ[^\n]*)/) || [''])[0]));
+  }
+
   head('③ 短いタップでは動かない（今までどおり詳細が出る）');
   const p2 = await barPos('辻井');
   if (p2) await longDrag(p2, (await rowPos(1)), 60);    // 0.06秒＝長押しにならない
