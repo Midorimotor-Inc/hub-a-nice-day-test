@@ -28,8 +28,10 @@ const INDEX_RULES = [
   ['<link rel="manifest" href="manifest_dev.json" />', '<link rel="manifest" href="manifest.json" />', 1],
   // 環境識別の配色: 全体背景・ログイン画面（オレンジ→青）
   ['linear-gradient(140deg,#7c2d12,#EA580C,#f97316)', 'linear-gradient(140deg,#1e3a8a,#1d4ed8,#2563eb)', 3],
-  // ヘッダー背景（オレンジ単色→青グラデーション）
-  ["<header ref={headerRef} style={{background:'#EA580C',", "<header ref={headerRef} style={{background:'linear-gradient(135deg,#1e3a8a,#1d4ed8)',", 1],
+  // ヘッダーの帯の色（A案・2026-10-14）。店を切り替えると帯ごと店の色になる。
+  //   テスト版は両店ともオレンジ／メインは 本店＝青・三田店＝赤。色はこの2つの定数だけを通すこと。
+  ["const UI_HEAD='#EA580C';", "const UI_HEAD='linear-gradient(135deg,#1e3a8a,#1d4ed8)';", 1],
+  ["const UI_HEAD_S=UI_HEAD;", "const UI_HEAD_S='linear-gradient(135deg,#7f1d1d,#dc2626)';", 1],
   // ヘッダーロゴ文字色
   ["gap:7,fontSize:16,fontWeight:800,color:'#9a3412'", "gap:7,fontSize:16,fontWeight:800,color:'white'", 1],
   // 戻るボタン（DEVグレー→本番グリーン）※代車管理の BACK_S は2026-09-12からDEVも緑なので変換しない
@@ -72,7 +74,7 @@ const MOBILE_REGEX_RULES = [
 ];
 // 変換後にあってはならない文字列（残骸チェック）
 const FORBIDDEN = ['hub-v8-dev', '[DEV]', '[テスト版]', 'テスト版（DEV）', 'スケジュールシステム テスト版', 'DEV版警告バナー',
-  'linear-gradient(140deg,#7c2d12', "header ref={headerRef} style={{background:'#EA580C'",
+  'linear-gradient(140deg,#7c2d12', "const UI_HEAD='#EA580C'",
   // mobile.html の配色（この4つの定義だけ。同じ色を使う modal は本番にもあるので、const の形で見る）
   "const UI_BG='#FF9500'", "const UI_HEAD='#FF9500'", "const UI_TAB='#F97316'", "const UI_ACC='#b45309'",
   'const UI_BG_S=UI_BG;', 'const UI_HEAD_S=UI_HEAD;', 'const UI_TAB_S=UI_TAB;', 'const UI_ACC_S=UI_ACC;'];

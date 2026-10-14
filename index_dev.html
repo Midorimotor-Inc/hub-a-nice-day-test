@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791963551296';
+    window.__APP_BUILD='build-1791969659702';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.62.5';
+const APP_VERSION = '3.63';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -207,6 +207,15 @@ const STORES = [
   {id:'honten', name:'本店',  color:'#2563eb', bg:'#eff6ff', accent:'#1d4ed8'},
   {id:'sanda',  name:'三田店',color:'#dc2626', bg:'#fef2f2', accent:'#b91c1c'},
 ];
+
+// -- ヘッダー帯の色（A案・2026-10-14 ユーザー決定）--
+//   店を切り替えると、ヘッダーの帯（ロゴの段＋ナビのボタンの段）ごと店の色になる。
+//   中のボタン（カレンダー・検索・顧客リスト…）の色は今までどおり＝役割の色を残す。
+//   ★テスト版は両店ともオレンジが仕様（スマホ版と同じ決まり）。色の切り替わりはメインでだけ見える。
+//   ★色は必ずこの定数を通すこと。画面に直書きすると port_to_main.js が変換できない。
+const UI_HEAD='#EA580C';
+const UI_HEAD_S=UI_HEAD;
+const uiHead=(sid)=>sid==='sanda'?UI_HEAD_S:UI_HEAD;
 
 // -- 業務バッジ定義 --
 const BADGES = [
@@ -14303,7 +14312,7 @@ function AppInner() {
       )}
 
       {/* -- ヘッダー -- */}
-      <header ref={headerRef} style={{background:'#EA580C',borderBottom:`3px solid ${vsStore.color}`,padding:'9px 18px',position:'fixed',top:(fsHint&&isFullscreen)?46:0,transition:'top .2s ease',left:0,right:0,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,0.15)'}}>
+      <header ref={headerRef} style={{background:uiHead(vsId),borderBottom:`3px solid ${vsStore.color}`,padding:'9px 18px',position:'fixed',top:(fsHint&&isFullscreen)?46:0,transition:'top .2s ease',left:0,right:0,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,0.15)'}}>
         {(()=>{
           const userStore=STORES.find(s=>s.id===(currentUser?.store?.id||'honten'))||STORES[0];
           return(
@@ -14387,7 +14396,7 @@ function AppInner() {
                 <span style={{width:1,height:22,background:'rgba(255,255,255,.4)',margin:'0 3px',flexShrink:0}}/>
                 <button onClick={()=>hubCloseWindow(()=>setCloseHelp(true))} title="閉じる"
                   style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
-                    background:'#dc2626',border:'2px solid #fca5a5',color:'white',fontSize:15,fontWeight:900,cursor:'pointer',lineHeight:1}}
+                    background:'#dc2626',border:'2px solid rgba(255,255,255,.9)',color:'white',fontSize:15,fontWeight:900,cursor:'pointer',lineHeight:1}}
                   onMouseEnter={e=>e.currentTarget.style.background='#b91c1c'}
                   onMouseLeave={e=>e.currentTarget.style.background='#dc2626'}>✕</button>
               </div>
@@ -14475,9 +14484,11 @@ function AppInner() {
                 })()}
               </div>
               <div style={{flexShrink:0,display:'flex',gap:6,alignItems:'center'}}>
+                {/* ★帯が店の色になったので（A案・2026-10-14）、選んでいる店は「白いピル＋店の色の文字」で反転させる。
+                    同じ色で塗ると帯に沈んで、どちらを見ているのか分からなくなる。 */}
                 {STORES.map(s=>(
                   <button key={s.id} onClick={()=>{setViewStore(s.id);setLoanerPinnedRes(null);setLoanerHoverRes(null);}}
-                    style={{padding:'6px 16px',borderRadius:8,border:`2px solid ${vsId===s.id?s.color:'#e5e7eb'}`,background:vsId===s.id?s.color:'white',color:vsId===s.id?'white':'#6b7280',fontWeight:vsId===s.id?800:600,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
+                    style={{padding:'6px 16px',borderRadius:8,border:`2px solid ${vsId===s.id?'#fff':'rgba(255,255,255,.5)'}`,background:vsId===s.id?'#fff':'rgba(255,255,255,.16)',color:vsId===s.id?s.color:'#fff',fontWeight:vsId===s.id?800:600,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
                     {s.name}{vsId===s.id&&currentUser?.store?.id===s.id?' 🏠':''}
                   </button>
                 ))}

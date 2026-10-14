@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>店舗カラーのモック（本店／三田店）</title>
+<!--
+  「本店から三田店に切り替えた時、操作ボタン周りも店舗カラーになるように」のモック（2026-10-14）。
+  いまは**右端の店舗ボタンだけ**が色を変えている（ヘッダーは環境の色＝本番は青・テスト版はオレンジ）。
+  上の切替で 本店／三田店 を行き来して、3案を見比べてください。中身はダミーです。
+-->
+<style>
+  :root{
+    --ink:#1b2129; --ink2:#475569; --line:#e2e8f0;
+    /* 店舗の色（本番の STORES と同じ） */
+    --st:#1d4ed8; --st2:#2563eb; --stBg:#eff6ff; --stDeep:#1e3a8a;
+  }
+  body.sanda{ --st:#b91c1c; --st2:#dc2626; --stBg:#fef2f2; --stDeep:#7f1d1d; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:16px 16px 60px}
+  h1{font-size:17px;font-weight:900;margin-bottom:4px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.9}
+  .switch{position:sticky;top:0;z-index:20;background:#eef2f7;padding:10px 0 12px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .switch b{font-size:13px}
+  .sw{border:2px solid #cbd5e1;background:#fff;border-radius:9px;padding:7px 18px;font:inherit;font-weight:800;cursor:pointer}
+  .sw.on{border-color:var(--st);background:var(--st);color:#fff}
+  .case{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
+  .case>h2{font-size:13.5px;font-weight:900;padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .case>h2 small{font-weight:600;color:var(--ink2);margin-left:8px;font-size:11.5px}
+  .pick{display:inline-block;margin-left:10px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+
+  /* ── ヘッダーの作り（本物に寄せた見た目） ── */
+  .hd{padding:7px 12px;display:flex;align-items:center;gap:10px;color:#fff}
+  .hd .logo{font-weight:900;font-size:15px;opacity:.95}
+  .chip{font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 7px;background:rgba(255,255,255,.22)}
+  .sp{flex:1}
+  .hbtn{font-size:11px;font-weight:800;border-radius:7px;padding:3px 10px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff}
+  .hbtn.light{background:#fff;border-color:#fff}
+  .x{background:#dc2626;color:#fff;border:none;border-radius:7px;width:26px;height:24px;font-weight:900;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+  .nav{display:flex;gap:6px;align-items:center;padding:7px 12px;flex-wrap:nowrap;overflow:hidden}
+  .nb{background:#fff;border:1px solid #d7dde5;border-radius:8px;padding:5px 13px;font-size:12px;font-weight:700;color:#334155;white-space:nowrap}
+  .nb.on{background:#fde68a;border-color:#f59e0b;color:#92400e}
+  .nb.g{background:#d1fae5;border-color:#6ee7b7;color:#047857}
+  .nb.r{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
+  .nb.p{background:#fce7f3;border-color:#f9a8d4;color:#9d174d}
+  .stores{display:flex;gap:6px;margin-left:auto}
+  .stb{border-radius:8px;padding:5px 15px;font-size:12px;font-weight:800;background:#fff;border:1px solid #d7dde5;color:#334155}
+  .stb.on{background:var(--st);border-color:var(--st);color:#fff}
+  .body{padding:12px 14px;background:#fff}
+  .datebar{display:flex;justify-content:center;gap:5px;align-items:center;margin-bottom:10px}
+  .dd{background:#7c2d12;color:#fff;border-radius:7px;padding:4px 14px;font-weight:800;font-size:12.5px}
+  .mini{background:#9a3412;color:#fff;border-radius:6px;padding:3px 7px;font-size:11px}
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid #cbd5e1;padding:5px 7px;font-size:12px}
+  th{background:#f1f5f9;font-weight:800;font-size:11.5px}
+  .tools{display:flex;gap:6px;justify-content:flex-end;margin-bottom:7px}
+  .tb{border:1px solid #cbd5e1;background:#fff;border-radius:7px;padding:3px 10px;font-size:11.5px;font-weight:700;color:#475569}
+
+  /* ── いま（本番の実物どおり：青の帯＋下に3pxの店舗色の線） ── */
+  .now .hd{background:linear-gradient(135deg,#1e3a8a,#1d4ed8)}
+  .now .nav{background:#1d4ed8;border-bottom:3px solid var(--st)}
+
+  /* ── A案：帯だけ店舗色 ── */
+  .a .hd{background:linear-gradient(135deg,var(--stDeep),var(--st))}
+  .a .nav{background:var(--st)}
+  .a .stb.on{background:#fff;border-color:#fff;color:var(--st)}
+
+  /* ── B案：帯＋いまの画面のボタンも店舗色 ── */
+  .b .hd{background:linear-gradient(135deg,var(--stDeep),var(--st))}
+  .b .nav{background:var(--st)}
+  .b .stb.on{background:#fff;border-color:#fff;color:var(--st)}
+  .b .nb.on{background:#fff;border-color:#fff;color:var(--st);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+  .b .dd{background:var(--st)} .b .mini{background:var(--st2)}
+  .b .tb{border-color:var(--st);color:var(--st);background:var(--stBg)}
+  .b th{background:var(--stBg);color:var(--st)}
+
+  /* ── C案：帯は今のまま＋店舗色の太い下線と枠 ── */
+  .c .hd{background:#1d4ed8}
+  .c .nav{background:#1d4ed8;border-bottom:5px solid var(--st)}
+  .c .body{box-shadow:inset 0 0 0 3px var(--stBg)}
+  .c .tb{border-color:var(--st);color:var(--st)}
+  .c th{background:var(--stBg);color:var(--st)}
+
+  .note{font-size:12px;color:var(--ink2);padding:9px 14px;background:#f8fafc;border-top:1px dashed var(--line);line-height:1.9}
+  .sanda-only{display:none} body.sanda .sanda-only{display:inline}
+  body.sanda .honten-only{display:none}
+</style>
+</head>
+<body class="honten">
+<div class="wrap">
+  <h1>店舗カラーのモック（PC・本番の色）</h1>
+  <div class="lead">
+    「本店から三田店に切り替えた時、<b>操作ボタン周りも店舗カラー</b>に」のご要望のモックです。<br>
+    <b>上のボタンで店を切り替えて</b>、下の4つを見比べてください。色は本番のもの（<b>本店＝青 #1d4ed8／三田店＝赤 #b91c1c</b>）。中身はダミーです。
+  </div>
+
+  <div class="switch">
+    <b>切り替えて見る：</b>
+    <button class="sw on" id="h">🏠 本店</button>
+    <button class="sw" id="s">🏪 三田店</button>
+    <span style="font-size:12px;color:#475569">← ここを押すと下が全部切り替わります</span>
+  </div>
+
+  <!-- いま -->
+  <div class="case now" id="now">
+    <h2>いま <small>帯は青のまま。変わるのは右端の店舗ボタンと、帯の下の3pxの線だけ（見落としやすい）</small></h2>
+    <div class="hd">
+      <span class="logo">Hub a Nice day</span><span class="chip">v3.62.5</span><span class="chip">● 接続済</span>
+      <span class="sp"></span>
+      <span class="hbtn">⛶ 全画面</span><span class="hbtn light" style="color:#1d4ed8">江 江川京志</span>
+      <span class="hbtn">🕒 復旧</span><span class="hbtn">💾 控え</span><button class="x">✕</button>
+    </div>
+    <div class="nav">
+      <span class="nb">カレンダー</span><span class="nb on">スケジュール</span><span class="nb">代車管理</span>
+      <span class="nb r">検索</span><span class="nb g">顧客リスト</span><span class="nb">料金表</span><span class="nb p">車両管理</span>
+      <span class="stores"><span class="stb honten-only on">本店 🏠</span><span class="stb honten-only">三田店</span>
+        <span class="stb sanda-only">本店</span><span class="stb sanda-only on">三田店 🏪</span></span>
+    </div>
+    <div class="body">
+      <div class="datebar"><span class="mini">«</span><span class="dd">10月14日（水）</span><span class="mini">»</span></div>
+      <div class="tools"><span class="tb">▲ 畳む</span><span class="tb">入庫制限</span><span class="tb">印刷</span></div>
+      <table><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>入庫</th></tr>
+        <tr><td>1</td><td>山田　太郎</td><td>ワゴンR</td><td>マッハ車検</td><td>ハスラー</td><td>09:00</td></tr></table>
+    </div>
+  </div>
+
+  <!-- A案 -->
+  <div class="case a">
+    <h2>A案：帯だけ店舗色 <span class="pick">いちばん控えめ</span><small>ヘッダーとボタンの行が店の色になる。中のボタンは今までどおり</small></h2>
+    <div class="hd">
+      <span class="logo">Hub a Nice day</span><span class="chip">v3.62.5</span><span class="chip">● 接続済</span>
+      <span class="sp"></span>
+      <span class="hbtn">⛶ 全画面</span><span class="hbtn light" style="color:var(--st)">江 江川京志</span>
+      <span class="hbtn">🕒 復旧</span><span class="hbtn">💾 控え</span><button class="x">✕</button>
+    </div>
+    <div class="nav">
+      <span class="nb">カレンダー</span><span class="nb on">スケジュール</span><span class="nb">代車管理</span>
+      <span class="nb r">検索</span><span class="nb g">顧客リスト</span><span class="nb">料金表</span><span class="nb p">車両管理</span>
+      <span class="stores"><span class="stb honten-only on">本店 🏠</span><span class="stb honten-only">三田店</span>
+        <span class="stb sanda-only">本店</span><span class="stb sanda-only on">三田店 🏪</span></span>
+    </div>
+    <div class="body">
+      <div class="datebar"><span class="mini">«</span><span class="dd">10月14日（水）</span><span class="mini">»</span></div>
+      <div class="tools"><span class="tb">▲ 畳む</span><span class="tb">入庫制限</span><span class="tb">印刷</span></div>
+      <table><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>入庫</th></tr>
+        <tr><td>1</td><td>山田　太郎</td><td>ワゴンR</td><td>マッハ車検</td><td>ハスラー</td><td>09:00</td></tr></table>
+    </div>
+    <div class="note">帯（ヘッダーとボタンの行）だけが店の色。<b>パッと見て店が分かる</b>。中のボタンの色は今までと同じなので、慣れた見え方が崩れません。</div>
+  </div>
+
+  <!-- B案 -->
+  <div class="case b">
+    <h2>B案：操作ボタン周りも店舗色 <span class="pick">ご要望に一番近い</span><small>帯に加えて、選択中のボタン・日付・小さい操作ボタン・表の見出しも店の色</small></h2>
+    <div class="hd">
+      <span class="logo">Hub a Nice day</span><span class="chip">v3.62.5</span><span class="chip">● 接続済</span>
+      <span class="sp"></span>
+      <span class="hbtn">⛶ 全画面</span><span class="hbtn light" style="color:var(--st)">江 江川京志</span>
+      <span class="hbtn">🕒 復旧</span><span class="hbtn">💾 控え</span><button class="x">✕</button>
+    </div>
+    <div class="nav">
+      <span class="nb">カレンダー</span><span class="nb on">スケジュール</span><span class="nb">代車管理</span>
+      <span class="nb r">検索</span><span class="nb g">顧客リスト</span><span class="nb">料金表</span><span class="nb p">車両管理</span>
+      <span class="stores"><span class="stb honten-only on">本店 🏠</span><span class="stb honten-only">三田店</span>
+        <span class="stb sanda-only">本店</span><span class="stb sanda-only on">三田店 🏪</span></span>
+    </div>
+    <div class="body">
+      <div class="datebar"><span class="mini">«</span><span class="dd">10月14日（水）</span><span class="mini">»</span></div>
+      <div class="tools"><span class="tb">▲ 畳む</span><span class="tb">入庫制限</span><span class="tb">印刷</span></div>
+      <table><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>入庫</th></tr>
+        <tr><td>1</td><td>山田　太郎</td><td>ワゴンR</td><td>マッハ車検</td><td>ハスラー</td><td>09:00</td></tr></table>
+    </div>
+    <div class="note">帯＋<b>いま開いている画面のボタン</b>＋<b>日付</b>＋<b>畳む／入庫制限／印刷</b>＋<b>表の見出し</b>まで店の色。<br>
+      <b>どの店の画面を触っているか取り違えにくい</b>のが利点。検索（赤）・顧客リスト（緑）など<b>役割の色はそのまま</b>残します。<br>※三田店は帯が赤になるので、<b>右上の ✕ と「検索」が帯に溶けます</b>。✕ には白い縁をつけてあります（上で確認できます）。</div>
+  </div>
+
+  <!-- C案 -->
+  <div class="case c">
+    <h2>C案：いまの線を太くするだけ <small>帯は青のまま。下の線を3px→5pxにして、画面の内枠と小さい操作ボタンも店の色</small></h2>
+    <div class="hd">
+      <span class="logo">Hub a Nice day</span><span class="chip">v3.62.5</span><span class="chip">● 接続済</span>
+      <span class="sp"></span>
+      <span class="hbtn">⛶ 全画面</span><span class="hbtn light" style="color:#1d4ed8">江 江川京志</span>
+      <span class="hbtn">🕒 復旧</span><span class="hbtn">💾 控え</span><button class="x">✕</button>
+    </div>
+    <div class="nav">
+      <span class="nb">カレンダー</span><span class="nb on">スケジュール</span><span class="nb">代車管理</span>
+      <span class="nb r">検索</span><span class="nb g">顧客リスト</span><span class="nb">料金表</span><span class="nb p">車両管理</span>
+      <span class="stores"><span class="stb honten-only on">本店 🏠</span><span class="stb honten-only">三田店</span>
+        <span class="stb sanda-only">本店</span><span class="stb sanda-only on">三田店 🏪</span></span>
+    </div>
+    <div class="body">
+      <div class="datebar"><span class="mini">«</span><span class="dd">10月14日（水）</span><span class="mini">»</span></div>
+      <div class="tools"><span class="tb">▲ 畳む</span><span class="tb">入庫制限</span><span class="tb">印刷</span></div>
+      <table><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>入庫</th></tr>
+        <tr><td>1</td><td>山田　太郎</td><td>ワゴンR</td><td>マッハ車検</td><td>ハスラー</td><td>09:00</td></tr></table>
+    </div>
+    <div class="note"><b>いまの作りの延長</b>です（帯の下の線はすでに店の色で引いてあります）。変化がいちばん小さい反面、<b>やはり見落としやすい</b>です。</div>
+  </div>
+
+  <div class="case"><h2>※ これはモックです</h2>
+    <div class="note">名前はダミーです。<b>テスト版は両店ともオレンジ</b>が仕様なので、色の切り替わりは<b>本番でだけ</b>見えます。
+      この点は今までのスマホ版と同じ決まりです。<br>
+      スマホ版は<b>すでに店舗色</b>（本店＝青／三田店＝赤）になっているので、A案かB案にすると<b>PCとスマホの見え方がそろいます</b>。</div>
+  </div>
+</div>
+<script>
+  var b=document.body, h=document.getElementById('h'), s=document.getElementById('s');
+  function set(st){ b.className=st; h.className='sw'+(st==='honten'?' on':''); s.className='sw'+(st==='sanda'?' on':''); }
+  h.onclick=function(){set('honten')}; s.onclick=function(){set('sanda')};
+</script>
+</body>
+</html>
