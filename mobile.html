@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791864193374';
+  window.__APP_BUILD='build-1791943862667';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.61.1';
+const MOBILE_VERSION='3.62';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3879,9 +3879,14 @@ const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,sched
 };
 
 const LOANER_SECTION_COLORS={honten:'#1d4ed8',sanda:'#dc2626',rental:'#7c3aed'};
+// 代車・レンタカー名の比べ方（2026-10-14）。**鍵マークと空白は無視する。**
+//   レンタカーを付けると予約カードには「🔑 ノマド (3101)」と書かれるが、代車管理の一覧は「ノマド (3101)」。
+//   そのまま文字で比べるとレンタカーが全部「車名ちがい」になる（本番で確認）。PC版と同じ決まり。
+const sameCarLabel = (a, b) => String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
+                           === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
 const LOANER_PRESS_MS=200;   // ★長押しと判定する時間（2026-10-07 ユーザー指示：0.2秒で反応させる）
 const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,loanerCarsS,vsId,
-                   inspData,schedData,onMoveLoaner,onMoveRental,onFixSync,onDropSync})=>{
+                   inspData,schedData,schedOther,onMoveLoaner,onMoveRental,onFixSync,onDropSync})=>{
   const today=new Date();
   // ★表示は「月ごと」ではなく起点日からの連続49日（2026-07-30 ユーザー要望）。
   //   既定の起点＝本日の3日前 → 本日が左から4列目に出て、左スワイプ（横スクロール）で
@@ -3939,12 +3944,31 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
   const _todayN=(()=>{const n=new Date();return n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();})();
   const resStartN=r=>r?(r.fy*10000+(r.fm+1)*100+r.fd):0;
   // bookingKey からスケジュールの行を引く（入庫時間とズレのチェックに使う）
-  const bkRowM=(bk)=>{
-    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+  const otherStoreId=(vsId==='honten')?'sanda':'honten';
+  const bkRowM=(bk,who)=>{
+    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
     if(!m)return null;
-    if(m[1]==='insp'){const rows=(inspData||{})[m[2]]||[];return{kind:'insp',dk:m[2],at:m[3],row:rows[Number(m[3])]||null};}
-    const day=(schedData||{})[m[2]]||{};
-    return {kind:'sched',dk:m[2],at:m[3],row:day[m[3]]||null};
+    if(m[1]==='insp'){
+      const rows=(inspData||{})[m[2]]||[];
+      const row=rows[Number(m[3])]||null;
+      if(row&&row.name)return{kind:'insp',dk:m[2],at:m[3],row,bk,store:null};
+      // ★行番号がずれただけ＝同じ日に同じ氏名の車検があればそれ（2026-10-14）
+      const i=who?rows.findIndex(r=>r&&r.name===who):-1;
+      if(i>=0)return{kind:'insp',dk:m[2],at:String(i),row:rows[i],bk:'insp-'+m[2]+'-'+i,store:null};
+      return{kind:'insp',dk:m[2],at:m[3],row:null};
+    }
+    // ★整備は**両店**を見る。代車は店をまたいで貸すので、見ている店だけ見ると他店の予約が「無い」になる。
+    const mine=((schedData||{})[m[2]]||{})[m[3]]||null;
+    if(mine)return{kind:'sched',dk:m[2],at:m[3],row:mine,bk,store:vsId};
+    const oth=((schedOther||{})[m[2]]||{})[m[3]]||null;
+    if(oth)return{kind:'sched',dk:m[2],at:m[3],row:oth,bk,store:otherStoreId};
+    // ★枠の名前がずれただけ＝同じ日に同じ氏名の整備があればそれ
+    for(const pair of [[schedData,vsId],[schedOther,otherStoreId]]){
+      const day=(pair[0]||{})[m[2]]||{};
+      const k=who?Object.keys(day).find(x=>day[x]&&day[x].name===who):null;
+      if(k)return{kind:'sched',dk:m[2],at:k,row:day[k],bk:'sched-'+m[2]+'-'+k,store:pair[1]};
+    }
+    return{kind:'sched',dk:m[2],at:m[3],row:null};
   };
   const bkEntryMinM=(bk)=>{
     const f=bkRowM(bk); if(!f||!f.row)return null;
@@ -4070,7 +4094,8 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
         Object.values(resObj[cid]||{}).forEach(r=>{
           if(!r||!r.bookingKey)return;
           seen[r.bookingKey]=true;
-          const f=bkRowM(r.bookingKey), want=carLbl(car);
+          const f=bkRowM(r.bookingKey,r.user), want=carLbl(car);
+          if(f&&f.bk)seen[f.bk]=true;   // 枠名・行番号がずれていても「対応する予約はある」
           if(!f||!f.row||!f.row.name){
             out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,resId:r.id,
               dk:(r.fy!=null?(r.fy+'-'+(r.fm+1)+'-'+r.fd):''),endNum:endOf(r),
@@ -4078,9 +4103,9 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
             return;
           }
           const have=kind==='rental'?(f.row.rentalLabel||''):(f.row.loaner||'');
-          if(String(have).trim()!==String(want).trim())
-            out.push({kind,type:'label',bk:r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,resId:r.id,
-              dk:f.dk,at:f.at,rowKind:f.kind,endNum:endOf(r),text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
+          if(!sameCarLabel(have,want))
+            out.push({kind,type:'label',bk:f.bk||r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,resId:r.id,
+              dk:f.dk,at:f.at,rowKind:f.kind,rowStore:f.store,endNum:endOf(r),text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
         });
       });
     };
@@ -6145,7 +6170,9 @@ const App=()=>{
   //   期間はそのまま、別の車へ移すだけ。**予約カードの代車名も必ず一緒に書き換える**。
   const carLabelM=(c)=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
   // 予約カード側の代車名を書き換える（氏名が一致する行にだけ書く＝取り違え防止）
-  const writeCarLabel=async(bookingKey,user,patch)=>{
+  // ★第4引数 store：その行がどの店の整備か（2026-10-14）。
+  //   代車は店をまたいで貸すので、見ている店の整備とはかぎらない。間違えると別の店の枠へ書いてしまう。
+  const writeCarLabel=async(bookingKey,user,patch,store)=>{
     const m=String(bookingKey||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
     if(!m)return;
     const dk=m[2], at=m[3];
@@ -6156,12 +6183,13 @@ const App=()=>{
         rows[i]={...rows[i],...patch}; out[dk]=rows; return out;
       },v=>setInspData(v),null,true);
     }else{
-      const key=storKey('sched',vsId);
-      await writeShared(key,vsId==='honten'?schedDataH:schedDataS,base=>{
+      const sid=store||vsId;
+      const key=storKey('sched',sid);
+      await writeShared(key,sid==='honten'?schedDataH:schedDataS,base=>{
         const out={...(base||{})}; const day={...(out[dk]||{})};
         if(!day[at]||!day[at].name||day[at].name!==user)return out;
         day[at]={...day[at],...patch}; out[dk]=day; return out;
-      },v=>(vsId==='honten'?setSchedDataH(v):setSchedDataS(v)),null,true);
+      },v=>(sid==='honten'?setSchedDataH(v):setSchedDataS(v)),null,true);
     }
   };
   const moveResCar=async(isRental,fromCar,toCar,res)=>{
@@ -6197,7 +6225,7 @@ const App=()=>{
     if(!it||it.type!=='label')return;
     const isR=it.kind==='rental';
     const patch=isR?{rentalLabel:it.want,rentalCarId:it.carId}:{loaner:it.want,loanerId:Number(it.carId)};
-    try{ await writeCarLabel(it.bk,it.user,patch); }
+    try{ await writeCarLabel(it.bk,it.user,patch,it.rowStore); }
     catch(e){ alert('直せませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e)); }
   },[hotInsp,schedDataH,schedDataS,vsId]);
 
@@ -6226,7 +6254,7 @@ const App=()=>{
         },apply,null,true);
       }else if(it.type==='bar'){
         const isR=it.kind==='rental';
-        await writeCarLabel(it.bk,it.user,isR?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null});
+        await writeCarLabel(it.bk,it.user,isR?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null},it.rowStore);
       }
     }catch(e){ alert('消せませんでした。'+String.fromCharCode(10)+String((e&&e.message)||e)); }
   },[vsId,rentalResData,loanerResH,loanerResS,hotInsp,schedDataH,schedDataS]);
@@ -6767,6 +6795,7 @@ const App=()=>{
         {tab==='loaner'&&<LoanerView loanerResH={loanerResH} loanerResS={loanerResS} rentalResData={rentalResData} rentalCars={rentalCars}
           loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId}
           inspData={inspData} schedData={vsId==='honten'?schedDataH:schedDataS}
+          schedOther={vsId==='honten'?schedDataS:schedDataH}
           onMoveLoaner={moveLoanerCarM} onMoveRental={moveRentalCarM} onFixSync={fixSyncM} onDropSync={dropSyncM}/>}
         {tab==='cust'&&<CustSheet embedded names={cfNames} cache={cfCache} busy={cfBusy} loadingName={cfLoadingName}
           cfx={cfx} cfxBusy={cfBusy&&!cfx} initCust={custSheet&&custSheet.cust||null} initMode={custSheet&&custSheet.mode||'find'}

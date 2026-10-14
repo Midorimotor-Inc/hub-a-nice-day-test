@@ -310,6 +310,48 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     t('過去の分は消していない（貸出の履歴を守る）', !!(Lb && Lb['4'] && Lb['4'].rp));
   }
 
+  head('⑦ ズレでないものをズレにしない（2026-10-14 本番報告：14件出たが実際はズレていない）');
+  {
+    // 車は CARS のとおり： 1=ハスラー(7074) 2=スペーシア(8967) 3=ワゴンR(3503) 4=アルト(1188)
+    const A = d(10), B = d(11), C = d(12);
+    const get = k => page.evaluate(x => window.__fakeFb.get(x), k);
+    const set2 = (k, v) => page.evaluate(([kk, vv]) => { window.__fakeFb.set(kk, vv); window.__fakeFb.emit(kk, vv); }, [k, v]);
+    const addBar = async (carId, key, rec) => {
+      const cur = (await lres()) || {};
+      await set2(STOR + 'honten-lres', Object.assign({}, cur, { [carId]: Object.assign({}, cur[carId] || {}, { [key]: rec }) }));
+    };
+    const addSched = async (key, dkey, slot, row) => {
+      const cur = (await get(STOR + key)) || {};
+      await set2(STOR + key, Object.assign({}, cur, { [dkey]: Object.assign({}, cur[dkey] || {}, { [slot]: row }) }));
+    };
+    const badge = () => page.evaluate(() => (document.body.innerText.match(/スケジュール(と一致|とズレ[^\n]*)/) || [''])[0]);
+    t('下準備：いまは「一致」', await seeText(page, 'スケジュールと一致', 8000), await badge());
+
+    // ① 他店（三田店）の整備に紐づく貸出 … 代車は店をまたいで貸すのでズレではない
+    await addSched('sanda-sched', dk(A), '09:00', { name: '三田　花子', carType: 'タント', loaner: 'ハスラー (7074)', loanerId: 1 });
+    await addBar('1', 'x1', { id: 7001, user: '三田　花子', fy: A.y, fm: A.m, fd: A.d, ty: A.y, tm: A.m, td: A.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'sched-' + dk(A) + '-09:00' });
+    await page.waitForTimeout(1600);
+    t('★他店の整備に紐づく貸出はズレにしない', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
+    // ② レンタカーの予約カードは「🔑 ノマド (3101)」と鍵マーク付き … 代車管理は鍵マーク無し
+    await addSched('honten-sched', dk(B), '10:00', { name: '鍵山　太郎', carType: 'アルト', rentalLabel: '🔑 ノマド (3101)', rentalCarId: 101 });
+    await set2(STOR + 'rres', { '101': { y1: { id: 7002, user: '鍵山　太郎', fy: B.y, fm: B.m, fd: B.d, ty: B.y, tm: B.m, td: B.d, carName: 'ノマド', carNum: '3101', bookingKey: 'sched-' + dk(B) + '-10:00' } } });
+    await page.waitForTimeout(1600);
+    t('★レンタカーの鍵マークは車名ちがいにしない', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
+    // ③ 枠の名前がずれただけ … 同じ日・同じ氏名なら見つける（しかも二重に数えない）
+    await addSched('honten-sched', dk(C), '13:00', { name: '枠田　ずれ', carType: 'ワゴンR', loaner: 'アルト (1188)', loanerId: 4 });
+    await addBar('4', 'z1', { id: 7003, user: '枠田　ずれ', fy: C.y, fm: C.m, fd: C.d, ty: C.y, tm: C.m, td: C.d, carName: 'アルト', carNum: '1188', bookingKey: 'sched-' + dk(C) + '-午前' });
+    await page.waitForTimeout(1600);
+    t('★枠の名前がずれていても同じ日の同じ氏名で見つける', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
+    // ④ 本物のズレ（カードの代車名が空）はちゃんと出す。しかも1件だけ（帯とカードで二重に数えない）
+    await addSched('honten-sched', dk(C), '13:00', { name: '枠田　ずれ', carType: 'ワゴンR', loaner: '', loanerId: null });
+    await page.waitForTimeout(1600);
+    t('★本物のズレ（カードの代車名が空）は見逃さない', await seeText(page, 'スケジュールとズレ', 6000), await badge());
+    t('数は1件だけ（帯とカードで二重に数えない）', /スケジュールとズレ 1件/.test(await badge()), await badge());
+  }
+
   head('④ 代車 ⇄ レンタカーはまたがない（作りの確認）');
   const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
   t('入れ替えは同じ表の中だけ（kind が違えば受け付けない）', SRC.indexOf("if(!mvDrag||mvDrag.kind!==kind)return;") > 0);
