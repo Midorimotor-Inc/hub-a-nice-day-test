@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -386,6 +386,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   マイスケジュールを入れないこと・失敗を残すこと・最後の控えを出すこと を見張る。
 - **教訓：`fbSnapTick` のように握りつぶす catch は、失敗が誰にも見えない。** 時点保存が作られていないことに2週間気づけなかった。
   画面のどこかに「最後の時点保存はいつか」を出す／失敗を `diag-*` に残す、のどちらかを入れること。
+### 【重大なバグ】帯を消すと「別人」の代車名を消していた（v3.62.3・2026-10-14）
+- ユーザー報告「代車のズレ件数がどんどん増えている」「代車管理にあるのにスケジュール側が空は絶対ありえない」。
+- **件数が増えるのは古い画面のせい**（整備の時間を動かすたび、古い判定は2件ずつ積み上げる）。**実データは本店1件・三田店0件**だった。
+  → **まず配信済みの版をブラウザが持っているか確認すること**（右上のバージョン）。
+- **本物のバグはこちら**：`deleteLoanerRes`（代車管理の 🗑）が予約カードの代車名を消す時、
+  **氏名を確かめず `bookingKey` の行番号だけで消していた**。行番号は予約を足し引きするとずれるので、
+  **まったく別の人の代車名を消していた**（検査で実証：行0の別人が空になり、行1の本人は残った）。
+  さらに ② **車検（`insp-`）にしか効かない**（整備はカードに名前が残る）③ **レンタカーは消す処理そのものが無い**。
+  これが「カードにあるのに帯が無い」「帯があるのにカードが空」の出どころ。
+- 直し：`clearCarLabelOnDelete(res,isRental)` に一本化（`deleteLoanerRes` と `deleteRentalRes` の両方から呼ぶ）。
+  ・**氏名が一致する行にだけ書く**（行番号が合わなければ同じ日の同じ氏名を探す）
+  ・**整備にも効かせる。しかも両店を見る**（代車は店をまたいで貸す）
+  ・**代車の削除は `loaner` だけ、レンタカーの削除は `rentalLabel` だけ**を消す（取り違え防止）
+  ・`clearCarLabelOnDelete` は **`deleteRentalRes` より前に定義する**（後ろだと「初期化前に使えない」で白画面）
+- 検査は `node loaner_delete_test.js`（11件）。**本物のブラウザで代車管理の 🗑 を押し**、別人の代車名が消えないことを見る。
+  **直す前のファイルでは8件落ちる**（別人が空になり、本人が残る）ことを確認済み。
+- **教訓：`bookingKey` の行番号・枠名は当てにならない。書き込む時は必ず氏名で照合すること。**
+  この決まりは「直す」「入れ替え」「ズレ判定」には入れてあったが、**削除の経路だけ抜けていた**。
 ### 【落とし穴】数字欄の inputMode は日本語入力を解除する（v3.61.1・2026-10-13）
 - ユーザー報告「**予約カード入力するときなど良く英数字になる**のはPCの設定ですか？出来ればひらがなに設定したい」。
 - **PCの設定ではなくアプリ側**。Windows は `inputMode="numeric"` / `type="number"` / `type="tel"` の欄に入ると**IMEを英数に切り替え、

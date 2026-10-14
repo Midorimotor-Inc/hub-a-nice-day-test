@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791951020093';
+    window.__APP_BUILD='build-1791959431899';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.62.2';
+const APP_VERSION = '3.62.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3033,7 +3033,7 @@ const fbSnapKeyList = async () => {
   const set = {};
   const add = k => {
     k = String(k || ''); if (!k || k.indexOf(STOR) !== 0) return;
-    if (STOR === 'hub-v8-' && k.indexOf('hub-v8-dev-') === 0) return;   // 本番のときは DEV のキーを除く
+    if (STOR === 'hub-v8-' && k.indexOf(STOR + 'dev-') === 0) return;   // 本番のときは DEV のキーを除く
     if (k.indexOf(STOR + 'myprv-') === 0) return;                        // 本人しか読めない（入れない）
     if (k === STOR + 'snap-index' || k === STOR + 'auth-codes' || k.indexOf('__chunk') >= 0) return;
     if (k.indexOf(STOR + 'diag-') === 0) return;   // 診断の記録は控えに入れない
@@ -11658,7 +11658,51 @@ function AppInner() {
       {label:'レンタカー予約',getLocal:()=>rresRef.current,...(opts||{})}),
     [persistRes,updateLocalRres]);
   const addRentalRes    = useCallback((carId,rec) => persistRres(base=>putResRec(base,carId,String(rec.id),rec),back=>resHasRec(back,carId,rec.id),{verb:'登録',name:rec?.user}),[persistRres]);
-  const deleteRentalRes = useCallback((carId,resId) => persistRres(base=>resHasRec(base,carId,resId)?removeResById(base,carId,resId):undefined,back=>!resHasRec(back,carId,resId),{verb:'削除'}),[persistRres]);
+  // ★帯を消したら、予約カードの代車名も消す（2026-10-14 に作り直し）。
+  //   それまでの欠陥：① **氏名を確かめず行番号だけで消していた**（行がずれていると**別人の代車名を消す**）
+  //   ② 車検（insp-）にしか効かず、整備（sched-）はカードに名前が残った
+  //   ③ レンタカーは消す処理そのものが無かった
+  //   ①が「代車管理にあるのにカードが空」「カードにあるのに帯が無い」の出どころ。
+  //   **必ず氏名が一致する行にだけ書くこと**（この決まりは「直す」「入れ替え」と同じ）。
+  const clearCarLabelOnDelete=useCallback((res,isRental)=>{
+    if(!res||!res.bookingKey)return;
+    const who=res.user||'';
+    const patch=isRental?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null};
+    const has=r=>!!(isRental?(r.rentalLabel||r.rentalCarId):(r.loaner||r.loanerId));
+    const m=String(res.bookingKey).match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
+    if(!m||!who)return;
+    const dk=m[2], at=m[3];
+    if(m[1]==='insp'){
+      persistInsp(
+        base=>{
+          const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
+          const rows=[...(data[dk]||[])];
+          const i=(rows[Number(at)]&&rows[Number(at)].name===who)?Number(at):rows.findIndex(r=>r&&r.name===who);
+          if(i<0||!rows[i]||!has(rows[i]))return undefined;   // 別人の行／もう空なら触らない
+          rows[i]={...rows[i],...patch}; data[dk]=rows; return data;
+        },
+        back=>{ const rows=(back&&back[dk])||[]; const r=rows.find(x=>x&&x.name===who); return !r||!has(r); },
+        {alert:false}
+      );
+      return;
+    }
+    // 整備：**両店**を見て、氏名が一致する枠だけ消す（代車は店をまたいで貸す）
+    [['honten',setSchedDataH],['sanda',setSchedDataS]].forEach(pair=>{
+      pair[1](prev=>{
+        const out={...(prev||{})}; const day={...(out[dk]||{})};
+        let k=(day[at]&&day[at].name===who)?at:Object.keys(day).find(x=>day[x]&&day[x].name===who);
+        if(!k||!day[k]||!has(day[k]))return prev;
+        day[k]={...day[k],...patch}; out[dk]=day; return out;
+      });
+    });
+  },[persistInsp,setSchedDataH,setSchedDataS]);
+  // ★レンタカーの帯を消した時も予約カードの「🔑 …」を消す（2026-10-14。それまで消していなかった）
+  const deleteRentalRes = useCallback((carId,resId) => {
+    const rec=Object.values(_resObj(rresRef.current)[carId]||{}).find(r=>r&&r.id===resId);
+    const p=persistRres(base=>resHasRec(base,carId,resId)?removeResById(base,carId,resId):undefined,back=>!resHasRec(back,carId,resId),{verb:'削除'});
+    clearCarLabelOnDelete(rec,true);
+    return p;
+  },[persistRres,clearCarLabelOnDelete]);
   // ★編集は savedAt を打ち直す（古いキャッシュに上書きされないため。sharedRecTs 参照）
   const replaceRentalRes = useCallback((carId,resId,newRec0) => { const newRec={...(newRec0||{}),savedAt:Date.now()}; return persistRres(base=>resHasRec(base,carId,resId)?patchResRec(base,carId,resId,newRec):undefined,back=>{const r=Object.values(_resObj(back)[carId]||{}).find(x=>x&&x.id===resId);return !!r&&Object.keys(newRec||{}).every(k=>JSON.stringify(r[k])===JSON.stringify(newRec[k]));},{verb:'期間の変更',name:newRec?.user}); },[persistRres]);
   // ★「この端末がたった今登録した代車」を覚えておく。光らせる根拠はこれだけで、
@@ -13635,31 +13679,8 @@ function AppInner() {
       back=>!resHasRec(back,cid,rid),
       {verb:'削除',name:deletedRes?.user}
     );
-    // inspDataの該当行のloaner/loanerId/rentalLabel/rentalCarIdもクリア
-    if(deletedRes?.bookingKey){
-      const bk=deletedRes.bookingKey;
-      // bookingKey形式: "insp-2026-5-18-2"
-      const m=bk.match(/^insp-(.+)-(\d+)$/);
-      if(m){
-        const dk=m[1], idx=Number(m[2]);
-        // insp側のloanerフィールドクリアもサーバー最新値ベース（第2層）。bookingKeyは位置(idx)を
-        // 指すのでidxで対象行を特定する。失敗しても軽微（代車ラベルが残るだけ）なのでアラートは出さない。
-        persistInsp(
-          base=>{
-            const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
-            const rows=[...(data[dk]||[])];
-            if(rows[idx]&&(rows[idx].loaner||rows[idx].loanerId)){
-              rows[idx]={...rows[idx],loaner:'',loanerId:null};
-              data[dk]=rows;
-            }
-            return data;
-          },
-          back=>{ const rows=(back&&back[dk])||[]; return !rows[idx]||!(rows[idx].loaner||rows[idx].loanerId); },
-          {alert:false}
-        );
-      }
-    }
-  },[persistLres,persistInsp,loanerRes]);
+    clearCarLabelOnDelete(deletedRes,false);
+  },[persistLres,loanerRes,clearCarLabelOnDelete]);
   // 「↶ 戻す」と「最適化の適用」は代車予約を丸ごと差し替える操作なので、mutate はサーバー最新値を
   // 見ずにスナップショットをそのまま返す（＝意図した通りの一括差し替え）。ただし書きっぱなしにはせず
   // 読み返し検証は通す（着地しなければアラート＋メール通知）。

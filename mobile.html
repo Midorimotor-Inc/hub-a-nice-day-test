@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791951020093';
+  window.__APP_BUILD='build-1791959431899';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.62.2';
+const MOBILE_VERSION='3.62.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -843,7 +843,7 @@ const fbSnapKeyList = async () => {
   const set = {};
   const add = k => {
     k = String(k || ''); if (!k || k.indexOf(STOR) !== 0) return;
-    if (STOR === 'hub-v8-' && k.indexOf('hub-v8-dev-') === 0) return;   // 本番のときは DEV のキーを除く
+    if (STOR === 'hub-v8-' && k.indexOf(STOR + 'dev-') === 0) return;   // 本番のときは DEV のキーを除く
     if (k.indexOf(STOR + 'myprv-') === 0) return;                        // 本人しか読めない（入れない）
     if (k === STOR + 'snap-index' || k === STOR + 'auth-codes' || k.indexOf('__chunk') >= 0) return;
     if (k.indexOf(STOR + 'diag-') === 0) return;   // 診断の記録は控えに入れない
