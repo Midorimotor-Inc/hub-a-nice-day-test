@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791948227213';
+    window.__APP_BUILD='build-1791951020093';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.62.1';
+const APP_VERSION = '3.62.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3012,17 +3012,73 @@ const fbSnapIdx = () => fbDb.collection('snapidx').doc(STOR);
 const fbSnapDoc = id => fbDb.collection('snaps').doc(id);
 const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
 // この環境の全キーを読む（cf-* や insp-arch も含む。本番のときは DEV のキーを除く）。{キー: JSON文字列}
-const fbSnapReadAll = async () => {
-  const FP = firebase.firestore.FieldPath.documentId();
-  const q = await fbDb.collection('kv').where(FP, '>=', STOR).where(FP, '<', STOR + '\uf8ff').get();
-  const out = {};
-  q.forEach(d => {
-    const k = d.id;
-    if (STOR === 'hub-v8-' && k.indexOf(STOR + 'dev-') === 0) return;   // 本番のときは DEV のキーを除く
+// ★kv は「まとめ読み（クエリ）」しない（2026-10-14・ユーザー決定）。
+//   ルールの kv はキーの名前を見る書き方（key.matches(...)）なので、Firestore は **クエリを一切許可できない**
+//   （1件ずつの取得だけ通る）。そのため以前はここが必ず失敗し、**時点保存が 2026-09-30 から2週間
+//   作られていなかった**。しかも fbSnapTick が catch で握りつぶしていたので誰も気づけなかった。
+//   キーの集め方は3つ：
+//     ① 決まったキー（下の表）
+//     ② 索引から広がるキー（顧客ファイル／検索の索引／車検証の写真）
+//     ③ **前回の控えに入っていたキー**（snaps/{id}/kv はルールにキー名の条件が無いので一覧を取れる）
+//        ＝一度でも控えに入ったキーは以後ずっと拾える（取りこぼしが自然に直る）
+//   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
+//   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
+const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','memoItems',
+  'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
+  'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
+const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
+  'staff-v2','cars','schedRestrictions'];
+const fbSnapKeyList = async () => {
+  const set = {};
+  const add = k => {
+    k = String(k || ''); if (!k || k.indexOf(STOR) !== 0) return;
+    if (STOR === 'hub-v8-' && k.indexOf('hub-v8-dev-') === 0) return;   // 本番のときは DEV のキーを除く
+    if (k.indexOf(STOR + 'myprv-') === 0) return;                        // 本人しか読めない（入れない）
     if (k === STOR + 'snap-index' || k === STOR + 'auth-codes' || k.indexOf('__chunk') >= 0) return;
-    const v = (d.data() || {}).v;
-    if (typeof v === 'string' && v && v !== 'null') out[k] = v;
-  });
+    if (k.indexOf(STOR + 'diag-') === 0) return;   // 診断の記録は控えに入れない
+    set[k] = 1;
+  };
+  SNAP_KEYS_COMMON.forEach(b => add(STOR + b));
+  ['honten', 'sanda'].forEach(st => SNAP_KEYS_STORE.forEach(b => add(STOR + st + '-' + b)));
+  const readJson = async k => {
+    try { const s = await fbDoc(k).get(); const v = s.exists ? (s.data() || {}).v : null;
+      return (typeof v === 'string' && v && v !== 'null') ? JSON.parse(v) : null; } catch (e) { return null; }
+  };
+  try {   // ② 索引から広がるキー
+    const cfi = await readJson(STOR + 'cf-index');
+    const names = (Array.isArray(cfi) ? cfi : []).map(f => (f && f.name) || f).filter(Boolean);
+    for (const nm of names) {
+      add(STOR + 'cf-' + nm + '-index');
+      const fi = await readJson(STOR + 'cf-' + nm + '-index');
+      const n = Math.max(1, Number(fi && fi.chunks) || 1);
+      for (let i = 0; i < n; i++) add(STOR + 'cf-' + nm + '-chunk-' + i);
+    }
+    const si = await readJson(STOR + 'cf-search-index');
+    for (let i = 0; i < (Number(si && si.chunks) || 0); i++) add(STOR + 'cf-search-chunk-' + i);
+    const vl = await readJson(STOR + 'vehicles-v2');
+    (Array.isArray(vl) ? vl : []).forEach(v => ((v && Array.isArray(v.docs)) ? v.docs : []).forEach(dd => {
+      if (!dd || !dd.id) return;
+      add(STOR + 'vehdoc-' + dd.id + '-index');
+      for (let i = 0; i < (Number(dd.chunks) || 0); i++) add(STOR + 'vehdoc-' + dd.id + '-chunk-' + i);
+    }));
+  } catch (e) { console.warn('[SNAP] 索引からキーを広げられません', e && e.message); }
+  try {   // ③ 前回の控えに入っていたキー
+    const list = await fbSnapList();
+    if (list.length) { const sub = await fbSnapDoc(list[0].file).collection('kv').get(); sub.forEach(d => add(d.id)); }
+  } catch (e) { console.warn('[SNAP] 前回のキー一覧を読めません', e && e.message); }
+  return Object.keys(set);
+};
+const fbSnapReadAll = async () => {
+  const keys = await fbSnapKeyList();
+  const out = {};
+  for (let i = 0; i < keys.length; i += 20) {        // 1件ずつの取得を20本ずつ並べて読む
+    const got = await Promise.all(keys.slice(i, i + 20).map(async k => {
+      try { const s = await fbDoc(k).get(); return [k, s.exists ? (s.data() || {}).v : null]; }
+      catch (e) { return [k, null]; }
+    }));
+    got.forEach(p => { if (typeof p[1] === 'string' && p[1] && p[1] !== 'null') out[p[0]] = p[1]; });
+  }
   return out;
 };
 const snapSummaryOf = data => {
@@ -3191,13 +3247,20 @@ const fbArchiveOldInsp = async () => {
   } catch (e) { console.warn('[SNAP] 仕分けに失敗', e && e.message); }
 };
 let __snapTimer = null;
+// ★失敗を握りつぶさないこと（2026-10-14）。以前はここが `catch (e) {}` だったので、
+//   時点保存が2週間作られていないことに誰も気づけなかった。結果は必ず端末に残す。
+const snapNote = (ok, msg) => {
+  try { localStorage.setItem(STOR + 'snap-last', JSON.stringify({ at: Date.now(), ok: !!ok, err: String(msg || '') })); } catch (e) {}
+  if (!ok) console.error('[SNAP] 時点保存ができていません', msg);
+};
 const fbSnapTick = async () => {
   if (!FB_ON || !fbUser || document.visibilityState === 'hidden') return;
   try {
     const d = await fbSnapCreate('daily', '', { sameDay: true });
     if (d) await fbArchiveOldInsp();
     await fbSnapCreate('auto', '', { withinMs: SNAP_AUTO_EVERY_MIN * 60000 });
-  } catch (e) {}
+    snapNote(true, '');
+  } catch (e) { snapNote(false, (e && e.message) || e); }
 };
 if (FB_ON) fbWhenUser(() => { setTimeout(fbSnapTick, 90000); if (!__snapTimer) __snapTimer = setInterval(fbSnapTick, 10 * 60000); });
 
@@ -10919,6 +10982,23 @@ const RestoreModal = memo(({isOpen, onClose, currentUser, inspData})=>{
              : list.length===0 ? <div style={{padding:'20px',textAlign:'center',color:'#94a3b8',fontSize:13}}>保存された時点がまだありません<br/>（{FB_ON?'開いている画面が1時間ごとに自動で貯めます':'30分ごとに自動で貯まります'}）
                   {FB_ON&&allowed&&<div style={{marginTop:10}}><button onClick={makeNow} disabled={making} style={{padding:'7px 14px',borderRadius:8,border:'2px solid #1d4ed8',background:'#eff4ff',color:'#1d4ed8',fontWeight:800,fontSize:12.5,cursor:'pointer'}}>{making?'保存しています…':'今すぐ時点保存を作る'}</button></div>}</div>
              : <>
+                {/* ★最後の控えがいつかを必ず出す（2026-10-14）。
+                    時点保存が 9/30 から2週間止まっていたのに、誰も気づけなかったため。
+                    3日以上あいていたら赤くして、作れていないことが分かるようにする。 */}
+                {(()=>{
+                  const newest=list&&list.length?list[0]:null;
+                  const days=newest?Math.floor((Date.now()-newest.ts)/86400000):null;
+                  const bad=!newest||days>=3;
+                  return (
+                    <div style={{marginBottom:9,padding:'8px 10px',borderRadius:9,fontSize:12,lineHeight:1.8,
+                      background:bad?'#fef2f2':'#ecfdf5',border:'1.5px solid '+(bad?'#fecaca':'#a7f3d0'),color:bad?'#b91c1c':'#047857'}}>
+                      {newest
+                        ?<span><b>{bad?'⚠ ':'✓ '}最後の控え：{newest.tsText||''}</b>{days>0?('（'+days+'日前）'):'（今日）'}
+                          {bad?<span><br/>3日以上あいています。控えは<b>スケジュール画面を開いている間</b>に作られます。
+                            この画面の「＋ 今すぐ時点保存を作る」でも作れます。</span>:null}</span>
+                        :<span><b>⚠ 控えが1つもありません</b><br/>「＋ 今すぐ時点保存を作る」で作ってください。</span>}
+                    </div>);
+                })()}
                 {FB_ON&&allowed&&<button onClick={makeNow} disabled={making} style={{width:'100%',marginBottom:9,padding:'7px 10px',borderRadius:8,border:'2px solid #1d4ed8',background:'#eff4ff',color:'#1d4ed8',fontWeight:800,fontSize:12.5,cursor:'pointer'}}>{making?'保存しています…':'＋ 今すぐ時点保存を作る'}</button>}
                 {autoList.length>0 && <div style={ghd}><span style={{width:7,height:7,borderRadius:'50%',background:'#0f9d58',display:'inline-block'}}/>最近の自動保存（{FB_ON?'1時間ごと':'30分ごと'}）</div>}
                 {autoList.map(e=>(

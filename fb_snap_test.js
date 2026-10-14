@@ -72,6 +72,21 @@ const signedInInit = ([me, stor]) => {
   // 復旧画面
   t('管理者に「復旧」ボタンが出る', await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.innerText.includes('復旧')), null, { timeout: 10000 }).then(() => true).catch(() => false));
   await clickText(page, '復旧');
+  // ★kv を「まとめ読み（クエリ）」しないこと（2026-10-14）。
+  //   ルールの kv はキー名を見る書き方なので Firestore はクエリを許可できず、
+  //   時点保存だけが黙って失敗して 2026-09-30 から2週間作られていなかった。
+  {
+    const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
+    const M = fs.readFileSync(path.join(DIR, 'mobile.html'), 'utf8');
+    const body = (src) => (src.split('const fbSnapReadAll = async () => {')[1] || '').split(String.fromCharCode(10) + '};')[0];
+    t('★PC：時点保存は kv をまとめ読みしない', body(SRC).indexOf("collection('kv').where(") < 0, body(SRC).slice(0, 120));
+    t('★スマホ：時点保存は kv をまとめ読みしない', body(M).indexOf("collection('kv').where(") < 0, body(M).slice(0, 120));
+    t('決まったキーの表がある（PC・スマホ）', SRC.indexOf('SNAP_KEYS_COMMON') > 0 && M.indexOf('SNAP_KEYS_COMMON') > 0);
+    t('前回の控えからキーを拾う（取りこぼしが自然に直る）', SRC.indexOf('前回の控えに入っていたキー') > 0);
+    t('マイスケジュールは控えに入れない', SRC.indexOf("k.indexOf(STOR + 'myprv-') === 0") > 0);
+    t('失敗を握りつぶさない（結果を端末に残す）', SRC.indexOf('snapNote') > 0 && SRC.indexOf('catch (e) { snapNote(false') > 0);
+    t('復旧画面に「最後の控え」を出す', SRC.indexOf('最後の控え：') > 0);
+  }
   t('復旧画面が開き、まだ時点保存が無い', await seeText(page, '保存された時点がまだありません', 8000));
   await clickText(page, '今すぐ時点保存を作る');
   t('時点保存が作られて一覧に出る（手動）', await seeText(page, '手動', 15000), await bodyText(page).then(x => x.slice(0, 300)));

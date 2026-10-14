@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791948227213';
+  window.__APP_BUILD='build-1791951020093';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.62.1';
+const MOBILE_VERSION='3.62.2';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -822,17 +822,73 @@ const fbSnapIdx = () => fbDb.collection('snapidx').doc(STOR);
 const fbSnapDoc = id => fbDb.collection('snaps').doc(id);
 const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
 // この環境の全キーを読む（cf-* や insp-arch も含む。本番のときは DEV のキーを除く）。{キー: JSON文字列}
-const fbSnapReadAll = async () => {
-  const FP = firebase.firestore.FieldPath.documentId();
-  const q = await fbDb.collection('kv').where(FP, '>=', STOR).where(FP, '<', STOR + '\uf8ff').get();
-  const out = {};
-  q.forEach(d => {
-    const k = d.id;
-    if (STOR === 'hub-v8-' && k.indexOf(STOR + 'dev-') === 0) return;   // 本番のときは DEV のキーを除く
+// ★kv は「まとめ読み（クエリ）」しない（2026-10-14・ユーザー決定）。
+//   ルールの kv はキーの名前を見る書き方（key.matches(...)）なので、Firestore は **クエリを一切許可できない**
+//   （1件ずつの取得だけ通る）。そのため以前はここが必ず失敗し、**時点保存が 2026-09-30 から2週間
+//   作られていなかった**。しかも fbSnapTick が catch で握りつぶしていたので誰も気づけなかった。
+//   キーの集め方は3つ：
+//     ① 決まったキー（下の表）
+//     ② 索引から広がるキー（顧客ファイル／検索の索引／車検証の写真）
+//     ③ **前回の控えに入っていたキー**（snaps/{id}/kv はルールにキー名の条件が無いので一覧を取れる）
+//        ＝一度でも控えに入ったキーは以後ずっと拾える（取りこぼしが自然に直る）
+//   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
+//   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
+const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','memoItems',
+  'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
+  'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
+const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
+  'staff-v2','cars','schedRestrictions'];
+const fbSnapKeyList = async () => {
+  const set = {};
+  const add = k => {
+    k = String(k || ''); if (!k || k.indexOf(STOR) !== 0) return;
+    if (STOR === 'hub-v8-' && k.indexOf('hub-v8-dev-') === 0) return;   // 本番のときは DEV のキーを除く
+    if (k.indexOf(STOR + 'myprv-') === 0) return;                        // 本人しか読めない（入れない）
     if (k === STOR + 'snap-index' || k === STOR + 'auth-codes' || k.indexOf('__chunk') >= 0) return;
-    const v = (d.data() || {}).v;
-    if (typeof v === 'string' && v && v !== 'null') out[k] = v;
-  });
+    if (k.indexOf(STOR + 'diag-') === 0) return;   // 診断の記録は控えに入れない
+    set[k] = 1;
+  };
+  SNAP_KEYS_COMMON.forEach(b => add(STOR + b));
+  ['honten', 'sanda'].forEach(st => SNAP_KEYS_STORE.forEach(b => add(STOR + st + '-' + b)));
+  const readJson = async k => {
+    try { const s = await fbDoc(k).get(); const v = s.exists ? (s.data() || {}).v : null;
+      return (typeof v === 'string' && v && v !== 'null') ? JSON.parse(v) : null; } catch (e) { return null; }
+  };
+  try {   // ② 索引から広がるキー
+    const cfi = await readJson(STOR + 'cf-index');
+    const names = (Array.isArray(cfi) ? cfi : []).map(f => (f && f.name) || f).filter(Boolean);
+    for (const nm of names) {
+      add(STOR + 'cf-' + nm + '-index');
+      const fi = await readJson(STOR + 'cf-' + nm + '-index');
+      const n = Math.max(1, Number(fi && fi.chunks) || 1);
+      for (let i = 0; i < n; i++) add(STOR + 'cf-' + nm + '-chunk-' + i);
+    }
+    const si = await readJson(STOR + 'cf-search-index');
+    for (let i = 0; i < (Number(si && si.chunks) || 0); i++) add(STOR + 'cf-search-chunk-' + i);
+    const vl = await readJson(STOR + 'vehicles-v2');
+    (Array.isArray(vl) ? vl : []).forEach(v => ((v && Array.isArray(v.docs)) ? v.docs : []).forEach(dd => {
+      if (!dd || !dd.id) return;
+      add(STOR + 'vehdoc-' + dd.id + '-index');
+      for (let i = 0; i < (Number(dd.chunks) || 0); i++) add(STOR + 'vehdoc-' + dd.id + '-chunk-' + i);
+    }));
+  } catch (e) { console.warn('[SNAP] 索引からキーを広げられません', e && e.message); }
+  try {   // ③ 前回の控えに入っていたキー
+    const list = await fbSnapList();
+    if (list.length) { const sub = await fbSnapDoc(list[0].file).collection('kv').get(); sub.forEach(d => add(d.id)); }
+  } catch (e) { console.warn('[SNAP] 前回のキー一覧を読めません', e && e.message); }
+  return Object.keys(set);
+};
+const fbSnapReadAll = async () => {
+  const keys = await fbSnapKeyList();
+  const out = {};
+  for (let i = 0; i < keys.length; i += 20) {        // 1件ずつの取得を20本ずつ並べて読む
+    const got = await Promise.all(keys.slice(i, i + 20).map(async k => {
+      try { const s = await fbDoc(k).get(); return [k, s.exists ? (s.data() || {}).v : null]; }
+      catch (e) { return [k, null]; }
+    }));
+    got.forEach(p => { if (typeof p[1] === 'string' && p[1] && p[1] !== 'null') out[p[0]] = p[1]; });
+  }
   return out;
 };
 const snapSummaryOf = data => {
