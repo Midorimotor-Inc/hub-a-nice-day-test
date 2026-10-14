@@ -354,6 +354,22 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     await page.waitForTimeout(1600);
     t('★枠に別人が入っていても、その人の行と比べない（氏名で探し直す）', await seeText(page, 'スケジュールと一致', 6000), await badge());
 
+    // ★他店の代車を借りている分を「貸出が無い」にしない（2026-10-14 本番報告：18件出た）
+    //   三田店の予約に本店の代車を貸すのはふつうにある。帯は本店の表にあるので、
+    //   見ている店の表だけ見ていると「カードにあるのに貸出が無い」が大量に出る。
+    const E = d(14);
+    await addSched('sanda-sched', dk(E), '09:00', { name: '他店　借人', carType: 'ソリオ', loaner: 'ハスラー (7074)', loanerId: 1 });
+    await addBar('1', 'v1', { id: 7005, user: '他店　借人', fy: E.y, fm: E.m, fd: E.d, ty: E.y, tm: E.m, td: E.d, carName: 'ハスラー', carNum: '7074', bookingKey: 'sched-' + dk(E) + '-09:00' });
+    await page.waitForTimeout(1600);
+    t('★他店の予約に自店の代車を貸してもズレにしない', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
+    // ★枠の名前が「空」の紐付けも読める（2026-10-14 本番：sched-2026-10-31- が1件を2件に化けさせていた）
+    const G = d(15);
+    await addSched('honten-sched', dk(G), '09:00', { name: '空枠　太郎', carType: 'アルト', loaner: 'スペーシア (8967)', loanerId: 2 });
+    await addBar('2', 'u1', { id: 7006, user: '空枠　太郎', fy: G.y, fm: G.m, fd: G.d, ty: G.y, tm: G.m, td: G.d, carName: 'スペーシア', carNum: '8967', bookingKey: 'sched-' + dk(G) + '-' });
+    await page.waitForTimeout(1600);
+    t('★枠の名前が空の紐付けも1件の予約として読む（2件に化けない）', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
     // ④ 本物のズレ（カードの代車名が空）はちゃんと出す。しかも1件だけ（帯とカードで二重に数えない）
     await addSched('honten-sched', dk(C), '13:00', { name: '枠田　ずれ', carType: 'ワゴンR', loaner: '', loanerId: null });
     await page.waitForTimeout(1600);

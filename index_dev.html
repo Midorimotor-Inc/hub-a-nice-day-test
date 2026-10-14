@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791959431899';
+    window.__APP_BUILD='build-1791960095972';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.62.3';
+const APP_VERSION = '3.62.4';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9680,7 +9680,7 @@ const LoanerSettingsModal = memo(({isOpen, onClose, listH, listS, onSaveH, onSav
 // ============================================
 //  代車管理グリッド（閲覧専用 + モーダル編集）
 // ============================================
-const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,schedOther,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onMoveLoanerRes,onMoveRentalRes,onFixSync,onDropSync,pendingDeleteBk='',justAddedIds=[]})=>{
+const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,schedOther,loanerResOther,loanersOther,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onMoveLoanerRes,onMoveRentalRes,onFixSync,onDropSync,pendingDeleteBk='',justAddedIds=[]})=>{
   const LOANERS_LOCAL=storeLoaners||LOANERS;
   const RENTAL_LOCAL=rentalCars||DEFAULT_RENTAL_CARS;
   // 表示色：期間の重なる予約どうしは必ず違う色（同じお客様は同じ色）。描画のたびに全予約から決める
@@ -9821,7 +9821,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   const vsId=(storeInfo&&storeInfo.id)||'honten';
   const otherStoreId=vsId==='honten'?'sanda':'honten';
   const bkRow=(bk,who)=>{
-    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
     if(!m)return null;
     if(m[1]==='insp'){
       const rows=(inspData||{})[m[2]]||[];
@@ -9861,7 +9861,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
     const TD=(()=>{const n=new Date();return n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();})();
     const dkNum=dk=>{const p=String(dk||'').split('-');return p.length===3?(Number(p[0])*10000+Number(p[1])*100+Number(p[2])):0;};
     const endOf=r=>(r&&r.ty!=null)?(r.ty*10000+(r.tm+1)*100+r.td):0;
-    const scan=(kind,resObj,cars)=>{
+    const scan=(kind,resObj,cars,barStore)=>{
       Object.keys(resObj||{}).forEach(cid=>{
         const car=(cars||[]).find(c=>String(c.id)===String(cid));
         Object.values(resObj[cid]||{}).forEach(r=>{
@@ -9871,7 +9871,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
           if(f&&f.bk)seen[f.bk]=true;   // 枠名・行番号がずれていても「対応する予約はある」
           const want=carLabelOf(car);
           if(!f||!f.row||!f.row.name){
-            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,resId:r.id,
+            out.push({kind,type:'row',bk:r.bookingKey,user:r.user,want,carId:cid,resId:r.id,barStore,
               dk:(r.fy!=null?(r.fy+'-'+(r.fm+1)+'-'+r.fd):''),endNum:endOf(r),
               text:'スケジュールに予約が見つかりません（予約が消された／日にちが変わった可能性）'});
             return;
@@ -9879,15 +9879,18 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
           const row=f.row;
           const have=kind==='rental'?(row.rentalLabel||''):(row.loaner||'');
           if(!sameCarLabel(have,want)){
-            out.push({kind,type:'label',bk:f.bk||r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,resId:r.id,
+            out.push({kind,type:'label',bk:f.bk||r.bookingKey,user:r.user,want,have:have||'（空）',carId:cid,resId:r.id,barStore,
               dk:f.dk,at:f.at,rowKind:f.kind,rowStore:f.store,endNum:endOf(r),
               text:'予約カードの'+(kind==='rental'?'レンタカー名':'代車名')+'が代車管理と違います'});
           }
         });
       });
     };
-    scan('loaner',loanerRes,LOANERS_LOCAL);
-    scan('rental',rentalRes,RENTAL_LOCAL);
+    // ★両店の代車の表を見る（2026-10-14）。代車は会社の車なので、
+    //   三田店の予約に本店の代車を貸すことがある。見ている店の表だけ見ると「貸出が無い」ことになる。
+    scan('loaner',loanerRes,LOANERS_LOCAL,vsId);
+    scan('loaner',loanerResOther,loanersOther,otherStoreId);
+    scan('rental',rentalRes,RENTAL_LOCAL,null);   // レンタカーは会社共通（店で分かれていない）
     // 逆向き：予約カードには代車名があるのに、代車管理に帯が無い
     const rev=(dk,at,row,kind)=>{
       if(!row||!row.name)return;
@@ -10555,7 +10558,12 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                         片方にしか無いので自動では直せません。手で合わせるか、下の「消す」で片方だけ残っている分を消せます。
                       </div>
                     )}
-                    {it.type!=='label'&&onDropSync&&(
+                    {it.type==='row'&&it.barStore&&it.barStore!==vsId&&(
+                      <div style={{fontSize:11,color:'#1d4ed8',marginTop:6,lineHeight:1.7}}>
+                        この貸出は<b>{it.barStore==='honten'?'本店':'三田店'}の代車管理</b>に入っています。消す時はそちらの画面から。
+                      </div>
+                    )}
+                    {it.type!=='label'&&onDropSync&&!(it.type==='row'&&it.barStore&&it.barStore!==vsId)&&(
                       <button onClick={()=>{if(dropAsk(it))onDropSync(it);}}
                         style={{marginTop:8,padding:'7px 16px',borderRadius:8,border:'1.5px solid #dc2626',background:'white',color:'#b91c1c',fontWeight:800,fontSize:12,cursor:'pointer'}}>
                         🗑 {it.type==='row'?'この貸出を消す（代車管理から）':'予約カードの代車名を消す'}
@@ -13744,7 +13752,7 @@ function AppInner() {
     setLoanerUndo(u=>[...u,{prevRental:rentalResData}]);
     persistRres(()=>next,back=>JSON.stringify(back)===JSON.stringify(next),{verb:'レンタカーの入れ替え',name:moved.user});
     // 予約カード側のラベルも書き換える（食い違いを残さない）
-    const m=String(moved.bookingKey||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/);
+    const m=String(moved.bookingKey||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
     if(!m)return;
     const dk=m[2], at=m[3], who=moved.user;
     if(m[1]==='insp'){
@@ -13856,7 +13864,7 @@ function AppInner() {
     (moves||[]).forEach(mv=>{
       if(!mv||!mv.bookingKey)return;
       const info=_label(mv.bookingKey); if(!info)return;
-      const m=String(mv.bookingKey).match(/^(insp|sched)-(\d+-\d+-\d+)-(.+)$/); if(!m)return;
+      const m=String(mv.bookingKey).match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/); if(!m)return;
       (m[1]==='insp'?_inspMoves:_schedMoves).push({dk:m[2],at:m[3],user:mv.user,...info});
     });
     if(_inspMoves.length){
@@ -15587,6 +15595,7 @@ function AppInner() {
               hoverRes={loanerHoverRes}   setHoverRes={stableHoverSetter}
               storeLoaners={currentLoaners} storeInfo={STORES.find(s=>s.id===vsId)}
               schedOther={vsId==='honten'?schedDataS:schedDataH}
+              loanerResOther={vsId==='honten'?loanerResS:loanerResH} loanersOther={vsId==='honten'?dynLoanerListS:dynLoanerListH}
               rentalCars={dynRentalCars} rentalRes={rentalResData}
               onAddRentalRes={addRentalRes} onDeleteRentalRes={deleteRentalRes} onReplaceRentalRes={replaceRentalRes}
               onPickRental={handlePickRental}
