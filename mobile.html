@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1791943862667';
+  window.__APP_BUILD='build-1791948227213';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.62';
+const MOBILE_VERSION='3.62.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3958,10 +3958,13 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
       return{kind:'insp',dk:m[2],at:m[3],row:null};
     }
     // ★整備は**両店**を見る。代車は店をまたいで貸すので、見ている店だけ見ると他店の予約が「無い」になる。
+    // ★拾った行は**氏名が合う時だけ**「その予約」とみなす（2026-10-14 ユーザー報告）。PC版と同じ。
+    //   枠は予定を動かすと空き、別の人の予定が入る。氏名を見ないと別人の行と比べてしまう。
+    const okRow=r=>r&&r.name&&(!who||r.name===who);
     const mine=((schedData||{})[m[2]]||{})[m[3]]||null;
-    if(mine)return{kind:'sched',dk:m[2],at:m[3],row:mine,bk,store:vsId};
+    if(okRow(mine))return{kind:'sched',dk:m[2],at:m[3],row:mine,bk,store:vsId};
     const oth=((schedOther||{})[m[2]]||{})[m[3]]||null;
-    if(oth)return{kind:'sched',dk:m[2],at:m[3],row:oth,bk,store:otherStoreId};
+    if(okRow(oth))return{kind:'sched',dk:m[2],at:m[3],row:oth,bk,store:otherStoreId};
     // ★枠の名前がずれただけ＝同じ日に同じ氏名の整備があればそれ
     for(const pair of [[schedData,vsId],[schedOther,otherStoreId]]){
       const day=(pair[0]||{})[m[2]]||{};

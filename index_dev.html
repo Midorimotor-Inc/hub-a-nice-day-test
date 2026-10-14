@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791943862667';
+    window.__APP_BUILD='build-1791948227213';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.62';
+const APP_VERSION = '3.62.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9771,10 +9771,14 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
     }
     // ★整備は**両店**を見る（2026-10-14）。代車は店をまたいで貸すので、
     //   見ている店の表だけ見ていると他店の予約が「無い」ことになり、ズレでないものがズレに出る。
+    // ★拾った行は**氏名が合う時だけ**「その予約」とみなす（2026-10-14 ユーザー報告）。
+    //   枠（11:00 など）は予定を動かすと空き、**別の人の予定が入る**。
+    //   氏名を見ないと「山谷さんの帯」を「その枠にいる岩本さんの行」と比べて、ありもしないズレを出す。
+    const okRow=r=>r&&r.name&&(!who||r.name===who);
     const mine=((schedData||{})[m[2]]||{})[m[3]]||null;
-    if(mine)return {kind:'sched',dk:m[2],at:m[3],row:mine,bk,store:vsId};
+    if(okRow(mine))return {kind:'sched',dk:m[2],at:m[3],row:mine,bk,store:vsId};
     const oth=((schedOther||{})[m[2]]||{})[m[3]]||null;
-    if(oth)return {kind:'sched',dk:m[2],at:m[3],row:oth,bk,store:otherStoreId};
+    if(okRow(oth))return {kind:'sched',dk:m[2],at:m[3],row:oth,bk,store:otherStoreId};
     // ★枠の名前がずれただけ＝同じ日に同じ氏名の整備があればそれ
     for(const [src,sid] of [[schedData,vsId],[schedOther,otherStoreId]]){
       const day=(src||{})[m[2]]||{};

@@ -52,12 +52,13 @@ const dkNum = dk => { const q = String(dk || '').split('-'); return q.length ===
         return i >= 0 ? { kind: 'insp', dk: m[2], at: String(i), row: (inspData[m[2]] || [])[i], bk: 'insp-' + m[2] + '-' + i }
                       : { kind: 'insp', dk: m[2], at: m[3], row: null };
       }
+      const ok = r => r && r.name && (!user || r.name === user);   // ★氏名が合う時だけ「その予約」とみなす
       const mine = (sched[m[2]] || {})[m[3]] || null;
-      if (mine) return { kind: 'sched', dk: m[2], at: m[3], row: mine, bk };
+      if (FIXED ? ok(mine) : !!mine) return { kind: 'sched', dk: m[2], at: m[3], row: mine, bk };
       if (!FIXED) return { kind: 'sched', dk: m[2], at: m[3], row: null };
       // ★代車は店をまたいで貸すので、もう一方の店の整備も見る
       const his = (other[m[2]] || {})[m[3]] || null;
-      if (his) return { kind: 'sched', dk: m[2], at: m[3], row: his, bk, otherStore: true };
+      if (ok(his)) return { kind: 'sched', dk: m[2], at: m[3], row: his, bk, otherStore: true };
       // ★枠の名前がずれただけ＝同じ日に同じ氏名の整備があれば、それ
       for (const src of [sched, other]) {
         const day = src[m[2]] || {};

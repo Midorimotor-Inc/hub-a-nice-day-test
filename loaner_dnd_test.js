@@ -345,6 +345,15 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     await page.waitForTimeout(1600);
     t('★枠の名前がずれていても同じ日の同じ氏名で見つける', await seeText(page, 'スケジュールと一致', 6000), await badge());
 
+    // ★枠に別の人の予定が入っていても、その人の行と比べない（2026-10-14 本番報告：山谷さんの件）
+    //   予定を動かすと枠が空き、そこへ別の人が入る。氏名を見ないと「ありもしないズレ」が出る。
+    const D = d(13);
+    await addSched('sanda-sched', dk(D), '11:00', { name: '岩本　別人', carType: 'ソリオ', loaner: '', loanerId: null });
+    await addSched('sanda-sched', dk(D), '14:00', { name: '山谷　本人', carType: 'スイフト', loaner: 'ワゴンR (3503)', loanerId: 3 });
+    await addBar('3', 'w1', { id: 7004, user: '山谷　本人', fy: D.y, fm: D.m, fd: D.d, ty: D.y, tm: D.m, td: D.d, carName: 'ワゴンR', carNum: '3503', bookingKey: 'sched-' + dk(D) + '-11:00' });
+    await page.waitForTimeout(1600);
+    t('★枠に別人が入っていても、その人の行と比べない（氏名で探し直す）', await seeText(page, 'スケジュールと一致', 6000), await badge());
+
     // ④ 本物のズレ（カードの代車名が空）はちゃんと出す。しかも1件だけ（帯とカードで二重に数えない）
     await addSched('honten-sched', dk(C), '13:00', { name: '枠田　ずれ', carType: 'ワゴンR', loaner: '', loanerId: null });
     await page.waitForTimeout(1600);
