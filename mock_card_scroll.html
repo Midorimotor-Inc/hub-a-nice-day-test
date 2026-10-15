@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>予約カードの送りとスクロール</title>
+<!--
+  2026-10-15 のご依頼のモック。
+   ① タイムスケジュールを畳んだ状態から「＋ 予定を追加」した時、カーソルを時間の欄から始める
+   ② 下へ送った時に、編集中の欄がカードの半分あたりに来るようにスクロールする
+  実測（本物の画面）：↓キーの時だけ真ん中に来る。**Tab・クリックでは一度もスクロールしない**（欄が80%まで下がる）。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --cy:#0891b2; --cy2:#0e7490; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.7}
+  .wrap{display:flex;gap:18px;padding:16px;min-height:100vh;align-items:flex-start}
+  .side{flex:1;min-width:0;max-width:620px}
+  h1{font-size:17px;font-weight:900;margin-bottom:6px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  .card h2{font-size:13.5px;font-weight:900;margin-bottom:8px}
+  .opt{display:block;border:2px solid #e2e8f0;border-radius:10px;padding:9px 12px;margin-bottom:8px;cursor:pointer}
+  .opt.on{border-color:var(--cy);background:#ecfeff}
+  .opt b{font-size:13px}
+  .opt span{display:block;font-size:11.5px;color:var(--ink2);margin-top:2px}
+  .meter{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:11px 13px;font-size:12px;line-height:1.9}
+  .meter b{color:#fde047}
+  .bar{height:9px;background:#1e293b;border-radius:5px;margin-top:7px;position:relative;overflow:hidden}
+  .bar i{position:absolute;top:0;bottom:0;width:4px;background:#fde047;border-radius:3px;transition:left .18s}
+  .bar u{position:absolute;top:0;bottom:0;left:50%;width:1px;background:#64748b}
+  .tip{font-size:11.5px;color:var(--ink2);margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+  kbd{background:#f1f5f9;border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:5px;padding:0 6px;font-size:11px;font-family:inherit;font-weight:700}
+
+  /* ── 予約カード（本物と同じ 560px・高さいっぱい・中だけスクロール）── */
+  .panelwrap{flex:0 0 560px;height:min(calc(100vh - 32px),760px);min-height:520px;position:sticky;top:16px}
+  .panel{background:#fff;height:100%;overflow-y:auto;border-right:3px solid var(--cy);box-shadow:8px 0 32px rgba(0,0,0,.18);border-radius:10px;scroll-behavior:smooth}
+  .phead{background:linear-gradient(135deg,var(--cy2),var(--cy));padding:14px 18px;position:sticky;top:0;z-index:5;color:#fff}
+  .phead b{font-weight:800;font-size:15px}
+  .phead div{font-size:11.5px;opacity:.8;margin-top:2px}
+  .body{padding:16px 18px 140px;display:flex;flex-direction:column;gap:16px}
+  .fld label{display:block;font-size:11px;font-weight:800;color:#475569;margin-bottom:4px}
+  .fld label em{font-weight:400;font-style:normal;color:#9ca3af;font-size:10px;margin-left:5px}
+  .fld input,.fld select,.fld textarea,.fld .fake{width:100%;padding:10px 12px;border:2px solid #e5e7eb;border-radius:8px;font:inherit;font-size:14px;background:#fff}
+  .fld textarea{min-height:66px;resize:vertical}
+  .fld .fake{cursor:pointer;color:#0891b2;font-weight:700}
+  .fld :focus{outline:3px solid var(--cy);outline-offset:2px;box-shadow:0 0 0 4px rgba(8,145,178,.15);border-color:var(--cy)}
+  .two{display:grid;grid-template-columns:1fr 118px;gap:8}
+  .need{border-color:#f59e0b !important;background:#fffbeb}
+  .btns{display:flex;flex-direction:column;gap:8;padding-top:6px}
+  .btns button{padding:11px;border-radius:9px;border:none;font:inherit;font-weight:800;cursor:pointer;background:var(--cy);color:#fff}
+  .btns button.sub{background:#f3f4f6;color:#374151}
+  @media (max-width:1080px){ .wrap{flex-direction:column-reverse} .panelwrap{flex:none;width:100%;max-width:560px;height:620px;min-height:520px;position:static} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>予約カード：送りとスクロール</h1>
+    <div class="lead">右のカードで <kbd>Tab</kbd> や <kbd>↓</kbd> を押して、下へ送ってみてください。案を切り替えると動きが変わります。</div>
+
+    <div class="card">
+      <h2>② 下へ送った時のスクロール</h2>
+      <label class="opt on" id="o0"><input type="radio" name="m" value="now" checked hidden><b>いま</b>
+        <span>↓キーの時だけ真ん中に寄せる。<b style="color:#b91c1c">Tab・クリックでは一度もスクロールしない</b>（本物の実測：scrollTop が 221 のまま、欄が 80% まで下がる）</span></label>
+      <label class="opt" id="o1"><input type="radio" name="m" value="always" hidden><b>A案：いつでも真ん中</b>
+        <span>どの送り方（Tab・クリック・↓キー）でも、編集中の欄をカードの<b>半分の位置</b>へ。ご依頼どおりの動き</span></label>
+      <label class="opt" id="o2"><input type="radio" name="m" value="band" hidden><b>B案：下半分に入ったら真ん中（おすすめ）</b>
+        <span>欄が<b>上半分にいる間は動かさない</b>。半分より下がったら真ん中へ戻す。<b>無駄に画面が動かない</b>のが利点</span></label>
+    </div>
+
+    <div class="card">
+      <h2>① 最初にカーソルが入る欄</h2>
+      <label class="opt on" id="s0"><input type="radio" name="s" value="time" checked hidden><b>時間から始める（ご依頼）</b>
+        <span>タイムスケジュールを<b>畳んだ状態</b>から「＋ 予定を追加」した時。時間は選ばないと保存できないので、ここから始めるのが自然</span></label>
+      <label class="opt" id="s1"><input type="radio" name="s" value="name" hidden><b>いま：氏名から始まる</b>
+        <span>時間は上にあるのに飛ばされ、あとで戻って選ぶことになる</span></label>
+      <div class="tip">※ 時間の欄は今は <code>&lt;select&gt;</code> です。<b>日本語入力が英数のままになる</b>ので、本番では
+        車検カードの「入庫時間」と同じ<b>自前のドロップダウン</b>に替えます（見た目と操作は下と同じ）。</div>
+    </div>
+
+    <div class="meter">
+      編集中の欄：<b id="mF">—</b><br>
+      カードの上から <b id="mP">—</b>　/　scrollTop <b id="mS">—</b>
+      <div class="bar"><u></u><i id="mI" style="left:0"></i></div>
+      <div style="font-size:11px;opacity:.75;margin-top:6px">細い線が「半分」。黄色が編集中の欄の位置です。</div>
+      <button id="demo" style="margin-top:10px;width:100%;padding:9px;border:none;border-radius:8px;background:#fde047;color:#0f172a;font:inherit;font-weight:800;cursor:pointer">▶ Tab で下まで送ってみる</button>
+    </div>
+  </div>
+
+  <div class="panelwrap">
+    <div class="panel" id="panel">
+      <div class="phead"><b>📋 一般予約カード</b><div id="sub">10/15（水）／ 畳んだ状態から追加</div></div>
+      <div class="body" id="body">
+        <div class="fld" id="f-time"><label>時間 <em>選ばないと保存できません</em></label>
+          <select id="timeSel" class="need"><option value="">--:--</option><option>09:00</option><option>09:30</option><option>10:00</option><option>10:30</option><option>11:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select></div>
+        <div class="fld"><label>氏名 *</label><input placeholder="お客様名"></div>
+        <div class="fld"><label>担当 <em>番号を打って Enter</em></label><input placeholder="担当者名 or 番号"></div>
+        <div class="two">
+          <div class="fld"><label>車種</label><input placeholder="例：プリウス"></div>
+          <div class="fld"><label>ナンバー <em>4桁</em></label><input placeholder="例：3310"></div>
+        </div>
+        <div class="fld"><label>電話 <em>任意</em></label><input placeholder="090-0000-0000"></div>
+        <div class="fld"><label>作業内容</label><input placeholder="クイック整備・修理 など"></div>
+        <div class="fld"><label>指・見</label><input placeholder="指定・見積"></div>
+        <div class="fld"><label>特典</label><input placeholder="なし"></div>
+        <div class="fld"><label>入庫時間 <em>900→9:00</em></label><input placeholder="9:00"></div>
+        <div class="fld"><label>代車・レンタカー</label><input placeholder="なし"></div>
+        <div class="fld"><label>入庫日 <em>事前入庫の場合</em></label><div class="fake" tabindex="0">📅 押して選ぶ</div></div>
+        <div class="fld"><label>納車日 <em>任意</em></label><div class="fake" tabindex="0">📅 押して選ぶ</div></div>
+        <div class="fld"><label>納車時間</label><input placeholder="未定"></div>
+        <div class="fld"><label>備考 <em>納車日の行に出ます</em></label><textarea placeholder="納車時の申し送り"></textarea></div>
+        <div class="fld"><label>内容</label><textarea placeholder="メモや特記事項"></textarea></div>
+        <div class="btns"><button>保存する</button><button class="sub">閉じる</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  var panel=document.getElementById('panel');
+  var mode='now', startAt='time';
+  var mF=document.getElementById('mF'),mP=document.getElementById('mP'),mS=document.getElementById('mS'),mI=document.getElementById('mI');
+  var fields=[].slice.call(panel.querySelectorAll('input,select,textarea,.fake'));
+
+  function label(el){ var p=el; for(var i=0;i<4&&p;i++,p=p.parentElement){ var l=p.querySelector&&p.querySelector(':scope > label'); if(l) return l.childNodes[0].textContent.trim(); } return el.tagName; }
+  function pct(el){ var br=panel.getBoundingClientRect(), ar=el.getBoundingClientRect();
+    return Math.round(((ar.top+ar.height/2-br.top)/br.height)*100); }
+  function show(el){ mF.textContent=label(el); var p=pct(el); mP.textContent=p+'%'; mS.textContent=Math.round(panel.scrollTop);
+    mI.style.left=Math.max(0,Math.min(99,p))+'%'; }
+
+  // 真ん中へ寄せる（本物と同じ scrollIntoView ではなく、カードの中だけを動かす）
+  function center(el){
+    var br=panel.getBoundingClientRect(), ar=el.getBoundingClientRect();
+    var want=(ar.top+ar.height/2)-(br.top+br.height/2);
+    panel.scrollTop=Math.max(0,Math.min(panel.scrollHeight-panel.clientHeight,panel.scrollTop+want));
+  }
+  function onFocus(e){
+    var el=e.target; if(fields.indexOf(el)<0) return;
+    if(mode==='always') center(el);
+    else if(mode==='band'){ if(pct(el)>50) center(el); }
+    // 'now' は ↓キーの時だけ（下の keydown で呼ぶ）
+    setTimeout(function(){show(el);},mode==='now'?0:220);
+  }
+  panel.addEventListener('focusin',onFocus);
+  panel.addEventListener('keydown',function(e){
+    var i=fields.indexOf(e.target); if(i<0) return;
+    if(e.key==='ArrowDown'||(e.key==='Enter'&&e.target.tagName!=='TEXTAREA')){
+      e.preventDefault(); var n=fields[i+1]; if(!n) return; n.focus();
+      if(mode==='now') center(n);           // いま：↓キーの時だけ真ん中
+      setTimeout(function(){show(n);},220);
+    } else if(e.key==='ArrowUp'){
+      e.preventDefault(); var p=fields[i-1]; if(!p) return; p.focus();
+      if(mode==='now') center(p);
+      setTimeout(function(){show(p);},220);
+    }
+  });
+
+  function pickOpt(name,val){
+    [].slice.call(document.querySelectorAll('.opt')).forEach(function(o){
+      var r=o.querySelector('input'); if(r.name===name) o.className='opt'+(r.value===val?' on':'');
+    });
+  }
+  [].slice.call(document.querySelectorAll('.opt')).forEach(function(o){
+    o.addEventListener('click',function(){
+      var r=o.querySelector('input'); r.checked=true; pickOpt(r.name,r.value);
+      if(r.name==='m'){ mode=r.value; }
+      else { startAt=r.value; reset(); }
+    });
+  });
+  function reset(){
+    panel.scrollTop=0;
+    var el=(startAt==='time')?document.getElementById('timeSel'):fields[1];
+    document.getElementById('sub').textContent=(startAt==='time')
+      ? '10/15（水）／ 畳んだ状態から追加 → 時間から'
+      : '10/15（水）／ 畳んだ状態から追加 → 氏名から（いま）';
+    setTimeout(function(){ el.focus(); show(el); },60);
+  }
+  document.getElementById("demo").onclick=function(){
+    var btn=this; if(btn.disabled)return; btn.disabled=true; btn.textContent="送っています…";
+    panel.scrollTop=0;
+    var i=0;
+    (function step(){
+      if(i>=fields.length){ btn.disabled=false; btn.textContent="▶ Tab で下まで送ってみる"; return; }
+      fields[i].focus(); i++; setTimeout(step,620);
+    })();
+  };
+  reset();
+</script>
+</body>
+</html>

@@ -160,14 +160,25 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
   await pp.waitForTimeout(600);
   await pp.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('スケジュール') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 12); if (b) b.click(); });
   await pp.waitForTimeout(1200);
-  // 制限を掛けた日へ移動（日付入力欄）
-  await pp.evaluate(v => {
-    const i = [...document.querySelectorAll('input[type=date]')].find(e => e.offsetParent !== null);
-    if (!i) return false;
-    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    s.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true }));
+  // ★PC の日付は自前のカレンダー（2026-10-15）。ネイティブの type=date は日本語入力を解除するのでやめた。
+  const ppGoDay = async (v) => {
+    const want = v.slice(0, 7);
+    await pp.evaluate(() => { const b = [...document.querySelectorAll('[data-datepick]')].find(e => e.offsetParent !== null); if (b) b.click(); });
+    await pp.waitForTimeout(200);
+    for (let i = 0; i < 40; i++) {
+      const cur = await pp.evaluate(() => { const e = document.querySelector('[data-mon]'); return e ? e.getAttribute('data-mon') : null; });
+      if (!cur || cur === want) break;
+      await pp.click(cur < want ? '[data-mnav="next"]' : '[data-mnav="prev"]');
+      await pp.waitForTimeout(80);
+    }
+    const day = await pp.$(`[data-day="${v}"]`);
+    if (!day) return false;
+    await day.click();
+    await pp.waitForTimeout(250);
     return true;
-  }, D1.input);
+  };
+  // 制限を掛けた日へ移動（日付入力欄）
+  await ppGoDay(D1.input);
   await pp.waitForTimeout(1500);
 
   head('⑤ PC：制限の説明はバッジ1か所だけ');
@@ -234,13 +245,7 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
   t('★元の日からは消える', !(sd && sd[D1.dk] && Object.values(sd[D1.dk] || {}).some(r => r && r.name === '辻井')), sd && sd[D1.dk]);
 
   // 別の月の予約を開くと、その月のカレンダーが出る（前に開いた月を覚えたままにしない）
-  await pp.evaluate(v => {
-    const i = [...document.querySelectorAll('input[type=date]')].find(e => e.offsetParent !== null);
-    if (!i) return false;
-    const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    s.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }, D2.input);
+  await ppGoDay(D2.input);
   await pp.waitForTimeout(1500);
   await pp.evaluate(() => { const tr = [...document.querySelectorAll('tr')].find(r => /来月の人/.test(r.innerText)); if (tr) tr.click(); });
   await pp.waitForTimeout(800);

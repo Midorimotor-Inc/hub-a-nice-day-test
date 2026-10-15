@@ -2,6 +2,10 @@
 //   ①：畳んだ時に予定がゼロなら「まだ予定がありません」と出る
 //   ②：畳んだ時も「＋ 予定を追加」が出て、押すと予約カードが開く。時間は --:-- で、選ばないと保存できない。
 //      選んだ時間の枠に入る。
+//   ⑤：2026-10-15 ユーザー指示 — 畳んだ状態から開いた時はカーソルが**時間の欄**から始まる。
+//      時間は <select> ではなく自前のドロップダウン（select も日本語入力を英数にするため）。
+//   ⑥：2026-10-15 ユーザー選択（B案）— 欄を下へ送った時、カードの半分より下に来たら真ん中へ戻す。
+//      以前は ↓キーの時だけで、Tab・クリックでは一度もスクロールしなかった。
 //   ③：カレンダーの月集計に「合計○台・本店○台・三田店○台」が出る
 //   ④：スタッフ休日カレンダーを開くと、ログインしている人だけが選ばれている
 //   実行: node collapsed_add_test.js
@@ -103,7 +107,41 @@ const DK = `${Y}-${M + 1}-${D}`;
   t('②「＋ 予定を追加」が出る', await page.evaluate(() => [...document.querySelectorAll('button')].some(b => b.innerText.includes('＋ 予定を追加'))));
   await clickText(page, '＋ 予定を追加');
   t('② 予約カードが開く', await seeText(page, '一般予約カード', 8000));
-  t('② 時間の欄は1つだけで、--:-- で始まる', await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); if (!box) return false; const sels = [...box.querySelectorAll('select')].filter(s => [...s.options].some(o => o.text === '--:--')); return sels.length === 1 && sels[0].value === ''; }));
+  await page.waitForTimeout(900);   // 開いた直後のカーソル移動（120ms のタイマー）を待つ
+  t('② 時間の欄は1つだけで、--:-- で始まる', await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
+    const sl = [...box.querySelectorAll('[data-kbkey="slot"]')];
+    return sl.length === 1 && /--:--/.test(sl[0].innerText);
+  }), await page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); const d = b && b.querySelector('[data-kbkey="slot"]'); return d ? d.innerText : '(無い)'; }));
+  // ★⑤ カーソルが時間の欄から始まる（2026-10-15 ユーザー指示）
+  t('⑤ 開いた時のカーソルが「時間」の欄に入っている', await page.evaluate(() => {
+    const a = document.activeElement;
+    return !!(a && a.dataset && a.dataset.kbkey === 'slot');
+  }), await page.evaluate(() => { const a = document.activeElement; return a ? (a.tagName + '/' + (a.dataset.kbkey || a.placeholder || '')) : '(なし)'; }));
+  t('⑤ 時間の欄に <select> を使っていない（日本語入力を解除するため）', await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
+    return [...box.querySelectorAll('select')].every(x => ![...x.options].some(o => o.text === '--:--'));
+  }));
+  // ★⑥ B案：下へ送った時のスクロール
+  const scrollTopOf = () => page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); return b ? Math.round(b.scrollTop) : -1; });
+  const pctOf = () => page.evaluate(() => {
+    const b = document.querySelector('.booking-modal-inner'), a = document.activeElement;
+    if (!b || !a) return -1;
+    const br = b.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    return Math.round(((ar.top + ar.height / 2 - br.top) / br.height) * 100);
+  });
+  await page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); if (b) b.scrollTop = 0; });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Tab'); await page.waitForTimeout(700);
+  t('⑥ 上半分にいる間はスクロールしない', (await scrollTopOf()) === 0, { scrollTop: await scrollTopOf(), pct: await pctOf() });
+  const pcts = [];
+  for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); await page.waitForTimeout(700); pcts.push(await pctOf()); }
+  const moved = await scrollTopOf();
+  t('⑥ 下へ送るとカードがスクロールする（前は一度も動かなかった）', moved > 0, { scrollTop: moved, pcts });
+  t('⑥ どの欄も画面の外（100%超）へ出ていかない', pcts.every(p => p >= 0 && p <= 100), pcts);
+  // 時間の欄へ戻してから続ける（この後の保存の検査のため）
+  await page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); const d = b && b.querySelector('[data-kbkey="slot"]'); if (d) d.focus(); });
+  await page.waitForTimeout(400);
   // 名前と作業だけ入れて保存 → 時間未選択で止まる
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
@@ -153,13 +191,15 @@ const DK = `${Y}-${M + 1}-${D}`;
   await page.waitForTimeout(800);
   t('② 時間を選ばずに保存しようとすると止まる', await page.evaluate(() => !!document.querySelector('.booking-modal-inner')));
   // 時間を選んで保存
+  // ★自前のドロップダウン：押して開く → 項目を mousedown で決める（2026-10-15）
+  await page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); const d = b && b.querySelector('[data-kbkey="slot"]'); if (d) d.click(); });
+  await page.waitForTimeout(400);
+  t('⑤ 押すと時間の一覧が開く', await page.evaluate(() => document.querySelectorAll('[data-slotid]').length > 3));
   await page.evaluate(() => {
-    const box = document.querySelector('.booking-modal-inner');
-    const sel = [...box.querySelectorAll('select')].find(s => [...s.options].some(o => o.text === '--:--'));
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-    setter.call(sel, '13:00'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    const el = document.querySelector('[data-slotid="13:00"]');
+    if (el) el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const b = [...box.querySelectorAll('button')].find(x => /確定|保存/.test(x.innerText)); if (b) b.click(); });
   t('② 選んだ時間（13:00）の枠に入る', await page.waitForFunction(([k, dk]) => {
     const day = (window.__fakeFb.get(k + 'honten-sched') || {})[dk] || {};

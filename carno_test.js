@@ -181,6 +181,17 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('新しい予約の初期値に no がある（車検・整備とも）',
     /blankInsp\s*=\s*\(\)\s*=>\s*\(\{[^)]*no:''/.test(src) && /blankSched\s*=\s*\(\)\s*=>\s*\(\{[^)]*no:''/.test(src));
 
+  // ★PC には「日本語入力を解除する欄」をひとつも置かない（2026-10-15 ユーザー報告：予定や備考も英数になる）
+  //   type="date" / "time" / "number" も inputMode と同じく Windows の IME を英数にし、次の欄で ひらがな に戻さない。
+  //   日付は HubDatePick（ボタン＋自前のカレンダー）、時刻は「900→9:00」に直すふつうの文字欄にしてある。
+  //   ※ mobile.html は対象外（iPhone は欄ごとに切り替わるので、数字キーパッドが出る利点のほうが大きい）。
+  const badFields = (txt) => (txt.match(/<input[^>]*\stype="(date|time|number)"/g) || []);
+  t('★PC（スケジュール）に type=date/time/number の入力欄が無い', badFields(src).length === 0, badFields(src).slice(0, 3));
+  const custSrc = fs.readFileSync(path.join(DIR, 'customers.html'), 'utf8');
+  t('★PC（顧客リスト）にも無い', badFields(custSrc).length === 0, badFields(custSrc).slice(0, 3));
+  t('日付はボタン＋自前のカレンダーで選ぶ（HubDatePick がある）', /const HubDatePick\s*=/.test(src));
+  t('予定の時刻は文字欄で、900→9:00 に直す道具がある', /const toTimeStr\s*=/.test(src) && /data-tmfld="start"/.test(src));
+
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-carno.png') });
   await ctx.close(); await browser.close(); server.close();

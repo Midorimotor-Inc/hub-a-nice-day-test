@@ -81,7 +81,24 @@ const DMD = `${DLV.getMonth() + 1}月${DLV.getDate()}日`;
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('スケジュール') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 12); if (b) b.click(); });
   await page.waitForTimeout(1200);
   // 納車日へ移動
-  const goDay = async iso => page.evaluate(v => {
+  // ★日付は自前のカレンダー（2026-10-15）。ネイティブの type=date は日本語入力を解除するのでやめた。
+  const goDay = async (v) => {
+    const want = v.slice(0, 7);
+    await page.evaluate(() => { const b = [...document.querySelectorAll('[data-datepick]')].find(e => e.offsetParent !== null); if (b) b.click(); });
+    await page.waitForTimeout(200);
+    for (let i = 0; i < 40; i++) {
+      const cur = await page.evaluate(() => { const e = document.querySelector('[data-mon]'); return e ? e.getAttribute('data-mon') : null; });
+      if (!cur || cur === want) break;
+      await page.click(cur < want ? '[data-mnav="next"]' : '[data-mnav="prev"]');
+      await page.waitForTimeout(80);
+    }
+    const day = await page.$(`[data-day="${v}"]`);
+    if (!day) return false;
+    await day.click();
+    await page.waitForTimeout(250);
+    return true;
+  };
+  const _goDayOld = async iso => page.evaluate(v => {
     const inp = [...document.querySelectorAll('input[type=date]')].find(e => e.offsetParent !== null);
     if (!inp) return false;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;

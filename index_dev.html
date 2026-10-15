@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1791969659702';
+    window.__APP_BUILD='build-1792034272746';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.63';
+const APP_VERSION = '3.65';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -632,11 +632,17 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
             {form.allday
               ?<span style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>終日</span>
               :<>
-                <input type="time" style={{...inputS,width:'auto',flex:'0 0 auto'}} value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/>
+                {/* ★時刻に type="time" を使わない（2026-10-15）。Windows は時刻の欄に入ると IME を英数にし、
+                    次の「メモ」へ移っても ひらがな に戻さない。ふつうの文字欄にして 900→9:00 に直す。 */}
+                <input data-tmfld="start" style={{...inputS,width:84,flex:'0 0 auto',textAlign:'center'}} value={form.time||''} placeholder="9:00"
+                  onChange={e=>setForm({...form,time:e.target.value})}
+                  onBlur={e=>setForm(p=>({...p,time:toTimeStr(e.target.value)}))}/>
                 <span style={{fontSize:13,color:'#64748b',fontWeight:700}}>〜</span>
-                <input type="time" style={{...inputS,width:'auto',flex:'0 0 auto'}} value={form.end||''} onChange={e=>setForm({...form,end:e.target.value})}/>
+                <input data-tmfld="end" style={{...inputS,width:84,flex:'0 0 auto',textAlign:'center'}} value={form.end||''} placeholder="10:00"
+                  onChange={e=>setForm({...form,end:e.target.value})}
+                  onBlur={e=>setForm(p=>({...p,end:toTimeStr(e.target.value)}))}/>
                 {(form.time||form.end)&&<button onClick={()=>setForm({...form,time:'',end:''})} style={{padding:'0 10px',borderRadius:8,border:'1px solid #d1d5db',background:'white',fontSize:11,cursor:'pointer'}}>時刻なし</button>}
-                <span style={{fontSize:11,color:'#94a3b8'}}>終わりは空でもOK</span>
+                <span style={{fontSize:11,color:'#94a3b8'}}>終わりは空でもOK・900 と打つと 9:00</span>
               </>}
           </div>
           <textarea style={{...inputS,minHeight:52,marginBottom:6,resize:'vertical'}} placeholder="メモ（任意）" value={form.memo} onChange={e=>setForm({...form,memo:e.target.value})} maxLength={200}/>
@@ -761,8 +767,9 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave})=>{
     return (
       <span style={{...box,background:'white',borderColor:'#6366f1'}}>
         <span style={{fontWeight:700}}>{m+1}月の休日</span>
-        <input autoFocus type="number" min="0" max="31" value={val} disabled={busy}
-          onChange={e=>setVal(e.target.value)}
+        {/* ★type="number" を使わない（2026-10-15）。Windows の IME が英数のままになるため。全角で打っても半角にする。 */}
+        <input autoFocus value={val} disabled={busy}
+          onChange={e=>setVal(toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,2))}
           onKeyDown={e=>{if(e.key==='Enter')commit();if(e.key==='Escape')setEditing(false);}}
           style={{width:52,padding:'2px 6px',border:'2px solid #c7d2fe',borderRadius:5,fontSize:12,fontWeight:800,textAlign:'center'}}/>
         <span style={{fontWeight:700}}>日</span>
@@ -1409,6 +1416,67 @@ const resolveOrderSlot = (orderDate, mailing2) => {
 // ║  - StaffCalendarModal / InspLimitModal（設定系モーダル）        ║
 // ╚══════════════════════════════════════════════════════════════════╝
 
+// ── 日付を選ぶボタン（2026-10-15）────────────────────────────────────────
+//   ネイティブの type="date" は、入ると Windows の IME が英数になり、次の「備考」へ移っても
+//   ひらがな に戻らない。予約カード（納車日）と同じやり方で、ボタン＋自前のカレンダーにする。
+//   入力欄に focus しないので IME を落とさない。値は今までどおり "YYYY-MM-DD" の文字列。
+const HubDatePick = ({value,onChange,placeholder='日付を選ぶ',style,color='#1d4ed8',clearable=true,icon='📅',fmt,txColor})=>{
+  const [open,setOpen]=useState(false);
+  const [mon,setMon]=useState(null);
+  const monOf=()=>{const p=String(value||'').split('-').map(Number);
+    return (p.length===3&&p[0])?{year:p[0],month:p[1]-1}:{year:new Date().getFullYear(),month:new Date().getMonth()};};
+  const pick=(y,m,d)=>{onChange(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);setOpen(false);};
+  const lbl=()=>{if(!value)return placeholder;const p=String(value).split('-');
+    const dt=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+    if(isNaN(dt.getTime()))return String(value);
+    if(fmt)return fmt(String(value),dt);
+    return `${Number(p[1])}/${Number(p[2])}（${['日','月','火','水','木','金','土'][dt.getDay()]}）`;};
+  return(
+    <div style={{position:'relative'}}>
+      <button type="button" data-datepick="1" onClick={()=>{setMon(monOf());setOpen(o=>!o);}}
+        style={{...(style||{}),textAlign:'left',cursor:'pointer',display:'flex',alignItems:'center',gap:7,fontFamily:'inherit'}}>
+        {icon&&<span style={{fontSize:13}}>{icon}</span>}
+        <span style={{fontWeight:value?700:400,color:txColor||(value?color:'#9ca3af')}}>{lbl()}</span>
+        {clearable&&value&&(
+          <span onClick={e=>{e.stopPropagation();onChange('');setOpen(false);}} title="消す"
+            style={{marginLeft:'auto',color:'#9ca3af',fontSize:13,padding:'0 2px'}}>✕</span>
+        )}
+      </button>
+      {open&&mon&&(
+        <div style={{position:'absolute',top:'100%',left:0,zIndex:9999,marginTop:4,background:'white',borderRadius:10,
+          boxShadow:'0 8px 30px rgba(0,0,0,0.25)',padding:12,minWidth:238,border:`2px solid ${color}`}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+            <button type="button" onClick={()=>setMon(p=>{const d=new Date(p.year,p.month-1,1);return{year:d.getFullYear(),month:d.getMonth()};})}
+              data-mnav="prev" style={{background:'none',border:'none',cursor:'pointer',fontSize:17,padding:'2px 9px',fontFamily:'inherit'}}>‹</button>
+            <span data-mon={mon.year+'-'+String(mon.month+1).padStart(2,'0')} style={{fontWeight:700,fontSize:13,color:'#1f2937'}}>{mon.year}年{mon.month+1}月</span>
+            <button type="button" onClick={()=>setMon(p=>{const d=new Date(p.year,p.month+1,1);return{year:d.getFullYear(),month:d.getMonth()};})}
+              data-mnav="next" style={{background:'none',border:'none',cursor:'pointer',fontSize:17,padding:'2px 9px',fontFamily:'inherit'}}>›</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:2}}>
+            {['日','月','火','水','木','金','土'].map((d,i)=>(
+              <div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,padding:'2px 0',
+                color:i===0?'#ef4444':i===6?'#2563eb':'#9ca3af'}}>{d}</div>))}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+            {(()=>{const yr=mon.year,mo=mon.month,first=new Date(yr,mo,1).getDay(),days=new Date(yr,mo+1,0).getDate(),cells=[];
+              for(let i=0;i<first;i++)cells.push(<div key={'e'+i}/>);
+              for(let d=1;d<=days;d++){
+                const v=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,on=String(value||'')===v;
+                cells.push(<button type="button" key={d} data-day={v} onClick={()=>pick(yr,mo,d)}
+                  style={{padding:'6px 0',borderRadius:6,fontFamily:'inherit',cursor:'pointer',fontSize:12,
+                    border:on?`2px solid ${color}`:'1px solid #e5e7eb',background:on?color:'white',
+                    color:on?'white':'#374151',fontWeight:on?800:500}}>{d}</button>);}
+              return cells;})()}
+          </div>
+          <button type="button" onClick={()=>setOpen(false)}
+            style={{marginTop:8,width:'100%',padding:'5px',background:'#f3f4f6',border:'none',borderRadius:6,
+              cursor:'pointer',fontSize:11,color:'#6b7280',fontFamily:'inherit'}}>閉じる</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const CustListModal = memo(({isOpen, onClose, mode:initMode, cust, existingData, currentUser, onSave, onCancelBooking, loanerRes={}, storeLoaners}) => {
   const [form, setForm] = useState({arrivalDate:'',orderDate:'',note:'',staff:'',course:0,tokuten:'-',store:'',loanerCarId:null,loanerLabel:'',loanerFromDate:'',loanerToDate:''});
   const [showLoanerPicker, setShowLoanerPicker] = useState(false);
@@ -1528,8 +1596,8 @@ const CustListModal = memo(({isOpen, onClose, mode:initMode, cust, existingData,
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
             <div>
               <label style={CLBL}>📅 入庫日（車検日）<span style={{color:'#9ca3af',fontWeight:400,marginLeft:6,fontSize:11}}>未定OK</span></label>
-              <input type="date" value={form.arrivalDate||''} style={{...CINP,fontWeight:700,color:'#1d4ed8',fontSize:13}}
-                onChange={e=>F('arrivalDate',e.target.value)}/>
+              <HubDatePick value={form.arrivalDate||''} onChange={v=>F('arrivalDate',v)} placeholder="未定（押して選ぶ）"
+                style={{...CINP,fontWeight:700,fontSize:13}} color="#1d4ed8"/>
             </div>
             <div>
               <label style={CLBL}>入庫店舗</label>
@@ -1626,11 +1694,9 @@ const CustListModal = memo(({isOpen, onClose, mode:initMode, cust, existingData,
                 {cust.mailing2?`投函日②以降→予約②、以前→予約①`:'入力すると予約①に自動セット'}
               </span>
             </label>
-            <input type="date" value={form.orderDate||''}
+            <HubDatePick value={form.orderDate||''} onChange={v=>F('orderDate',v)} placeholder="未入力（押して選ぶ）" color="#1d4ed8"
               style={{...CINP,background:form.orderDate?'#eff6ff':'white',
-                color:form.orderDate?'#1d4ed8':'#374151',fontWeight:form.orderDate?700:400,
-                borderColor:form.orderDate?'#93c5fd':'#e5e7eb'}}
-              onChange={e=>F('orderDate',e.target.value)}/>
+                borderColor:form.orderDate?'#93c5fd':'#e5e7eb'}}/>
             {form.orderDate&&(
               <div style={{marginTop:5,fontSize:11,fontWeight:700,
                 color:orderSlot==='reserve2'?'#1d4ed8':'#059669'}}>
@@ -2049,6 +2115,24 @@ const sameCarLabel = (a, b) => String(a == null ? '' : a).replace(/🔑/g, '').r
                            === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
 // 全角の数字（０-９）を半角に直す。日本語入力（ひらがな）のまま打っても数字欄に入るようにするため（2026-10-13）。
 const toHankakuNum = (v) => String(v == null ? '' : v).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+// 「900」「９００」「9.00」「9:0」→「09:00」。読めない時は打った文字をそのまま返す（勝手に消さない）。
+//   PC の時刻欄に type="time" を使わないための道具（2026-10-15）。type="time" は Windows の IME を英数にする。
+const toTimeStr = (v) => {
+  const t = toHankakuNum(String(v == null ? '' : v)).trim().replace(/[：．。・･\.]/g, ':');
+  if (!t) return '';
+  let h, mi;
+  const c = t.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (c) { h = Number(c[1]); mi = Number(c[2]); }
+  else {
+    const d = t.replace(/[^0-9]/g, '');
+    if (d.length === 1 || d.length === 2) { h = Number(d); mi = 0; }
+    else if (d.length === 3) { h = Number(d.slice(0, 1)); mi = Number(d.slice(1)); }
+    else if (d.length === 4) { h = Number(d.slice(0, 2)); mi = Number(d.slice(2)); }
+    else return v;
+  }
+  if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return v;
+  return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+};
 const blankInsp  = () => ({name:'',staff:'',carType:'',no:'',phone:'',address:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
 
 // ── 「この保存で日付が変わったか」の判定（必ずこれを使う）──────────────
@@ -6672,8 +6756,8 @@ const InspLimitModal=memo(({isOpen,onClose,curMonth,inspLimits,onSave})=>{
         {/* 制限する日付 */}
         <div style={{marginBottom:18}}>
           <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:7}}>📅 制限する日付</label>
-          <input type="date" value={selDate} onChange={e=>setSelDate(e.target.value)}
-            style={{width:'100%',padding:'9px 12px',border:'2px solid #d1d5db',borderRadius:8,fontSize:14,outline:'none',boxSizing:'border-box'}}/>
+          <HubDatePick value={selDate} onChange={v=>setSelDate(v)} clearable={false} placeholder="日を選ぶ"
+            style={{width:'100%',padding:'9px 12px',border:'2px solid #d1d5db',borderRadius:8,fontSize:14,outline:'none',boxSizing:'border-box',background:'white'}}/>
           {currentLimit!=null&&(
             <div style={{marginTop:5,padding:'5px 10px',background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,fontSize:11,color:'#dc2626',fontWeight:700}}>
               この日は現在 最大{currentLimit}台 に制限されています
@@ -6990,12 +7074,15 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const tokutenRef=useRef(null);   // 特典（車検）
   const shimiRef=useRef(null);     // 指・見（整備）
   const timeRef=useRef(null);
+  const slotRef=useRef(null);     // 整備の「時間帯」（2026-10-15。畳んだ状態から追加した時はここから始める）
+  const cardRef=useRef(null);     // カードの外枠（スクロールするのはこの箱）
   const noteRef=useRef(null);
   const contRef=useRef(null);
 
   // キーボード操作用state（必ずreturnより前に定義）
   const [kbField,setKbField]=useState('');
   const [showTmPk,setShowTmPk]=useState(false);
+  const [showSlotPk,setShowSlotPk]=useState(false);  // 整備の時間帯のドロップダウン
   const [showWkPk,setShowWkPk]=useState(false);
   const [showShPk,setShowShPk]=useState(false);
   const [showDatePicker,setShowDatePicker]=useState(false);
@@ -7063,7 +7150,12 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     setForm(formData);
     setStaffInput(defaultStaff);
     setShowStaff(false);
-    if(justOpened) setTimeout(()=>{setKbField('name');nameRef.current?.focus();},120);
+    if(justOpened) setTimeout(()=>{
+      // ★畳んだ状態の「＋ 予定を追加」から開いた時は、時間を選ばないと保存できないので**時間から始める**
+      //   （2026-10-15 ユーザー指示）。それ以外は今までどおり氏名から。
+      if(type!=='insp'&&isNew&&!timeSlot){ setKbField('slot'); slotRef.current?.focus(); }
+      else { setKbField('name'); nameRef.current?.focus(); }
+    },120);
   },[isOpen,initialData,isNew,currentUser]);
 
   useEffect(()=>{
@@ -7079,7 +7171,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
 
   // ── キーボード操作 ──────────────────────────────────────────
   const INSP_ORDER=['name','staff','car','carno','course','tokuten','time','note'];
-  const SCHED_ORDER=['name','staff','car','carno','work','shimi','note'];
+  //   ★整備は先頭に時間帯（2026-10-15）。畳んだ状態から追加した時はここが必須の欄になる。
+  const SCHED_ORDER=['slot','name','staff','car','carno','work','shimi','note'];
   const ORDER=isInsp?INSP_ORDER:SCHED_ORDER;
   // フォーカスリング
   const KB=(key)=>kbField===key
@@ -7087,13 +7180,26 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     :{};
   // 次/前のフィールドへ
   const TIME_VALS=SCHED_SLOTS; // 9:00〜18:00＋整理用の特別枠（未定/午前/午後）
-  // キー操作で送った時、フォーカスした項目をモーダルの中央にスクロール
-  //（上の方の項目は先頭でクランプされ中央に来ないが、中央を過ぎたら常に真ん中に保たれる）
-  const centerField=(el)=>{ if(el){try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){} } };
+  // ★編集中の欄が**カードの半分より下**に来たら、真ん中へ戻す（B案・2026-10-15 ユーザー選択）。
+  //   上半分にいる間は動かさない＝必要な時しか画面が動かない。
+  //   以前は ↓キーで送った時だけ scrollIntoView していたので、**Tab・クリックでは一度もスクロールしなかった**
+  //   （実測：scrollTop が 221 のまま、欄がカードの 80% まで下がっていた）。
+  //   いまはカードの枠の onFocus から呼ぶので、Tab でもクリックでも ↓キーでも同じように効く。
+  const centerField=(el)=>{
+    const box=cardRef.current; if(!box||!el)return;
+    try{
+      const br=box.getBoundingClientRect(), ar=el.getBoundingClientRect();
+      const mid=ar.top+ar.height/2-br.top;          // カードの上からの位置
+      if(mid<=br.height*0.5)return;                 // 上半分なら動かさない
+      const want=box.scrollTop+(mid-br.height*0.5);
+      box.scrollTo({top:Math.max(0,Math.min(box.scrollHeight-box.clientHeight,want)),behavior:'smooth'});
+    }catch(e){}
+  };
   const goNext=(from)=>{
     const i=ORDER.indexOf(from); if(i<0||i>=ORDER.length-1)return;
     const next=ORDER[i+1]; setKbField(next);
-    if(next==='name'){nameRef.current?.focus();centerField(nameRef.current);}
+    if(next==='slot'){slotRef.current?.focus();centerField(slotRef.current);}
+    else if(next==='name'){nameRef.current?.focus();centerField(nameRef.current);}
     else if(next==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(next==='car'){carRef.current?.focus();centerField(carRef.current);}
     else if(next==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
@@ -7109,7 +7215,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const goPrev=(from)=>{
     const i=ORDER.indexOf(from); if(i<=0)return;
     const prev=ORDER[i-1]; setKbField(prev);
-    if(prev==='name'){nameRef.current?.focus();centerField(nameRef.current);}
+    if(prev==='slot'){slotRef.current?.focus();centerField(slotRef.current);}
+    else if(prev==='name'){nameRef.current?.focus();centerField(nameRef.current);}
     else if(prev==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(prev==='car'){carRef.current?.focus();centerField(carRef.current);}
     else if(prev==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
@@ -7149,6 +7256,20 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     if(e.key==='ArrowDown'){e.preventDefault();const nv=TIME_VALS[Math.min(cur+1,TIME_VALS.length-1)];setForm(p=>({...p,time:nv}));scrollTmIntoView(nv);}
     else if(e.key==='ArrowUp'){e.preventDefault();const nv=TIME_VALS[Math.max(cur-1,0)];setForm(p=>({...p,time:nv}));scrollTmIntoView(nv);}
     else if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();setShowTmPk(false);if(e.key==='Enter')goNext('time');}
+  };
+  // 整備の時間帯：Enter で開く → ↑↓ で選ぶ → Enter で決めて次へ（入庫時間と同じ操作）
+  const onSlotKb=(e)=>{
+    const cur0=form._slot||timeSlot||'';
+    if(!showSlotPk){
+      if(e.key==='Enter'){e.preventDefault();setShowSlotPk(true);}
+      else if(e.key==='ArrowDown'){e.preventDefault();goNext('slot');}
+      else if(e.key==='ArrowUp'){e.preventDefault();goPrev('slot');}
+      return;}
+    const cur=SCHED_SLOTS.indexOf(getBaseSlot(cur0));
+    const intoView=(v)=>{const el=document.querySelector('[data-slotid="'+v+'"]');if(el)el.scrollIntoView({block:'nearest'});};
+    if(e.key==='ArrowDown'){e.preventDefault();const nv=SCHED_SLOTS[Math.min(cur+1,SCHED_SLOTS.length-1)];setForm(p=>({...p,_slot:nv}));intoView(nv);}
+    else if(e.key==='ArrowUp'){e.preventDefault();const nv=SCHED_SLOTS[Math.max(cur-1,0)];setForm(p=>({...p,_slot:nv}));intoView(nv);}
+    else if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();setShowSlotPk(false);if(e.key==='Enter')goNext('slot');}
   };
   const WIDS=WORKS.map(w=>w.id);
   const onWorkKb=(e)=>{
@@ -7290,7 +7411,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-start'}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} className="slide-in booking-modal-inner"
+      {/* ★onFocus はバブリングするので、Tab・クリック・↓キーのどれで欄が変わっても centerField が走る（2026-10-15） */}
+      <div ref={cardRef} onClick={e=>e.stopPropagation()} className="slide-in booking-modal-inner"
+        onFocus={e=>centerField(e.target)}
         style={{background:'white',width:'clamp(360px,90vw,560px)',height:'100vh',overflowY:'auto',boxShadow:'8px 0 32px rgba(0,0,0,0.22)',borderRight:`3px solid ${isInsp?'#9a3412':'#0891b2'}`}}>
         {/* パネルヘッダー */}
         <div style={{background:isInsp?'linear-gradient(135deg,#9a3412,#ea580c)':'linear-gradient(135deg,#0e7490,#0891b2)',padding:'16px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:20}}>
@@ -7426,12 +7549,36 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             return(
             <div>
               <label style={LBL}>{needPick?'時間 *':'時間帯'} <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>{needPick?'選ばないと保存できません':'変更する場合は選択'}</span></label>
-              <select value={needPick?(form._slot||''):getBaseSlot(form._slot||timeSlot)}
-                onChange={e=>setForm(p=>({...p,_slot:e.target.value}))}
-                style={{...INP,fontWeight:700,color:needPick&&!form._slot?'#9ca3af':'#0891b2'}}>
-                {needPick&&<option value="">--:--</option>}
-                {SCHED_SLOTS.map(s=><option key={s} value={s}>{specialSlotLabel(s)}</option>)}
-              </select>
+              {/* ★<select> をやめて自前のドロップダウンにした（2026-10-15）。
+                  select も日本語入力を英数にしてしまうのと、キーボードだけで選べるようにするため。
+                  操作は車検カードの「入庫時間」と同じ：Enter で開く → ↑↓ で選ぶ → Enter で次へ。 */}
+              <div ref={slotRef} tabIndex={0} data-kbkey="slot"
+                onFocus={()=>setKbField('slot')} onBlur={()=>{setKbField('');setTimeout(()=>setShowSlotPk(false),150);}}
+                onKeyDown={onSlotKb} onClick={()=>setShowSlotPk(p=>!p)}
+                style={{...INP,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',
+                  ...(needPick&&!form._slot?{borderColor:'#f59e0b',background:'#fffbeb'}:{}),...KB('slot')}}>
+                <span style={{fontWeight:700,fontSize:14,color:(needPick&&!form._slot)?'#9ca3af':'#0891b2'}}>
+                  {needPick
+                    ?(form._slot?specialSlotLabel(form._slot):'--:--（Enterで開く）')
+                    :specialSlotLabel(getBaseSlot(form._slot||timeSlot))}
+                </span>
+                <span style={{fontSize:10,color:'#6b7280'}}>{showSlotPk?'▲':'▼'}</span>
+              </div>
+              {showSlotPk&&(
+                <div style={{border:'2px solid #0891b2',borderRadius:8,marginTop:4,maxHeight:200,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                  {SCHED_SLOTS.map(v=>{
+                    const sel=getBaseSlot(form._slot||timeSlot||'')===v;
+                    return(
+                      <div key={v} data-slotid={v}
+                        onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,_slot:v}));setShowSlotPk(false);goNext('slot');}}
+                        style={{padding:'8px 16px',cursor:'pointer',fontSize:14,fontWeight:sel?800:400,
+                          background:sel?'#e0f2fe':'white',color:sel?'#0891b2':'#374151'}}>
+                        {specialSlotLabel(v)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             );
           })()}
@@ -8439,8 +8586,8 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
           </div>
           <div><div style={LB}>ナンバー（FULL）*</div><input value={f.num} onChange={e=>set('num',e.target.value)} placeholder="例：神戸58Aい7177" style={INP}/></div>
           <div><div style={LB}>メーカー（スズキなら点検アラートが出ます）</div><input value={f.maker} onChange={e=>set('maker',e.target.value)} placeholder="例：スズキ" style={INP}/></div>
-          <div><div style={LB}>登録日*</div><input type="date" value={f.regDate} onChange={e=>set('regDate',e.target.value)} style={INP}/></div>
-          <div><div style={LB}>車検満了日*</div><input type="date" value={f.expiry} onChange={e=>set('expiry',e.target.value)} style={INP}/></div>
+          <div><div style={LB}>登録日*</div><HubDatePick value={f.regDate} onChange={v=>set('regDate',v)} clearable={false} placeholder="押して選ぶ" style={{...INP,background:'white'}}/></div>
+          <div><div style={LB}>車検満了日*</div><HubDatePick value={f.expiry} onChange={v=>set('expiry',v)} clearable={false} placeholder="押して選ぶ" style={{...INP,background:'white'}}/></div>
           <div><div style={LB}>初度登録*（年月）</div><input type="month" value={String(f.firstReg||'').slice(0,7)} onChange={e=>set('firstReg',e.target.value)} style={INP}/></div>
           <div><div style={LB}>型式</div><input value={f.model} onChange={e=>set('model',e.target.value)} placeholder="例：MR52S" style={INP}/></div>
           <div style={{gridColumn:'1 / -1'}}>
@@ -8825,15 +8972,15 @@ const VehicleView2=memo(({rows,setRows,loanerH,loanerS,rentalList,onSaveLoanerH,
             <span key={yk} style={{display:'inline-flex',alignItems:'center',gap:4}}>
               <span style={{color:'#64748b'}}>{lb}</span>
               <span style={{background:'#fde047',borderRadius:4,padding:'0 4px',fontWeight:800}}>黄</span>
-              <input type="number" value={cfg[yk]} onChange={e=>saveCfg({...cfg,[yk]:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
+              <input value={cfg[yk]} onChange={e=>saveCfg({...cfg,[yk]:Number(toHankakuNum(e.target.value).replace(/[^0-9]/g,''))||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
               <span style={{background:'#f97316',color:'white',borderRadius:4,padding:'0 4px',fontWeight:800,marginLeft:3}}>橙</span>
-              <input type="number" value={cfg[ok]} onChange={e=>saveCfg({...cfg,[ok]:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
+              <input value={cfg[ok]} onChange={e=>saveCfg({...cfg,[ok]:Number(toHankakuNum(e.target.value).replace(/[^0-9]/g,''))||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
             </span>
           ))}
           <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
             <span style={{color:'#64748b'}}>車検満了</span>
             <span style={{background:'#fde047',borderRadius:4,padding:'0 4px',fontWeight:800}}>色が変わる</span>
-            <input type="number" value={cfg.yCar} onChange={e=>saveCfg({...cfg,yCar:Number(e.target.value)||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
+            <input value={cfg.yCar} onChange={e=>saveCfg({...cfg,yCar:Number(toHankakuNum(e.target.value).replace(/[^0-9]/g,''))||0})} style={{width:48,padding:'2px 5px',border:'1.5px solid #e5e7eb',borderRadius:5}}/>日前
           </span>
           <span style={{fontSize:10.5,color:'#9a3412'}}>赤＝期日を過ぎたら（日数は出しません）</span>
         </div>
@@ -9245,11 +9392,11 @@ const VehicleView=memo(({vehicleData,setVehicleData,loanerH,loanerS,rentalList,o
                 <select value={addForm.category} onChange={e=>setAddForm(p=>({...p,category:e.target.value}))} style={{...INP_S,background:'white'}}>
                   {VEHICLE_CATS.map(c=><option key={c.id} value={c.id}>{c.icon}{c.label}</option>)}
                 </select>
-                <input type="date" value={addForm.regDate} onChange={e=>setAddForm(p=>({...p,regDate:e.target.value}))} style={INP_S} onFocus={e=>e.target.style.borderColor='#0891b2'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                <HubDatePick value={addForm.regDate} onChange={v=>setAddForm(p=>({...p,regDate:v}))} clearable={false} placeholder="押して選ぶ" color="#059669" style={{...INP_S,background:'white'}}/>
                 <div style={{background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:6,padding:'6px 8px'}}>
                   <div style={{fontSize:10,color:'#065f46',fontWeight:700,marginBottom:4}}>最初の点検を設定（任意）</div>
                   <input value={addForm.inspName} onChange={e=>setAddForm(p=>({...p,inspName:e.target.value}))} placeholder="点検名（例：1ヶ月点検）" style={{...INP_S,marginBottom:4}} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
-                  <input type="number" value={addForm.inspDays} onChange={e=>setAddForm(p=>({...p,inspDays:e.target.value}))} placeholder="登録日から何日後？（例：30）" style={INP_S} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                  <input value={addForm.inspDays} onChange={e=>setAddForm(p=>({...p,inspDays:toHankakuNum(e.target.value).replace(/[^0-9]/g,'')}))} placeholder="登録日から何日後？（例：30）" style={INP_S} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
                 </div>
                 <div style={{display:'flex',gap:5}}>
                   <button onClick={addVehicle} disabled={!addForm.name.trim()} style={{flex:1,padding:'7px 0',background:addForm.name.trim()?'#c2410c':'#e5e7eb',color:addForm.name.trim()?'white':'#9ca3af',border:'none',borderRadius:7,fontWeight:700,fontSize:12,cursor:addForm.name.trim()?'pointer':'default'}}>追加</button>
@@ -9329,7 +9476,7 @@ const VehicleView=memo(({vehicleData,setVehicleData,loanerH,loanerS,rentalList,o
                         </div>
                         <div style={{display:'flex',gap:6,alignItems:'center'}}>
                           <label style={{fontSize:11,color:'#374151',fontWeight:600,whiteSpace:'nowrap'}}>登録日</label>
-                          <input type="date" value={editVehicle.regDate||''} onChange={e=>setEditVehicle(p=>({...p,regDate:e.target.value}))} style={INP_S} onFocus={e=>e.target.style.borderColor='#c2410c'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                          <HubDatePick value={editVehicle.regDate||''} onChange={v=>setEditVehicle(p=>({...p,regDate:v}))} clearable={false} placeholder="押して選ぶ" color="#059669" style={{...INP_S,background:'white'}}/>
                         </div>
                         <textarea value={editVehicle.note||''} onChange={e=>setEditVehicle(p=>({...p,note:e.target.value}))} placeholder="メモ" rows={2} style={{...INP_S,resize:'vertical'}} onFocus={e=>e.target.style.borderColor='#c2410c'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
                         <div style={{display:'flex',gap:6}}>
@@ -9392,7 +9539,7 @@ const VehicleView=memo(({vehicleData,setVehicleData,loanerH,loanerS,rentalList,o
                     <div style={{display:'flex',flexDirection:'column',gap:6}}>
                       <input value={addInspForm.name} onChange={e=>setAddInspForm(p=>({...p,name:e.target.value}))} placeholder="点検名（例：6ヶ月点検、車検、保険更新 など）" style={INP_S} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
                       <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                        <input type="number" value={addInspForm.days} onChange={e=>setAddInspForm(p=>({...p,days:e.target.value}))} placeholder={selVehicle.regDate?`登録日から何日後？（登録日：${fmtDate(selVehicle.regDate)}）`:'登録日から何日後？'} style={{...INP_S,flex:1}} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                        <input value={addInspForm.days} onChange={e=>setAddInspForm(p=>({...p,days:toHankakuNum(e.target.value).replace(/[^0-9]/g,'')}))} placeholder={selVehicle.regDate?`登録日から何日後？（登録日：${fmtDate(selVehicle.regDate)}）`:'登録日から何日後？'} style={{...INP_S,flex:1}} onFocus={e=>e.target.style.borderColor='#059669'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
                       </div>
                       {selVehicle.regDate&&addInspForm.days&&(
                         <div style={{fontSize:11,color:'#065f46',background:'white',padding:'4px 8px',borderRadius:5,border:'1px solid #a7f3d0'}}>
@@ -10463,20 +10610,20 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
             {/* ★日付欄でも直せる（2026-10-02 ユーザー指示）。長い期間はドラッグが大変なため */}
             <div style={{display:'flex',gap:8,alignItems:'center',justifyContent:'center',marginBottom:12}}>
               <span style={{fontSize:11,fontWeight:800,color:'#64748b',whiteSpace:'nowrap'}}>貸出日</span>
-              <input type="date" value={`${start.year}-${String(start.month+1).padStart(2,'0')}-${String(start.day).padStart(2,'0')}`}
-                onChange={e=>{const p=e.target.value.split('-').map(Number);if(p.length!==3||p.some(isNaN))return;
+              <HubDatePick clearable={false} value={`${start.year}-${String(start.month+1).padStart(2,'0')}-${String(start.day).padStart(2,'0')}`}
+                onChange={vv=>{const p=vv.split('-').map(Number);if(p.length!==3||p.some(isNaN))return;
                   const ns={year:p[0],month:p[1]-1,day:p[2]};
                   setConfirm(c=>{if(!c)return c;const en=new Date(c.end.year,c.end.month,c.end.day),st=new Date(ns.year,ns.month,ns.day);return{...c,start:ns,end:st>en?ns:c.end};});}}
-                style={{padding:'6px 8px',border:'2px solid #93c5fd',borderRadius:8,fontSize:13,fontFamily:'inherit'}}/>
+                style={{padding:'6px 8px',border:'2px solid #93c5fd',borderRadius:8,fontSize:13,fontFamily:'inherit',background:'white'}}/>
               <span style={{fontSize:12,color:'#64748b',fontWeight:700}}>〜</span>
               <span style={{fontSize:11,fontWeight:800,color:'#64748b',whiteSpace:'nowrap'}}>返却日</span>
-              <input type="date" value={`${end.year}-${String(end.month+1).padStart(2,'0')}-${String(end.day).padStart(2,'0')}`}
-                onChange={e=>{const p=e.target.value.split('-').map(Number);if(p.length!==3||p.some(isNaN))return;
+              <HubDatePick clearable={false} value={`${end.year}-${String(end.month+1).padStart(2,'0')}-${String(end.day).padStart(2,'0')}`}
+                onChange={vv=>{const p=vv.split('-').map(Number);if(p.length!==3||p.some(isNaN))return;
                   const ne={year:p[0],month:p[1]-1,day:p[2]};
                   setConfirm(c=>{if(!c)return c;const st=new Date(c.start.year,c.start.month,c.start.day),en=new Date(ne.year,ne.month,ne.day);if(en<st){alert('返却日は貸出日より後にしてください。');return c;}
                     if(hasConflict(c.carId,c.start.year,c.start.month,c.start.day,ne.year,ne.month,ne.day)){alert('その期間はこの代車が既に使われています。');return c;}
                     return{...c,end:ne};});}}
-                style={{padding:'6px 8px',border:'2px solid #93c5fd',borderRadius:8,fontSize:13,fontFamily:'inherit'}}/>
+                style={{padding:'6px 8px',border:'2px solid #93c5fd',borderRadius:8,fontSize:13,fontFamily:'inherit',background:'white'}}/>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
               <input value={pickUser} onChange={e=>setPickUser(e.target.value)}
@@ -10831,8 +10978,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
             <div style={{display:'grid',gap:12}}>
               <div><label style={LBL}>利用者名</label><input value={editForm.user} onChange={e=>setEditForm(p=>({...p,user:e.target.value}))} style={INP} autoFocus/></div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                <div><label style={LBL}>貸出日</label><input type="date" value={editForm.startDate} onChange={e=>setEditForm(p=>({...p,startDate:e.target.value}))} style={INP}/></div>
-                <div><label style={LBL}>返却日</label><input type="date" value={editForm.endDate} onChange={e=>setEditForm(p=>({...p,endDate:e.target.value}))} style={INP}/></div>
+                <div><label style={LBL}>貸出日</label><HubDatePick clearable={false} value={editForm.startDate} onChange={v=>setEditForm(p=>({...p,startDate:v}))} style={{...INP,background:'white'}}/></div>
+                <div><label style={LBL}>返却日</label><HubDatePick clearable={false} value={editForm.endDate} onChange={v=>setEditForm(p=>({...p,endDate:v}))} style={{...INP,background:'white'}}/></div>
               </div>
               {/* 他の予約状況ミニプレビュー（近い分だけ・多い時はスクロール） */}
               {(()=>{const n=nearRes(loanerRes[editModal.carId],editForm,editModal.resId);return(
@@ -10870,8 +11017,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
             <div style={{display:'grid',gap:12}}>
               <div><label style={LBL}>利用者名</label><input value={rentalEditForm.user} onChange={e=>setRentalEditForm(p=>({...p,user:e.target.value}))} style={INP} autoFocus/></div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                <div><label style={LBL}>貸出日</label><input type="date" value={rentalEditForm.startDate} onChange={e=>setRentalEditForm(p=>({...p,startDate:e.target.value}))} style={INP}/></div>
-                <div><label style={LBL}>返却日</label><input type="date" value={rentalEditForm.endDate} onChange={e=>setRentalEditForm(p=>({...p,endDate:e.target.value}))} style={INP}/></div>
+                <div><label style={LBL}>貸出日</label><HubDatePick clearable={false} value={rentalEditForm.startDate} onChange={v=>setRentalEditForm(p=>({...p,startDate:v}))} style={{...INP,background:'white'}}/></div>
+                <div><label style={LBL}>返却日</label><HubDatePick clearable={false} value={rentalEditForm.endDate} onChange={v=>setRentalEditForm(p=>({...p,endDate:v}))} style={{...INP,background:'white'}}/></div>
               </div>
               {(()=>{const n=nearRes((rentalRes||{})[rentalEditModal.carId],rentalEditForm,rentalEditModal.resId);return(
               <div style={{background:'#f0fdf4',borderRadius:6,padding:'8px 10px',fontSize:11,color:'#6b7280'}}>
@@ -14915,16 +15062,15 @@ function AppInner() {
                       <button onClick={()=>moveDate(-7)} style={{...NAV_S,padding:'4px 7px',fontSize:10}} title="前週">«</button>
                       <button onClick={()=>moveDate(-1)} style={{...NAV_S,padding:'4px 8px'}}><ChevronLeft size={14}/></button>
                       <div style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
-                        <span
-                          onClick={()=>{const el=document.getElementById('sched-date-input');if(el){try{el.showPicker();}catch{el.click();}}}}
-                          style={{fontWeight:900,fontSize:15,color:'white',padding:'4px 14px',minWidth:130,textAlign:'center',background:'#7c2d12',border:'2px solid #a5b4fc',borderRadius:8,cursor:'pointer',userSelect:'none',display:'inline-block'}}>
-                          {_selDate?`${_selDate.getMonth()+1}月${_selDate.getDate()}日（${['日','月','火','水','木','金','土'][_selDate.getDay()]}）`:''}
-                        </span>
-                        <input id="sched-date-input" type="date"
+                        {/* ★隠した type="date" を showPicker で開いていた（2026-10-15 まで）。
+                            ネイティブの日付欄に入ると Windows の IME が英数になり、備考・メモで ひらがな に戻らない。
+                            自前のカレンダーにして、見た目は今までの札のまま。 */}
+                        <HubDatePick clearable={false} icon={null} color="#7c2d12" txColor="white"
                           value={_selDate?`${_selDate.getFullYear()}-${String(_selDate.getMonth()+1).padStart(2,'0')}-${String(_selDate.getDate()).padStart(2,'0')}`:''}
-                          onChange={e=>{const p=e.target.value.split('-').map(Number);if(p.length===3&&!isNaN(p[0]))setSelDate(new Date(p[0],p[1]-1,p[2]));}}
-                          style={{position:'absolute',opacity:0,width:'1px',height:'1px',top:0,left:0,pointerEvents:'none'}}
-                        />
+                          onChange={v=>{const p=v.split('-').map(Number);if(p.length===3&&!isNaN(p[0]))setSelDate(new Date(p[0],p[1]-1,p[2]));}}
+                          fmt={(v,dt)=>`${dt.getMonth()+1}月${dt.getDate()}日（${['日','月','火','水','木','金','土'][dt.getDay()]}）`}
+                          style={{fontWeight:900,fontSize:15,padding:'4px 14px',minWidth:130,justifyContent:'center',
+                            userSelect:'none',background:'#7c2d12',border:'2px solid #a5b4fc',borderRadius:8}}/>
                       </div>
                       <button onClick={()=>moveDate(1)} style={{...NAV_S,padding:'4px 8px'}}><ChevronRight size={14}/></button>
                       <button onClick={()=>moveDate(7)} style={{...NAV_S,padding:'4px 7px',fontSize:10}} title="翌週">»</button>
