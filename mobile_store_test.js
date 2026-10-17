@@ -167,6 +167,19 @@ const DK = `${Y}-${M + 1}-${D}`;
   }, [STOR, DK], { timeout: 25000 }).then(() => true).catch(() => false),
     await page.evaluate(k => window.__fakeFb.get(k + 'honten-sched'), STOR));
 
+  // ★スマホで保存した整備にも store が入る（2026-10-17 ユーザー報告）
+  //   PC は書いていてスマホは書いていなかったため、同じ整備でも「PCで保存した行だけ store が入る」不揃いになっていた。
+  //   （本番の実データで、直近に store が欠けていた5件はすべてスマホ保存分だった）
+  t("★スマホで保存した整備の行にも store が入る", await page.evaluate(([k, dk]) => {
+    const day = (window.__fakeFb.get(k + "sanda-sched") || {})[dk] || {};
+    const r = Object.values(day).find(x => x && x.name === "相原");
+    return !!(r && (r.store === "sanda" || r.store === "三田店"));
+  }, [STOR, DK]), await page.evaluate(([k, dk]) => {
+    const day = (window.__fakeFb.get(k + "sanda-sched") || {})[dk] || {};
+    const r = Object.values(day).find(x => x && x.name === "相原");
+    return r ? { name: r.name, store: r.store === undefined ? "(無い)" : r.store } : "(行が無い)";
+  }, [STOR, DK]));
+
   // ── iPhone の自動拡大よけ：入力欄の文字が16px以上か ──
   console.log('\n■ 画面が勝手に拡大しないか（入力欄の文字は16px以上）');
   const small = await page.evaluate(() => {

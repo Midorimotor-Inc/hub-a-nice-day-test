@@ -38,7 +38,7 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 (async () => {
   const seed = {
     [STOR + 'insp']: { [DK]: [{ name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' }] },
-    [STOR + 'honten-sched']: { [DK]: { '10:00': { id: 11, name: '相原', carType: 'ワゴンR', work: 'オイル', content: '' } } },
+    [STOR + 'honten-sched']: { [DK]: { '10:00': { id: 11, name: '相原', carType: 'ワゴンR', work: 'オイル', content: '', store: 'honten' } } },
     [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [{ uid: 's10', name: '藤原昭人', myNumber: 10, badge: 'inspector', store: 'sanda' }],
@@ -98,6 +98,15 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     return !!r && (r.store === 'sanda' || r.store === '三田店');
   }, [STOR, DK], { timeout: 20000 }).then(() => true).catch(() => false),
     await page.evaluate(([k, dk]) => ((window.__fakeFb.get(k + 'insp') || {})[dk] || []).map(r => r && { n: r.name, s: r.store }), [STOR, DK]));
+
+  // ★タイムスケジュールのお客様欄に店舗バッジを出さない（2026-10-17 ユーザー指示）
+  //   整備の予定は店ごとのデータなので、見ている店と必ず同じ＝情報がない。
+  //   （本番・テスト版とも「store が見ている店と違う」予定は0件であることを確認済み）
+  t("★整備の行に店舗バッジを出さない（相原さんの行）", await page.evaluate(() => {
+    const td = [...document.querySelectorAll("td")].find(e => e.innerText.includes("相原"));
+    if (!td) return false;
+    return !/本店|三田店/.test(td.innerText);
+  }), await page.evaluate(() => { const td = [...document.querySelectorAll("td")].find(e => e.innerText.includes("相原")); return td ? td.innerText.replace(/s+/g, " ") : "(行が無い)"; }));
 
   // ── ③ 整備の店を変えて移す ──
   console.log('\n■ ③ 整備（一般予約カード）の店を変えて移す');
