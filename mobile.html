@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792206704357';
+  window.__APP_BUILD='build-1792228075799';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.65.2';
+const MOBILE_VERSION='3.66';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1271,7 +1271,9 @@ const addPending=p=>savePendingStore([...loadPending(),p]);
 const removePendingStore=pid=>savePendingStore(loadPending().filter(p=>p.pid!==pid));
 
 // ══ 予約データのコアロジック（PC版と同一。挙動を変えないこと）══
-const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',staff:'',carType:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
+// 全角数字→半角（PC の toHankakuNum と同じ）。ひらがなのまま ３３１０ と打っても 3310 になる。
+const toHankakuNum=(v)=>String(v==null?'':v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',staff:'',carType:'',no:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
 // dk("2026-7-9") ⇔ <input type=date>("2026-07-09") 変換
 const dkToInputDate=(dk)=>{if(!dk)return'';const p=String(dk).split('-');return p.length===3?`${p[0]}-${String(p[1]).padStart(2,'0')}-${String(p[2]).padStart(2,'0')}`:'';};
 const inputDateToDk=(v)=>{if(!v)return'';const p=v.split('-').map(Number);return p.length===3?`${p[0]}-${p[1]}-${p[2]}`:'';};
@@ -1883,8 +1885,13 @@ const VEH_COLORS=[['パール/白','#f8fafc'],['ブラック','#1f2937'],['シ�
   ['カーキ','#75923c'],['オフブルー','#7dd3fc'],['ブルー','#2563eb'],['デニム','#3687a4'],
   ['ベージュ','#eeece1'],['アイボリー','#ffff99'],['ブラウン','#78350f'],['レッド','#dc2626'],['イエロー','#fde047'],['グリーン','#059669']];
 const vehPlate4=num=>{const m=String(num||'').match(/(\d{1,4})(?!.*\d)/);return m?m[1]:'';};
+// ★月末は「移り先の月の末日」で止める（2026-10-17）。止めないと JS の日付がそのまま繰り上がり、
+//   1/30 の1か月後が 3/2、8/31 の1か月後が 10/1 になって**ひと月ずれる**（本番の実データで1台発覚）。
 const vehAddMonths=(iso,m)=>{ if(!iso)return ''; const p=String(iso).split('-').map(Number); if(!p[0])return '';
-  const d=new Date(p[0],(p[1]||1)-1+m,p[2]||1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  const y=p[0], mo=(p[1]||1)-1, day=p[2]||1;
+  const last=new Date(y,mo+m+1,0).getDate();          // 移り先の月の末日
+  const d=new Date(y,mo+m,Math.min(day,last));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 // 点検の基準日（＝登録日）。空の時は車検満了日から逆算（PC版 vehBase と同じ）
 const vehBase=(v)=>{
   if(v&&v.regDate)return v.regDate;
@@ -3109,7 +3116,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   const sc=isInsp?'#3730a3':'#0e7490';
   const [form,setForm]=useState(()=>{
     const base={
-      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
+      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
       staff:currentUser?.name||'',
       ...(initial||{}),
     };
@@ -3299,6 +3306,17 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
                 {staffNames.map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </div>
+          </div>
+          {/* ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）。
+              スマホは inputMode を付けたまま（iPhone は欄ごとに切り替わるので巻き添えが無く、数字キーパッドが出る利点が大きい）。
+              それでも変換が走る端末があるので、変換中は数字に削らない（PC と同じ守り）。 */}
+          <div>
+            <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>4桁・任意</span></label>
+            <input value={form.no==null?'':String(form.no)} inputMode="numeric" placeholder="例：3310" style={INP}
+              onChange={e=>{const ime=!!(e.nativeEvent&&e.nativeEvent.isComposing);
+                const v=ime?e.target.value:toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);
+                setForm(p=>({...p,no:v}));}}
+              onCompositionEnd={e=>{const v=toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);setForm(p=>({...p,no:v}));}}/>
           </div>
           {/* ★電話（任意・2026-10-06 ユーザー要望）。車検・一般とも。PC版と同じ form.phone。
               リストから予約した時はリストの番号が入っている。入っていれば 📞 でそのままかけられる。

@@ -137,6 +137,45 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('★ナンバー欄は日本語入力を解除しない（inputmode を付けない）', !!imeAttrs.no && !imeAttrs.no.inputmode, imeAttrs.no);
   t('ナンバー欄は number 型でもない（これも解除してしまう）', !!imeAttrs.no && imeAttrs.no.type !== 'number', imeAttrs.no);
   t('電話欄も解除しない（2026-09-23 の直しが残っている）', !!imeAttrs.tel && !imeAttrs.tel.inputmode && imeAttrs.tel.type !== 'tel', imeAttrs.tel);
+  // ★★日本語入力（ひらがな）のまま、変換しながら打つ（2026-10-17 現場報告）
+  //   「何度打っても任意の数字が入らず、30回以上やってようやく入った」の再現。
+  //   inputMode を外した（v3.61.1）ので、この欄にも IME の変換が効くようになった。
+  //   打つたびに数字以外を削って value を書き換えると、変換中の文字が壊れて数字が入らない。
+  //   ★本物の IME と同じ経路（CDP の Input.imeSetComposition）で確かめること。
+  //     手作りの input イベントでは composition が起きないので、このバグは絶対に見つからない。
+  const cdp = await ctx.newCDPSession(page);
+  const noInput = () => page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const i = wrap && wrap.querySelector(':scope > input'); if (!i) return null; i.focus(); return i.value;
+  });
+  // いったん空にする
+  await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const i = wrap.querySelector(':scope > input');
+    const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    st.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  await noInput();
+  for (const c of ['３', '３３', '３３１', '３３１０']) {
+    await cdp.send('Input.imeSetComposition', { text: c, selectionStart: c.length, selectionEnd: c.length });
+    await page.waitForTimeout(120);
+  }
+  const during = await noInput();
+  t('★変換している最中は、打った文字がそのまま見えている（消えない）', during === '３３１０', during);
+  await cdp.send('Input.insertText', { text: '３３１０' });   // 確定（Enter）
+  await page.waitForTimeout(500);
+  const fixed = await fieldByLabel(page, 'ナンバー');
+  t('★★日本語入力のまま変換して打っても 3310 が入る', !!fixed && fixed.value === '3310', fixed);
+  t('★変換で打った後も number 型や inputmode は付いていない', !!fixed && !fixed.inputmode && fixed.type !== 'number', fixed);
+  t('★maxLength は付けない（変換中の文字が切られて壊れるため）', await page.evaluate(() => {
+    const box = document.querySelector('.booking-modal-inner');
+    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const i = wrap.querySelector(':scope > input'); return !i.hasAttribute('maxlength');
+  }));
+
   // 全角で打っても半角4桁になる（ひらがなのまま打てる）
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');

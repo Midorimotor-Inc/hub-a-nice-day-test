@@ -100,6 +100,31 @@ const hasLabel = (page, re) => page.evaluate(r =>
   t('16px以上（iPhoneが勝手に拡大しない）', !!p1 && p1.fs >= 16, p1 && p1.fs);
   t('車検には住所の欄もある（PC版と同じ）', await hasLabel(page, '^住所'));
 
+  // ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）
+  const noInfo = await page.evaluate(() => {
+    const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
+    if (!lab) return null;
+    const inp = lab.parentElement && lab.parentElement.querySelector('input');
+    if (!inp) return null;
+    const labs = [...document.querySelectorAll('label')].filter(e => e.offsetParent !== null).map(e => e.innerText.trim().split(' ')[0]);
+    return { ph: inp.placeholder || '', im: inp.getAttribute('inputmode') || '', fs: parseFloat(getComputedStyle(inp).fontSize),
+      afterCar: labs.indexOf('ナンバー') > labs.findIndex(x => /^車種/.test(x)) };
+  });
+  t('★ナンバーの欄がある', !!noInfo, noInfo);
+  t('★車種より下にある（車名の下に1行）', !!noInfo && noInfo.afterCar, noInfo);
+  t('数字キーパッドが出る（スマホはそのまま）', !!noInfo && noInfo.im === 'numeric', noInfo);
+  t('16px以上（iPhoneが勝手に拡大しない）', !!noInfo && noInfo.fs >= 16, noInfo);
+  t('★全角で打っても半角4桁になる', await page.evaluate(() => {
+    const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
+    const inp = lab.parentElement.querySelector('input');
+    const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    st.call(inp, '３３１０'); inp.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }) && await (async () => { await page.waitForTimeout(400); return page.evaluate(() => {
+    const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
+    return lab.parentElement.querySelector('input').value === '3310';
+  }); })());
+
   t('電話番号を入れられる', await typePhone(page, '090-1234-5678'));
   await page.waitForTimeout(400);
   t('入っていると 📞 が出る', await page.evaluate(() =>

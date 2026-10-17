@@ -226,6 +226,26 @@ const minus = n => plus(-n);
   const insAfter = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v1').insurance, STOR+'vehicles-v2');
   t('★一覧で保険の○×を切り替えられる', insBefore!==insAfter, {before:insBefore,after:insAfter});
 
+  // ── ★所在地は押すたびに 本店⇄三田店（2026-10-17 ユーザー指示）──
+  //   タイヤ・保険と同じで、押しても右の詳細パネルは開かない（stopPropagation）。
+  const stOf = () => page.evaluate(k => ((window.__fakeFb.get(k)||[]).find(x=>x&&x.id==='v1')||{}).store, STOR+'vehicles-v2');
+  const tapLoc = () => page.evaluate(() => {
+    const r=[...document.querySelectorAll('tr')].find(x=>x.innerText.includes('ハスラー タフワイルド ホワイト'));
+    if(!r)return false; const td=[...r.querySelectorAll('td')].find(c=>(c.title||'').includes('本店⇄三田店'));
+    if(!td)return false; td.click(); return true; });
+  // 先に詳細パネルを閉じておく（前の検査で開いたままのことがある）
+  await page.evaluate(() => { const p=document.querySelector('[data-vehpanel]'); if(p){ const x=[...p.querySelectorAll('button')].find(b=>b.innerText.trim()==='✕'); if(x)x.click(); } });
+  await page.waitForTimeout(600);
+  t('★検査の前提：詳細パネルは閉じている', !(await page.evaluate(() => !!document.querySelector('[data-vehpanel]'))));
+  const stBefore = await stOf();
+  t('★所在地の欄が押せるようになっている', await tapLoc());
+  await page.waitForTimeout(1200);
+  const stAfter1 = await stOf();
+  t('★1回押すと所在地が入れ替わる', stBefore!==stAfter1 && ['honten','sanda'].includes(stAfter1), {before:stBefore,after:stAfter1});
+  t('★押しても右の詳細パネルは開かない', !(await page.evaluate(() => !!document.querySelector('[data-vehpanel]'))));
+  await tapLoc(); await page.waitForTimeout(1200);
+  t('★もう一度押すと元に戻る（本店→三田店→本店）', (await stOf())===stBefore, {before:stBefore,after1:stAfter1,after2:await stOf()});
+
   head('⑫ 期日の表示とナビの印（2026-10-05 ユーザー指示）');
   const m6cell = await cellOf('ハスラー タフワイルド ホワイト',12);
   t('★6か月点検は期日も出す', /[0-9]+\/[0-9]+/.test(m6cell), m6cell);
@@ -240,6 +260,37 @@ const minus = n => plus(-n);
   t('★ナビの印は △! になっている', !!mark, mark);
   t('★色は 黄・オレンジ・赤 のどれか', !!mark && ['rgb(234, 179, 8)','rgb(249, 115, 22)','rgb(220, 38, 38)'].includes(mark.color), mark);
   t('★3秒で止まる', !!mark && mark.cnt==='4' && parseFloat(mark.dur)===0.75, mark);
+
+  // ── ⑦ 点検の自動設計（画面の純関数をそのまま取り出して確かめる）──
+  console.log(String.fromCharCode(10) + '■ ⑦ 点検の自動設計 1か月→6か月→12か月→12か月→車検');
+  const SRC2 = fs.readFileSync(path.join(DIR, process.env.SRC || 'index_dev.html'), 'utf8');
+  const _f = SRC2.indexOf('const vehIsSuzuki='), _to = SRC2.indexOf('const vehInspState=');
+  const vbox = {};
+  new Function('box', SRC2.slice(_f, _to) + ';Object.assign(box,{vehAddMonths,vehBase,vehIsNewPeriod,vehM12List,vehInspDue,vehAlertKinds});')(vbox);
+  const mo = (a, b) => { const p = String(a).split('-').map(Number), q = String(b).split('-').map(Number); return (q[0] - p[0]) * 12 + (q[1] - p[1]); };
+  // 新車の乗用（登録から車検満了まで36か月）
+  const car = { id: 1, maker: 'スズキ', regDate: '2026-04-20', expiry: '2029-04-20' };
+  const list = vbox.vehM12List(car);
+  t('⑦ 1か月点検は登録の1か月後', vbox.vehInspDue(car, 'm1') === '2026-05-20', vbox.vehInspDue(car, 'm1'));
+  t('⑦ 6か月点検は登録の6か月後', vbox.vehInspDue(car, 'm6') === '2026-10-20', vbox.vehInspDue(car, 'm6'));
+  t('⑦ 12か月点検は2回（1年後・2年後）', list.length === 2 && list[0] === '2027-04-20' && list[1] === '2028-04-20', list);
+  t('⑦ 車検満了の回は作らない（3年後は出さない）', !list.includes('2029-04-20'), list);
+  t('⑦ 並びが 1か月→6か月→12か月→12か月→車検 の順になる', (() => {
+    const seq = [vbox.vehInspDue(car, 'm1'), vbox.vehInspDue(car, 'm6'), ...list, car.expiry];
+    return JSON.stringify(seq) === JSON.stringify(seq.slice().sort());
+  })());
+  // 4ナンバー貨物（2年車検）は12か月が1回
+  const k4 = { id: 2, maker: 'スズキ', cargo4: true, regDate: '2026-04-20', expiry: '2028-04-20' };
+  t('⑦ 4ナンバーの12か月点検は1回', vbox.vehM12List(k4).length === 1, vbox.vehM12List(k4));
+  // 新車でない車には 1か月・6か月を出さない
+  const old = { id: 3, maker: 'スズキ', regDate: '2020-04-20', expiry: '2028-04-20' };
+  t('⑦ 新車でない車に 1か月・6か月は出さない', !vbox.vehInspDue(old, 'm1') && !vbox.vehInspDue(old, 'm6'));
+  // ★月末の繰り上がり（2026-10-17。本番の実データで1台ずれていた）
+  t('★⑦ 1/30 の1か月後は 2月末（3/2 にならない）', vbox.vehAddMonths('2023-01-30', 1) === '2023-02-28', vbox.vehAddMonths('2023-01-30', 1));
+  t('★⑦ 1/31 の1か月後も 2月末', vbox.vehAddMonths('2023-01-31', 1) === '2023-02-28', vbox.vehAddMonths('2023-01-31', 1));
+  t('★⑦ 8/31 の1か月後は 9/30（10/1 にならない）', vbox.vehAddMonths('2026-08-31', 1) === '2026-09-30', vbox.vehAddMonths('2026-08-31', 1));
+  t('★⑦ うるう日 2/29 の12か月後は 2/28', vbox.vehAddMonths('2024-02-29', 12) === '2025-02-28', vbox.vehAddMonths('2024-02-29', 12));
+  t('⑦ 月末でない日はそのまま', vbox.vehAddMonths('2026-04-20', 6) === '2026-10-20', vbox.vehAddMonths('2026-04-20', 6));
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
