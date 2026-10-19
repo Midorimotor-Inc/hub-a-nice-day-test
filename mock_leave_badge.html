@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>有給バッジのモック</title>
+<!--
+  2026-10-19 ご依頼：スケジュールのスタッフバーで、有給の人に「有」の一文字バッジを付ける。
+  いまは 📋 の絵文字。アプリにある業務バッジ（代・店・工・検 …）と同じ形にそろえる案を並べた。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --off:#9ca3af; --leave:#0f766e; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.7}
+  .wrap{max-width:1000px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:17px;font-weight:900;margin-bottom:6px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.9}
+  .case{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+  .case h2{font-size:13.5px;font-weight:900;padding:11px 14px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .case h2 small{font-weight:600;color:var(--ink2);margin-left:8px;font-size:11.5px}
+  .pick{display:inline-block;margin-left:9px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .pad{padding:14px}
+  .note{font-size:11.5px;color:var(--ink2);padding:9px 14px;background:#f8fafc;border-top:1px dashed var(--line);line-height:1.9}
+
+  /* ── 本物のスタッフバーに寄せた作り ── */
+  .bar{display:flex;align-items:stretch;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;max-width:820px}
+  .work{display:flex;align-items:center;gap:6px;padding:5px 12px;background:#eff6ff;flex:1;flex-wrap:wrap;min-width:0}
+  .work .ttl{font-weight:700;font-size:11;color:#374151;white-space:nowrap}
+  .pillW{padding:2px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;font-weight:700;font-size:11px;border:1px solid #bfdbfe;white-space:nowrap}
+  .rest{display:flex;align-items:center;gap:6px;padding:5px 12px;border-left:1px solid #e5e7eb;flex-wrap:wrap;justify-content:flex-end;
+        background:repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 3px,#ebebeb 3px,#ebebeb 6px);min-width:fit-content;max-width:45%}
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;background:var(--off);color:#fff;font-weight:700;font-size:11px;white-space:nowrap}
+  .pill.lv{background:var(--leave)}
+  .tail{font-size:11px;color:#9ca3af;flex-shrink:0}
+
+  /* 一文字バッジ（アプリの業務バッジと同じ作り：16px・角丸4・白文字） */
+  .bdg{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;
+       background:#0f766e;color:#fff;font-size:9px;font-weight:900;line-height:1;flex-shrink:0}
+  .bdg.round{border-radius:50%}
+  .bdg.off{background:#6b7280}
+  .bdg.onwhite{background:#fff;color:#0f766e}
+
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .lbl{font-size:11.5px;color:var(--ink2);width:54px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>有給の「有」バッジ</h1>
+  <div class="lead">
+    スケジュールのスタッフバー（右側の網掛けが休みの枠）です。<br>
+    例：<b>竹林直行＝休日</b>／<b>魚住圭＝有給</b>／江川京志は出勤。
+  </div>
+
+  <!-- いま -->
+  <div class="case">
+    <h2>いま <small>v3.66.1 で入れた形。絵文字の 📋 が付いている</small></h2>
+    <div class="pad">
+      <div class="bar">
+        <div class="work"><span>👤</span><span class="ttl">本日</span><span class="pillW">江川京志</span></div>
+        <div class="rest">
+          <span class="pill">竹林直行</span>
+          <span class="pill lv">📋 魚住圭</span>
+          <span class="tail">🏖</span>
+        </div>
+      </div>
+    </div>
+    <div class="note">絵文字は端末によって形も幅も変わります。小さい字だと何の印か分かりにくいのが難点です。</div>
+  </div>
+
+  <!-- A案 -->
+  <div class="case">
+    <h2>A案：名前の左に四角い「有」 <span class="pick">アプリの他のバッジと同じ形</span><small>業務バッジ（代・店・工・検…）と同じ 16px・角丸・白文字</small></h2>
+    <div class="pad">
+      <div class="bar">
+        <div class="work"><span>👤</span><span class="ttl">本日</span><span class="pillW">江川京志</span></div>
+        <div class="rest">
+          <span class="pill">竹林直行</span>
+          <span class="pill lv"><span class="bdg onwhite">有</span>魚住圭</span>
+          <span class="tail">🏖</span>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <span class="lbl">単体</span>
+        <span class="pill lv"><span class="bdg onwhite">有</span>魚住圭</span>
+        <span class="pill">竹林直行</span>
+        <span style="font-size:11.5px;color:#5b6676">← 有給は濃い緑＋白い「有」、休日は今までどおり灰色</span>
+      </div>
+    </div>
+    <div class="note">名前の<b>前</b>に付くので、並んでいても<b>すぐ見分けられます</b>。白抜きなので濃い緑の上でもはっきり読めます。</div>
+  </div>
+
+  <!-- B案 -->
+  <div class="case">
+    <h2>B案：名前の左に丸い「有」 <small>形だけ丸にしたもの</small></h2>
+    <div class="pad">
+      <div class="bar">
+        <div class="work"><span>👤</span><span class="ttl">本日</span><span class="pillW">江川京志</span></div>
+        <div class="rest">
+          <span class="pill">竹林直行</span>
+          <span class="pill lv"><span class="bdg round onwhite">有</span>魚住圭</span>
+          <span class="tail">🏖</span>
+        </div>
+      </div>
+    </div>
+    <div class="note">丸はアプリの中では「人」の印に使っているので、<b>業務バッジと見間違えにくい</b>反面、少し目立ちます。</div>
+  </div>
+
+  <!-- C案 -->
+  <div class="case">
+    <h2>C案：名前の右に「有」 <small>氏名を先に読ませる</small></h2>
+    <div class="pad">
+      <div class="bar">
+        <div class="work"><span>👤</span><span class="ttl">本日</span><span class="pillW">江川京志</span></div>
+        <div class="rest">
+          <span class="pill">竹林直行</span>
+          <span class="pill lv">魚住圭<span class="bdg onwhite">有</span></span>
+          <span class="tail">🏖</span>
+        </div>
+      </div>
+    </div>
+    <div class="note">名前が先に来るので読みやすいですが、名前の長さで<b>バッジの位置がそろいません</b>。</div>
+  </div>
+
+  <!-- D案 -->
+  <div class="case">
+    <h2>D案：休日にも「休」を付けて対にする <small>A案＋休日側にも一文字</small></h2>
+    <div class="pad">
+      <div class="bar">
+        <div class="work"><span>👤</span><span class="ttl">本日</span><span class="pillW">江川京志</span></div>
+        <div class="rest">
+          <span class="pill"><span class="bdg off" style="background:#fff;color:#6b7280">休</span>竹林直行</span>
+          <span class="pill lv"><span class="bdg onwhite">有</span>魚住圭</span>
+          <span class="tail">🏖</span>
+        </div>
+      </div>
+    </div>
+    <div class="note">休日と有給が<b>同じ形で並ぶ</b>ので、どちらがどちらか迷いません。そのぶん印は増えます。</div>
+  </div>
+
+  <div class="case"><h2>※ 補足</h2>
+    <div class="note">
+      ・色は<b>有給＝濃い緑</b>（#0f766e）、<b>休日＝灰色</b>（#9ca3af）で、カレンダーの 🏖 休日 ／ 📋 有給 と合わせています。<br>
+      ・バッジの大きさは<b>アプリの業務バッジと同じ 16px</b>です。<br>
+      ・<b>スマホ版には今回は入れていません</b>。必要なら同じ形で入れられます。
+    </div>
+  </div>
+</div>
+</body>
+</html>

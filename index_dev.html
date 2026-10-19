@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792228075799';
+    window.__APP_BUILD='build-1792388479282';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.66';
+const APP_VERSION = '3.66.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -6168,7 +6168,7 @@ const MemoModal=memo(({isNew,initContent,initBy,staffNames,dateLabel,onSave,onDe
 // ============================================
 //  休日スタッフ編集モーダル
 // ============================================
-const DayOffModal=memo(({isOpen,onClose,dateLabel,staffList,selected,onSave})=>{
+const DayOffModal=memo(({isOpen,onClose,dateLabel,staffList,selected,onSave,storeName,onOpenCalendar})=>{
   const [sel,setSel]=useState([]);
   useEffect(()=>{if(isOpen)setSel(selected||[]);},[isOpen,selected]);
   if(!isOpen)return null;
@@ -6200,6 +6200,19 @@ const DayOffModal=memo(({isOpen,onClose,dateLabel,staffList,selected,onSave})=>{
         {sel.length>0&&(
           <div style={{marginBottom:14,padding:'8px 12px',background:'#fffbeb',border:'1px solid #fbbf24',borderRadius:8,fontSize:12,color:'#92400e',fontWeight:600}}>
             🏖 本日の休み：{sel.join('　')}
+          </div>
+        )}
+        {/* ★ここで直せるのは「今見ている店の、その日の休日」だけ（2026-10-19 ユーザー要望）。
+            有給や他の店、ほかの日はフルのカレンダーで。入口が設定の奥にしか無く見つけられなかったため、ここに出す。 */}
+        {onOpenCalendar&&(
+          <div style={{marginBottom:14,padding:'9px 12px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,fontSize:11.5,color:'#475569',lineHeight:1.8}}>
+            ここで直せるのは <b>{storeName||'この店'}</b> の <b>この日の休日</b> だけです。
+            <b>有給</b>・<b>ほかの店</b>・<b>ほかの日</b> は次から：
+            <button onClick={onOpenCalendar}
+              style={{display:'block',width:'100%',marginTop:7,padding:'9px 0',background:'#fff7ed',border:'2px solid #fdba74',borderRadius:8,
+                fontWeight:800,fontSize:12.5,color:'#c2410c',cursor:'pointer',fontFamily:'inherit'}}>
+              📅 スタッフ休日・有給カレンダーを開く
+            </button>
           </div>
         )}
         <div style={{display:'flex',gap:8}}>
@@ -6348,14 +6361,16 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,autoRanges
 // ============================================
 //  スタッフ休日・有給カレンダーモーダル
 // ============================================
-const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,
+const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,viewStore,
   dynStaffH,dynStaffS,
   dayOffDataH,setDayOffDataH,dayOffDataS,setDayOffDataS,
   paidLeaveDataH,setPaidLeaveDataH,paidLeaveDataS,setPaidLeaveDataS,
   offNoteH,setOffNoteH,offNoteS,setOffNoteS,
   closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpenDates,
   monthlyHolidays,onSaveMonthlyHoliday})=>{
-  const [calStore,setCalStore]=useState('honten');
+  // ★開いた時の店は「今見ている店」に合わせる（2026-10-19）。
+  //   それまで 'honten' の決め打ちで、三田店を見ている時に開いても本店が出ていた。
+  const [calStore,setCalStore]=useState(viewStore||'honten');
   const [selStaff,setSelStaff]=useState(null);
   const [selType,setSelType]=useState('dayoff');
   const [calMonth,setCalMonth]=useState(null);
@@ -6366,15 +6381,17 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,
 
   useEffect(()=>{
     if(isOpen){
-      // ログインユーザーの店舗を初期選択
-      const userStoreId=currentUser?.store?.id||'honten';
-      setCalStore(userStoreId);
+      // ★開いた時の店は「今見ている店」に合わせる（2026-10-19 ユーザー要望）。
+      //   それまで**ログインしている人の店**を入れていたので、三田店を見ている時に開いても本店が出ていた。
+      //   （本店の人が三田店の休日を見られない、の正体）。ヘッダーの店の切替と揃える。
+      const startStore=viewStore||currentUser?.store?.id||'honten';
+      setCalStore(startStore);
       setCalMonth(initMonth||new Date());
       // ログインユーザーを初期選択（自分の休日をすぐ編集できるように）
-      setSelStaff(currentUser?.name||null);
+      setSelStaff(startStore===(currentUser?.store?.id)?(currentUser?.name||null):null);   // 他店は「全員」から
       setSelType('dayoff');
     }
-  },[isOpen,initMonth,currentUser]);
+  },[isOpen,initMonth,currentUser,viewStore]);
 
   if(!isOpen||!calMonth)return null;
 
@@ -12304,7 +12321,7 @@ function AppInner() {
   },[currentUser,inspData,schedData,memoData,loanerRes,closedDays,closedDates]);
 
   // ── 印刷・PDF出力 ──────────────────────────────────────────
-  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData) => {
+  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData, paidLeaveData) => {
     const storeName = vsId==='honten'?'本店':'三田店';
     const storeColor = vsId==='honten'?'#2563eb':'#dc2626';
     // 元配列インデックス(_idx)を保持：代車のbookingKey(insp-${dk}-${idx})照合に必要
@@ -12344,7 +12361,8 @@ function AppInner() {
       return m ? fmtLoaner(m[1], m[2]) : s;
     };
 
-    const dayOff = dayOffData[dk]||[];
+    // ★有給も休みとして扱う（2026-10-19）。印刷だけ出勤者に混ざっていた。
+    const dayOff = (dayOffData[dk]||[]).concat((paidLeaveData&&paidLeaveData[dk])||[]);
     const workStaff = staffList.filter(s=>!dayOff.includes(s.name));
 
     // タイムスケジュール：9:00〜18:00 全枠（空き含む）
@@ -15145,16 +15163,22 @@ function AppInner() {
                   // 店舗休日の場合はスタッフ全員を休み扱い
                   const storeHoliday=isClosed(new Date(...dk.split('-').map((v,i)=>i===1?Number(v)-1:Number(v))));
                   const manualOffs=dayOffData[dk]||[];
-                  const offs=storeHoliday?currentStaffList.map(s=>s.name):manualOffs;
-                  const working=storeHoliday?[]:currentStaffList.filter(s=>!manualOffs.includes(s.name));
+                  // ★有給も「休み」として扱う（2026-10-19 三田店からの報告）。
+                  //   それまで休日（dayoff）しか見ておらず、**有給の人が出勤の側に並んでいた**。
+                  //   カレンダーと控え（オフライン予定表）は前から有給を見ていたので、画面ごとに食い違っていた。
+                  //   ★休みを数える所は dayoff と pleave の両方を見ること。
+                  const manualLeaves=(paidLeaveData[dk]||[]).filter(n=>!manualOffs.includes(n));
+                  const awayAll=manualOffs.concat(manualLeaves);
+                  const offs=storeHoliday?currentStaffList.map(s=>s.name):awayAll;
+                  const working=storeHoliday?[]:currentStaffList.filter(s=>!awayAll.includes(s.name));
                   // ★休日に入っている名前は、名簿に無くても**必ず出す**（2026-10-06 ユーザー報告）。
                   //   名簿を名前で絞り込んでいたため、名前を変えた人の休日が黙って消えていた。
                   //   カレンダーは出る／スケジュールは出ない、の食い違いの正体がこれ。
                   const dayoff=storeHoliday
-                    ?currentStaffList.map(s=>({id:s.id||s.uid||s.name,name:s.name,unknown:false}))
-                    :manualOffs.map(n=>{
+                    ?currentStaffList.map(s=>({id:s.id||s.uid||s.name,name:s.name,unknown:false,leave:false}))
+                    :awayAll.map(n=>{
                         const m=currentStaffList.find(x=>x.name===n);
-                        return {id:(m&&(m.id||m.uid))||('x-'+n),name:n,unknown:!m};
+                        return {id:(m&&(m.id||m.uid))||('x-'+n),name:n,unknown:!m,leave:manualLeaves.includes(n)};
                       });
                   return(
                     <div style={{display:'flex',alignItems:'stretch',border:'1px solid #e5e7eb',borderRadius:8,overflow:'hidden',marginBottom:6}}>
@@ -15172,7 +15196,7 @@ function AppInner() {
                             : <span style={{fontSize:11,color:'#9ca3af',fontStyle:'italic'}}>—</span>
                         }
                       </div>
-                      <div onClick={storeHoliday?undefined:()=>setShowDayOff(true)} title={storeHoliday?'店休日のため全員休み':'クリックして休日スタッフを編集'}
+                      <div onClick={storeHoliday?undefined:()=>setShowDayOff(true)} title={storeHoliday?'店休日のため全員休み':'クリックして休日スタッフを編集（📋 は有給）'}
                         style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',
                           background:'repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 3px,#ebebeb 3px,#ebebeb 6px)',
                           borderLeft:'1px solid #e5e7eb',cursor:storeHoliday?'default':'pointer',flexWrap:'wrap',justifyContent:'flex-end',minWidth:'fit-content',maxWidth:'45%'}}>
@@ -15182,12 +15206,17 @@ function AppInner() {
                               const note=storeHoliday?'':(typeof nv==='string'?nv:(nv&&nv.memo)||'');
                               const ttl=s.unknown?'この名前はスタッフ名簿にありません（名前を変えた可能性があります）':(note||undefined);
                               return(
-                              <span key={s.id} title={ttl} style={{padding:'2px 9px',borderRadius:20,background:s.unknown?'#f59e0b':'#9ca3af',color:'white',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+                              <span key={s.id} title={s.leave?('有給'+(ttl?'：'+ttl:'')):ttl} style={{padding:'2px 9px',borderRadius:20,background:s.unknown?'#f59e0b':(s.leave?'#0f766e':'#9ca3af'),color:'white',fontWeight:700,fontSize:11,display:'inline-flex',alignItems:'center',whiteSpace:'nowrap'}}>
                                 {s.unknown&&<span style={{marginRight:3}}>⚠</span>}
+                                {/* ★有給は「有」の一文字バッジ（2026-10-19 ユーザー選択・A案）。
+                                    業務バッジ（代・店・工・検…）と同じ 16px・角丸・白抜きにそろえてある。
+                                    絵文字は端末で形も幅も変わるのでやめた。 */}
+                                {s.leave&&<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,borderRadius:4,
+                                  background:'white',color:'#0f766e',fontSize:9,fontWeight:900,lineHeight:1,flexShrink:0,marginRight:4}}>有</span>}
                                 {s.name}{note&&<span style={{fontWeight:400,opacity:.9}}>（{note.length>8?note.slice(0,8)+'…':note}）</span>}
                               </span>
                               );})
-                          : <span style={{fontSize:11,color:'#9ca3af',fontStyle:'italic',whiteSpace:'nowrap'}}>休日なし</span>
+                          : <span style={{fontSize:11,color:'#9ca3af',fontStyle:'italic',whiteSpace:'nowrap'}}>休日・有給なし</span>
                         }
                         <span style={{fontSize:11,color:'#9ca3af',flexShrink:0}}>🏖</span>
                       </div>
@@ -15210,7 +15239,8 @@ function AppInner() {
               {/* -- 対応可能チェック・アラート（時間枠別・自店舗のみ） -- */}
               {(()=>{
                 const storeHolidayChk=isClosed(new Date(...dk.split('-').map((v,i)=>i===1?Number(v)-1:Number(v))));
-                const offs=storeHolidayChk?currentStaffList.map(s=>s.name):(dayOffData[dk]||[]);
+                // ★有給も休みとして数える（2026-10-19）。出勤者の人数がずれていた。
+                const offs=storeHolidayChk?currentStaffList.map(s=>s.name):(dayOffData[dk]||[]).concat(paidLeaveData[dk]||[]);
                 const workingStaff=storeHolidayChk?[]:currentStaffList.filter(s=>!offs.includes(s.name));
                 if(workingStaff.length===0)return null;
                 // 対応スタッフ＝出勤者のうち対応可能業務で車検/整備いずれかのフロント対応にチェックがある人のみ
@@ -15538,7 +15568,7 @@ function AppInner() {
                     <button onClick={()=>setRestrictionModal(true)} title="入庫制限設定" style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:5,cursor:'pointer',fontSize:10,color:'#dc2626',fontWeight:700}}>
                       🚫 入庫制限
                     </button>
-                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData)} title="印刷・PDF出力"
+                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData,paidLeaveData)} title="印刷・PDF出力"
                       style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#f8fafc',border:'2px solid #94a3b8',borderRadius:5,cursor:'pointer',fontSize:10,color:'#475569',fontWeight:700}}>
                       🖨 印刷
                     </button>
@@ -15938,6 +15968,7 @@ function AppInner() {
       {/* -- スタッフ休日・有給カレンダーモーダル -- */}
       <StaffCalendarModal
         isOpen={showStaffCal}
+        viewStore={vsId}
         onClose={()=>setShowStaffCal(false)}
         initMonth={curMonth}
         currentUser={currentUser}
@@ -16035,6 +16066,8 @@ function AppInner() {
         isOpen={showDayOff}
         onClose={()=>setShowDayOff(false)}
         dateLabel={dateLabel}
+        storeName={vsStore.name}
+        onOpenCalendar={()=>{setShowDayOff(false);setShowStaffCal(true);}}
         staffList={(currentStaffList.length>0?currentStaffList:DEFAULT_STAFF_HONTEN).filter(s=>s.badge!=='president'&&s.myNumber!==0)}
         selected={dayOffData[dk]||[]}
         onSave={names=>{

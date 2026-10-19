@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792228075799';
+  window.__APP_BUILD='build-1792388479282';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.66';
+const MOBILE_VERSION='3.66.2';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3579,7 +3579,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   );
 };
 
-const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
+const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
   const today=new Date();
   const [ds,setDs]=useState({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()});
   useEffect(()=>{if(initDate)setDs(initDate);},[initDate]);
@@ -3659,11 +3659,55 @@ const ScheduleView=({onEditMemo,onToggleMemo,otherView,inspData,schedDataH,sched
             </div>
           </div>
         )}
+        {/* ★スタッフの行（2026-10-19 ユーザー指示）。PC のスタッフバーと同じ中身をスマホにも。
+            有給は「有」の一文字バッジ（PC と同じ形）。休業日の時は出さない。 */}
+        {(()=>{
+          const storeHoliday=calIsClosed(new Date(y,m,d),closedDays||[],closedDates||[],overrideOpen||[]);
+          if(storeHoliday)return null;
+          const offsOnly=(dayOffData||{})[dk]||[];
+          const leavesOnly=((pleaveData||{})[dk]||[]).filter(n=>!offsOnly.includes(n));
+          const away=offsOnly.concat(leavesOnly);
+          const working=(staffList||[]).filter(s=>s&&s.name&&!away.includes(s.name));
+          if(!working.length&&!away.length)return null;
+          const LV={display:'inline-flex',alignItems:'center',justifyContent:'center',width:15,height:15,borderRadius:4,
+            background:'white',color:'#0f766e',fontSize:9,fontWeight:900,lineHeight:1,flexShrink:0,marginRight:3};
+          return(
+            <div style={{margin:'10px 12px 0',border:'1px solid #e2e8f0',borderRadius:10,overflow:'hidden',background:'white'}}>
+              <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',padding:'7px 10px'}}>
+                <span style={{fontSize:13}}>👤</span>
+                <span style={{fontSize:10.5,fontWeight:800,color:'#475569',flexShrink:0}}>出勤</span>
+                {working.length
+                  ?working.map(st=>(
+                    <span key={st.uid||st.name} style={{padding:'2px 8px',borderRadius:20,background:'#f1f5f9',color:'#334155',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>{st.name}</span>))
+                  :<span style={{fontSize:11,color:'#9ca3af'}}>—</span>}
+              </div>
+              {away.length>0&&(
+                <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',padding:'7px 10px',borderTop:'1px dashed #e2e8f0',
+                  background:'repeating-linear-gradient(45deg,#f8f8f8,#f8f8f8 3px,#f0f0f0 3px,#f0f0f0 6px)'}}>
+                  <span style={{fontSize:13}}>🏖</span>
+                  <span style={{fontSize:10.5,fontWeight:800,color:'#475569',flexShrink:0}}>休み</span>
+                  {away.map(n=>{
+                    const lv=leavesOnly.includes(n);
+                    return(
+                      <span key={n} title={lv?'有給':'休日'} style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:20,
+                        background:lv?'#0f766e':'#9ca3af',color:'white',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+                        {lv&&<span style={LV}>有</span>}{n}
+                      </span>);
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* 同時刻入庫×スタッフ対応人数アラート（PC版と同じ集計: 9:00枠・9:30枠、フロント対応可の出勤者が分母） */}
         {(()=>{
           const storeHoliday=calIsClosed(new Date(y,m,d),closedDays||[],closedDates||[],overrideOpen||[]);
           if(storeHoliday)return null;
-          const offs=(dayOffData||{})[dk]||[];
+          // ★有給も「休み」として数える（2026-10-19）。それまで dayoff しか見ておらず、
+          //   有給の人を出勤に数えていた（PC と同じ取りこぼし）。
+          const offsOnly=(dayOffData||{})[dk]||[];
+          const leavesOnly=((pleaveData||{})[dk]||[]).filter(n=>!offsOnly.includes(n));
+          const offs=offsOnly.concat(leavesOnly);
           const working=(staffList||[]).filter(s=>s&&s.name&&!offs.includes(s.name));
           if(working.length===0)return null;
           const capOf=s=>s.capabilities||getDefaultCapabilities(s.badge||'mechanic');
@@ -6868,6 +6912,7 @@ const App=()=>{
           schedRestrictions={schedRestrictions}
           staffList={((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(s=>s.store===vsId)).filter(s=>s.badge!=='president'&&s.myNumber!==0)}
           dayOffData={vsId==='honten'?dayOffH:dayOffS}
+          pleaveData={vsId==='honten'?pleaveH:pleaveS}
           closedDays={cDays} closedDates={cDates} overrideOpen={overrideOpen} inspLimits={inspLimits}/>}
         {tab==='cal'&&<CalendarView inspData={inspData} closedDays={cDays} closedDates={cDates} overrideOpen={overrideOpen} vsId={vsId}
           mySched={mySched} privItems={myPriv.items} uid={user.uid}
