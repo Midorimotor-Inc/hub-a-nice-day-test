@@ -98,7 +98,55 @@ const hasLabel = (page, re) => page.evaluate(r =>
   t('電話のキーボードが出る（type=tel）', !!p1 && p1.type === 'tel', p1 && p1.type);
   t('例の表示が出る', !!p1 && /0000/.test(p1.ph), p1 && p1.ph);
   t('16px以上（iPhoneが勝手に拡大しない）', !!p1 && p1.fs >= 16, p1 && p1.fs);
-  t('車検には住所の欄もある（PC版と同じ）', await hasLabel(page, '^住所'));
+  // ★A案（2026-10-20）：電話は1行まるごと／住所はボタン＋シート＋Google マップ
+  const telW = await page.evaluate(() => {
+    const lab = [...document.querySelectorAll('label')].find(e => /^電話/.test(e.innerText.trim()) && e.offsetParent !== null);
+    const inp = lab.parentElement.querySelector('input');
+    return Math.round(inp.getBoundingClientRect().width);
+  });
+  t('★電話の欄が広い（1行まるごと・200px超）', telW > 200, telW + 'px');
+  t('★住所は入力欄ではなくボタンになっている', await page.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')].find(e => /住所|📍/.test(e.innerText) && e.offsetParent !== null);
+    return !!b2;
+  }));
+  t('★住所ボタンを押すとシートが開く', await page.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')].find(e => /住所|📍/.test(e.innerText) && e.offsetParent !== null);
+    if (!b2) return false; b2.click(); return true;
+  }) && await seeText(page, 'Google マップ', 4000));
+  // シートの入力欄に住所を打つ → マップのボタンが使えるようになる
+  await page.evaluate(() => {
+    const inp = [...document.querySelectorAll('input')].find(e => e.placeholder === '市区町村から' && e.offsetParent !== null);
+    if (!inp) return false;
+    const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    st.call(inp, '神戸市北区八多町中890-1'); inp.dispatchEvent(new Event('input', { bubbles: true })); return true;
+  });
+  await page.waitForTimeout(500);
+  t('★住所を入れるとマップのリンクが住所つきで出る', await page.evaluate(() => {
+    const a2 = [...document.querySelectorAll('a')].find(e => /Google/.test(e.innerText));
+    return !!(a2 && a2.href.indexOf('google.com/maps') >= 0 && decodeURIComponent(a2.href).indexOf('八多町') >= 0);
+  }), await page.evaluate(() => { const a2=[...document.querySelectorAll('a')].find(e=>/Google/.test(e.innerText)); return a2?decodeURIComponent(a2.href).slice(0,95):'(無い)'; }));
+  // 住所を消すとマップは押せなくなる（a ではなく div になる）
+  await page.evaluate(() => {
+    const inp = [...document.querySelectorAll('input')].find(e => e.placeholder === '市区町村から' && e.offsetParent !== null);
+    const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    st.call(inp, ''); inp.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
+  t('★住所が空の時はマップを押せない（リンクにしない）', await page.evaluate(() => {
+    const any = [...document.querySelectorAll('a,div')].find(e => /Google マップで開く/.test(e.innerText) && e.children.length === 0);
+    return !!any && any.tagName !== 'A';
+  }), await page.evaluate(() => { const any=[...document.querySelectorAll('a,div')].find(e=>/Google マップで開く/.test(e.innerText)&&e.children.length===0); return any?any.tagName:'(無い)'; }));
+  // 住所を戻してから次へ
+  await page.evaluate(() => {
+    const inp = [...document.querySelectorAll('input')].find(e => e.placeholder === '市区町村から' && e.offsetParent !== null);
+    const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    st.call(inp, '神戸市北区八多町中890-1'); inp.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/とじる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: require('path').join(__dirname, 'smoke-mobile-addr.png') });
+  t('車検には住所がある（PC版と同じ。スマホはボタン）', await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /住所|📍/.test(e.innerText) && e.offsetParent !== null)));
 
   // ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）
   const noInfo = await page.evaluate(() => {

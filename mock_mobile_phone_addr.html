@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>スマホ予約カード：電話と住所</title>
+<!--
+  2026-10-20 ご依頼：
+   ① スマホの車検予約カードで電話番号が切れて見えない → 番号全体が見えるように
+   ② 住所はあまり使わない → 小さい「住所」ボタンにして、タップで開く
+   ③ 住所から Google マップへ
+  枠は実機と同じ 390px 幅。入力欄の寸法（16px・padding 10/11・角丸10）も本物と同じ。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:16px 14px 70px}
+  h1{font-size:17px;font-weight:900;margin-bottom:5px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.9}
+  .grid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  .col{flex:0 0 390px;max-width:390px}
+  .ttl{font-size:13.5px;font-weight:900;margin-bottom:3px}
+  .ttl .pick{display:inline-block;margin-left:7px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .sub{font-size:11.5px;color:var(--ink2);margin-bottom:8px;line-height:1.8;min-height:34px}
+
+  /* ── 実機と同じ寸法の枠 ── */
+  .phone{width:390px;background:#fff;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+  .head{background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;padding:10px 14px;font-weight:800;font-size:14px}
+  .body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px;position:relative}
+  label.l{font-size:11px;font-weight:800;color:#475569;display:block;margin-bottom:4px}
+  label.l em{font-weight:400;font-style:normal;color:#94a3b8;font-size:10px;margin-left:4px}
+  .inp{width:100%;padding:10px 11px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
+  .row{display:flex;gap:10px}
+  .tel{display:flex;gap:6px}
+  .callbtn{flex-shrink:0;width:44px;display:flex;align-items:center;justify-content:center;border:2px solid #86efac;background:#f0fdf4;color:#047857;border-radius:10px;font-size:17px;text-decoration:none}
+  .cut{outline:2px dashed #ef4444;outline-offset:2px}
+  .warn{font-size:11px;color:#b91c1c;font-weight:700;margin-top:4px}
+
+  /* 住所ボタン */
+  .addrbtn{display:flex;align-items:center;gap:7px;width:100%;padding:9px 11px;border:1.5px solid #d1d5db;border-radius:10px;background:#f8fafc;font-family:inherit;font-size:13px;cursor:pointer;text-align:left}
+  .addrbtn .pin{flex-shrink:0;font-size:15px}
+  .addrbtn .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;font-weight:700}
+  .addrbtn .tx.none{color:#94a3b8;font-weight:400}
+  .addrbtn .arw{flex-shrink:0;color:#94a3b8;font-size:12px}
+  .addrbtn.small{width:auto;padding:7px 12px}
+
+  /* 下から出るシート */
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:2px solid #ea580c;border-radius:14px 14px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);padding:14px 16px 16px;display:none}
+  .sheet.on{display:block}
+  .sheet h3{font-size:13px;font-weight:900;margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .sheet h3 .x{margin-left:auto;background:#f3f4f6;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px}
+  .map{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:9px;padding:11px 0;border:2px solid #93c5fd;background:#eff6ff;color:#1d4ed8;border-radius:10px;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;text-decoration:none}
+  .map.off{border-color:#e5e7eb;background:#f8fafc;color:#cbd5e1;cursor:default}
+  .shclose{width:100%;margin-top:8px;padding:10px 0;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;color:#475569}
+  .note{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.9;background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>スマホの車検予約カード：電話と住所</h1>
+  <div class="lead">
+    枠は<b>実機と同じ390px幅</b>、入力欄の寸法も本物と同じです。<b>実際に触れます</b>（住所ボタン・マップ）。
+  </div>
+
+  <div class="grid">
+
+    <!-- いま -->
+    <div class="col">
+      <div class="ttl">いま</div>
+      <div class="sub">電話と住所が<b>横に半分ずつ</b>。電話の欄は約108pxしかなく、<b>番号の後ろが切れます</b>。</div>
+      <div class="phone">
+        <div class="head">🚗 車検予約カード</div>
+        <div class="body">
+          <div class="row">
+            <div style="flex:1;min-width:0">
+              <label class="l">電話 <em>任意</em></label>
+              <div class="tel">
+                <input class="inp cut" value="090-1234-5678" style="min-width:0">
+                <a class="callbtn" href="#">📞</a>
+              </div>
+              <div class="warn">↑ 右が切れて読めない</div>
+            </div>
+            <div style="flex:1.2;min-width:0">
+              <label class="l">住所 <em>任意</em></label>
+              <input class="inp" value="神戸市北区八多町" style="min-width:0">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A案 -->
+    <div class="col">
+      <div class="ttl">A案：電話は1行まるごと<span class="pick">おすすめ</span></div>
+      <div class="sub">電話が<b>1行フル幅</b>で全部見えます。住所は下に<b>小さなボタン</b>。タップで開きます。</div>
+      <div class="phone">
+        <div class="head">🚗 車検予約カード</div>
+        <div class="body" id="bodyA">
+          <div>
+            <label class="l">電話 <em>任意</em></label>
+            <div class="tel">
+              <input class="inp" value="090-1234-5678">
+              <a class="callbtn" href="#" onclick="return false">📞</a>
+            </div>
+          </div>
+          <div>
+            <button class="addrbtn" onclick="openSheet('A')">
+              <span class="pin">📍</span>
+              <span class="tx" id="txA">神戸市北区八多町中８９０−１</span>
+              <span class="arw">▸</span>
+            </button>
+          </div>
+          <div class="sheet" id="shA">
+            <h3>📍 住所 <button class="x" onclick="closeSheet('A')">✕</button></h3>
+            <input class="inp" id="adA" value="神戸市北区八多町中８９０−１" oninput="syncA()">
+            <a class="map" id="mpA" target="_blank" rel="noopener">🗺 Google マップで開く</a>
+            <button class="shclose" onclick="closeSheet('A')">とじる</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        住所が入っていればボタンに<b>住所がそのまま出ます</b>（長ければ「…」）。入っていなければ「住所を入れる」と薄く出ます。<br>
+        <b>お試しください：</b>📍 のボタンを押すと下からシートが開きます。中の住所を書き換えるとマップのリンクも変わります。
+      </div>
+    </div>
+
+    <!-- B案 -->
+    <div class="col">
+      <div class="ttl">B案：電話の行の右に小さく 📍</div>
+      <div class="sub">1行で済み、いちばん場所を取りません。ただし<b>住所が入っているか一目で分かりません</b>。</div>
+      <div class="phone">
+        <div class="head">🚗 車検予約カード</div>
+        <div class="body" id="bodyB">
+          <div>
+            <label class="l">電話 <em>任意</em><span style="float:right;font-weight:800;color:#475569">住所</span></label>
+            <div class="tel">
+              <input class="inp" value="090-1234-5678" style="min-width:0">
+              <a class="callbtn" href="#" onclick="return false">📞</a>
+              <button class="callbtn" style="border-color:#93c5fd;background:#eff6ff;color:#1d4ed8;cursor:pointer" onclick="openSheet('B')">📍</button>
+            </div>
+          </div>
+          <div class="sheet" id="shB">
+            <h3>📍 住所 <button class="x" onclick="closeSheet('B')">✕</button></h3>
+            <input class="inp" id="adB" value="神戸市北区八多町中８９０−１" oninput="syncB()">
+            <a class="map" id="mpB" target="_blank" rel="noopener">🗺 Google マップで開く</a>
+            <button class="shclose" onclick="closeSheet('B')">とじる</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">電話の欄は A案より少し狭くなります（📍 のぶん44px）。<b>「090-1234-5678」はぎりぎり入ります</b>が、市外局番が長い番号だと怪しくなります。</div>
+    </div>
+
+    <!-- C案 -->
+    <div class="col">
+      <div class="ttl">C案：住所は入っている時だけ出す</div>
+      <div class="sub">A案と同じですが、<b>住所が空ならボタンも出しません</b>。「＋ 住所」の小さいリンクだけ。</div>
+      <div class="phone">
+        <div class="head">🚗 車検予約カード</div>
+        <div class="body" id="bodyC">
+          <div>
+            <label class="l">電話 <em>任意</em></label>
+            <div class="tel">
+              <input class="inp" value="078-123-4567">
+              <a class="callbtn" href="#" onclick="return false">📞</a>
+            </div>
+          </div>
+          <div>
+            <button class="addrbtn small" onclick="openSheet('C')" style="color:#94a3b8;border-style:dashed">
+              <span class="pin" style="font-size:13px">＋</span><span style="font-size:12px">住所を入れる</span>
+            </button>
+          </div>
+          <div class="sheet" id="shC">
+            <h3>📍 住所 <button class="x" onclick="closeSheet('C')">✕</button></h3>
+            <input class="inp" id="adC" value="" placeholder="市区町村から" oninput="syncC()">
+            <a class="map off" id="mpC">🗺 Google マップで開く</a>
+            <button class="shclose" onclick="closeSheet('C')">とじる</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">カードがいちばんすっきりします。住所を入れている人が少ないなら、これが一番合います。<br><b>お試しください：</b>シートに住所を打つとマップのボタンが使えるようになります。</div>
+    </div>
+
+  </div>
+
+  <div class="note" style="max-width:800px;margin-top:18px">
+    <b>Google マップについて</b>：住所をそのまま渡して開きます（<code>google.com/maps/search/?api=1&amp;query=住所</code>）。
+    スマホなら<b>マップのアプリが開きます</b>。住所が空の時はボタンを押せなくしてあります。<br>
+    <b>PC版は変えていません</b>（画面が広いので電話も住所も並べて入ります）。必要なら PC にもマップのボタンだけ足せます。
+  </div>
+</div>
+<script>
+  function openSheet(k){ document.getElementById('sh'+k).classList.add('on'); }
+  function closeSheet(k){ document.getElementById('sh'+k).classList.remove('on'); }
+  function mapUrl(v){ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(v); }
+  function upd(k){
+    var v=(document.getElementById('ad'+k).value||'').trim();
+    var a=document.getElementById('mp'+k);
+    if(v){ a.href=mapUrl(v); a.classList.remove('off'); a.removeAttribute('aria-disabled'); }
+    else { a.removeAttribute('href'); a.classList.add('off'); }
+    var tx=document.getElementById('tx'+k);
+    if(tx){ if(v){ tx.textContent=v; tx.classList.remove('none'); } else { tx.textContent='住所を入れる'; tx.classList.add('none'); } }
+  }
+  function syncA(){upd('A');} function syncB(){upd('B');} function syncC(){upd('C');}
+  upd('A');upd('B');upd('C');
+</script>
+</body>
+</html>

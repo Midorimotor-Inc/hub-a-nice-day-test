@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>タイムスケジュールの週表示</title>
+<!--
+  2026-10-19 ご相談：「A3の1週間の紙をめくって手書きしている。Hubはパッと見て1週間の感じが分かりづらい」
+  → いまの Hub のタイムスケジュールは【1日ずつ】しか出せない。紙は1枚で1週間。そこを埋めるモック。
+  時間枠・作業コードは本物（SCHED_SLOTS / WORKS）に合わせてある。名前はダミー。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --cy:#0891b2; --cy2:#0e7490; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1500px;margin:0 auto;padding:16px 14px 70px}
+  h1{font-size:18px;font-weight:900;margin-bottom:5px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.9}
+  .case{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
+  .case h2{font-size:14px;font-weight:900;padding:11px 14px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .case h2 small{font-weight:600;color:var(--ink2);margin-left:8px;font-size:11.5px}
+  .pick{display:inline-block;margin-left:9px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .pad{padding:12px 14px;overflow-x:auto}
+  .note{font-size:11.5px;color:var(--ink2);padding:10px 14px;background:#f8fafc;border-top:1px dashed var(--line);line-height:1.9}
+
+  .hd{display:flex;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--cy2),var(--cy));color:#fff;border-radius:9px 9px 0 0}
+  .hd b{font-size:14px;font-weight:800}
+  .nav{margin-left:auto;display:flex;gap:6px}
+  .nav span{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700}
+
+  table{border-collapse:collapse;width:100%;min-width:900px}
+  th,td{border:1px solid #d7dde5;padding:0}
+  th{background:#f1f5f9;font-size:11px;font-weight:800;padding:5px 4px;white-space:nowrap}
+  th.sun{color:#ef4444}th.sat{color:#2563eb}
+  th.today{background:#cffafe;color:#0e7490}
+  .tm{width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
+  .tm.sp{background:#faf5ff;color:#7c3aed}
+  td.cell{height:26px;vertical-align:middle;padding:1px 3px;font-size:11.5px}
+  td.cell.closed{background:repeating-linear-gradient(45deg,#fff7ed,#fff7ed 4px,#ffedd5 4px,#ffedd5 8px)}
+  td.cell.add{color:#cbd5e1;text-align:center;font-size:11px}
+  td.cell.add:hover{background:#ecfeff;color:#0891b2;cursor:pointer}
+  .ent{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .nm{font-weight:700;color:#1e293b;overflow:hidden;text-overflow:ellipsis}
+  .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;line-height:15px}
+  .w-Q{background:#0891b2}.w-B{background:#d97706}.w-12{background:#7c3aed}.w-N{background:#059669}.w-納{background:#be123c}.w-他{background:#64748b}
+  .car{flex-shrink:0;font-size:9.5px;color:#0f766e;background:#ccfbf1;border-radius:3px;padding:0 3px}
+  .cnt{font-size:10.5px;font-weight:800;color:#9a3412;background:#fff7ed;border-top:1px solid #fed7aa;padding:2px 4px;text-align:center}
+  .day1{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:430px}
+  .day1 .r{display:flex;gap:8px;border-bottom:1px solid #f1f5f9;padding:4px 0;font-size:12px}
+  .day1 .r span:first-child{width:46px;color:#64748b;font-weight:700;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>タイムスケジュールの週表示</h1>
+  <div class="lead">
+    いまの Hub は<b>1日ずつ</b>しか出せません。A3の紙は<b>1枚で1週間</b>。だから「パッと見て1週間の感じ」が紙に負けています。<br>
+    時間枠（午前／9:00〜18:00／未定／午後）と作業コードは<b>本物と同じ</b>にしてあります。名前はダミーです。
+  </div>
+
+  <!-- いま -->
+  <div class="case">
+    <h2>いま：1日表示 <small>その日のことは分かるが、来週どこが空いているかは分からない</small></h2>
+    <div class="pad">
+      <div class="day1">
+        <div style="font-weight:900;margin-bottom:6px">10月19日（月）</div>
+        <div class="r"><span>午前</span><span>前村　和子　<b style="color:#0891b2">Q</b></span></div>
+        <div class="r"><span>09:00</span><span>桑田　陽子　<b style="color:#7c3aed">⑫</b>　代ハスラー</span></div>
+        <div class="r"><span>09:30</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
+        <div class="r"><span>10:00</span><span>西浦　三田　<b style="color:#d97706">B</b></span></div>
+        <div class="r"><span>10:30</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
+        <div class="r"><span>11:00</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
+        <div class="r"><span>…</span><span style="color:#cbd5e1">（この日の続き）</span></div>
+      </div>
+    </div>
+    <div class="note">電話で「来週あたりで」と言われた時、<b>日を1つずつめくる</b>ことになります。紙なら1枚で見えます。</div>
+  </div>
+
+  <!-- A案 -->
+  <div class="case">
+    <h2>A案：紙と同じ並びの週表 <span class="pick">おすすめ</span><small>縦＝時間、横＝曜日。A3の紙とまったく同じ向き。このまま印刷できる</small></h2>
+    <div class="pad">
+      <div class="hd"><b>⏰ タイムスケジュール（本店）</b>
+        <span style="font-size:12px;opacity:.9">10/19（月）〜 10/24（土）</span>
+        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span><span>🖨 印刷</span></span>
+      </div>
+      <table id="tA"></table>
+    </div>
+    <div class="note">
+      ・空いている枠は <b>＋</b>。<b>クリックすればその場で入れられます</b>（1日表示に移動しなくてよい）。<br>
+      ・<b>そのまま印刷すればA3の紙と同じもの</b>が出ます。壁に貼る紙を Hub から出せるので、手書きの紙を作る必要がなくなります。<br>
+      ・休業日は網掛け。日曜は列ごと出さないこともできます。
+    </div>
+  </div>
+
+  <!-- B案 -->
+  <div class="case">
+    <h2>B案：A案＋その日の車検台数 <small>上に「車検 ○台」を出して、1週間の混み具合が分かるようにする</small></h2>
+    <div class="pad">
+      <div class="hd"><b>⏰ タイムスケジュール（本店）</b>
+        <span style="font-size:12px;opacity:.9">10/19（月）〜 10/24（土）</span>
+        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span><span>🖨 印刷</span></span>
+      </div>
+      <table id="tB"></table>
+    </div>
+    <div class="note">整備だけ見ても空いているように見えて、<b>実は車検が6台入っていて手が無い</b>ということが起きます。車検の台数が上に出ていれば、電話口で判断できます。</div>
+  </div>
+
+  <!-- C案 -->
+  <div class="case">
+    <h2>C案：1日1行の横並び <small>縦＝曜日、横＝時間。縦に短く収まる</small></h2>
+    <div class="pad"><table id="tC"></table></div>
+    <div class="note">画面には収まりますが、<b>A3の紙とは向きが逆</b>なので慣れ直しが要ります。印刷しても今の紙とは別物になります。</div>
+  </div>
+
+  <div class="case"><h2>※ 補足</h2>
+    <div class="note">
+      ・<b>1日表示は無くしません。</b>その日の詳しい作業・代車・備考は今までどおり1日表示で見ます。週表示は「空きを探す」「全体を掴む」ための画面です。<br>
+      ・<b>代車</b>は週表示では小さく「代○○」とだけ出しています（名前が長いので）。<br>
+      ・スマホは画面が狭いので、週表示は<b>PCだけ</b>を考えています。必要なら横スクロールで入れられます。
+    </div>
+  </div>
+</div>
+<script>
+  var SLOTS=['午前','09:00','09:30','10:00','10:30','11:00','11:30','12:00','未定','午後',
+             '13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+  var DAYS=[{d:'10/19',w:'月',today:true},{d:'10/20',w:'火'},{d:'10/21',w:'水',closed:true},
+            {d:'10/22',w:'木'},{d:'10/23',w:'金'},{d:'10/24',w:'土',sat:true}];
+  // ダミーの予定 {日index: {枠: [氏名, 作業コード, 代車]}}
+  var DATA={
+    0:{'午前':['前村　和子','Q'],'09:00':['桑田　陽子','12','ハスラー'],'10:00':['西浦　三田','B'],'14:00':['岩本　健','Q'],'16:00':['山谷　聡','納']},
+    1:{'09:30':['大山　順','Q'],'11:00':['辻井　望','12'],'13:00':['岸本　信子','B','ワゴンR'],'15:30':['前田　剛','N'],'17:00':['河合　聡','他']},
+    3:{'09:00':['小西　望','Q'],'09:30':['栗﨑　保','12'],'10:30':['阿部　明','Q'],'13:30':['藤明　工業','B','タント'],'16:30':['宮武　健','納']},
+    4:{'午前':['芦田　光','Q'],'10:00':['中井　啓','12'],'11:30':['両澤　ち','他'],'14:30':['野呂　遥','N','N-BOX'],'17:30':['見取　勇','Q']},
+    5:{'09:00':['竹林　直','Q'],'10:00':['魚住　圭','B'],'13:00':['舟田　祥','12'],'15:00':['岡上　秀','納']}
+  };
+  var INSP=[6,4,0,5,3,2];   // その日の車検台数
+  function wkCls(c){return c==='Q'?'w-Q':c==='B'?'w-B':c==='12'?'w-12':c==='N'?'w-N':c==='納'?'w-納':'w-他';}
+  function wkTxt(c){return c==='12'?'⑫':c;}
+  function build(id,opt){
+    var t=document.getElementById(id); if(!t) return;
+    var h='<tr><th class="tm"></th>';
+    DAYS.forEach(function(d,i){
+      h+='<th class="'+(d.today?'today':'')+(d.sat?' sat':'')+'">'+d.d+'（'+d.w+'）'+(d.closed?'<div style="font-weight:700;color:#c2410c;font-size:10px">休業日</div>':'')+'</th>';
+    });
+    h+='</tr>';
+    if(opt.insp){
+      h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>';
+      DAYS.forEach(function(d,i){ h+='<td class="cnt">'+(d.closed?'—':'🚗 '+INSP[i]+'台')+'</td>'; });
+      h+='</tr>';
+    }
+    SLOTS.forEach(function(sl){
+      var sp=(sl==='午前'||sl==='午後'||sl==='未定');
+      h+='<tr><td class="tm'+(sp?' sp':'')+'">'+sl+'</td>';
+      DAYS.forEach(function(d,i){
+        if(d.closed){ h+='<td class="cell closed"></td>'; return; }
+        var e=(DATA[i]||{})[sl];
+        if(!e){ h+='<td class="cell add">＋</td>'; return; }
+        h+='<td class="cell"><div class="ent"><span class="wk '+wkCls(e[1])+'">'+wkTxt(e[1])+'</span>'
+          +'<span class="nm">'+e[0]+'</span>'+(e[2]?'<span class="car">代'+e[2]+'</span>':'')+'</div></td>';
+      });
+      h+='</tr>';
+    });
+    t.innerHTML=h;
+  }
+  build('tA',{});
+  build('tB',{insp:true});
+  // C案：縦＝曜日、横＝時間
+  (function(){
+    var t=document.getElementById('tC'); if(!t) return;
+    var cols=SLOTS.filter(function(s){return s!=='未定'&&s!=='午前'&&s!=='午後';});
+    var h='<tr><th class="tm"></th>'+cols.map(function(s){return '<th style="font-size:10px">'+s+'</th>';}).join('')+'</tr>';
+    DAYS.forEach(function(d,i){
+      h+='<tr><td class="tm">'+d.d+'<br>（'+d.w+'）</td>';
+      cols.forEach(function(sl){
+        if(d.closed){ h+='<td class="cell closed"></td>'; return; }
+        var e=(DATA[i]||{})[sl];
+        if(!e){ h+='<td class="cell add">＋</td>'; return; }
+        h+='<td class="cell"><div class="ent"><span class="wk '+wkCls(e[1])+'">'+wkTxt(e[1])+'</span>'
+          +'<span class="nm" style="font-size:10px">'+e[0].split('　')[0]+'</span></div></td>';
+      });
+      h+='</tr>';
+    });
+    t.innerHTML=h;
+  })();
+</script>
+</body>
+</html>

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792388479282';
+  window.__APP_BUILD='build-1792461113110';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.66.2';
+const MOBILE_VERSION='3.67';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3141,6 +3141,7 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   // ★限定＝この車でないとダメな予約。代車スケジュールの最適化で動かさない印。
   //   最初の予約から付けられるようにする（2026-08-27にユーザーが要望）。
   const [carLocked,setCarLocked]=useState(false);
+  const [addrOpen,setAddrOpen]=useState(false);   // 住所シート（2026-10-20）
   const [carSel,setCarSel]=useState('');
   const [carFrom,setCarFrom]=useState(form.entryDate?dkToInputDate(form.entryDate):defDate);
   const [carTo,setCarTo]=useState(form.deliveryDate?dkToInputDate(form.deliveryDate):defDate);
@@ -3266,8 +3267,34 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   const LBL={fontSize:11,fontWeight:800,color:'#475569',display:'block',marginBottom:4};
   const INP={width:'100%',padding:'10px 12px',border:'2px solid #e2e8f0',borderRadius:10,outline:'none',background:'white'};
   const staffNames=[...new Set([...(staffList||[]).map(s=>s.name),currentUser?.name].filter(Boolean))];
+  // ★住所シート（2026-10-20）。住所を直して、そのまま Google マップで開ける。
+  //   カード（zIndex 300）より上に出す。住所が空の時はマップのボタンを押せなくする。
+  const addrSheet=(!addrOpen)?null:(
+    <div onClick={()=>setAddrOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3150,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+          <div style={{fontWeight:900,fontSize:15,color:'#c2410c'}}>📍 住所</div>
+          <button onClick={()=>setAddrOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+        <input value={form.address||''} onChange={e=>setForm(p=>({...p,address:e.target.value}))}
+          placeholder="市区町村から" style={INP} autoFocus/>
+        {(()=>{
+          const ad=String(form.address||'').trim();
+          const st={display:'flex',alignItems:'center',justifyContent:'center',gap:7,width:'100%',marginTop:9,padding:'12px 0',
+            borderRadius:10,fontWeight:800,fontSize:14,fontFamily:'inherit',textDecoration:'none',
+            border:'2px solid '+(ad?'#93c5fd':'#e5e7eb'),background:ad?'#eff6ff':'#f8fafc',color:ad?'#1d4ed8':'#cbd5e1'};
+          return ad
+            ?<a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(ad)}
+               target="_blank" rel="noopener" style={st}>🗺 Google マップで開く</a>
+            :<div style={st}>🗺 Google マップで開く</div>;
+        })()}
+        <button onClick={()=>setAddrOpen(false)} style={{width:'100%',marginTop:8,padding:'11px 0',background:'#f3f4f6',border:'none',borderRadius:10,fontWeight:700,fontSize:13.5,color:'#475569',fontFamily:'inherit'}}>とじる</button>
+      </div>
+    </div>
+  );
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:300,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={saving?undefined:onClose}>
+      {addrSheet}
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
           <div style={{flex:1,minWidth:0}}>
@@ -3321,27 +3348,37 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
           {/* ★電話（任意・2026-10-06 ユーザー要望）。車検・一般とも。PC版と同じ form.phone。
               リストから予約した時はリストの番号が入っている。入っていれば 📞 でそのままかけられる。
               車検だけ PC と同じく住所も出す。 */}
-          <div style={{display:'flex',gap:10}}>
-            <div style={{flex:1}}>
-              <label style={LBL}>電話 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意</span></label>
-              <div style={{display:'flex',gap:6}}>
-                <input value={form.phone||''} onChange={e=>setForm(p=>({...p,phone:e.target.value}))}
-                  type="tel" inputMode="tel" placeholder="090-0000-0000" style={{...INP,flex:1,minWidth:0}}/>
-                {String(form.phone||'').trim()&&(
-                  <a href={'tel:'+String(form.phone).replace(/[^0-9+]/g,'')} title="タップで発信"
-                    style={{flexShrink:0,width:44,display:'flex',alignItems:'center',justifyContent:'center',
-                      border:'2px solid #86efac',background:'#f0fdf4',color:'#047857',borderRadius:10,fontSize:17,textDecoration:'none'}}>📞</a>
-                )}
-              </div>
+          {/* ★電話は1行まるごと（2026-10-20 ユーザー報告・A案）。
+              それまで住所と横に並べていたので電話の欄が 107px しかなく、
+              「090-1234-5678」（表示に 136px 必要）が**切れて読めなかった**。 */}
+          <div>
+            <label style={LBL}>電話 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意</span></label>
+            <div style={{display:'flex',gap:6}}>
+              <input value={form.phone||''} onChange={e=>setForm(p=>({...p,phone:e.target.value}))}
+                type="tel" inputMode="tel" placeholder="090-0000-0000" style={{...INP,flex:1,minWidth:0}}/>
+              {String(form.phone||'').trim()&&(
+                <a href={'tel:'+String(form.phone).replace(/[^0-9+]/g,'')} title="タップで発信"
+                  style={{flexShrink:0,width:44,display:'flex',alignItems:'center',justifyContent:'center',
+                    border:'2px solid #86efac',background:'#f0fdf4',color:'#047857',borderRadius:10,fontSize:17,textDecoration:'none'}}>📞</a>
+              )}
             </div>
-            {isInsp&&(
-              <div style={{flex:1.2}}>
-                <label style={LBL}>住所 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意</span></label>
-                <input value={form.address||''} onChange={e=>setForm(p=>({...p,address:e.target.value}))}
-                  placeholder="市区町村から" style={INP}/>
-              </div>
-            )}
           </div>
+          {/* ★住所は小さなボタン。タップで下からシートが開く（あまり使わないので場所を取らせない）。
+              入っていればボタンにそのまま出す（長ければ …）。車検だけ（PC と同じ）。 */}
+          {isInsp&&(()=>{
+            const ad=String(form.address||'').trim();
+            return(
+              <button type="button" onClick={()=>setAddrOpen(true)}
+                style={{display:'flex',alignItems:'center',gap:7,width:'100%',padding:'9px 11px',
+                  border:'1.5px solid '+(ad?'#d1d5db':'#e5e7eb'),borderRadius:10,background:'#f8fafc',
+                  fontFamily:'inherit',fontSize:13,textAlign:'left'}}>
+                <span style={{flexShrink:0,fontSize:15}}>📍</span>
+                <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                  color:ad?'#334155':'#94a3b8',fontWeight:ad?700:400}}>{ad||'住所を入れる'}</span>
+                <span style={{flexShrink:0,color:'#94a3b8',fontSize:12}}>▸</span>
+              </button>
+            );
+          })()}
           {isInsp?(
             <React.Fragment>
               {/* ★車検日＝この予約が乗っている日。変えるとその日へ予約ごと移す（2026-10-04 現場要望）。
