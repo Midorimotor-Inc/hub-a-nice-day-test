@@ -193,7 +193,17 @@ const cust = (i, o) => Object.assign({
   await clickText(page, '本予約');
   t('いつもの車検の入力画面が、名前・車種入りで開く', await seeText(page, '井上花子', 8000) && await page.evaluate(() => !![...document.querySelectorAll('input')].find(e => e.value === 'ハスラー')));
   await clickText(page, 'クイック車検');
-  await page.evaluate(() => { const sel = [...document.querySelectorAll('select')].find(e => [...e.options].some(o => o.value === '13:30')); if (sel) { const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set; setter.call(sel, '13:30'); sel.dispatchEvent(new Event('change', { bubbles: true })); } });
+  // ★入庫時間は <select> をやめてボタン＋シートになった（2026-10-20）
+  await page.evaluate(() => {
+    const l = [...document.querySelectorAll('label')].find(e => /^入庫時間/.test(e.innerText.trim()));
+    const b = l && l.parentElement && l.parentElement.querySelector('button');
+    if (b) b.click();
+  });
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '13:30' && e.offsetParent !== null);
+    if (b) b.click();
+  });
   await page.waitForTimeout(300);
   await clickText(page, '予約確定');
   await page.waitForTimeout(800);

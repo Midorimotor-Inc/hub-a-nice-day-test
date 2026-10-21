@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>スマホ 一般整備：作業内容・担当・クイック</title>
+<!--
+  2026-10-20 ご依頼：
+   ① スマホの一般整備で「作業内容」「担当」の開き方が大きい時と小さい時がある → すべて大きく開くように
+   ② 内容欄に PC と同じクイック項目（ボタンでメニューが開く）
+  枠は実機と同じ 390px。入力欄の寸法も本物と同じ。実際に触れます。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --cy:#0891b2; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1250px;margin:0 auto;padding:16px 14px 70px}
+  h1{font-size:17px;font-weight:900;margin-bottom:5px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.9}
+  .grid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  .col{flex:0 0 390px;max-width:390px}
+  .ttl{font-size:13.5px;font-weight:900;margin-bottom:3px}
+  .ttl .pick{display:inline-block;margin-left:7px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .sub{font-size:11.5px;color:var(--ink2);margin-bottom:8px;line-height:1.8;min-height:50px}
+
+  .phone{width:390px;background:#fff;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.08);position:relative}
+  .head{background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;padding:10px 14px;font-weight:800;font-size:14px}
+  .body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px;min-height:430px}
+  label.l{font-size:11px;font-weight:800;color:#475569;display:block;margin-bottom:4px}
+  .inp{width:100%;padding:10px 11px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
+  .row{display:flex;gap:10px}
+  textarea.inp{resize:none;line-height:1.5}
+
+  /* 押して開くボタン（selectの代わり） */
+  .selbtn{display:flex;align-items:center;gap:7px;width:100%;padding:10px 11px;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;font-size:16px;font-family:inherit;text-align:left;cursor:pointer}
+  .selbtn .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .selbtn .tx.ph{color:#9ca3af}
+  .selbtn .arw{flex-shrink:0;color:#94a3b8;font-size:12px}
+
+  /* 下から出るシート */
+  .sheet{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:5}
+  .sheet.on{display:flex}
+  .sh{background:#fff;width:100%;border-radius:18px 18px 0 0;padding:13px 13px 18px;max-height:88%;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.25)}
+  .sh h3{display:flex;align-items:center;font-weight:900;font-size:15px;color:#0e7490;margin-bottom:10px}
+  .sh h3 .x{margin-left:auto;background:#f1f5f9;border:none;border-radius:50%;width:32px;height:32px;font-size:15px;font-weight:800;color:#64748b;cursor:pointer}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .opts.one{grid-template-columns:1fr}
+  .opt{display:flex;align-items:center;gap:7px;padding:12px 10px;border:2px solid #e5e7eb;border-radius:11px;background:#fff;font-family:inherit;font-size:14px;font-weight:700;color:#334155;cursor:pointer;text-align:left}
+  .opt .cd{flex-shrink:0;min-width:28px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;background:#0891b2;color:#fff;font-size:11px;font-weight:900}
+  .opt.on{border-color:#0891b2;background:#ecfeff;color:#0e7490}
+  .opt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+  .shclose{width:100%;margin-top:10px;padding:11px 0;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;font-size:13.5px;color:#475569;cursor:pointer;font-family:inherit}
+
+  /* クイック */
+  .qbtn{margin-left:auto;padding:4px 11px;background:#e0f2fe;border:1.5px solid #7dd3fc;border-radius:7px;font-size:11.5px;color:#0369a1;font-weight:800;cursor:pointer;font-family:inherit}
+  .qitem{display:flex;align-items:center;gap:8px;width:100%;padding:12px 11px;border:2px solid #6ee7b7;border-radius:11px;background:#ecfdf5;font-family:inherit;font-size:14px;font-weight:700;color:#059669;cursor:pointer;text-align:left;margin-bottom:7px}
+  .qitem.on{background:#d1fae5;border-color:#10b981;color:#065f46}
+  .qitem .mk{flex-shrink:0;width:20px;text-align:center;font-size:13px}
+
+  .note{font-size:11.5px;color:var(--ink2);margin-top:9px;line-height:1.9;background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .warn{font-size:11px;color:#b91c1c;font-weight:700;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>スマホ 一般整備：作業内容・担当・クイック項目</h1>
+  <div class="lead">
+    枠は<b>実機と同じ390px</b>。<b>実際に触れます</b>（作業内容・担当・⚡クイックを押してみてください）。
+  </div>
+
+  <div class="grid">
+
+    <!-- いま -->
+    <div class="col">
+      <div class="ttl">いま</div>
+      <div class="sub">作業内容・担当・指見は <b>&lt;select&gt;</b>。<b>開き方は端末まかせ</b>なので、iPhoneは下からホイール、Androidは小さな一覧…と変わります。<b>内容欄にクイック項目はありません。</b></div>
+      <div class="phone">
+        <div class="head">⏰ 整備の編集</div>
+        <div class="body">
+          <div class="row">
+            <div style="flex:1"><label class="l">車種 *</label><input class="inp" value="ワゴンR"></div>
+            <div style="flex:1"><label class="l">担当</label>
+              <select class="inp"><option>江川京志</option><option>竹林直行</option><option>魚住圭</option></select></div>
+          </div>
+          <div class="row">
+            <div style="flex:1.4"><label class="l">作業内容 *</label>
+              <select class="inp"><option>選択</option><option>Q クイック整備・修理</option><option>⑫ 12ヶ月点検</option><option>M12 メンパ12ヶ月点検</option></select>
+              <div class="warn">↑ 端末によって開き方が変わる</div></div>
+            <div style="flex:1"><label class="l">指・見</label>
+              <select class="inp"><option>なし</option><option>指示書</option><option>見積</option><option>両方</option></select></div>
+          </div>
+          <div>
+            <label class="l">内容</label>
+            <textarea class="inp" rows="2" placeholder="（手で打つだけ）"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A案 -->
+    <div class="col">
+      <div class="ttl">A案：どれも下から大きく開く<span class="pick">おすすめ</span></div>
+      <div class="sub">作業内容・担当・指見を<b>自分のシート</b>にします。<b>端末に関係なく毎回同じ大きさ</b>で開きます。内容欄には<b>⚡ クイック</b>。</div>
+      <div class="phone" id="pA">
+        <div class="head">⏰ 整備の編集</div>
+        <div class="body">
+          <div class="row">
+            <div style="flex:1"><label class="l">車種 *</label><input class="inp" value="ワゴンR"></div>
+            <div style="flex:1"><label class="l">担当</label>
+              <button class="selbtn" onclick="open_('A','staff')"><span class="tx" id="txA_staff">江川京志</span><span class="arw">▾</span></button></div>
+          </div>
+          <div class="row">
+            <div style="flex:1.4"><label class="l">作業内容 *</label>
+              <button class="selbtn" onclick="open_('A','work')"><span class="tx ph" id="txA_work">選択</span><span class="arw">▾</span></button></div>
+            <div style="flex:1"><label class="l">指・見</label>
+              <button class="selbtn" onclick="open_('A','shimi')"><span class="tx" id="txA_shimi">なし</span><span class="arw">▾</span></button></div>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;margin-bottom:4px">
+              <label class="l" style="margin:0">内容</label>
+              <button class="qbtn" onclick="open_('A','quick')">⚡ クイック</button>
+            </div>
+            <textarea class="inp" rows="3" id="cnA" placeholder="タップして入力／⚡から定型文"></textarea>
+          </div>
+        </div>
+        <div class="sheet" id="shA" onclick="close_('A')"><div class="sh" onclick="event.stopPropagation()" id="shAin"></div></div>
+      </div>
+      <div class="note">
+        <b>お試しください：</b>「作業内容」を押すと13項目が<b>2列で大きく</b>出ます。「⚡ クイック」は定型文のメニュー。<br>
+        選んだ項目には ✓ が付き、もう一度押すと外れます（PCと同じ動き）。
+      </div>
+    </div>
+
+    <!-- B案 -->
+    <div class="col">
+      <div class="ttl">B案：その場で開く（シートにしない）</div>
+      <div class="sub">カードの中に<b>そのまま一覧が開きます</b>。シートより近い場所に出ますが、<b>下の項目が押し下げられ</b>画面が動きます。</div>
+      <div class="phone" id="pB">
+        <div class="head">⏰ 整備の編集</div>
+        <div class="body">
+          <div class="row">
+            <div style="flex:1"><label class="l">車種 *</label><input class="inp" value="ワゴンR"></div>
+            <div style="flex:1"><label class="l">担当</label>
+              <button class="selbtn" onclick="toggleInline()"><span class="tx" id="txB_staff">江川京志</span><span class="arw">▾</span></button></div>
+          </div>
+          <div id="inlineB" style="display:none">
+            <div class="opts one" id="inlineOpts"></div>
+          </div>
+          <div class="row">
+            <div style="flex:1.4"><label class="l">作業内容 *</label>
+              <button class="selbtn"><span class="tx ph">選択</span><span class="arw">▾</span></button></div>
+            <div style="flex:1"><label class="l">指・見</label>
+              <button class="selbtn"><span class="tx">なし</span><span class="arw">▾</span></button></div>
+          </div>
+          <div><label class="l">内容</label><textarea class="inp" rows="2"></textarea></div>
+        </div>
+      </div>
+      <div class="note"><b>お試しください：</b>「担当」を押すと、その場に一覧が開きます。開くたびに下がずれるのが気になるかどうかです。</div>
+    </div>
+
+  </div>
+
+  <div class="note" style="max-width:860px;margin-top:18px">
+    <b>なぜ「大きい時と小さい時」があるのか</b>：いまは <code>&lt;select&gt;</code> を使っていて、<b>開き方は端末（iPhone / Android / ブラウザ）が決めます</b>。
+    画面の下の方にある欄ほど小さく開く、項目数で高さが変わる、といったことが起きます。アプリ側では揃えられません。<br>
+    <b>自分のシートにすれば、どの端末でも毎回同じ大きさ</b>になります。おまけに <code>&lt;select&gt;</code> は日本語入力を英数に落とすので、そこも直ります。<br><br>
+    <b>クイック項目</b>は <b>PCで作ったものがそのまま出ます</b>（PCの「⚙ クイック編集」で足した定型文）。スマホ側で作る画面は作りません。
+  </div>
+</div>
+<script>
+  var WORKS=[['Q','クイック整備・修理'],['⑫','12ヶ月点検'],['M12','メンパ12ヶ月点検'],['M6','メンパ6ヶ月点検'],
+             ['N1','新車1ヶ月点検'],['N6','新車6ヶ月点検'],['B','鈑金塗装'],['R','リコール'],
+             ['商','商談'],['保','保険'],['試','試乗'],['納','納車'],['他','その他']];
+  var STAFF=['江川京志','竹林直行','魚住圭','幸田桂紀','見取大介','岡上秀一','舟田祥子'];
+  var SHIMI=['なし','指示書','見積','両方'];
+  var QUICK=[['Eオイル交換','エンジンオイル交換'],['Eオイル・エレメント交換','エンジンオイル+エレメント交換'],
+             ['持込シーズンタイヤ付替','持込シーズンタイヤ付替'],['預かりシーズンタイヤ付替','預かりシーズンタイヤ付替'],
+             ['レッカー搬入','レッカー搬入'],['書類預かり','書類預かり']];
+  var sel={work:'',staff:'江川京志',shimi:'なし'};
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function open_(p,kind){
+    var box=document.getElementById('sh'+p+'in'); var h='';
+    if(kind==='work'){
+      h='<h3>⏰ 作業内容 <button class="x" onclick="close_(\''+p+'\')">✕</button></h3><div class="opts">'
+        +WORKS.map(function(w){return '<button class="opt'+(sel.work===w[0]?' on':'')+'" onclick="pick(\''+p+'\',\'work\',\''+w[0]+'\',\''+esc(w[1])+'\')">'
+          +'<span class="cd">'+w[0]+'</span><span class="nm">'+w[1]+'</span></button>';}).join('')+'</div>';
+    } else if(kind==='staff'){
+      h='<h3>👤 担当 <button class="x" onclick="close_(\''+p+'\')">✕</button></h3><div class="opts">'
+        +STAFF.map(function(n){return '<button class="opt'+(sel.staff===n?' on':'')+'" onclick="pick(\''+p+'\',\'staff\',\''+n+'\',\''+n+'\')"><span class="nm">'+n+'</span></button>';}).join('')+'</div>';
+    } else if(kind==='shimi'){
+      h='<h3>📄 指・見 <button class="x" onclick="close_(\''+p+'\')">✕</button></h3><div class="opts">'
+        +SHIMI.map(function(n){return '<button class="opt'+(sel.shimi===n?' on':'')+'" onclick="pick(\''+p+'\',\'shimi\',\''+n+'\',\''+n+'\')"><span class="nm">'+n+'</span></button>';}).join('')+'</div>';
+    } else {
+      var cur=(document.getElementById('cn'+p).value||'').split('\n');
+      h='<h3>⚡ クイック <button class="x" onclick="close_(\''+p+'\')">✕</button></h3>'
+        +QUICK.map(function(q,i){var on=cur.indexOf(q[1])>=0;
+          return '<button class="qitem'+(on?' on':'')+'" onclick="toggleQ(\''+p+'\','+i+')"><span class="mk">'+(on?'✓':'＋')+'</span>'+q[0]+'</button>';}).join('')
+        +'<div style="font-size:11px;color:#64748b;margin-top:4px">PCの「⚙ クイック編集」で作った定型文がここに出ます</div>';
+    }
+    h+='<button class="shclose" onclick="close_(\''+p+'\')">とじる</button>';
+    box.innerHTML=h;
+    document.getElementById('sh'+p).classList.add('on');
+  }
+  function close_(p){ document.getElementById('sh'+p).classList.remove('on'); }
+  function pick(p,kind,v,label){
+    sel[kind]=v;
+    var t=document.getElementById('tx'+p+'_'+kind);
+    t.textContent=(kind==='work'?v+' '+label:label); t.classList.remove('ph');
+    close_(p);
+  }
+  function toggleQ(p,i){
+    var ta=document.getElementById('cn'+p); var q=QUICK[i][1];
+    var lines=(ta.value||'').split('\n').filter(function(x){return x!=='';});
+    var at=lines.indexOf(q);
+    if(at>=0) lines.splice(at,1); else lines.push(q);
+    ta.value=lines.join('\n');
+    open_(p,'quick');
+  }
+  function toggleInline(){
+    var w=document.getElementById('inlineB');
+    if(w.style.display==='none'){
+      document.getElementById('inlineOpts').innerHTML=STAFF.map(function(n){
+        return '<button class="opt" onclick="document.getElementById(\'txB_staff\').textContent=\''+n+'\';toggleInline()"><span class="nm">'+n+'</span></button>';}).join('');
+      w.style.display='block';
+    } else w.style.display='none';
+  }
+</script>
+</body>
+</html>

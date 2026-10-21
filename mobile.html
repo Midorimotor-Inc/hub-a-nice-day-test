@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792461113110';
+  window.__APP_BUILD='build-1792488433606';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.67';
+const MOBILE_VERSION='3.68';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -166,7 +166,8 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   storKey('pleave','honten'),storKey('pleave','sanda'),STOR+'mholidays',
   storKey('offnote','honten'),storKey('offnote','sanda'),   // 休日タブ（2026-09-19）・休日メモ（2026-09-20）
   STOR+'mysched',    // マイスケジュール（公開予定・2026-09-20）
-  STOR+'memoItems'];  // 備考・メモのクイック項目（PCで作った定型文・2026-10-03）
+  STOR+'memoItems',   // 備考・メモのクイック項目（PCで作った定型文・2026-10-03）
+  STOR+'setItems'];   // 整備の【内容】欄のクイック項目（PCで作った定型文・2026-10-20）
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -3104,7 +3105,7 @@ const withDeliveryNote = (entry, dk, isInsp) => {
   e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
   return e;
 };
-const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
+const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
   const isInsp=mode.type==='insp';
   // 休業日には入庫・納車を入れられない（選んだ時点で弾き、元の値に戻す）
   const closedDk=dk=>!!(isClosedDk&&isClosedDk(dk));
@@ -3142,6 +3143,11 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   //   最初の予約から付けられるようにする（2026-08-27にユーザーが要望）。
   const [carLocked,setCarLocked]=useState(false);
   const [addrOpen,setAddrOpen]=useState(false);   // 住所シート（2026-10-20）
+  // ★選ぶ欄は <select> をやめて「下から大きく開くシート」に（2026-10-20 ユーザー指示・A案）。
+  //   <select> は開き方を端末（iPhone/Android/ブラウザ）が決めるので、大きい時と小さい時があった。
+  //   自前のシートなら**どの端末でも毎回同じ大きさ**。日本語入力を英数に落とす問題も消える。
+  const [pickState,setPickState]=useState(null);  // {title,opts,cur,onPick,cols}
+  const [quickOpen,setQuickOpen]=useState(false); // 内容欄のクイック項目
   const [carSel,setCarSel]=useState('');
   const [carFrom,setCarFrom]=useState(form.entryDate?dkToInputDate(form.entryDate):defDate);
   const [carTo,setCarTo]=useState(form.deliveryDate?dkToInputDate(form.deliveryDate):defDate);
@@ -3267,6 +3273,75 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   const LBL={fontSize:11,fontWeight:800,color:'#475569',display:'block',marginBottom:4};
   const INP={width:'100%',padding:'10px 12px',border:'2px solid #e2e8f0',borderRadius:10,outline:'none',background:'white'};
   const staffNames=[...new Set([...(staffList||[]).map(s=>s.name),currentUser?.name].filter(Boolean))];
+  // ★選ぶ欄のボタン。見た目は今までの欄と同じ（INP）＋右に ▾
+  const pickBtn=(text,isEmpty,title,opts,cur,onPick,st,cols)=>(
+    <button type="button" onClick={()=>setPickState({title,opts,cur,onPick,cols:cols||2})}
+      style={{...INP,...(st||{}),display:'flex',alignItems:'center',gap:7,textAlign:'left',fontFamily:'inherit'}}>
+      <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+        ...(isEmpty?{color:'#9ca3af'}:{})}}>{text}</span>
+      <span style={{flexShrink:0,color:'#94a3b8',fontSize:12}}>▾</span>
+    </button>
+  );
+  const pickSheet=(!pickState)?null:(
+    <div onClick={()=>setPickState(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3150,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',
+        padding:'13px 13px 20px',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+          <div style={{fontWeight:900,fontSize:15,color:sc}}>{pickState.title}</div>
+          <button onClick={()=>setPickState(null)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat('+pickState.cols+',1fr)',gap:7}}>
+          {pickState.opts.map(o=>{
+            const on=String(pickState.cur||'')===String(o.v);
+            return(
+              <button key={String(o.v)} onClick={()=>{pickState.onPick(o.v);setPickState(null);}}
+                style={{display:'flex',alignItems:'center',gap:7,padding:'12px 10px',borderRadius:11,fontFamily:'inherit',
+                  border:'2px solid '+(on?sc:'#e5e7eb'),background:on?'#ecfeff':'white',color:on?sc:'#334155',
+                  fontSize:14,fontWeight:700,textAlign:'left'}}>
+                {o.code&&<span style={{flexShrink:0,minWidth:28,height:22,display:'inline-flex',alignItems:'center',justifyContent:'center',
+                  borderRadius:5,background:on?sc:'#94a3b8',color:'white',fontSize:11,fontWeight:900}}>{o.code}</span>}
+                <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:13.5}}>{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={()=>setPickState(null)} style={{width:'100%',marginTop:10,padding:'11px 0',background:'#f3f4f6',border:'none',borderRadius:10,fontWeight:700,fontSize:13.5,color:'#475569',fontFamily:'inherit'}}>とじる</button>
+      </div>
+    </div>
+  );
+  // ★内容欄のクイック項目（2026-10-20）。**PC で作った定型文**（setItems）がそのまま出る。
+  //   PC と同じで、行として足す／もう一度押すと外す。
+  const quickSheet=(!quickOpen)?null:(()=>{
+    const its=(Array.isArray(quickItems)?quickItems:[]).map(si=>({...si,text:(si&&(si.text||si.content||si.label))||''})).filter(si=>si.text);
+    const lines=String(form.content||'').split('\n').filter(x=>x!=='');
+    const toggle=(t)=>{const i=lines.indexOf(t);const nx=i>=0?lines.filter(x=>x!==t):lines.concat([t]);setForm(p=>({...p,content:nx.join('\n')}));};
+    return(
+      <div onClick={()=>setQuickOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3150,display:'flex',alignItems:'flex-end'}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',
+          padding:'13px 13px 20px',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+          <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
+            <div style={{fontWeight:900,fontSize:15,color:sc}}>⚡ クイック</div>
+            <button onClick={()=>setQuickOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+          </div>
+          {its.length===0
+            ?<div style={{fontSize:12.5,color:'#94a3b8',padding:'14px 4px',lineHeight:1.9}}>まだ定型文がありません。<br/>PC の「内容」欄の <b>⚙ クイック編集</b> で足すと、ここにも出ます。</div>
+            :its.map((si,i)=>{
+              const on=lines.indexOf(si.text)>=0;
+              return(
+                <button key={si.id||i} onClick={()=>toggle(si.text)}
+                  style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'12px 11px',marginBottom:7,borderRadius:11,fontFamily:'inherit',
+                    border:'2px solid '+(on?'#10b981':'#6ee7b7'),background:on?'#d1fae5':'#ecfdf5',color:on?'#065f46':'#059669',
+                    fontSize:14,fontWeight:700,textAlign:'left'}}>
+                  <span style={{flexShrink:0,width:20,textAlign:'center',fontSize:13}}>{on?'✓':'＋'}</span>
+                  <span style={{flex:1,minWidth:0}}>{si.label||si.text}</span>
+                </button>
+              );
+            })}
+          <button onClick={()=>setQuickOpen(false)} style={{width:'100%',marginTop:4,padding:'11px 0',background:'#f3f4f6',border:'none',borderRadius:10,fontWeight:700,fontSize:13.5,color:'#475569',fontFamily:'inherit'}}>とじる</button>
+        </div>
+      </div>
+    );
+  })();
   // ★住所シート（2026-10-20）。住所を直して、そのまま Google マップで開ける。
   //   カード（zIndex 300）より上に出す。住所が空の時はマップのボタンを押せなくする。
   const addrSheet=(!addrOpen)?null:(
@@ -3295,6 +3370,8 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:300,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={saving?undefined:onClose}>
       {addrSheet}
+      {pickSheet}
+      {quickSheet}
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
           <div style={{flex:1,minWidth:0}}>
@@ -3328,10 +3405,9 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
             </div>
             <div style={{flex:1}}>
               <label style={LBL}>担当</label>
-              <select value={form.staff||''} onChange={e=>setForm(p=>({...p,staff:e.target.value}))} style={INP}>
-                <option value="">（なし）</option>
-                {staffNames.map(n=><option key={n} value={n}>{n}</option>)}
-              </select>
+              {pickBtn(form.staff||'（なし）',!form.staff,'👤 担当',
+                [{v:'',label:'（なし）'}].concat(staffNames.map(n=>({v:n,label:n}))),
+                form.staff||'',v=>setForm(p=>({...p,staff:v})),null,2)}
             </div>
           </div>
           {/* ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）。
@@ -3411,10 +3487,9 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
               <div style={{display:'flex',gap:10}}>
                 <div style={{flex:1}}>
                   <label style={LBL}>入庫時間 *</label>
-                  <select value={form.time||''} onChange={e=>setForm(p=>({...p,time:e.target.value}))} style={INP}>
-                    <option value="">選択</option>
-                    {SCHED_SLOTS.map(t=><option key={t} value={t}>{specialSlotLabel(t)}</option>)}
-                  </select>
+                  {pickBtn(form.time?specialSlotLabel(form.time):'選択',!form.time,'🕘 入庫時間',
+                    SCHED_SLOTS.map(t=>({v:t,label:specialSlotLabel(t)})),
+                    form.time||'',v=>setForm(p=>({...p,time:v})),null,3)}
                 </div>
                 <div style={{flex:1}}>
                   <label style={LBL}>特典</label>
@@ -3461,31 +3536,36 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
                   </div>
                   <div style={{flex:1}}>
                     <label style={LBL}>時間</label>
-                    <select value={mvSlot} onChange={e=>setMvSlot(e.target.value)}
-                      style={{...INP,...(moved?{border:'2px solid #0e7490',background:'#ecfeff',color:'#0e7490',fontWeight:800}:{})}}>
-                      {SCHED_SLOTS.map(t=><option key={t} value={t}>{specialSlotLabel(t)}</option>)}
-                    </select>
+                    {pickBtn(specialSlotLabel(mvSlot),false,'🕘 時間',
+                      SCHED_SLOTS.map(t=>({v:t,label:specialSlotLabel(t)})),
+                      mvSlot,v=>setMvSlot(v),
+                      moved?{border:'2px solid #0e7490',background:'#ecfeff',color:'#0e7490',fontWeight:800}:null,3)}
                   </div>
                 </div>
               )}
               <div style={{display:'flex',gap:10}}>
                 <div style={{flex:1.4}}>
                   <label style={LBL}>作業内容 *</label>
-                  <select value={form.work||''} onChange={e=>setForm(p=>({...p,work:e.target.value}))} style={INP}>
-                    <option value="">選択</option>
-                    {WORKS.map(w=><option key={w.id} value={w.id}>{w.id} {w.name}</option>)}
-                  </select>
+                  {pickBtn((()=>{const w=WORKS.find(x=>x.id===form.work);return w?(w.id+' '+w.name):'選択';})(),!form.work,'⏰ 作業内容',
+                    WORKS.map(w=>({v:w.id,label:w.name,code:w.id})),
+                    form.work||'',v=>setForm(p=>({...p,work:v})),null,2)}
                 </div>
                 <div style={{flex:1}}>
                   <label style={LBL}>指・見</label>
-                  <select value={form.shimi||''} onChange={e=>setForm(p=>({...p,shimi:e.target.value}))} style={INP}>
-                    {SHIMIS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  {pickBtn((SHIMIS.find(x=>x.id===(form.shimi||''))||SHIMIS[0]).name,false,'📄 指・見',
+                    SHIMIS.map(x=>({v:x.id,label:x.name})),
+                    form.shimi||'',v=>setForm(p=>({...p,shimi:v})),null,2)}
                 </div>
               </div>
               <div>
-                <label style={LBL}>内容</label>
-                <textarea value={form.content||''} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={2} style={{...INP,resize:'none'}}/>
+                {/* ★内容のクイック項目（2026-10-20 ユーザー要望）。PC で作った定型文がそのまま出る。 */}
+                <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
+                  <label style={{...LBL,marginBottom:0}}>内容</label>
+                  <button type="button" onClick={()=>setQuickOpen(true)}
+                    style={{marginLeft:'auto',padding:'4px 11px',background:'#e0f2fe',border:'1.5px solid #7dd3fc',borderRadius:7,
+                      fontSize:11.5,color:'#0369a1',fontWeight:800,fontFamily:'inherit'}}>⚡ クイック</button>
+                </div>
+                <textarea value={form.content||''} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={3} style={{...INP,resize:'none'}}/>
               </div>
             </React.Fragment>
           )}
@@ -3508,10 +3588,10 @@ const EditModal=({mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,
                 </div>
                 <div style={{marginTop:8}}>
                   <label style={LBL}>納車時間</label>
-                  <select value={form.deliveryTime||'未定'} onChange={e=>setForm(p=>({...p,deliveryTime:e.target.value}))}
-                    style={{...INP,border:'2px solid #047857',color:'#047857',fontWeight:800}}>
-                    {SCHED_SLOTS.map(v=><option key={v} value={v}>{deliverySlotLabel(v)}</option>)}
-                  </select>
+                  {pickBtn(deliverySlotLabel(form.deliveryTime||'未定'),false,'🏁 納車時間',
+                    SCHED_SLOTS.map(v=>({v:v,label:deliverySlotLabel(v)})),
+                    form.deliveryTime||'未定',v=>setForm(p=>({...p,deliveryTime:v})),
+                    {border:'2px solid #047857',color:'#047857',fontWeight:800},3)}
                   {(()=>{const p=form.deliveryDate.split('-');return <div style={{fontSize:11,color:'#047857',marginTop:4,fontWeight:800}}>🏁 納車：{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')} {deliverySlotLabel(form.deliveryTime||'未定')}</div>;})()}
                 </div>
                 {/* ★納車日の備考（2026-10-02 ユーザー決定・C案）。納車日の行に出る。
@@ -5650,6 +5730,7 @@ const App=()=>{
   const [memoDataH,setMemoDataH]=useState({});
   const [memoDataS,setMemoDataS]=useState({});
   const [memoItemsRaw,setMemoItemsRaw]=useState([]);   // 備考のクイック項目（PCで作った定型文・2026-10-03）
+  const [setItemsRaw,setSetItemsRaw]=useState([]);     // 整備の【内容】欄のクイック項目（2026-10-20）
   const [memoEdit,setMemoEdit]=useState(null);         // 備考・メモの追加／編集 {dk,idx}（idx=null で新規）
   const [loanerResH,setLoanerResH]=useState({});
   const [rentalCars,setRentalCars]=useState([]);
@@ -5799,7 +5880,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -5831,6 +5912,7 @@ const App=()=>{
       if(isPlainObj(onS))setOffNoteS(onS);
       if(isPlainObj(msch))setMySched(msch);
       if(Array.isArray(mitems))setMemoItemsRaw(mitems);
+      if(Array.isArray(sitems))setSetItemsRaw(sitems);
       setGasOk(FB_ON?!(window.__hubGasDown||0):true);   // Firestore では購読の失敗（fbDown）を接続状態に反映
     }catch{setGasOk(false);}
     finally{fetchBusyRef.current=false;}
@@ -6992,6 +7074,7 @@ const App=()=>{
           onClose={()=>setMemoEdit(null)}/>;
       })()}
       {editMode&&<EditModal
+        quickItems={setItemsRaw}
         mode={editMode}
         initial={editMode.initial}
         vsId={vsId}

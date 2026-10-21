@@ -54,6 +54,7 @@ const EMPTY_D = EMPTY.getDate();
 
 (async () => {
   const seed = {
+    [STOR + 'setItems']: [{ id: 'si1', label: 'Eオイル交換', text: 'エンジンオイル交換' }, { id: 'si2', label: 'レッカー搬入', text: 'レッカー搬入' }],
     [STOR + 'insp']: { [DK]: [
       { name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' },
       { name: '稲木', carType: 'ワゴンR', no: '3311', course: 3, store: 'honten', seq: 2, time: '09:30', bookingStatus: 'confirmed', note: '' },
@@ -166,7 +167,57 @@ const EMPTY_D = EMPTY.getDate();
     return { d: lbl('日にち'), t: lbl('時間') };
   });
   t('「日にち」の欄がある', !!fields.d && fields.d.tag === 'INPUT', fields);
-  t('「時間」の欄があり 10:00 が入っている', !!fields.t && fields.t.tag === 'SELECT' && fields.t.val === '10:00', fields);
+  // ★選ぶ欄は <select> をやめてボタン＋シートになった（2026-10-20）。ボタンの文字で確かめる。
+  const timeBtnTxt = await page.evaluate(() => {
+    const l = [...document.querySelectorAll('label')].find(e => e.innerText.trim() === '時間');
+    const b = l && l.parentElement && l.parentElement.querySelector('button');
+    return b ? b.innerText.replace(/\s+/g, ' ').trim() : null;
+  });
+  t('「時間」の欄があり 10:00 が入っている', !!timeBtnTxt && timeBtnTxt.indexOf('10:00') >= 0, timeBtnTxt);
+  // ★選ぶ欄はどれも「下から大きく開くシート」（2026-10-20 ユーザー指示・A案）
+  //   <select> は開き方を端末が決めるので大きい時と小さい時があった。自前のシートなら毎回同じ。
+  t('★カードに <select> が1つも無い', await page.evaluate(() => document.querySelectorAll('.modal-box select, select').length === 0),
+    await page.evaluate(() => [...document.querySelectorAll('select')].length));
+  const openPick = (lab) => page.evaluate(x => {
+    const l = [...document.querySelectorAll('label')].find(e => e.innerText.trim().indexOf(x) === 0);
+    const b2 = l && l.parentElement && l.parentElement.querySelector('button');
+    if (!b2) return false; b2.click(); return true;
+  }, lab);
+  t('★「作業内容」を押すとシートが開く', await openPick('作業内容') && await seeText(page, '作業内容', 4000));
+  // シート（いちばん手前の覆い）の中のボタンを数える。✕ と とじる は除く
+  const opts = await page.evaluate(() => {
+    const sh = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).zIndex === '3150').pop();
+    if (!sh) return -1;
+    return [...sh.querySelectorAll('button')].filter(b2 => !/^✕$|とじる/.test(b2.innerText.trim())).length;
+  });
+  t('★作業内容が13項目ぜんぶ大きく出る', opts === 13, opts);
+  const optH = await page.evaluate(() => {
+    const sh = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).zIndex === '3150').pop();
+    const b2 = sh && [...sh.querySelectorAll('button')].find(x => !/^✕$|とじる/.test(x.innerText.trim()));
+    return b2 ? Math.round(b2.getBoundingClientRect().height) : 0;
+  });
+  t('★1項目が指で押せる大きさ（40px以上）', optH >= 40, optH + 'px');
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/とじる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(400);
+  t('★内容欄に ⚡ クイックのボタンがある', await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /⚡ クイック/.test(e.innerText) && e.offsetParent !== null)));
+  // ★クイック項目は PC で作った定型文がそのまま出て、押すと内容に行として入る（PC と同じ）
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/⚡ クイック/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(600);
+  t('★クイックに PC の定型文が出る', await seeText(page, 'Eオイル交換', 4000));
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/Eオイル交換/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(500);
+  t('★押すと内容欄に入る', await page.evaluate(() => {
+    const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null);
+    return !!ta && ta.value.indexOf('エンジンオイル交換')>=0;
+  }), await page.evaluate(() => { const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null); return ta?ta.value:'(無い)'; }));
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/Eオイル交換/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(500);
+  t('★もう一度押すと外れる', await page.evaluate(() => {
+    const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null);
+    return !!ta && ta.value.indexOf('エンジンオイル交換')<0;
+  }));
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/とじる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.waitForTimeout(400);
   t('移動の案内文は出さない（ユーザー指示）', !(await page.evaluate(() => document.body.innerText)).includes('元の枠は空きます'));
   // 翌日の 13:00 へ移す
   await page.evaluate(([inDate]) => {
@@ -177,14 +228,18 @@ const EMPTY_D = EMPTY.getDate();
     setter.call(inp, inDate); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true }));
   }, [IN2]);
   await page.waitForTimeout(400);
+  // 「時間」のボタンを押して、シートから 13:00 を選ぶ
   await page.evaluate(() => {
     const l = [...document.querySelectorAll('label')].find(e => e.innerText.trim() === '時間');
-    if (!l) return;
-    const sel = l.parentElement.querySelector('select');
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-    setter.call(sel, '13:00'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    const b = l && l.parentElement && l.parentElement.querySelector('button');
+    if (b) b.click();
   });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '13:00' && e.offsetParent !== null);
+    if (b) b.click();
+  });
+  await page.waitForTimeout(500);
   t('「予約確定」を押せた', await clickText(page, '予約確定'));
   t('移り先（翌日 13:00）に入る', await page.waitForFunction(([k, dk2]) => {
     const day = (window.__fakeFb.get(k + 'honten-sched') || {})[dk2] || {};
