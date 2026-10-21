@@ -117,6 +117,17 @@ const seed = {
   console.log('\n■ ① スケジュールから週表示を開く');
   const hasBtn = await page.evaluate(() => !!document.querySelector('[data-weekbtn]'));
   t('スケジュールに「📅 週表示」のボタンがある', hasBtn);
+  // ★入口はカレンダーの横にも（2026-10-21 ユーザー指示：どこで見るのか分からなかった）
+  const nav = await page.evaluate(() => { const b = document.querySelector('[data-weeknav]'); if (!b) return null;
+    const bar = b.parentElement; const names = [...bar.children].map(e => e.innerText.replace(/s+/g, ''));
+    return { txt: b.innerText.replace(/s+/g, ''), i: names.indexOf('週間カレンダー'), cal: names.indexOf('カレンダー') }; });
+  t('★上の並びに「週間カレンダー」のボタンがある', !!nav && nav.txt === '週間カレンダー', nav);
+  t('★「カレンダー」のすぐ右どなりにある', !!nav && nav.i === nav.cal + 1, nav);
+  await page.evaluate(() => { const b = document.querySelector('[data-weeknav]'); if (b) b.click(); });
+  await page.waitForTimeout(900);
+  t('★カレンダー横のボタンからも週の表が開く', await page.evaluate(() => !!document.querySelector('[data-weekview]')));
+  await page.evaluate(() => { const b = [...document.querySelectorAll('[data-weekview] button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); });
+  await page.waitForTimeout(400);
   await page.evaluate(() => { const b = document.querySelector('[data-weekbtn]'); if (b) b.click(); });
   await page.waitForTimeout(900);
   const open = await page.evaluate(() => !!document.querySelector('[data-weekview]'));

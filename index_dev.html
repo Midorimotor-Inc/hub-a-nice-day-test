@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792574169580';
+    window.__APP_BUILD='build-1792574499638';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.69.1';
+const APP_VERSION = '3.69.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -14833,6 +14833,13 @@ function AppInner() {
                     <button onClick={()=>setView('calendar')} {...hov(view==='calendar')}
                       style={navSty(view==='calendar',{background:'#FFFFFF',color:'#1A2550'})}>
                       <Calendar size={13}/>カレンダー
+                    </button>
+                    {/* 週間カレンダー（v3.69.2・2026-10-21 ユーザー指示：カレンダーの横に置く）。
+                        スケジュールのヘッダーの「📅 週表示」と同じものを、どの画面からでも開ける */}
+                    <button onClick={()=>{setWeekStart(weekStartOf(selDate||new Date()));setWeekOpen(true);}} {...hov(false)}
+                      data-weeknav="1" title="1週間をまとめて見る"
+                      style={navSty(false,{background:'#A5E9F2',color:'#0B4A58'})}>
+                      <Calendar size={13}/>週間カレンダー
                     </button>
                     {selDate&&(
                       <button onClick={()=>setView('schedule')} {...hov(view==='schedule')}
