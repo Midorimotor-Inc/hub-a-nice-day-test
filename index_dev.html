@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792570816776';
+    window.__APP_BUILD='build-1792574169580';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.69';
+const APP_VERSION = '3.69.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4791,7 +4791,8 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
                       onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
                     <div style={{fontSize:11,color:'#6b7280',marginTop:5,lineHeight:1.7}}>
                       週表示の出勤バッジに出る文字です。<b>空のままなら名前の先頭1文字</b>が出ます。
-                      同じ文字の人がいる時だけ、ここで決めてください（例：見取大介＝<b>大</b>）。
+                      いまは全員それで分かれているので、<b>空のままにしてください</b>。
+                      同じ文字の人が出てきた時だけ、ここで決めます。
                     </div>
                   </div>
 
