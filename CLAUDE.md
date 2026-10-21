@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -990,6 +990,29 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   **写真の見た目だけで「見づらい」と決めて直さないこと。**
 - 見え方の確認は `node shot_store.js`（読み取りのみ・Firestore には触らない）。`--main` を付けると **port_to_main.js と同じ変換を当てた「本番の見え方」**をヘッダーだけ切り取って撮る。
   テスト版のままだと両店ともオレンジで違いが出ないので、**本番の見え方はこれで確かめること**。
+
+### タイムスケジュールの週表示（v3.69・2026-10-21・テスト版のみ）
+- きっかけ：現場から「タイムスケジュールは手書きが良い」「HUB はパッと見て1週間の感じが分かりづらい」。
+  いまA3の紙を2〜3か月分めくって手書きしている。**紙は1枚で1週間、Hub は1日ずつ**＝そこが負けていた。
+  本番データで数字も出した（11月：車検82件 vs 整備2件。**すでに半分だけ使われている**状態）。
+- **決めごと（モックを何度も出して確定・2026-10-21 ユーザー）**：
+  ① **同じ時間に数件あっても積んで全部出す**（「＋2」でたたまない）。
+     本番の実績＝車検は同じ入庫時間に2台以上が **33枠/177枠**（最多4台）、整備の2行目以降は本店 **19件/166件**（1枠最大3件）。珍しくないので隠さない。
+  ② 車検は「○台」ではなく **マ→ク→レ の順にコースのバッジ**。押すとその予約カード、右の **＋** はその日の新規受付。
+     並びを時間順にすると日ごとに色の並びが変わって見比べられない。**6台までは1行**（1280px でも）・7台は画面幅次第・8台で2段。
+  ③ 出勤と休みは **1行の中で左右に分ける（B案）**。休み（＝休日＋有給）は右に極薄で。
+  ④ **日曜も出す**　⑤ **画面のみ。印刷は作らない**　⑥ 形は横（A3縦の紙には寄せない）
+- 置き場所：スケジュールのヘッダー「📅 週表示」→ **別の窓（zIndex 900）**。
+  **1日表示はそのまま**。週表示は「空きを探す」「全体を掴む」ための画面。
+  予約カード（BookingModal）は zIndex 1000 なので**週表の上に出る**。カードを閉じても週表は残る。
+- **この画面は読むだけ**。保存は全部これまでの予約カードを通る（`handleOpenModal` を呼ぶだけ）。
+  新しい車検の行は**空いている最初の行**（詰めない＝代車の紐付け `bookingKey` を壊さないため）。
+  空き枠の ＋ は `makeSlotKey(slot, n)` の空いている n。
+- スタッフの1文字＝`staffIni`。**既定は名前の先頭1文字**、スタッフ設定の「🔖 週表示の1文字」（`ini`・2文字まで）が優先。
+  かぶる人がいる時だけ手で決める（見取が2人なので 見取大介＝**大**）。三田店は 藤・中・芦・長・石・両・野・河 でかぶらない。
+- 休業日は列ごと `CLOSED_BG`＋`CLOSED_BAR`、＋も出さない。**本店は曜日の定休日なし**（`honten-cdow=[]`）・**三田店だけ水曜定休**（`sanda-cdow-v2=[3]`）。
+- モック：`mock_week_sched.html`（実データと同じ形の週・混んだ週・台数1〜8台の幅・出勤の分け方3案）。
+- 検査は `node week_view_test.js`（44件）。**直す前の版では22件落ちる**ことを確認済み。
 
 ### 【記録】2026-10-14 に本番を v3.61.1 へ（port_to_main.js でまるごと移植）
 - それまで本番は v3.57.1。**各項の「本番にはまだ入れていない」は 2026-10-14 時点ですべて解消**（上の各項も書き換えた）。

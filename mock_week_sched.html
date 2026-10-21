@@ -4,9 +4,13 @@
 <meta charset="utf-8">
 <title>タイムスケジュールの週表示</title>
 <!--
-  2026-10-19 ご相談：「A3の1週間の紙をめくって手書きしている。Hubはパッと見て1週間の感じが分かりづらい」
-  → いまの Hub のタイムスケジュールは【1日ずつ】しか出せない。紙は1枚で1週間。そこを埋めるモック。
-  時間枠・作業コードは本物（SCHED_SLOTS / WORKS）に合わせてある。名前はダミー。
+  2026-10-21 ユーザー指示：
+    ・車検は「○台」ではなく マ・ク・レ のバッジを並べる。その横に ＋ で予約カードへ直接
+    ・同じ時間に数台入った時をどうするか
+    ・水曜日の予定も入れる（本店に曜日の定休日は無い＝実データ honten-cdow=[] で確認）
+  ※この週（10/19〜10/25 本店）は【本番の実データと同じ形】です。
+    時間・コース・作業コード・代車の有無・担当・休みの人は実物のまま。
+    氏名だけダミーに差し替えています（このファイルはリポジトリに入るため）。
 -->
 <style>
   :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --cy:#0891b2; --cy2:#0e7490; }
@@ -27,7 +31,7 @@
   .nav{margin-left:auto;display:flex;gap:6px}
   .nav span{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700}
 
-  table{border-collapse:collapse;width:100%;min-width:900px}
+  table{border-collapse:collapse;width:100%;min-width:980px}
   th,td{border:1px solid #d7dde5;padding:0}
   th{background:#f1f5f9;font-size:11px;font-weight:800;padding:5px 4px;white-space:nowrap}
   th.sun{color:#ef4444}th.sat{color:#2563eb}
@@ -35,150 +39,389 @@
   .tm{width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
   .tm.sp{background:#faf5ff;color:#7c3aed}
   td.cell{height:26px;vertical-align:middle;padding:1px 3px;font-size:11.5px}
-  td.cell.closed{background:repeating-linear-gradient(45deg,#fff7ed,#fff7ed 4px,#ffedd5 4px,#ffedd5 8px)}
+  td.cell.closed{background:#ffedd5;box-shadow:inset 4px 0 0 #f97316}
   td.cell.add{color:#cbd5e1;text-align:center;font-size:11px}
   td.cell.add:hover{background:#ecfeff;color:#0891b2;cursor:pointer}
   .ent{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .ent+.ent{margin-top:2px;padding-top:2px;border-top:1px dotted #e2e8f0}
   .nm{font-weight:700;color:#1e293b;overflow:hidden;text-overflow:ellipsis}
   .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;line-height:15px}
-  .w-Q{background:#0891b2}.w-B{background:#d97706}.w-12{background:#7c3aed}.w-N{background:#059669}.w-納{background:#be123c}.w-他{background:#64748b}
   .car{flex-shrink:0;font-size:9.5px;color:#0f766e;background:#ccfbf1;border-radius:3px;padding:0 3px}
-  .cnt{font-size:10.5px;font-weight:800;color:#9a3412;background:#fff7ed;border-top:1px solid #fed7aa;padding:2px 4px;text-align:center}
-  .day1{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-width:430px}
-  .day1 .r{display:flex;gap:8px;border-bottom:1px solid #f1f5f9;padding:4px 0;font-size:12px}
-  .day1 .r span:first-child{width:46px;color:#64748b;font-weight:700;flex-shrink:0}
+  .more{display:inline-block;font-size:9.5px;font-weight:900;color:#0e7490;background:#cffafe;border:1px solid #67e8f9;border-radius:9px;padding:0 6px;margin-left:3px;line-height:14px}
+
+  /* ★車検の行：台数ではなく コースのバッジを並べる（2026-10-21 ユーザー指示） */
+  .ins{padding:3px 3px;background:#fff7ed;border-top:1px solid #fed7aa;line-height:1;white-space:nowrap;text-align:center}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+      color:#fff;font-size:11px;font-weight:900;margin:1px;vertical-align:middle;cursor:pointer}
+  .cb.m{background:#b91c1c}.cb.k{background:#1d4ed8}.cb.r{background:#d97706}
+  .cb:hover{outline:2px solid #0f172a;outline-offset:1px}
+  .plus{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+      background:#fff;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px;font-weight:900;margin:1px 1px 1px 4px;vertical-align:middle;cursor:pointer}
+  .plus:hover{background:#c2410c;color:#fff;border-style:solid}
+
+  .stf{padding:3px 3px;text-align:center;background:#f8fafc;line-height:1}
+  .sb{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:4px;
+      background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px;vertical-align:middle}
+  /* 混ぜて出す時の休み＝「かなり薄く」（10/21 指示）。居ることは分かるが目に入らない程度 */
+  .sb.off{background:#fff;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+  /* 休みだけの行に出す時：行が分かれているので、読める程度のグレーにする */
+  .sb.off2{background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;font-weight:800}
+  .sep{display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle}
+  .stf .cnt{display:inline-block;min-width:15px;margin-right:4px;font-size:10px;font-weight:900;color:#0e7490;vertical-align:middle}
+  .stf.off-row{background:#fff}
+  .dash{color:#e2e8f0;font-size:10px}
+  /* 台数の確認表は、本表とまったく同じ列幅で見る */
+  #tW{table-layout:fixed}
+  #tW .ins{white-space:normal}
+  .leg{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:11.5px;color:#5b6676}
+  .leg b{font-size:12px;color:#1b2129}
+  .mini{min-width:0;width:300px}
+  .num{font-size:12.5px;line-height:2;color:#334155}
+  .num b{color:#b45309}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>タイムスケジュールの週表示</h1>
   <div class="lead">
-    いまの Hub は<b>1日ずつ</b>しか出せません。A3の紙は<b>1枚で1週間</b>。だから「パッと見て1週間の感じ」が紙に負けています。<br>
-    時間枠（午前／9:00〜18:00／未定／午後）と作業コードは<b>本物と同じ</b>にしてあります。名前はダミーです。
+    下の表は <b>10/19（月）〜10/25（日）本店の、本番に入っている予定そのままの形</b>です。<br>
+    時間・コース（マ／ク／レ）・作業コード・代車の有無・担当・休みの人は<b>実物のまま</b>。氏名だけダミーにしています。
   </div>
 
-  <!-- いま -->
+  <!-- ① 同じ時間に数台 -->
   <div class="case">
-    <h2>いま：1日表示 <small>その日のことは分かるが、来週どこが空いているかは分からない</small></h2>
+    <h2>ご質問：同じ時間に数台入った時は？ <small>まず実際にどれくらい起きているかを本番データで数えました</small></h2>
     <div class="pad">
-      <div class="day1">
-        <div style="font-weight:900;margin-bottom:6px">10月19日（月）</div>
-        <div class="r"><span>午前</span><span>前村　和子　<b style="color:#0891b2">Q</b></span></div>
-        <div class="r"><span>09:00</span><span>桑田　陽子　<b style="color:#7c3aed">⑫</b>　代ハスラー</span></div>
-        <div class="r"><span>09:30</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
-        <div class="r"><span>10:00</span><span>西浦　三田　<b style="color:#d97706">B</b></span></div>
-        <div class="r"><span>10:30</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
-        <div class="r"><span>11:00</span><span style="color:#cbd5e1">＋ クリックして追加</span></div>
-        <div class="r"><span>…</span><span style="color:#cbd5e1">（この日の続き）</span></div>
+      <div class="num">
+        ・<b>車検</b>：同じ日・同じ入庫時間に2台以上 → <b>33枠 / 全177枠（5枠に1つ）</b>。2台が27・3台が5・<b>4台が1</b>（三田店 10/17 9:00 に ク ク レ ク）。<br>
+        ・<b>整備</b>：同じ時間枠の2行目以降 → 本店 <b>19件 / 166件</b>、三田店 9件 / 37件。1枠に<b>最大3件</b>（この週も 10/19 の 17:00 が3件）。<br>
+        → <b>珍しいことではない</b>ので、週表示でも必ず全部見えるようにします。
       </div>
-    </div>
-    <div class="note">電話で「来週あたりで」と言われた時、<b>日を1つずつめくる</b>ことになります。紙なら1枚で見えます。</div>
-  </div>
-
-  <!-- A案 -->
-  <div class="case">
-    <h2>A案：紙と同じ並びの週表 <span class="pick">おすすめ</span><small>縦＝時間、横＝曜日。A3の紙とまったく同じ向き。このまま印刷できる</small></h2>
-    <div class="pad">
-      <div class="hd"><b>⏰ タイムスケジュール（本店）</b>
-        <span style="font-size:12px;opacity:.9">10/19（月）〜 10/24（土）</span>
-        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span><span>🖨 印刷</span></span>
-      </div>
-      <table id="tA"></table>
     </div>
     <div class="note">
-      ・空いている枠は <b>＋</b>。<b>クリックすればその場で入れられます</b>（1日表示に移動しなくてよい）。<br>
-      ・<b>そのまま印刷すればA3の紙と同じもの</b>が出ます。壁に貼る紙を Hub から出せるので、手書きの紙を作る必要がなくなります。<br>
-      ・休業日は網掛け。日曜は列ごと出さないこともできます。
+      <b>ア案（下の本表で採用）：セルの中に積む。</b>その時間だけ行が高くなり、2件でも3件でも<b>全部そのまま見えます</b>。<br>
+      <b>イ案：1件だけ出して「＋2」。</b>行の高さは揃いますが、<b>隠れた分はクリックしないと見えません</b>。<br>
+      いま最大3件・それも週に1〜2か所なので、<b>ア案（積む）をおすすめします</b>。見落としが出ないほうを採ります。
     </div>
   </div>
 
-  <!-- B案 -->
+  <!-- ② 本表 -->
   <div class="case">
-    <h2>B案：A案＋その日の車検台数 <small>上に「車検 ○台」を出して、1週間の混み具合が分かるようにする</small></h2>
+    <h2>週表示（本店・ア案＝積む） <span class="pick">2026-10-21</span><small>車検はマ・ク・レのバッジ＋その横に ＋ で予約カードへ直接</small></h2>
     <div class="pad">
       <div class="hd"><b>⏰ タイムスケジュール（本店）</b>
-        <span style="font-size:12px;opacity:.9">10/19（月）〜 10/24（土）</span>
-        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span><span>🖨 印刷</span></span>
+        <span style="font-size:12px;opacity:.9">10/19（月）〜 10/25（日）</span>
+        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span></span>
       </div>
-      <table id="tB"></table>
+      <table id="tA"></table>
+      <div class="leg" style="margin-top:12px">
+        <b>車検のコース：</b>
+        <span><span class="cb m">マ</span> マッハ車検</span>
+        <span><span class="cb k">ク</span> クイック車検</span>
+        <span><span class="cb r">レ</span> レギュラー車検</span>
+        <span><span class="plus">＋</span> 押すと<b>車検の予約カードがすぐ開く</b></span>
+      </div>
     </div>
-    <div class="note">整備だけ見ても空いているように見えて、<b>実は車検が6台入っていて手が無い</b>ということが起きます。車検の台数が上に出ていれば、電話口で判断できます。</div>
+    <div class="note">
+      ・<b>車検の行</b>：入庫時間の早い順にバッジを並べます。<b>バッジをなぞると「10:00　○○様　マッハ車検」</b>、押すとその予約カードが開きます。<br>
+      ・<b>＋</b> は<b>その日の車検の新規受付</b>。週表から日を選び直さずに、そのまま予約カードに入れます。<br>
+      ・<b>10/20 は ク ク マ マ の4台</b>。台数だけなら「4台」ですが、バッジなら<b>マッハが2台ある＝人がかかる日</b>だと一目で分かります。<br>
+      ・<b>10/19 の 17:00 は3件</b>（他・Q・B）。その行だけ高くなって、3件とも出ています。
+    </div>
   </div>
 
-  <!-- C案 -->
+  <!-- ③ イ案 -->
   <div class="case">
-    <h2>C案：1日1行の横並び <small>縦＝曜日、横＝時間。縦に短く収まる</small></h2>
-    <div class="pad"><table id="tC"></table></div>
-    <div class="note">画面には収まりますが、<b>A3の紙とは向きが逆</b>なので慣れ直しが要ります。印刷しても今の紙とは別物になります。</div>
+    <h2>イ案：1件だけ出して「＋2」 <small>比べる用。行の高さは揃うが隠れる</small></h2>
+    <div class="pad"><table id="tB"></table></div>
+    <div class="note">10/19 の 17:00 が <b>1件＋「＋2」</b>になります。表はきれいですが、<b>押すまで中身が分かりません</b>。空き探しの画面なので、埋まっている量が見えないのは逆効果だと思います。</div>
+  </div>
+
+  <!-- ④ 休業日 -->
+  <div class="case">
+    <h2>休業日の列 <small>本店は曜日の定休日なし／三田店は水曜定休（実データで確認）</small></h2>
+    <div class="pad" style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+      <div>
+        <div style="font-size:12px;font-weight:800;margin-bottom:5px">三田店の 10/21（水）</div>
+        <table id="tC" class="mini"></table>
+      </div>
+      <div class="num" style="max-width:600px">
+        ・<b>本店</b>は定休日の設定が空（<code>honten-cdow=[]</code>）なので、<b>水曜も普通の営業日として予定が入っています</b>。上の本表の水曜もそのとおりに出しました（試・M6・Q の3件、車検は マ マ）。<br>
+        ・<b>三田店</b>だけ水曜定休（<code>sanda-cdow-v2=[3]</code>）。そちらを開いた時は<b>その列だけオレンジの網掛け＋左に縦線</b>になり、＋も出しません。<br>
+        ・手で入れた臨時休業・第2火曜も同じ見た目になります（いまのカレンダーと揃えます）。
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 混んだ週（想定） -->
+  <div class="case">
+    <h2>混んだ週を想定して作った表 <span class="pick">2026-10-21</span><small>車検6台の日・休みが半分の日・車検ゼロの日・1枠に3件…を1枚に入れました</small></h2>
+    <div class="pad">
+      <div class="hd"><b>⏰ タイムスケジュール（本店）</b>
+        <span style="font-size:12px;opacity:.9">11/16（月）〜 11/22（日）　※想定</span>
+        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span></span>
+      </div>
+      <table id="tX"></table>
+    </div>
+    <div class="note">
+      <b>月 11/16</b>：<b>車検6台（マ マ マ ク ク レ）</b>。それでも<b>1行に収まります</b>。出勤は7人。<br>
+      <b>火 11/17</b>：<b>出勤4人・休み5人＝半分以上が休み</b>。車検は3台。<b>人が足りない日だと一目で分かります</b>。<br>
+      <b>水 11/18</b>：<b>車検ゼロ</b>。車検の欄は ＋ だけになります。整備は1枠に3件。<br>
+      <b>木 11/19</b>：<b>全員出勤（9人）・休みの行は —</b>。車検6台＋整備も多い、いちばん詰まった日。<br>
+      <b>金 11/20</b>：マッハが4台。<b>赤が4つ並ぶ＝ここは入れられない</b>と色だけで止まります。<br>
+      <b>土 11/21</b>：出勤5人で車検5台。<b>9:00 に車検2台＋整備2件</b>が重なっています。<br>
+      <b>日 11/22</b>：<b>出勤3人</b>。車検2台だけ、整備は午前に1件。
+    </div>
+  </div>
+
+  <!-- ⑥ 車検の並びと台数 -->
+  <div class="case">
+    <h2>車検の並び：マ → ク → レ で揃える <span class="pick">2026-10-21</span><small>台数が増えた時にどこまで入るか</small></h2>
+    <div class="pad">
+      <table id="tW"></table>
+    </div>
+    <div class="note">
+      ・<b>いつも マ → ク → レ の順</b>に並びます。入庫時間順だと日によって色の並びが変わって、見比べられませんでした。<br>
+      ・幅を測りました。<b>6台までは1行に収まります</b>（画面1280pxの狭いノートPCでも）。<b>7台は広い画面なら1行・狭いと2段</b>、<b>8台で2段</b>。2段になっても行が少し高くなるだけで、<b>隠れることはありません</b>。<br>
+      ・本番の最多は<b>5台</b>（10/31・11/15）なので、当分は1行で収まります。<br>
+      ・同じコースの中は<b>入庫の早い順</b>です。なぞれば「10:00　○○様　マッハ車検」が出ます。
+    </div>
+  </div>
+
+  <!-- ⑦ 出勤バッジ -->
+  <div class="case">
+    <h2>出勤と休みを分ける <span class="pick">2026-10-21</span><small>3つ並べました。A案＝分ける／B案＝1行で寄せる／C案＝前回（混ぜる）</small></h2>
+    <div class="pad">
+      <div style="font-size:12.5px;font-weight:800;margin:0 0 6px">A案：行を分ける（おすすめ）<span style="font-weight:600;color:#5b6676">　出勤の左に人数も出します</span></div>
+      <table id="tH1"></table>
+      <div style="font-size:12.5px;font-weight:800;margin:16px 0 6px">B案：1行のまま、出勤を左・休みを右に寄せる</div>
+      <table id="tH2"></table>
+      <div style="font-size:12.5px;font-weight:800;margin:16px 0 6px">C案：前回のまま（名簿順に混ぜて、休みは極薄）</div>
+      <table id="tH3"></table>
+      <div class="leg" style="margin-top:14px">
+        <b>本店の名簿（実物9名）：</b>
+        <span><span class="sb">大</span> 見取大介</span><span><span class="sb">岡</span> 岡上秀一</span>
+        <span><span class="sb">竹</span> 竹林直行</span><span><span class="sb">幸</span> 幸田桂紀</span>
+        <span><span class="sb">魚</span> 魚住圭</span><span><span class="sb">舟</span> 舟田祥子</span>
+        <span><span class="sb">江</span> 江川京志</span><span><span class="sb">ダ</span> ダク</span>
+        <span><span class="sb">カ</span> カビン</span>
+      </div>
+    </div>
+    <div class="note">
+      ・<b>A案をおすすめします。</b>出勤の行に<b>その日に居る人だけ</b>が並ぶので、<b>数えずに人数が分かります</b>（左に人数も出しました）。休みは下の行に落として、グレーで静かに出します。<br>
+      ・C案（前回）は休みを極薄にしていましたが、<b>同じ列に9個ずっと並ぶ</b>ので、出勤が何人なのか目で数える必要がありました。<br>
+      ・行が分かれるぶん、休みのバッジは<b>極薄ではなく読めるグレー</b>にしています（混ぜるなら極薄のままが良い、という前回のご判断はそのまま活きています）。<br>
+      ・この週の休みも<b>実データのまま</b>です（10/21 は幸田・魚住・舟田の3名、10/25 は岡上・カビン・舟田）。<br>
+      ・<b>既定は苗字の頭文字</b>。見取が2人なので「大介＝大」はスタッフ管理で手入力。三田店は 藤・中・芦・長・石・両・野・河 でかぶりません。
+    </div>
   </div>
 
   <div class="case"><h2>※ 補足</h2>
     <div class="note">
-      ・<b>1日表示は無くしません。</b>その日の詳しい作業・代車・備考は今までどおり1日表示で見ます。週表示は「空きを探す」「全体を掴む」ための画面です。<br>
-      ・<b>代車</b>は週表示では小さく「代○○」とだけ出しています（名前が長いので）。<br>
-      ・スマホは画面が狭いので、週表示は<b>PCだけ</b>を考えています。必要なら横スクロールで入れられます。
+      ・<b>1日表示は無くしません。</b>詳しい作業・代車・備考はこれまでどおり1日表示で。週表示は「空きを探す」「全体を掴む」ための画面です。<br>
+      ・<b>画面のみ。印刷は作りません</b>（10/21 決定）。<br>
+      ・空き枠の <b>＋</b> は、その場に整備の予定を1件足します（時間は押した枠が入った状態で開きます）。
     </div>
   </div>
 </div>
 <script>
   var SLOTS=['午前','09:00','09:30','10:00','10:30','11:00','11:30','12:00','未定','午後',
              '13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
-  var DAYS=[{d:'10/19',w:'月',today:true},{d:'10/20',w:'火'},{d:'10/21',w:'水',closed:true},
-            {d:'10/22',w:'木'},{d:'10/23',w:'金'},{d:'10/24',w:'土',sat:true}];
-  // ダミーの予定 {日index: {枠: [氏名, 作業コード, 代車]}}
-  var DATA={
-    0:{'午前':['前村　和子','Q'],'09:00':['桑田　陽子','12','ハスラー'],'10:00':['西浦　三田','B'],'14:00':['岩本　健','Q'],'16:00':['山谷　聡','納']},
-    1:{'09:30':['大山　順','Q'],'11:00':['辻井　望','12'],'13:00':['岸本　信子','B','ワゴンR'],'15:30':['前田　剛','N'],'17:00':['河合　聡','他']},
-    3:{'09:00':['小西　望','Q'],'09:30':['栗﨑　保','12'],'10:30':['阿部　明','Q'],'13:30':['藤明　工業','B','タント'],'16:30':['宮武　健','納']},
-    4:{'午前':['芦田　光','Q'],'10:00':['中井　啓','12'],'11:30':['両澤　ち','他'],'14:30':['野呂　遥','N','N-BOX'],'17:30':['見取　勇','Q']},
-    5:{'09:00':['竹林　直','Q'],'10:00':['魚住　圭','B'],'13:00':['舟田　祥','12'],'15:00':['岡上　秀','納']}
-  };
-  var INSP=[6,4,0,5,3,2];   // その日の車検台数
-  function wkCls(c){return c==='Q'?'w-Q':c==='B'?'w-B':c==='12'?'w-12':c==='N'?'w-N':c==='納'?'w-納':'w-他';}
-  function wkTxt(c){return c==='12'?'⑫':c;}
+  var DAYS0=[{d:'10/19',w:'月'},{d:'10/20',w:'火'},{d:'10/21',w:'水',today:true},
+            {d:'10/22',w:'木'},{d:'10/23',w:'金'},{d:'10/24',w:'土',sat:true},{d:'10/25',w:'日',sun:true}];
+
+  // ── 車検（実データの入庫時間とコース。氏名はダミー）──────────────
+  //   [コース, 入庫時間, 氏名]
+  var INSP0=[
+    [['マ','10:00','前村　和子'],['マ','14:00','岩本　健']],
+    [['ク','09:00','大山　順'],['ク','09:00','辻井　望'],['マ','10:00','桑田　陽子'],['マ','14:00','西浦　明']],
+    [['マ','10:00','小西　望'],['マ','14:00','栗﨑　保']],
+    [['マ','10:00','阿部　明'],['マ','14:00','宮武　健']],
+    [['ク','09:00','山谷　聡'],['マ','10:00','岸本　信子'],['マ','14:00','前田　剛']],
+    [['マ','10:00','中井　啓'],['マ','14:00','両澤　千']],
+    [['ク','09:00','野呂　遥'],['マ','10:00','見取　勇'],['マ','10:00','竹原　学']]
+  ];
+
+  // ── 整備（実データの枠・作業・代車・担当。氏名はダミー）───────────
+  //   枠 → [[作業, 氏名, 担当1文字, 代車名]]
+  var DATA0=[
+    {'09:00':[['Q','木下　明','大']],'10:00':[['Q','サカイ','大']],'16:30':[['Q','堀江　治','舟']],
+     '17:00':[['他','里見　梓','舟'],['Q','吉田　光','幸'],['B','下元　誠','江']]},
+    {'09:00':[['⑫','乗鞍　隆','大','ハスラー'],['M6','藤原　学','幸']],'13:00':[['Q','菊池　望','岡','ワゴンR']],
+     '15:00':[['N1','宇佐美　仁','舟']],'16:00':[['N6','奥山　実','大']]},
+    {'13:00':[['試','坂口　健','岡']],'16:00':[['M6','田所　広','竹']],'17:30':[['Q','宮本　聡','竹']]},
+    {'09:30':[['納','大高　治','岡'],['R','渡瀬　望','竹']],'15:00':[['Q','福井　明','幸']]},
+    {'09:00':[['Q','後藤　幹','江']],'13:30':[['Q','坂井　進','竹']]},
+    {'09:00':[['M12','東　陽子','舟','タント']],'11:00':[['納','西岡　純','岡']],'午後':[['納','南　洋一','岡']],
+     '15:00':[['納','北原　誠','岡']],'15:30':[['M6','今井　葵','舟']],'16:00':[['他','森　大地','幸']]},
+    {'09:00':[['M6','川端　真','幸']],'09:30':[['M6','白石　茜','岡']],'11:00':[['M6','溝口　亮','竹']],
+     '16:00':[['Q','原田　航','竹'],['他','丸山　健','大']]}
+  ];
+
+  // ── 混んだ週（想定）。車検6台・休みが半分・車検ゼロ … を1枚に入れた ──
+  var DAYS_X=[{d:'11/16',w:'月'},{d:'11/17',w:'火'},{d:'11/18',w:'水'},
+              {d:'11/19',w:'木'},{d:'11/20',w:'金'},{d:'11/21',w:'土',sat:true},{d:'11/22',w:'日',sun:true}];
+  var INSP_X=[
+    [['マ','09:00','赤松　豊'],['マ','10:00','石神　光'],['マ','14:00','井出　学'],['ク','09:00','上原　誠'],['ク','09:30','江口　望'],['レ','11:00','大橋　茜']],
+    [['マ','10:00','笠井　順'],['ク','09:00','北村　亮'],['レ','13:00','久野　翔']],
+    [],
+    [['マ','09:00','小島　亮'],['マ','10:00','榊　美咲'],['マ','14:00','志賀　健'],['ク','09:00','杉本　仁'],['ク','13:00','瀬川　葵'],['レ','11:00','曽根　隆']],
+    [['マ','09:00','高松　望'],['マ','10:00','辻　光一'],['マ','13:00','寺田　咲'],['マ','14:00','戸川　学'],['ク','09:00','中島　遥']],
+    [['マ','10:00','野上　誠'],['マ','14:00','萩野　純'],['ク','09:00','日高　茜'],['ク','09:00','藤川　亮'],['レ','11:00','堀　大地']],
+    [['マ','10:00','牧　友里'],['ク','09:00','水口　渉']]
+  ];
+  var DATA_X=[
+    {'09:00':[['Q','青山　実','大','ハスラー']],'10:30':[['⑫','井口　茜','幸']],'13:00':[['Q','上野　亮','竹']],
+     '16:00':[['納','榎本　光','岡'],['Q','大西　学','舟']]},
+    {'09:30':[['M6','柏木　望','岡']],'15:00':[['B','木山　誠','江']]},
+    {'09:00':[['Q','草野　葵','竹']],'11:00':[['M12','黒田　仁','幸','タント']],
+     '14:00':[['Q','小泉　咲','大'],['R','古賀　隆','竹'],['他','近藤　純','舟']]},
+    {'09:00':[['⑫','坂上　遥','大'],['Q','重松　亮','幸']],'09:30':[['M6','白鳥　誠','竹']],
+     '11:00':[['N1','須田　光','舟']],'13:30':[['Q','関　美月','岡','ワゴンR']],
+     '15:00':[['M6','園田　学','幸']],'16:30':[['納','高野　咲','岡'],['他','田村　仁','江']]},
+    {'09:30':[['Q','千葉　亮','竹']],'13:00':[['N6','津田　葵','舟']],'17:00':[['B','戸田　純','江']]},
+    {'09:00':[['Q','内藤　光','幸'],['M6','中山　咲','竹']],'11:00':[['納','西野　学','岡']],
+     '午後':[['納','沼田　仁','岡']],'15:30':[['Q','野中　遥','大']]},
+    {'午前':[['Q','橋本　誠','幸']]}
+  ];
+  var OFF_X=[
+    ['竹林直行','カビン'],
+    ['見取大介','岡上秀一','魚住圭','舟田祥子','ダク'],
+    ['幸田桂紀','魚住圭'],
+    [],
+    ['江川京志','ダク','カビン'],
+    ['岡上秀一','魚住圭','ダク','カビン'],
+    ['岡上秀一','竹林直行','魚住圭','舟田祥子','ダク','カビン']
+  ];
+
+  var STAFF=[{n:'見取大介',c:'大'},{n:'岡上秀一',c:'岡'},{n:'竹林直行',c:'竹'},
+             {n:'幸田桂紀',c:'幸'},{n:'魚住圭',c:'魚'},{n:'舟田祥子',c:'舟'},
+             {n:'江川京志',c:'江'},{n:'ダク',c:'ダ'},{n:'カビン',c:'カ'}];
+  // その日の休み（実データ）
+  var OFF0=[['竹林直行'],['見取大介'],['幸田桂紀','魚住圭','舟田祥子'],['見取大介','江川京志'],
+           ['カビン'],['岡上秀一'],['岡上秀一','カビン','舟田祥子']];
+
+  // 作業コードの色（本物の WORK_COLORS と同じ）
+  var WC={'Q':'#0891b2','⑫':'#4f46e5','M12':'#4f46e5','M6':'#4f46e5','N1':'#4f46e5','N6':'#4f46e5',
+          'B':'#9333ea','R':'#be123c','商':'#b45309','保':'#b45309','試':'#b45309','納':'#047857','他':'#64748b'};
+  var CN={'マ':'マッハ車検','ク':'クイック車検','レ':'レギュラー車検'};
+  var CC={'マ':'m','ク':'k','レ':'r'};
+  // 車検バッジ：コース順（マ→ク→レ）に揃える。同じコースなら入庫の早い順
+  var CORD={'マ':0,'ク':1,'レ':2};
+  function insBadges(rows){
+    return rows.slice().sort(function(a,b){
+      if(CORD[a[0]]!==CORD[b[0]]) return CORD[a[0]]-CORD[b[0]];
+      return a[1]<b[1]?-1:1;
+    }).map(function(r){
+      return '<span class="cb '+CC[r[0]]+'" title="'+r[1]+'　'+r[2]+'様　'+CN[r[0]]+'">'+r[0]+'</span>';
+    }).join('');
+  }
+  // 出勤／休みの行。mode: 'split'=2行に分ける（既定）／'group'=1行の中で寄せる／'mixed'=名簿順に混ぜる（前回）
+  function staffRows(mode,OFF,DAYS){
+    mode=mode||'split';
+    var on=function(st){ return '<span class="sb" title="'+st.n+'">'+st.c+'</span>'; };
+    var offB=function(st,faint){ return '<span class="sb '+(faint?'off':'off2')+'" title="'+st.n+'（休み）">'+st.c+'</span>'; };
+    var h='';
+    if(mode==='mixed'){
+      h+='<tr><td class="tm" style="background:#f8fafc;color:#475569">出勤</td>';
+      DAYS.forEach(function(d,i){ var off=OFF[i]||[];
+        h+='<td class="stf">'+STAFF.map(function(st){ return off.indexOf(st.n)>=0?offB(st,true):on(st); }).join('')+'</td>'; });
+      return h+'</tr>';
+    }
+    if(mode==='group'){
+      h+='<tr><td class="tm" style="background:#f8fafc;color:#475569">出勤</td>';
+      DAYS.forEach(function(d,i){ var off=OFF[i]||[];
+        var a=STAFF.filter(function(st){return off.indexOf(st.n)<0;}).map(on).join('');
+        var b=STAFF.filter(function(st){return off.indexOf(st.n)>=0;}).map(function(st){return offB(st,true);}).join('');
+        h+='<td class="stf">'+a+(b?'<span class="sep"></span>'+b:'')+'</td>'; });
+      return h+'</tr>';
+    }
+    h+='<tr><td class="tm" style="background:#f8fafc;color:#475569">出勤</td>';
+    DAYS.forEach(function(d,i){ var off=OFF[i]||[];
+      var a=STAFF.filter(function(st){return off.indexOf(st.n)<0;});
+      h+='<td class="stf"><b class="cnt">'+a.length+'</b>'+a.map(on).join('')+'</td>'; });
+    h+='</tr>';
+    h+='<tr><td class="tm" style="background:#fff;color:#94a3b8;font-weight:700">休み</td>';
+    DAYS.forEach(function(d,i){ var off=OFF[i]||[];
+      var b=STAFF.filter(function(st){return off.indexOf(st.n)>=0;});
+      h+='<td class="stf off-row">'+(b.length?b.map(function(st){return offB(st,false);}).join(''):'<span class="dash">—</span>')+'</td>'; });
+    return h+'</tr>';
+  }
+  function entHtml(e){
+    return '<div class="ent"><span class="wk" style="background:'+(WC[e[0]]||'#64748b')+'" title="'+e[0]+'">'+e[0]+'</span>'
+      +'<span class="nm">'+e[1]+'</span>'
+      +(e[3]?'<span class="car">代'+e[3]+'</span>':'')
+      +'<span class="sb" style="width:15px;height:15px;font-size:9px" title="担当">'+e[2]+'</span></div>';
+  }
   function build(id,opt){
     var t=document.getElementById(id); if(!t) return;
+    opt=opt||{};
+    var DAYS=opt.days||DAYS0, INSP=opt.insp||INSP0, DATA=opt.data||DATA0, OFF=opt.off||OFF0;
     var h='<tr><th class="tm"></th>';
-    DAYS.forEach(function(d,i){
-      h+='<th class="'+(d.today?'today':'')+(d.sat?' sat':'')+'">'+d.d+'（'+d.w+'）'+(d.closed?'<div style="font-weight:700;color:#c2410c;font-size:10px">休業日</div>':'')+'</th>';
+    DAYS.forEach(function(d){
+      h+='<th class="'+(d.today?'today':'')+(d.sat?' sat':'')+(d.sun?' sun':'')+'">'+d.d+'（'+d.w+'）</th>';
     });
     h+='</tr>';
-    if(opt.insp){
-      h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>';
-      DAYS.forEach(function(d,i){ h+='<td class="cnt">'+(d.closed?'—':'🚗 '+INSP[i]+'台')+'</td>'; });
-      h+='</tr>';
-    }
+    // 車検の行：マ・ク・レ のバッジ＋＋ボタン（★並びはコース順 マ→ク→レ。同じコースなら入庫の早い順）
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>';
+    DAYS.forEach(function(d,i){
+      h+='<td class="ins">'+insBadges(INSP[i]||[])
+        +'<span class="plus" title="この日の車検を新しく受ける（予約カードが開く）">＋</span></td>';
+    });
+    h+='</tr>';
+    // 出勤の行（★2026-10-21 ユーザー指示：出勤と休みを分ける）
+    h+=staffRows(opt.staffMode,OFF,DAYS);
+    if(opt.headOnly){ t.innerHTML=h; return; }
     SLOTS.forEach(function(sl){
       var sp=(sl==='午前'||sl==='午後'||sl==='未定');
       h+='<tr><td class="tm'+(sp?' sp':'')+'">'+sl+'</td>';
       DAYS.forEach(function(d,i){
-        if(d.closed){ h+='<td class="cell closed"></td>'; return; }
-        var e=(DATA[i]||{})[sl];
-        if(!e){ h+='<td class="cell add">＋</td>'; return; }
-        h+='<td class="cell"><div class="ent"><span class="wk '+wkCls(e[1])+'">'+wkTxt(e[1])+'</span>'
-          +'<span class="nm">'+e[0]+'</span>'+(e[2]?'<span class="car">代'+e[2]+'</span>':'')+'</div></td>';
+        var list=(DATA[i]||{})[sl];
+        if(!list||!list.length){ h+='<td class="cell add" title="ここに整備の予定を足す">＋</td>'; return; }
+        if(opt.fold&&list.length>1){
+          h+='<td class="cell">'+entHtml(list[0]).replace('</div>','<span class="more" title="あと'+(list.length-1)+'件">＋'+(list.length-1)+'</span></div>')+'</td>';
+          return;
+        }
+        h+='<td class="cell">'+list.map(entHtml).join('')+'</td>';
       });
       h+='</tr>';
     });
     t.innerHTML=h;
   }
   build('tA',{});
-  build('tB',{insp:true});
-  // C案：縦＝曜日、横＝時間
+  build('tB',{fold:true});
+  build('tX',{days:DAYS_X,insp:INSP_X,data:DATA_X,off:OFF_X});
+  build('tH1',{headOnly:true,staffMode:'split'});
+  build('tH2',{headOnly:true,staffMode:'group'});
+  build('tH3',{headOnly:true,staffMode:'mixed'});
+  // 車検の台数1〜6（本表と同じ列幅で、どこまで1行に入るかを見る）
+  (function(){
+    var t=document.getElementById('tW'); if(!t) return;
+    // 本表とまったく同じ列幅にするため、時間列＋7列の形をそろえる
+    var POOL=[['マ','09:00','—'],['マ','10:00','—'],['マ','14:00','—'],['ク','09:00','—'],
+              ['ク','09:30','—'],['レ','11:00','—'],['レ','13:00','—'],['レ','15:00','—'],
+              ['マ','11:00','—'],['ク','13:00','—']];
+    var SET=[2,3,4,5,6,7,8].map(function(n){ return POOL.slice(0,n); });
+    var h='<tr><th class="tm"></th>'+SET.map(function(s,i){var n=i+2;
+      return '<th>'+n+'台'+(n===5?'<div style="font-weight:700;color:#0e7490;font-size:10px">本番の最多</div>':'')+'</th>';}).join('')+'</tr>';
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+      +SET.map(function(s){return '<td class="ins">'+insBadges(s)+'<span class="plus">＋</span></td>';}).join('')+'</tr>';
+    t.innerHTML=h;
+  })();
+  // 三田店の水曜（休業日の見た目）
   (function(){
     var t=document.getElementById('tC'); if(!t) return;
-    var cols=SLOTS.filter(function(s){return s!=='未定'&&s!=='午前'&&s!=='午後';});
-    var h='<tr><th class="tm"></th>'+cols.map(function(s){return '<th style="font-size:10px">'+s+'</th>';}).join('')+'</tr>';
-    DAYS.forEach(function(d,i){
-      h+='<tr><td class="tm">'+d.d+'<br>（'+d.w+'）</td>';
-      cols.forEach(function(sl){
-        if(d.closed){ h+='<td class="cell closed"></td>'; return; }
-        var e=(DATA[i]||{})[sl];
-        if(!e){ h+='<td class="cell add">＋</td>'; return; }
-        h+='<td class="cell"><div class="ent"><span class="wk '+wkCls(e[1])+'">'+wkTxt(e[1])+'</span>'
-          +'<span class="nm" style="font-size:10px">'+e[0].split('　')[0]+'</span></div></td>';
-      });
-      h+='</tr>';
+    var h='<tr><th class="tm"></th><th>10/20（火）</th><th>10/21（水）<div style="font-weight:700;color:#c2410c;font-size:10px">休業日</div></th></tr>';
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+      +'<td class="ins"><span class="cb k">ク</span><span class="cb k">ク</span><span class="plus">＋</span></td>'
+      +'<td class="cell closed"></td></tr>';
+    h+='<tr><td class="tm" style="background:#f8fafc;color:#475569">出勤</td>'
+      +'<td class="stf"><span class="sb">藤</span><span class="sb">中</span><span class="sb">芦</span><span class="sb off">長</span><span class="sb">石</span><span class="sb">両</span><span class="sb">野</span><span class="sb">河</span></td>'
+      +'<td class="cell closed"></td></tr>';
+    ['09:00','09:30','10:00','10:30','11:00'].forEach(function(sl){
+      h+='<tr><td class="tm">'+sl+'</td>';
+      h+=(sl==='09:00'?'<td class="cell"><div class="ent"><span class="wk" style="background:#0891b2">Q</span><span class="nm">後藤　孝</span></div></td>':'<td class="cell add">＋</td>');
+      h+='<td class="cell closed"></td></tr>';
     });
     t.innerHTML=h;
   })();

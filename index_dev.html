@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792488433606';
+    window.__APP_BUILD='build-1792570816776';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.68';
+const APP_VERSION = '3.69';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4255,6 +4255,171 @@ const StaffRegisterModal=memo(({isOpen,onClose,staffListH,staffListS,onSave})=>{
   );
 });
 
+// ════════════════════════════════════════════════════════════
+//  週表示（v3.69・2026-10-21 ユーザー決定）
+//   「A3の紙は1枚で1週間見える」に追いつくための画面。**1日表示はそのまま残す**。
+//   決めごと（モックで確認・2026-10-21）：
+//    ① 同じ時間に数台あっても **積んで全部出す**（たたんで隠さない）
+//    ② 車検は台数ではなく **マ→ク→レ の順にバッジ**。押せばその予約カード／右の ＋ は新規受付
+//    ③ 出勤と休みは **1行の中で左右に分ける**（B案）。休みは極薄
+//    ④ 日曜も出す　⑤ **画面のみ**（印刷は作らない）
+//   ★この画面は読むだけ。保存はすべて今までの予約カード（BookingModal）を通る。
+// ════════════════════════════════════════════════════════════
+const WEEK_DOW = ['月','火','水','木','金','土','日'];
+// 月曜はじまりの週頭
+const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
+// スタッフの1文字。**既定は名前の先頭1文字**。かぶる時・ご希望はスタッフ設定の「1文字」で手で決める。
+const staffIni = (s) => { const v=String((s&&s.ini)||'').trim(); return v?v.slice(0,2):(String((s&&s.name)||'').trim().slice(0,1)||'?'); };
+const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:i; };
+
+const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeName,headColor,
+    inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,
+    onOpenInsp,onAddInsp,onOpenSched,onAddSched})=>{
+  if(!isOpen||!weekStart)return null;
+  const days=Array.from({length:7},(_,i)=>new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+i));
+  const nowD=new Date();
+  const todayDk=dateKey(nowD.getFullYear(),nowD.getMonth(),nowD.getDate());
+  const dkOf=(d)=>dateKey(d.getFullYear(),d.getMonth(),d.getDate());
+  const mine=(r)=>!!r&&(r.store===storeId||(r.store==null&&storeId==='honten'));
+  // 車検：コース順（マ→ク→レ）、同じコースなら入庫の早い順
+  const inspOf=(dk)=>(inspData[dk]||[]).map((r,i)=>({r,i}))
+    .filter(x=>x.r&&x.r.name&&x.r.bookingStatus!=='cancelled'&&mine(x.r))
+    .sort((a,b)=>{const c=courseOrd(a.r.course)-courseOrd(b.r.course);if(c)return c;
+      return String(a.r.time||'~~').localeCompare(String(b.r.time||'~~'));});
+  // 新しい車検を入れる行＝空いている最初の行（詰めない。代車の紐付けを壊さないため）
+  const nextInspIdx=(dk)=>{const rows=inspData[dk]||[];
+    for(let i=0;i<rows.length;i++){const r=rows[i];if(!r||!r.name||r.bookingStatus==='cancelled')return i;}
+    return rows.length;};
+  // 整備：同じ枠の 09:00 / 09:00__1 / 09:00__2 … を全部出す
+  const slotEntries=(dk,slot)=>{const day=schedData[dk]||{};
+    return [slot].concat(Object.keys(day).filter(k=>k.indexOf(slot+'__')===0).sort())
+      .map(k=>({k,r:day[k]})).filter(x=>x.r&&x.r.name);};
+  const nextSlotKey=(dk,slot)=>{const day=schedData[dk]||{};let n=0;
+    while(day[makeSlotKey(slot,n)]&&day[makeSlotKey(slot,n)].name)n++;return makeSlotKey(slot,n);};
+  const TH={padding:'5px 4px',fontSize:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid #d7dde5',
+    background:'#f1f5f9',position:'sticky',top:0,zIndex:4};
+  const TD={border:'1px solid #d7dde5',padding:'1px 3px',fontSize:11.5,verticalAlign:'middle',height:26};
+  const TM={border:'1px solid #d7dde5',width:54,minWidth:54,background:'#f8fafc',fontSize:11,fontWeight:800,
+    color:'#475569',textAlign:'center',whiteSpace:'nowrap'};
+  const SB={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:17,height:17,padding:'0 2px',
+    borderRadius:4,background:'#475569',color:'white',fontSize:10,fontWeight:900,margin:1,verticalAlign:'middle'};
+  const SB_OFF={...SB,background:'white',color:'#e6ebf1',border:'1px solid #f1f5f9',fontWeight:700};
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:900,display:'flex',
+      alignItems:'center',justifyContent:'center',padding:12}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} data-weekview="1"
+        style={{background:'white',borderRadius:14,width:'min(1560px,99vw)',height:'96vh',display:'flex',
+          flexDirection:'column',overflow:'hidden',boxShadow:'0 30px 80px rgba(0,0,0,.45)'}}>
+        {/* 見出し＋週送り */}
+        <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'9px 14px',
+          background:headColor||'linear-gradient(135deg,#0e7490,#0891b2)',color:'white'}}>
+          <b style={{fontSize:15,fontWeight:800}}>⏰ タイムスケジュール（週）</b>
+          <span style={{fontSize:12.5,opacity:.95}}>{storeName}</span>
+          <span style={{fontSize:13,fontWeight:700}}>
+            {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+WEEK_DOW[0]+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+WEEK_DOW[6]+'）'}
+          </span>
+          <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+            {[['‹ 前の週',-1],['今週',0],['次の週 ›',1]].map(([t,v])=>(
+              <button key={t} onClick={()=>onWeek(v)} data-wnav={String(v)}
+                style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                  padding:'4px 12px',fontSize:12,fontWeight:700,color:'white',cursor:'pointer',fontFamily:'inherit'}}>{t}</button>
+            ))}
+            <button onClick={onClose} title="閉じる"
+              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',marginLeft:6,fontFamily:'inherit'}}>✕</button>
+          </div>
+        </div>
+        <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+          <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
+            <thead>
+              <tr>
+                <th style={{...TH,width:54,minWidth:54}}></th>
+                {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
+                  return <th key={dk} style={{...TH,...(dk===todayDk?{background:'#cffafe',color:'#0e7490'}:{}),
+                    ...(i===6?{color:'#ef4444'}:i===5?{color:'#2563eb'}:{})}}>
+                    {(d.getMonth()+1)+'/'+d.getDate()+'（'+WEEK_DOW[i]+'）'}
+                    {cl&&<div style={{fontWeight:700,color:CLOSED_FG,fontSize:10}}>{CLOSED_LABEL}</div>}
+                  </th>;})}
+              </tr>
+            </thead>
+            <tbody>
+              {/* 車検：マ→ク→レ のバッジ＋＋（押すと予約カード） */}
+              <tr>
+                <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
+                {days.map(d=>{const dk=dkOf(d);
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                  return <td key={dk} data-wins={dk} style={{...TD,background:'#fff7ed',textAlign:'center',padding:'3px'}}>
+                    {inspOf(dk).map(({r,i})=>{const c=COURSES.find(x=>x.id===r.course);
+                      return <button key={i} data-wcb={dk+'/'+i} title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')}
+                        onClick={()=>onOpenInsp(dk,i)}
+                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
+                          borderRadius:5,background:(c&&c.color)||'#64748b',color:'white',fontSize:11,fontWeight:900,
+                          margin:1,border:'none',cursor:'pointer',fontFamily:'inherit',verticalAlign:'middle'}}>
+                        {(c&&c.initial)||'？'}</button>;})}
+                    <button data-wiadd={dk} title="この日の車検を新しく受ける" onClick={()=>onAddInsp(dk,nextInspIdx(dk))}
+                      style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
+                        borderRadius:5,background:'white',color:'#c2410c',border:'1.5px dashed #fb923c',fontSize:12,
+                        fontWeight:900,margin:'1px 1px 1px 4px',cursor:'pointer',fontFamily:'inherit',verticalAlign:'middle'}}>＋</button>
+                  </td>;})}
+              </tr>
+              {/* 出勤：左＝出勤／右＝休み（B案・2026-10-21 ユーザー決定） */}
+              <tr>
+                <td style={{...TM,color:'#475569'}}>出勤</td>
+                {days.map(d=>{const dk=dkOf(d);
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                  const offs=((dayOffData||{})[dk]||[]).concat((paidLeaveData||{})[dk]||[]);
+                  const on=(staffList||[]).filter(s=>offs.indexOf(s.name)<0);
+                  const off=(staffList||[]).filter(s=>offs.indexOf(s.name)>=0);
+                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1}}>
+                    {on.map(s=><span key={s.uid||s.name} style={SB} title={s.name}>{staffIni(s)}</span>)}
+                    {off.length>0&&<span style={{display:'inline-block',width:1,height:13,background:'#e2e8f0',margin:'0 5px',verticalAlign:'middle'}}/>}
+                    {off.map(s=><span key={s.uid||s.name} style={SB_OFF} title={s.name+'（休み）'}>{staffIni(s)}</span>)}
+                  </td>;})}
+              </tr>
+              {/* 時間枠：同じ枠に数件あれば積む */}
+              {SCHED_SLOTS.map(slot=>{
+                const sp=isSpecialSlot(slot);
+                return <tr key={slot}>
+                  <td style={{...TM,...(sp?{background:'#faf5ff',color:'#7c3aed'}:{})}}>{slot}</td>
+                  {days.map(d=>{const dk=dkOf(d);
+                    if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                    const list=slotEntries(dk,slot);
+                    if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
+                      style={{...TD,color:'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
+                      onMouseEnter={e=>{e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}
+                      onMouseLeave={e=>{e.currentTarget.style.background='';e.currentTarget.style.color='#cbd5e1';}}>＋</td>;
+                    return <td key={dk} style={TD}>
+                      {list.map(({k,r},ri)=>(
+                        <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
+                          style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
+                            ...(ri>0?{marginTop:2,paddingTop:2,borderTop:'1px dotted #e2e8f0'}:{})}}>
+                          <span title={(WORKS.find(w=>w.id===r.work)||{}).name||''}
+                            style={{flexShrink:0,fontSize:9.5,fontWeight:900,color:'white',borderRadius:3,padding:'0 4px',
+                              lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{r.work||'—'}</span>
+                          <span style={{fontWeight:700,color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis'}}>{r.name}</span>
+                          {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
+                          {r.staff&&<span style={{...SB,minWidth:15,height:15,fontSize:9}} title={'担当 '+r.staff}>{staffIni({name:r.staff,ini:((staffList||[]).find(s=>s.name===r.staff)||{}).ini})}</span>}
+                        </div>
+                      ))}
+                    </td>;})}
+                </tr>;})}
+            </tbody>
+          </table>
+        </div>
+        <div style={{flexShrink:0,padding:'7px 14px',borderTop:'1px solid #e2e8f0',background:'#f8fafc',
+          fontSize:11.5,color:'#5b6676',display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontWeight:800,color:'#1b2129'}}>車検のコース：</span>
+          {COURSES.map(c=><span key={c.id} style={{display:'inline-flex',alignItems:'center',gap:4}}>
+            <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:17,height:17,borderRadius:4,
+              background:c.color,color:'white',fontSize:10,fontWeight:900}}>{c.initial}</span>{c.name}</span>)}
+          <span>｜<b>＋</b> を押すと予約カードが開きます（車検＝その日の新規／空き枠＝その時間の整備）</span>
+          <span>｜出勤バッジの<b>右側の薄い分</b>はその日の休み・有給です</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // ============================================
 //  スタッフ設定モーダル（編集・削除・番号変更）
 // ============================================
@@ -4264,6 +4429,7 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
   const [editBadge,setEditBadge]=useState('mechanic');
   const [editCaps,setEditCaps]=useState({}); // capabilities
   const [editStore,setEditStore]=useState('honten');
+  const [editIni,setEditIni]=useState('');   // 週表示のバッジに出す1文字（空なら名前の先頭1文字）
   const [confirmDel,setConfirmDel]=useState(false);
   const [tab,setTab]=useState('honten');
   const [lockedBy,setLockedBy]=useState(null);
@@ -4309,7 +4475,7 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
     setSelUid(s.uid);setEditName(s.name);setEditBadge(s.badge||'mechanic');setConfirmDel(false);
     setEditEmail(s.loginEmail||'');setInviteMsg('');
     setEditCaps(s.capabilities||getDefaultCapabilities(s.badge||'mechanic'));
-    setEditStore(s.store||'honten');
+    setEditStore(s.store||'honten');setEditIni(s.ini||'');
   };
 
   const handleUpdate=()=>{
@@ -4318,6 +4484,7 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
     if(!target)return;
     // 番号（myNumber）は画面から外した。既存の値をそのまま引き継ぐ（並び順・社長判定の裏方の値）
     onUpdate({...target,name:editName.trim(),badge:editBadge,capabilities:editCaps,store:editStore,
+      ini:editIni.trim().slice(0,2),
       loginEmail:editEmail.trim().toLowerCase()||undefined});
     setSelUid(null);
   };
@@ -4612,6 +4779,20 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
                       style={{width:'100%',padding:'9px 11px',border:'2px solid #e5e7eb',borderRadius:8,fontSize:14,outline:'none',boxSizing:'border-box'}}
                       onFocus={e=>e.target.style.borderColor='#c2410c'}
                       onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                  </div>
+
+                  {/* 週表示のバッジに出す1文字（v3.69・2026-10-21） */}
+                  <div>
+                    <div style={{fontWeight:700,fontSize:12,color:'#374151',marginBottom:6}}>🔖 週表示の1文字</div>
+                    <input value={editIni} onChange={e=>setEditIni(e.target.value)} maxLength={2}
+                      placeholder={'空なら「'+(editName.trim().slice(0,1)||'？')+'」'}
+                      style={{width:90,padding:'9px 11px',border:'2px solid #e5e7eb',borderRadius:8,fontSize:15,fontWeight:800,textAlign:'center',outline:'none',boxSizing:'border-box'}}
+                      onFocus={e=>e.target.style.borderColor='#c2410c'}
+                      onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+                    <div style={{fontSize:11,color:'#6b7280',marginTop:5,lineHeight:1.7}}>
+                      週表示の出勤バッジに出る文字です。<b>空のままなら名前の先頭1文字</b>が出ます。
+                      同じ文字の人がいる時だけ、ここで決めてください（例：見取大介＝<b>大</b>）。
+                    </div>
                   </div>
 
                   {/* ログイン用メール（本人認証） */}
@@ -11772,6 +11953,9 @@ function AppInner() {
   const [desktopListS,setDesktopListS]=useShared(STOR+'desktops-sanda',[],60000);
   const [showStaffRegister,setShowStaffRegister]=useState(false);
   const [showStaffSettings,setShowStaffSettings]=useState(false);
+  // 週表示（v3.69・2026-10-21）。1日表示はそのまま、こちらは別の窓で開く
+  const [weekOpen,setWeekOpen]=useState(false);
+  const [weekStart,setWeekStart]=useState(()=>weekStartOf(new Date()));
   // 現在の表示店舗に応じたデータ・setter
   const schedData    = vsId==='honten'?schedDataH   :schedDataS;
   const setSchedData = vsId==='honten'?setSchedDataH:setSchedDataS;
@@ -15561,6 +15745,11 @@ function AppInner() {
                     </div>
                   )}
                   <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+                    {/* 週表示（v3.69・2026-10-21）：1週間を1枚で見る。空き探し・全体を掴むための画面 */}
+                    <button onClick={()=>{setWeekStart(weekStartOf(selDate));setWeekOpen(true);}} data-weekbtn="1" title="1週間をまとめて見る"
+                      style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#ecfeff',border:'2px solid #67e8f9',borderRadius:5,cursor:'pointer',fontSize:10,color:'#0e7490',fontWeight:700}}>
+                      📅 週表示
+                    </button>
                     <button onClick={()=>setSchedCollapsed(p=>!p)}
                       style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:schedCollapsed?'#eff6ff':'#f0fdf4',border:`2px solid ${schedCollapsed?'#93c5fd':'#86efac'}`,borderRadius:5,cursor:'pointer',fontSize:10,color:schedCollapsed?'#1d4ed8':'#16a34a',fontWeight:700}}>
                       {schedCollapsed?'▼ 開く':'▲ 畳む'}
@@ -16110,6 +16299,23 @@ function AppInner() {
         onClose={()=>setShowStaffRegister(false)}
         staffListH={dynStaffH} staffListS={dynStaffS}
         onSave={handleRegisterStaff}/>
+
+      {/* -- 週表示（v3.69・2026-10-21）。読むだけ。保存はすべて予約カードを通る -- */}
+      <WeekScheduleModal
+        isOpen={weekOpen}
+        onClose={()=>setWeekOpen(false)}
+        weekStart={weekStart}
+        onWeek={v=>setWeekStart(p=>v===0?weekStartOf(new Date()):new Date(p.getFullYear(),p.getMonth(),p.getDate()+v*7))}
+        storeId={vsId} storeName={vsStore.name}
+        headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
+        inspData={inspData} schedData={schedData}
+        staffList={currentStaffList}
+        dayOffData={dayOffData} paidLeaveData={paidLeaveData}
+        isClosed={isClosed}
+        onOpenInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',false)}
+        onAddInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',true)}
+        onOpenSched={(dk,slot)=>handleOpenModal('sched',dk,0,slot,false)}
+        onAddSched={(dk,slot)=>handleOpenModal('sched',dk,0,slot,true)}/>
 
       {/* -- スタッフ設定（編集・削除・店舗変更） -- */}
       <StaffSettingsModal
