@@ -78,6 +78,12 @@
   .cb.m{background:#b91c1c}.cb.k{background:#1d4ed8}.cb.r{background:#d97706}
   .plus{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
       background:#fff;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px;font-weight:900}
+  /* ★2026-10-23：車検バッジの赤い網掛け（モック） */
+  .hatch{background:repeating-linear-gradient(45deg,#fef2f2,#fef2f2 3px,#fecaca 3px,#fecaca 6px)}
+  .ins.hatch{background:repeating-linear-gradient(45deg,#fee2e2,#fee2e2 4px,#fecaca 4px,#fecaca 8px)}
+  .cb.over{background:repeating-linear-gradient(45deg,#fef2f2,#fef2f2 3px,#fecaca 3px,#fecaca 6px);color:#dc2626;border:1.5px solid #ef4444}
+  .lim{display:inline-block;margin-left:6px;padding:1px 6px;background:#dc2626;color:#fff;border-radius:4px;font-size:9.5px;font-weight:900;vertical-align:middle}
+  .rst{display:block;font-size:9.5px;font-weight:800;color:#dc2626;margin-top:2px}
   .stf{padding:3px;text-align:center;background:#f8fafc;line-height:1}
   .sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;border-radius:4px;
       background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px;vertical-align:middle}
@@ -147,6 +153,24 @@
       　例：10/20 13:00「エアコンフィルター交換、エバポレーター洗浄…」／10/22 13:00「ヘッドライトの調子が悪い …」。<br>
       <b>③</b> <b>:00 の行を水色／:30 の行を白</b>にしました。9:00〜9:30 が水色、9:30〜10:00 が白、10:00〜10:30 が水色…と30分ごとに切り替わります。<br>
       　午前・未定・午後の3つは時刻を持たない枠なので、今までどおり薄紫のままにしてあります。
+    </div>
+  </div>
+
+  <!-- ④ 車検バッジの赤い網掛け -->
+  <div class="case">
+    <h2>④ 車検バッジの赤い網掛け <span class="pick">2026-10-23</span><small>「制限がかかっている日」の出し方を2つ作りました</small></h2>
+    <div class="pad">
+      <div class="three stack">
+        <div><h3>ア案：台数制限（車検カレンダーの「最大N台」）を超えた分を赤い網掛け</h3><table id="rA" class="cmp"></table></div>
+        <div><h3>イ案：入庫制限（時間の制限）がある日は、車検の欄ぜんぶを赤い網掛け</h3><table id="rB" class="cmp"></table></div>
+        <div><h3>ウ案：両方出す</h3><table id="rC" class="cmp"></table></div>
+      </div>
+    </div>
+    <div class="note">
+      ・<b>「入庫制限」と「台数制限」は別のもの</b>です。入庫制限＝<b>整備（タイムスケジュール）の時間</b>を止めるもの（例 10:00〜11:00）。台数制限＝<b>その日の車検を最大N台まで</b>にするもの。<br>
+      ・<b>ア案</b>は、台数制限をかけた日で<b>上限を超えた分のバッジ</b>を赤い網掛けにします（＝承認待ちの分）。右に「最大4台」の札。<b>車検カレンダーと同じ見た目</b>です。<br>
+      ・<b>イ案</b>は、入庫制限がある日の<b>車検の欄をまるごと</b>赤い網掛けにします。<b>いま v3.70 で入れた、下の時間の枠の網掛けと同じ色</b>です。<br>
+      ・どちらを指していたか教えてください（<b>両方でも構いません＝ウ案</b>）。
     </div>
   </div>
 
@@ -298,6 +322,43 @@
     h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
       +SET.map(function(x){return insCell(mk(x[0],x[1],x[2]),'grp');}).join('')+'</tr>';
     t.innerHTML=h;
+  })();
+
+  // ④ 赤い網掛けの案
+  (function(){
+    var D=[
+      {d:'10/19（月）',ins:[['マ'],['マ']],lim:0,rst:''},
+      {d:'10/20（火）',ins:[['マ'],['マ'],['ク'],['ク']],lim:0,rst:'10:00〜11:00'},
+      {d:'10/21（水）',ins:[['マ'],['マ'],['マ'],['ク'],['ク'],['レ']],lim:4,rst:''},
+      {d:'10/22（木）',ins:[['マ'],['マ'],['ク'],['レ'],['レ']],lim:3,rst:'09:00〜10:00／14:00〜15:00'},
+      {d:'10/23（金）',ins:[['マ'],['ク']],lim:0,rst:''}
+    ];
+    var cell=function(x,mode){
+      var hat=(mode!=='A')&&x.rst;
+      var over=(mode!=='B')&&x.lim;
+      var gs=[],n=0;
+      x.ins.forEach(function(it){var c=it[0];var last=gs[gs.length-1];
+        var o=over&&(n>=x.lim); n++;
+        if(last&&last.c===c)last.items.push(o);else gs.push({c:c,items:[o]});});
+      var h='<td class="ins'+(hat?' hatch':'')+'">';
+      if(hat)h+='<span class="rst">🚫 '+x.rst+'</span>';
+      h+='<div class="grp">'+gs.map(function(g){
+        return '<div class="col2">'+g.items.map(function(o){
+          return '<span class="cb '+CC[g.c]+(o?' over':'')+'">'+g.c+'</span>';}).join('')+'</div>';}).join('')
+        +'<div class="col2"><span class="plus">＋</span></div></div>';
+      if(over)h+='<span class="lim">最大'+x.lim+'台</span>';
+      return h+'</td>';
+    };
+    [['rA','A'],['rB','B'],['rC','C']].forEach(function(p){
+      var t=document.getElementById(p[0]); if(!t)return;
+      var h='<tr><th class="tm"></th>'+D.map(function(x){return '<th>'+x.d
+        +(x.lim?'<div style="font-weight:700;color:#dc2626;font-size:10px">台数制限 最大'+x.lim+'台</div>':'')
+        +(x.rst?'<div style="font-weight:700;color:#dc2626;font-size:10px">入庫制限 '+x.rst+'</div>':'')
+        +'</th>';}).join('')+'</tr>';
+      h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+        +D.map(function(x){return cell(x,p[1]);}).join('')+'</tr>';
+      t.innerHTML=h;
+    });
   })();
 
   // ③ 帯の比べ

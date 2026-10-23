@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792724282325';
+    window.__APP_BUILD='build-1792725280246';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.70';
+const APP_VERSION = '3.70.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4322,12 +4322,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     if(last&&last.cid===x.r.course)last.items.push(x);else g.push({cid:x.r.course,items:[x]});});return g;};
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:900,display:'flex',
-      alignItems:'center',justifyContent:'center',padding:12}} onClick={onClose}>
+      alignItems:'center',justifyContent:'center',padding:0}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} data-weekview="1"
-        style={{background:'white',borderRadius:14,width:'min(1560px,99vw)',height:'96vh',display:'flex',
+        style={{background:'white',borderRadius:12,width:'99.5vw',height:'98.5vh',display:'flex',
           flexDirection:'column',overflow:'hidden',boxShadow:'0 30px 80px rgba(0,0,0,.45)'}}>
         {/* 見出し＋週送り */}
-        <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'9px 14px',
+        <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'6px 12px',
           background:headColor||'linear-gradient(135deg,#0e7490,#0891b2)',color:'white'}}>
           <b style={{fontSize:15,fontWeight:800}}>⏰ タイムスケジュール（週）</b>
           <span style={{fontSize:12.5,opacity:.95}}>{storeName}</span>
@@ -4346,12 +4346,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
           </div>
         </div>
         <div style={{flex:1,minHeight:0,overflow:'auto'}}>
-          <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
+          {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
+              td の height:26 は最低の高さとして効く */}
+          <table style={{borderCollapse:'collapse',width:'100%',height:'100%',minWidth:980,tableLayout:'fixed'}}>
             <thead>
               <tr>
                 <th style={{...TH,width:54,minWidth:54}}></th>
                 {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
-                  const rs=restrictionOf?restrictionOf(dk):null;
                   const dowCol=i===6?'#ef4444':i===5?'#2563eb':'#1b2129';
                   return <th key={dk} style={{...TH,...(dk===todayDk?{background:'#cffafe'}:{})}}>
                     {/* ★日付のバッジ。押すとその日の1日表示へ移る（2026-10-23 ユーザー指示） */}
@@ -4365,11 +4366,6 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                       {(d.getMonth()+1)+'/'+d.getDate()+'（'+WEEK_DOW[i]+'）'}
                     </button>
                     {cl&&<div style={{fontWeight:700,color:CLOSED_FG,fontSize:10}}>{CLOSED_LABEL}</div>}
-                    {!cl&&restrHas(rs)&&(
-                      <div data-wrestr={dk} title={'入庫制限　'+restrLabels(rs).join('／')}
-                        style={{fontWeight:800,color:'#dc2626',fontSize:9.5,marginTop:1,whiteSpace:'nowrap',
-                          overflow:'hidden',textOverflow:'ellipsis'}}>🚫 {restrLabels(rs).join('／')}</div>
-                    )}
                   </th>;})}
               </tr>
             </thead>
@@ -4455,19 +4451,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
             </tbody>
           </table>
         </div>
-        <div style={{flexShrink:0,padding:'7px 14px',borderTop:'1px solid #e2e8f0',background:'#f8fafc',
-          fontSize:11.5,color:'#5b6676',display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
-          <span style={{fontWeight:800,color:'#1b2129'}}>車検のコース：</span>
-          {COURSES.map(c=><span key={c.id} style={{display:'inline-flex',alignItems:'center',gap:4}}>
-            <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:17,height:17,borderRadius:4,
-              background:c.color,color:'white',fontSize:10,fontWeight:900}}>{c.initial}</span>{c.name}</span>)}
-          <span>｜<b>＋</b> を押すと予約カードが開きます（車検＝その日の新規／空き枠＝その時間の整備）</span>
-          <span>｜出勤バッジの<b>右側の薄い分</b>はその日の休み・有給です</span>
-          <span style={{display:'inline-flex',alignItems:'center',gap:5}}>｜
-            <span style={{display:'inline-block',width:17,height:17,borderRadius:3,background:RESTR_BG,border:'1px solid #fca5a5'}}/>
-            <b>入庫制限</b>（なぞると時間と通せる作業が出ます）</span>
-          <span>｜<b>日付を押す</b>とその日のスケジュールへ移ります</span>
-        </div>
+        {/* ★いちばん下の説明書きは出さない（2026-10-23 ユーザー指示：表を最大限に広く使う）。
+            色の意味・＋の働き・網掛けは、どれも「なぞると出る説明」で分かるようにしてある。 */}
       </div>
     </div>
   );

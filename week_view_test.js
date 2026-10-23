@@ -245,6 +245,7 @@ const seed = {
       otherDay: cell(other, '10:00'),
       head: head ? head.innerText.replace(/\s+/g, '') : '',
       headTitle: head ? head.getAttribute('title') : '',
+      legend: [...document.querySelectorAll('[data-weekview] *')].filter(x => /マッハ車検$/.test(x.textContent || '') && x.children.length === 0).length,
     };
   }, [TUE, WED]);
   t('★制限の中（10:00）は網掛けになる', !!rstr.in1 && rstr.in1.flag === '1' && /repeating-linear-gradient/.test(rstr.in1.bg), rstr.in1);
@@ -255,7 +256,9 @@ const seed = {
   t('★終わり（11:00）は制限に入らない', !!rstr.out2 && rstr.out2.flag === '0', rstr.out2);
   t('★制限の無い日は網掛けにしない', !!rstr.otherDay && rstr.otherDay.flag === '0', rstr.otherDay);
   t('★なぞると時間と通せる作業が出る', !!rstr.in1 && /10:00〜11:00/.test(rstr.in1.title) && /B/.test(rstr.in1.title), rstr.in1);
-  t('★日付の下に 🚫 と時間が出る', /🚫/.test(rstr.head) && /10:00〜11:00/.test(rstr.head), rstr.head);
+  // ★2026-10-23 ユーザー指示：日付の下に入庫制限は出さない（表を広く使うため）。網掛けとツールチップで分かる
+  t('★日付の下に入庫制限の文字を出さない', rstr.head === '', rstr.head);
+  t('★いちばん下の説明書きも出さない', rstr.legend === 0, rstr.legend);
   t('制限の中でも入力はできる（＋ は押せるまま）', !!rstr.in1 && rstr.in1.add && rstr.in1.cur === 'pointer', rstr.in1);
 
   // ── ③ 同じ時間に数件＝積む ──
