@@ -227,13 +227,13 @@ const seed = {
       return { flag: tr.getAttribute('data-wband'), tm: getComputedStyle(tr.children[0]).backgroundColor,
         cell: getComputedStyle(tr.children[3]).backgroundColor };
     };
-    return { h9: pick('09:00'), h930: pick('09:30'), h10: pick('10:00'), am: pick('午前') };
+    return { h9: pick('09:00'), h930: pick('09:30'), h10: pick('10:00'), am: pick('午前入庫') };
   });
   t('★09:00 の行に色が付く', !!band.h9 && band.h9.flag === '1' && band.h9.cell !== 'rgba(0, 0, 0, 0)', band.h9);
   t('★09:30 の行は白のまま', !!band.h930 && band.h930.flag === '0' && band.h930.cell === 'rgba(0, 0, 0, 0)', band.h930);
   t('★10:00 の行はまた色が付く（30分ごとに切り替わる）', !!band.h10 && band.h10.flag === '1' && band.h10.cell === band.h9.cell, band.h10);
   t('★時間の列は少し濃い色', !!band.h9 && band.h9.tm !== band.h9.cell, band.h9);
-  t('午前・未定・午後は時刻を持たないので帯を付けない', !!band.am && band.am.flag === '0', band.am);
+  t('午前入庫・午後入庫・入庫未定は時刻を持たないので帯を付けない', !!band.am && band.am.flag === '0', band.am);
 
   // ── ②-6 車検の台数制限（2026-10-23 ユーザー指示）──
   console.log('\n■ ②-6 車検の台数制限「最大N台」と、達した時の赤い網掛け');
@@ -295,26 +295,38 @@ const seed = {
       const r = b.getBoundingClientRect(); const st = getComputedStyle(b);
       return { txt: b.innerText.trim(), cx: Math.round(r.left + r.width / 2), w: Math.round(r.width), h: Math.round(r.height), fs: parseFloat(st.fontSize) };
     });
-    const rowOf = slot => [...document.querySelectorAll('[data-weekview] tr')].find(x => x.children[0] && x.children[0].innerText.trim() === slot);
-    const info = slot => { const tr = rowOf(slot); if (!tr) return null;
-      const st = getComputedStyle(tr.children[0]);
+    const foot = document.querySelector('[data-wfoot]');
+    // ★後ろに1日表示が残っているので、必ず週表の中だけを見る
+    const wv = document.querySelector('[data-weekview]');
+    const rowOf = (slot, root) => [...(root || wv).querySelectorAll('tr')].find(x => x.children[0] && x.children[0].innerText.trim() === slot);
+    const info = (slot, root) => { const tr = rowOf(slot, root); if (!tr) return null;
       return { pin: tr.getAttribute('data-wpin'), thin: tr.getAttribute('data-wthin'),
-        pos: st.position, h: Math.round(tr.getBoundingClientRect().height),
+        inFoot: !!(foot && foot.contains(tr)), top: Math.round(tr.getBoundingClientRect().top),
+        h: Math.round(tr.getBoundingClientRect().height),
         idx: [...tr.parentElement.children].indexOf(tr), n: tr.parentElement.children.length }; };
-    return { navCx: Math.round((box.left + box.right) / 2), nav,
-      mitei: info('未定'), gogo: info('午後'), gozen: info('午前'),
-      t12: info('12:00'), t18: info('18:00'), t9: info('09:00') };
+    const scroller = [...document.querySelectorAll('[data-weekview] div')].find(e => e.scrollHeight > e.clientHeight + 20);
+    return { navCx: Math.round((box.left + box.right) / 2), nav, boxBottom: Math.round(box.bottom),
+      mitei: info('入庫未定'), gogo: info('午後入庫'), gozen: info('午前入庫'),
+      t12: info('12:00'), t18: info('18:00'), t9: info('09:00'), t1130: info('11:30'), t13: info('13:00'),
+      footRows: foot ? [...foot.querySelectorAll('tr')].map(x => x.children[0].innerText.trim()) : null,
+      scrollable: !!scroller, footOutside: !!(foot && scroller && !scroller.contains(foot)) };
   });
   const mid = lay.nav.length === 3 ? Math.round((lay.nav[0].cx + lay.nav[2].cx) / 2) : -1;
   t('★週送りが帯の真ん中にある', mid > 0 && Math.abs(mid - lay.navCx) <= 40, { mid, center: lay.navCx });
   t('★前より大きい（高さ30px以上・文字14px以上）', lay.nav.every(b => b.h >= 30 && b.fs >= 14), lay.nav);
   t('3つとも出ている（前の週・今週・次の週）', lay.nav.map(b => b.txt).join(',').indexOf('今週') > 0, lay.nav);
-  t('★「未定」はいちばん下のほうに回っている', !!lay.mitei && lay.mitei.idx >= lay.mitei.n - 2, lay.mitei);
-  t('★「午後」はいちばん最後', !!lay.gogo && lay.gogo.idx === lay.gogo.n - 1, lay.gogo);
-  t('★2つとも下に貼り付けてある（スクロールしても消えない）', !!lay.mitei && lay.mitei.pin === '1' && lay.mitei.pos === 'sticky' && !!lay.gogo && lay.gogo.pos === 'sticky', { mitei: lay.mitei, gogo: lay.gogo });
-  t('「午前」は今までどおり上のまま', !!lay.gozen && lay.gozen.pin === '0' && lay.gozen.idx <= 3, lay.gozen);
-  t('★12:00 は細い', !!lay.t12 && lay.t12.thin === '1' && lay.t12.h < lay.t9.h, { t12: lay.t12, t9: lay.t9 });
-  t('★18:00 も細い', !!lay.t18 && lay.t18.thin === '1' && lay.t18.h < lay.t9.h, { t18: lay.t18, t9: lay.t9 });
+  t('★12:00 の枠はもう出さない', lay.t12 === null, lay.t12);
+  t('★12:00 のあった所に「午前入庫」が入る（11:30 の次・13:00 の前）',
+    !!lay.gozen && !!lay.t1130 && !!lay.t13 && lay.gozen.idx === lay.t1130.idx + 1 && lay.t13.idx === lay.gozen.idx + 1,
+    { gozen: lay.gozen, t1130: lay.t1130, t13: lay.t13 });
+  // 09:00 は予定が3件積まれていて高いので、細い枠（18:00）と比べる
+  t('★午前入庫は細くしない（12:00 の細さを引き継がない）', !!lay.gozen && lay.gozen.thin === '0' && !!lay.t18 && lay.gozen.h > lay.t18.h, { gozen: lay.gozen, t18: lay.t18 });
+  t('★「午後入庫」「入庫未定」はこの順で下に据え置く（入庫未定がいちばん下）',
+    JSON.stringify(lay.footRows) === JSON.stringify(['午後入庫', '入庫未定']), lay.footRows);
+  t('★2つともスクロールする表の外にある（上の予定と重ならない）',
+    !!lay.gogo && lay.gogo.inFoot && !!lay.mitei && lay.mitei.inFoot, { gogo: lay.gogo, mitei: lay.mitei });
+  t('★据え置きの表は画面のいちばん下にある', !!lay.mitei && lay.boxBottom - (lay.mitei.top + lay.mitei.h) < 12, { mitei: lay.mitei, bottom: lay.boxBottom });
+  t('★18:00 は細い', !!lay.t18 && lay.t18.thin === '1' && lay.t18.h < lay.t9.h, { t18: lay.t18, t9: lay.t9 });
 
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');
