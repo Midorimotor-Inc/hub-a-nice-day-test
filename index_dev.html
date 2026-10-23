@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792725280246';
+    window.__APP_BUILD='build-1792728999593';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.70.1';
+const APP_VERSION = '3.70.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4273,7 +4273,7 @@ const staffIni = (s) => { const v=String((s&&s.ini)||'').trim(); return v?v.slic
 const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:i; };
 
 const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeName,headColor,
-    inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,
+    inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,inspLimits,
     onOpenInsp,onAddInsp,onOpenSched,onAddSched,onPickDay})=>{
   if(!isOpen||!weekStart)return null;
   const days=Array.from({length:7},(_,i)=>new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+i));
@@ -4375,7 +4375,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                 <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
                 {days.map(d=>{const dk=dkOf(d);
                   if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
-                  return <td key={dk} data-wins={dk} style={{...TD,background:'#fff7ed',padding:'3px'}}>
+                  // ★台数制限（2026-10-23 ユーザー指示）。制限をかけた日は「最大N台」を出し、
+                  //   **その台数に達したら**（＝もう受けられない）欄ぜんぶを赤い網掛けにする。
+                  const lim=(inspLimits||{})[dk];
+                  const cnt=inspOf(dk).length;
+                  const full=lim!=null&&cnt>=lim;
+                  return <td key={dk} data-wins={dk} data-wfull={full?'1':'0'}
+                    title={lim!=null?('車検の台数制限　最大'+lim+'台（いま'+cnt+'台）'+(full?'　★上限に達しています':''))  :undefined}
+                    style={{...TD,background:full?RESTR_BG:'#fff7ed',padding:'3px'}}>
                     <div style={INS_GRP}>
                       {inspGroups(inspOf(dk)).map((g,gi)=>(
                         <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
@@ -4389,6 +4396,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                         <button data-wiadd={dk} title="この日の車検を新しく受ける" onClick={()=>onAddInsp(dk,nextInspIdx(dk))}
                           style={{...CB,background:'white',color:'#c2410c',border:'1.5px dashed #fb923c',fontSize:12}}>＋</button>
                       </div>
+                      {lim!=null&&(
+                        <div data-wlim={dk} style={{alignSelf:'center',padding:'1px 6px',borderRadius:4,
+                          background:full?'#dc2626':'#fff',color:full?'#fff':'#dc2626',
+                          border:'1.5px solid #dc2626',fontSize:9.5,fontWeight:900,whiteSpace:'nowrap'}}>最大{lim}台</div>
+                      )}
                     </div>
                   </td>;})}
               </tr>
@@ -16358,7 +16370,7 @@ function AppInner() {
         staffList={currentStaffList}
         dayOffData={dayOffData} paidLeaveData={paidLeaveData}
         isClosed={isClosed}
-        restrictionOf={restrictionOf}
+        restrictionOf={restrictionOf} inspLimits={inspLimits}
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setWeekOpen(false);}}
         onOpenInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',false)}
         onAddInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',true)}

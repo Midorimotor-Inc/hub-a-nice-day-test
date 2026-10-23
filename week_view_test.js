@@ -38,6 +38,11 @@ const seed = {
       { name: '三田の人', course: 1, time: '10:00', store: 'sanda', bookingStatus: 'confirmed' },
       { name: '消した人', course: 1, time: '10:00', store: 'honten', bookingStatus: 'cancelled' },
     ],
+    // 水：クイック2台（マッハにすると自動の入庫制限が増えて他の検査に響くのでコースは2）
+    [WED]: [
+      { name: '水一', course: 2, time: '13:00', store: 'honten', bookingStatus: 'confirmed' },
+      { name: '水二', course: 2, time: '13:30', store: 'honten', bookingStatus: 'confirmed' },
+    ],
     [SUN]: [{ name: '日曜花子', course: 2, time: '09:00', store: 'honten', bookingStatus: 'confirmed' }],
   },
   // 整備：月の 09:00 に3件（積む確認）／火の 13:00 に1件
@@ -70,6 +75,7 @@ const seed = {
   [STOR + 'honten-cdow']: [], [STOR + 'honten-cdate']: ['2026-10-22'],
   [STOR + 'sanda-cdow-v2']: [3], [STOR + 'sanda-cdate']: [],
   // 入庫制限（店ごと。STOR 無しのキーだが Firestore では STOR が前に付く）
+  [STOR + 'inspLimits']: { [WED]: 2, [SUN]: 5 },   // 水＝上限に達している／日＝まだ空き
   [STOR + 'honten-schedRestrictions']: { [TUE]: { ranges: [{ startTime: '10:00', endTime: '11:00' }], exemptWorks: ['B'] } },
   [STOR + 'sanda-schedRestrictions']: {},
   [STOR + 'honten-cars']: [], [STOR + 'sanda-cars']: [], [STOR + 'rentalcars']: [],
@@ -228,6 +234,26 @@ const seed = {
   t('★10:00 の行はまた色が付く（30分ごとに切り替わる）', !!band.h10 && band.h10.flag === '1' && band.h10.cell === band.h9.cell, band.h10);
   t('★時間の列は少し濃い色', !!band.h9 && band.h9.tm !== band.h9.cell, band.h9);
   t('午前・未定・午後は時刻を持たないので帯を付けない', !!band.am && band.am.flag === '0', band.am);
+
+  // ── ②-6 車検の台数制限（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-6 車検の台数制限「最大N台」と、達した時の赤い網掛け');
+  const lim = await page.evaluate(([full, room, none]) => {
+    const one = dk => {
+      const td = document.querySelector('[data-wins="' + dk + '"]');
+      if (!td) return null;
+      const tag = td.querySelector('[data-wlim]');
+      return { flag: td.getAttribute('data-wfull'), bg: getComputedStyle(td).backgroundImage,
+        tag: tag ? tag.innerText.replace(/s+/g, '') : '', title: td.getAttribute('title') || '',
+        n: td.querySelectorAll('[data-wcb]').length, add: !!td.querySelector('[data-wiadd]') };
+    };
+    return { full: one(full), room: one(room), none: one(none) };
+  }, [WED, SUN, MON]);
+  t('★制限をかけた日に「最大N台」が出る', !!lim.full && lim.full.tag === '最大2台', lim.full);
+  t('★上限に達したら車検の欄が赤い網掛けになる（2台/最大2台）', !!lim.full && lim.full.flag === '1' && /repeating-linear-gradient/.test(lim.full.bg), lim.full);
+  t('★まだ空きがある日は網掛けにしない（1台/最大5台）', !!lim.room && lim.room.tag === '最大5台' && lim.room.flag === '0', lim.room);
+  t('★制限をかけていない日は何も出さない', !!lim.none && lim.none.tag === '' && lim.none.flag === '0', lim.none);
+  t('なぞると「最大N台（いま○台）」が出る', !!lim.full && /最大2台（いま2台）/.test(lim.full.title), lim.full);
+  t('上限に達しても ＋ は残す（入力は止めない。断るのは今までどおり保存の時）', !!lim.full && lim.full.add, lim.full);
 
   // ── ②-5 入庫制限を網掛けで出す（2026-10-23 ユーザー指示）──
   console.log('\n■ ②-5 入庫制限を網掛けで出す');
