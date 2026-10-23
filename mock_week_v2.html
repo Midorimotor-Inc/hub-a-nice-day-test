@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>週間カレンダー 直しの案</title>
+<!--
+  2026-10-23 ユーザー指示（3件）：
+   ① 車検のバッジを「車検カレンダーのような四角いタイル」にする。
+      **6台で止めず、入っている台数を全部出す**（7台なら7つ・8台なら8つ）。並びは左から マ→ク→レ。
+      「2列ずつ」の読み取りに自信がないので ア案（3列ずつ）／イ案（2列ずつ）を並べた。
+   ② 整備の行から**担当者のバッジを外す**。代わりに**内容**を入る範囲だけ出す。
+   ③ 時間の帯：**:00 の行を水色／:30 の行を白**にして、30分ごとの区切りを分かりやすく。
+  ※ 中身は本番の 10/19〜10/25（本店）の実データの形。氏名はダミー、内容に入っていた人名も外してある。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --cy:#0891b2; --cy2:#0e7490; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1560px;margin:0 auto;padding:16px 14px 70px}
+  h1{font-size:18px;font-weight:900;margin-bottom:5px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.9}
+  .case{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:18px;overflow:hidden}
+  .case h2{font-size:14px;font-weight:900;padding:11px 14px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .case h2 small{font-weight:600;color:var(--ink2);margin-left:8px;font-size:11.5px}
+  .pick{display:inline-block;margin-left:9px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .pad{padding:12px 14px;overflow-x:auto}
+  .note{font-size:11.5px;color:var(--ink2);padding:10px 14px;background:#f8fafc;border-top:1px dashed var(--line);line-height:1.9}
+
+  .hd{display:flex;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--cy2),var(--cy));color:#fff;border-radius:9px 9px 0 0}
+  .hd b{font-size:14px;font-weight:800}
+  .nav{margin-left:auto;display:flex;gap:6px}
+  .nav span{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700}
+
+  table{border-collapse:collapse;width:100%;min-width:1020px;table-layout:fixed}
+  th,td{border:1px solid #d7dde5;padding:0}
+  th{background:#f1f5f9;font-size:11px;font-weight:800;padding:5px 4px;white-space:nowrap}
+  th.sun{color:#ef4444}th.sat{color:#2563eb}
+  th.today{background:#cffafe;color:#0e7490}
+  .tm{width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
+  .tm.sp{background:#faf5ff;color:#7c3aed}
+  /* ★③ 30分ごとの帯（2026-10-23 ユーザー指示）：:00 の行は水色、:30 の行は白 */
+  .tm.h0{background:#cfeef7;color:#0e5a6b}
+  td.cell{height:26px;vertical-align:middle;padding:1px 3px;font-size:11.5px}
+  tr.h0 td.cell{background:#e6f6fb}
+  tr.h0 td.cell.closed,td.cell.closed{background:#ffedd5;box-shadow:inset 4px 0 0 #f97316}
+  td.cell.add{color:#cbd5e1;text-align:center;font-size:11px}
+  td.cell.add:hover{background:#ecfeff;color:#0891b2;cursor:pointer}
+  .ent{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .ent+.ent{margin-top:2px;padding-top:2px;border-top:1px dotted #cbd5e1}
+  .nm{font-weight:700;color:#1e293b;flex-shrink:0}
+  /* ★② 内容は残った幅だけ出す（切れたら … ） */
+  .ct{color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;line-height:15px}
+  .car{flex-shrink:0;font-size:9.5px;color:#0f766e;background:#ccfbf1;border-radius:3px;padding:0 3px}
+
+  /* ★① 車検＝車検カレンダーと同じ四角いタイル。台数ぶん全部出す */
+  .ins{padding:3px;background:#fff7ed;border-top:1px solid #fed7aa}
+  .grid{display:grid;gap:2px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  /* 小さめ固定（車検カレンダーのタイルと同じくらいの大きさ） */
+  .sm{justify-content:center}
+  .sm.g3{grid-template-columns:repeat(3,30px)}
+  .sm.g2{grid-template-columns:repeat(2,30px)}
+  .sm .tile{width:30px;height:30px;aspect-ratio:auto;font-size:13px}
+  .tile{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;
+        font-weight:900;font-size:14px;position:relative;cursor:pointer}
+  .t-m{background:#fca5a5cc;color:#b91c1c;border:1.5px solid #b91c1c66}
+  .t-k{background:#bfdbfecc;color:#1d4ed8;border:1.5px solid #1d4ed866}
+  .t-r{background:#fde68acc;color:#d97706;border:1.5px solid #d9770666}
+  .t-add{background:#fff;color:#c2410c;border:1.5px dashed #fb923c;font-size:13px}
+  /* ★2026-10-23 ユーザー指示：いまの大きさのバッジを2段に積み、コースが変わったら列を変える（混ぜない） */
+  .grp{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:wrap;padding:1px 0}
+  .col2{display:grid;grid-template-rows:repeat(2,19px);grid-auto-flow:column;gap:2px}
+  .row1{display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:center}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+      color:#fff;font-size:11px;font-weight:900}
+  .cb.m{background:#b91c1c}.cb.k{background:#1d4ed8}.cb.r{background:#d97706}
+  .plus{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+      background:#fff;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px;font-weight:900}
+  .stf{padding:3px;text-align:center;background:#f8fafc;line-height:1}
+  .sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;border-radius:4px;
+      background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px;vertical-align:middle}
+  .sb.off{background:#fff;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+  .sep{display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle}
+  .three{display:flex;gap:16px;flex-wrap:wrap}
+  .three>div{flex:1;min-width:300px}
+  .three h3{font-size:12.5px;font-weight:800;margin-bottom:6px}
+  .cmp{min-width:0;width:100%}
+  /* ①の比べ表は本物に近い列幅（1列200px弱）で見る */
+  .stack{display:block}
+  .stack>div{min-width:0;margin-bottom:14px}
+  .stack .cmp{min-width:860px}
+  .cmp th{font-size:10.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週間カレンダー　直しの案（3件）</h1>
+  <div class="lead">
+    中身は <b>本番の 10/19〜10/25（本店）の実データの形</b>です。氏名はダミー、内容に入っていた人名も外してあります。
+  </div>
+
+  <!-- ① 車検のタイル -->
+  <div class="case">
+    <h2>① 車検のバッジ：いまの大きさのまま 2段に積む <span class="pick">2026-10-23</span><small>コースが変わったら列を変える／6台で止めず入っている台数を全部出す</small></h2>
+    <div class="pad">
+      <div class="three stack" id="cardA">
+        <div>
+          <h3>これでどうでしょう：いまの大きさのまま 2段に積む／コースが変わったら列を変える</h3>
+          <table id="cG" class="cmp"></table>
+          <h3 style="margin-top:14px">コースの組み合わせを変えた時</h3>
+          <table id="cG2" class="cmp"></table>
+        </div>
+        <div>
+          <h3>（前の案）四角いタイル・3列ずつ</h3>
+          <table id="cA" class="cmp"></table>
+        </div>
+        <div>
+          <h3>（いまの形）1行に並べる</h3>
+          <table id="cC" class="cmp"></table>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      ・<b>バッジの大きさはいまのまま</b>（プッシュ済みのものと同じ）。<br>
+      ・<b>上から下へ2段ずつ</b>積み、いっぱいになったら<b>右の列</b>へ。<b>コースが変わったら必ず新しい列から</b>始めます＝<b>マとクが同じ列で重ならない</b>。<br>
+      ・例：<b>マッハ3台</b>なら「マ／マ」の列＋「マ／（空き）」の列、<b>ひとつ空けて</b>クイック、<b>その横に</b>レギュラー。<br>
+      ・<b>台数ぶん全部出します</b>（車検カレンダーの「6台まで」はここには掛けません）。いちばん右の <b>＋</b> が新しい車検の受付。バッジを押すとその予約カードが開きます。<br>
+      ・下に前の案（四角いタイル・いまの1行）も残してあります。
+    </div>
+  </div>
+
+  <!-- 本表 -->
+  <div class="case">
+    <h2>①②③ を全部入れた週表 <span class="pick">2026-10-23</span></h2>
+    <div class="pad">
+      <div class="hd"><b>⏰ タイムスケジュール（週）</b><span style="font-size:12.5px;opacity:.95">本店</span>
+        <span style="font-size:13px;font-weight:700">10/19（月） 〜 10/25（日）</span>
+        <span class="nav"><span>‹ 前の週</span><span>今週</span><span>次の週 ›</span></span>
+      </div>
+      <table id="tA"></table>
+    </div>
+    <div class="note">
+      <b>②</b> お客様の横の<b>担当者バッジは外しました</b>。代わりに<b>内容</b>を、残った幅だけ出しています（切れたら … ）。<br>
+      　本番の整備175件のうち<b>内容が入っているのは122件</b>、長さの<b>中央値は9文字</b>・最長76文字。<b>9割がたは最初の十数文字で用が足ります</b>。<br>
+      　例：10/20 13:00「エアコンフィルター交換、エバポレーター洗浄…」／10/22 13:00「ヘッドライトの調子が悪い …」。<br>
+      <b>③</b> <b>:00 の行を水色／:30 の行を白</b>にしました。9:00〜9:30 が水色、9:30〜10:00 が白、10:00〜10:30 が水色…と30分ごとに切り替わります。<br>
+      　午前・未定・午後の3つは時刻を持たない枠なので、今までどおり薄紫のままにしてあります。
+    </div>
+  </div>
+
+  <!-- ③ 帯だけの比較 -->
+  <div class="case">
+    <h2>③ 時間の帯だけを比べる <small>左＝いま（帯なし）／右＝30分ごとの帯</small></h2>
+    <div class="pad">
+      <div class="three">
+        <div><h3>いま</h3><table id="bA" class="cmp"></table></div>
+        <div><h3>30分ごとの帯</h3><table id="bB" class="cmp"></table></div>
+      </div>
+    </div>
+    <div class="note">水色は <code>#e6f6fb</code>（時間の列は少し濃い <code>#cfeef7</code>）。予定の入っているセルも同じ帯の上に乗るので、<b>どの30分の話なのか</b>が横に目で追えます。</div>
+  </div>
+</div>
+
+<script>
+  var SLOTS=['午前','09:00','09:30','10:00','10:30','11:00','11:30','12:00','未定','午後',
+             '13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+  var DAYS=[{d:'10/19',w:'月'},{d:'10/20',w:'火'},{d:'10/21',w:'水'},
+            {d:'10/22',w:'木'},{d:'10/23',w:'金',today:true},{d:'10/24',w:'土',sat:true},{d:'10/25',w:'日',sun:true}];
+  // 車検（実データの入庫時間とコース・氏名はダミー）
+  var INSP=[
+    [['マ','10:00','前村'],['マ','14:00','岩本']],
+    [['ク','09:00','大山'],['ク','09:00','辻井'],['マ','10:00','桑田'],['マ','14:00','西浦']],
+    [['マ','10:00','小西'],['マ','14:00','栗﨑']],
+    [['マ','10:00','阿部'],['マ','14:00','宮武']],
+    [['マ','10:00','岸本'],['マ','14:00','前田'],['マ','16:00','竹原'],['ク','09:00','山谷']],
+    [['マ','10:00','中井'],['マ','14:00','両澤']],
+    [['マ','10:00','見取'],['マ','10:00','牧'],['ク','09:00','野呂']]
+  ];
+  // 整備（実データの枠・作業・内容。氏名はダミー、内容の人名は外した）
+  var DATA=[
+    {'09:00':[['Q','木下','ガラスリペア／AG手配OK']],'10:00':[['Q','サカイ','リアショック×とリアトリム']],
+     '16:30':[['Q','堀江','エンジンオイル交換']],
+     '17:00':[['他','里見','書類預かり'],['Q','吉田','エンジンオイル✖︎'],['B','下元','対物100']]},
+    {'09:00':[['⑫','乗鞍','メンパ有','ハスラー'],['M6','藤原','']],
+     '13:00':[['Q','菊池','エアコンフィルター交換、エバポレーター洗浄、ブレーキ修理','ワゴンR']],
+     '15:00':[['N1','宇佐美','']],'16:00':[['N6','奥山','']]},
+    {'13:00':[['試','坂口','ゴルフで来店']],'16:00':[['M6','田所','']],'17:30':[['Q','宮本','エンジンオイル交換']]},
+    {'09:00':[['⑫','大高','18100円']],'09:30':[['納','渡瀬',''],['R','福井','クランクプーリ']],
+     '13:00':[['Q','後藤','ヘッドライトの調子が悪い　昨日切れた今日はついてる。接触不良？']],
+     '15:00':[['Q','坂井','エンジンオイル✖︎'],['商','東','昨日の続きで話したい']]},
+    {'09:00':[['Q','西岡','エンジンオイル交換／ベルト交換']],'13:30':[['Q','南','エンジンオイル、エレメント交換']]},
+    {'09:00':[['M12','北原','','タント']],'11:00':[['納','今井','']],'午後':[['納','森','']],
+     '15:00':[['納','川端','']],'15:30':[['M6','白石','']],
+     '16:00':[['他','溝口','リアショック左右　保証交換']],'16:30':[['Q','原田','オイル交換したら　エンジンオイル漏れてるって言われた']]},
+    {'09:00':[['M6','丸山','エンジンオイル交換　試乗もあり'],['M12','青山','']],
+     '09:30':[['M6','井口','メンパ出力済み']],'11:00':[['M6','上野','']],
+     '16:00':[['Q','榎本','イモビライザー登録　請求済み'],['他','大西','スタッドレスタイヤ交換の相談']]}
+  ];
+  var STAFF=[{n:'見取大介',c:'見'},{n:'岡上秀一',c:'岡'},{n:'竹林直行',c:'竹'},
+             {n:'幸田桂紀',c:'幸'},{n:'魚住圭',c:'魚'},{n:'舟田祥子',c:'舟'},
+             {n:'江川京志',c:'江'},{n:'ダク',c:'ダ'},{n:'カビン',c:'カ'}];
+  var OFF=[['竹林直行'],['見取大介'],['幸田桂紀','魚住圭','舟田祥子'],['見取大介','江川京志'],
+           ['カビン'],['岡上秀一'],['岡上秀一','カビン','舟田祥子']];
+  var WC={'Q':'#0891b2','⑫':'#4f46e5','M12':'#4f46e5','M6':'#4f46e5','N1':'#4f46e5','N6':'#4f46e5',
+          'B':'#9333ea','R':'#be123c','商':'#b45309','保':'#b45309','試':'#b45309','納':'#047857','他':'#64748b'};
+  var CORD={'マ':0,'ク':1,'レ':2}, CC={'マ':'m','ク':'k','レ':'r'};
+  var isH0=function(s){ return /:00$/.test(s); };
+  var isSp=function(s){ return s==='午前'||s==='午後'||s==='未定'; };
+  function sortIns(rows){
+    return rows.slice().sort(function(a,b){
+      if(CORD[a[0]]!==CORD[b[0]])return CORD[a[0]]-CORD[b[0]];
+      return a[1]<b[1]?-1:1;});
+  }
+  // 車検のセル：mode 'g3'=3列 / 'g2'=2列 / 'row'=1行
+  function insCell(rows,mode){
+    var r=sortIns(rows);
+    if(mode==='grp'){
+      var gs=[];
+      r.forEach(function(x){var g=gs[gs.length-1];if(!g||g.c!==x[0]){g={c:x[0],items:[]};gs.push(g);}g.items.push(x);});
+      return '<td class="ins"><div class="grp">'+gs.map(function(g){
+        return '<div class="col2">'+g.items.map(function(x){
+          return '<span class="cb '+CC[x[0]]+'" title="'+x[1]+'　'+x[2]+'様">'+x[0]+'</span>';}).join('')+'</div>';
+      }).join('')+'<div class="col2"><span class="plus">＋</span></div></div></td>';
+    }
+    if(mode==='row'){
+      return '<td class="ins"><div class="row1">'+r.map(function(x){
+        return '<span class="cb '+CC[x[0]]+'" title="'+x[1]+'　'+x[2]+'様">'+x[0]+'</span>';}).join('')
+        +'<span class="plus">＋</span></div></td>';
+    }
+    var cls=mode.split('+sm')[0]+(mode.indexOf('+sm')>=0?' sm':'');
+    return '<td class="ins"><div class="grid '+cls+'">'+r.map(function(x){
+      return '<div class="tile t-'+CC[x[0]]+'" title="'+x[1]+'　'+x[2]+'様">'+x[0]+'</div>';}).join('')
+      +'<div class="tile t-add" title="この日の車検を新しく受ける">＋</div></div></td>';
+  }
+  function entHtml(e){
+    return '<div class="ent"><span class="wk" style="background:'+(WC[e[0]]||'#64748b')+'">'+e[0]+'</span>'
+      +'<span class="nm">'+e[1]+'</span>'
+      +(e[3]?'<span class="car">代'+e[3]+'</span>':'')
+      +(e[2]?'<span class="ct">'+e[2]+'</span>':'')+'</div>';
+  }
+  function build(id,mode){
+    var t=document.getElementById(id); if(!t) return;
+    var h='<tr><th class="tm"></th>';
+    DAYS.forEach(function(d,i){
+      h+='<th class="'+(d.today?'today':'')+(d.sat?' sat':'')+(d.sun?' sun':'')+'">'+d.d+'（'+d.w+'）</th>';});
+    h+='</tr>';
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+      +DAYS.map(function(d,i){return insCell(INSP[i]||[],mode);}).join('')+'</tr>';
+    h+='<tr><td class="tm">出勤</td>'+DAYS.map(function(d,i){
+      var off=OFF[i]||[];
+      var on=STAFF.filter(function(s){return off.indexOf(s.n)<0;});
+      var of=STAFF.filter(function(s){return off.indexOf(s.n)>=0;});
+      return '<td class="stf">'+on.map(function(s){return '<span class="sb" title="'+s.n+'">'+s.c+'</span>';}).join('')
+        +(of.length?'<span class="sep"></span>':'')
+        +of.map(function(s){return '<span class="sb off" title="'+s.n+'（休み）">'+s.c+'</span>';}).join('')+'</td>';
+    }).join('')+'</tr>';
+    SLOTS.forEach(function(sl){
+      var sp=isSp(sl), h0=isH0(sl);
+      h+='<tr class="'+(h0?'h0':'')+'"><td class="tm'+(sp?' sp':(h0?' h0':''))+'">'+sl+'</td>';
+      DAYS.forEach(function(d,i){
+        var list=(DATA[i]||{})[sl];
+        if(!list||!list.length){ h+='<td class="cell add">＋</td>'; return; }
+        h+='<td class="cell">'+list.map(entHtml).join('')+'</td>';
+      });
+      h+='</tr>';
+    });
+    t.innerHTML=h;
+  }
+  build('tA','grp');
+
+  // ① 台数の比べ（2・4・7・8・10台）
+  (function(){
+    var P=[['マ','09:00','—'],['マ','10:00','—'],['マ','14:00','—'],['ク','09:00','—'],['ク','09:30','—'],
+           ['レ','11:00','—'],['レ','13:00','—'],['レ','15:00','—'],['マ','11:00','—'],['ク','13:00','—']];
+    var SET=[2,4,7,8,10].map(function(n){return P.slice(0,n);});
+    [['cG','grp'],['cA','g3+sm'],['cC','row']].forEach(function(p){
+      var t=document.getElementById(p[0]); if(!t)return;
+      var h='<tr><th class="tm"></th>'+SET.map(function(s,i){
+        var n=[2,4,7,8,10][i];
+        return '<th>'+n+'台'+(n===7||n===8?'<div style="font-weight:700;color:#0e7490;font-size:10px">ご指定</div>':'')+'</th>';}).join('')+'</tr>';
+      h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+        +SET.map(function(s){return insCell(s,p[1]);}).join('')+'</tr>';
+      t.innerHTML=h;
+    });
+  })();
+
+  // コースの組み合わせを変えた時（cG2）
+  (function(){
+    var mk=function(m,k,r){var o=[];for(var i=0;i<m;i++)o.push(['マ','0'+(9+i)+':00','—']);
+      for(var i=0;i<k;i++)o.push(['ク','0'+(9+i)+':30','—']);
+      for(var i=0;i<r;i++)o.push(['レ','1'+(1+i)+':00','—']);return o;};
+    var SET=[[3,0,0],[3,2,1],[1,1,1],[4,3,2],[2,4,0],[5,0,3]];
+    var t=document.getElementById('cG2'); if(!t)return;
+    var h='<tr><th class="tm"></th>'+SET.map(function(x){
+      return '<th>マ'+x[0]+'・ク'+x[1]+'・レ'+x[2]+'<div style="font-weight:700;color:#0e7490;font-size:10px">'+(x[0]+x[1]+x[2])+'台</div></th>';}).join('')+'</tr>';
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'
+      +SET.map(function(x){return insCell(mk(x[0],x[1],x[2]),'grp');}).join('')+'</tr>';
+    t.innerHTML=h;
+  })();
+
+  // ③ 帯の比べ
+  (function(){
+    var S=['09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','13:30','14:00'];
+    [['bA',false],['bB',true]].forEach(function(p){
+      var t=document.getElementById(p[0]); if(!t)return;
+      var h='<tr><th class="tm"></th>'+DAYS.slice(0,4).map(function(d){return '<th>'+d.d+'</th>';}).join('')+'</tr>';
+      S.forEach(function(sl){
+        var h0=p[1]&&isH0(sl);
+        h+='<tr class="'+(h0?'h0':'')+'"><td class="tm'+(h0?' h0':'')+'">'+sl+'</td>';
+        DAYS.slice(0,4).forEach(function(d,i){
+          var list=(DATA[i]||{})[sl];
+          if(!list||!list.length){ h+='<td class="cell add">＋</td>'; return; }
+          h+='<td class="cell">'+list.map(entHtml).join('')+'</td>';
+        });
+        h+='</tr>';
+      });
+      t.innerHTML=h;
+    });
+  })();
+</script>
+</body>
+</html>

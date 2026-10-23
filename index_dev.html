@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792574499638';
+    window.__APP_BUILD='build-1792723127739';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.69.2';
+const APP_VERSION = '3.69.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4304,6 +4304,18 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const SB={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:17,height:17,padding:'0 2px',
     borderRadius:4,background:'#475569',color:'white',fontSize:10,fontWeight:900,margin:1,verticalAlign:'middle'};
   const SB_OFF={...SB,background:'white',color:'#e6ebf1',border:'1px solid #f1f5f9',fontWeight:700};
+  // ★車検のバッジは2段ずつ積み、コースが変わったら列を変える（2026-10-23 ユーザー指示）
+  //   マ3台なら「マ／マ」の列＋「マ／空き」の列 → ひとつ空けて ク → その横に レ。混ざらない。
+  const INS_GRP={display:'flex',gap:10,alignItems:'flex-start',justifyContent:'center',flexWrap:'wrap',padding:'1px 0'};
+  const INS_COL={display:'grid',gridTemplateRows:'repeat(2,19px)',gridAutoFlow:'column',gap:2};
+  const CB={display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,borderRadius:5,
+    color:'white',fontSize:11,fontWeight:900,border:'none',cursor:'pointer',fontFamily:'inherit'};
+  // ★30分ごとの帯（2026-10-23 ユーザー指示）：:00 の行は水色、:30 の行は白
+  const BAND_BG='#e6f6fb', BAND_TM='#cfeef7';
+  const isHourSlot=(x)=>/:00$/.test(String(x||''));
+  // コースごとのかたまりに分ける（並びは既に マ→ク→レ の順）
+  const inspGroups=(rows)=>{const g=[];rows.forEach(x=>{const last=g[g.length-1];
+    if(last&&last.cid===x.r.course)last.items.push(x);else g.push({cid:x.r.course,items:[x]});});return g;};
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:900,display:'flex',
       alignItems:'center',justifyContent:'center',padding:12}} onClick={onClose}>
@@ -4348,18 +4360,21 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                 <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
                 {days.map(d=>{const dk=dkOf(d);
                   if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
-                  return <td key={dk} data-wins={dk} style={{...TD,background:'#fff7ed',textAlign:'center',padding:'3px'}}>
-                    {inspOf(dk).map(({r,i})=>{const c=COURSES.find(x=>x.id===r.course);
-                      return <button key={i} data-wcb={dk+'/'+i} title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')}
-                        onClick={()=>onOpenInsp(dk,i)}
-                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
-                          borderRadius:5,background:(c&&c.color)||'#64748b',color:'white',fontSize:11,fontWeight:900,
-                          margin:1,border:'none',cursor:'pointer',fontFamily:'inherit',verticalAlign:'middle'}}>
-                        {(c&&c.initial)||'？'}</button>;})}
-                    <button data-wiadd={dk} title="この日の車検を新しく受ける" onClick={()=>onAddInsp(dk,nextInspIdx(dk))}
-                      style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
-                        borderRadius:5,background:'white',color:'#c2410c',border:'1.5px dashed #fb923c',fontSize:12,
-                        fontWeight:900,margin:'1px 1px 1px 4px',cursor:'pointer',fontFamily:'inherit',verticalAlign:'middle'}}>＋</button>
+                  return <td key={dk} data-wins={dk} style={{...TD,background:'#fff7ed',padding:'3px'}}>
+                    <div style={INS_GRP}>
+                      {inspGroups(inspOf(dk)).map((g,gi)=>(
+                        <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
+                          {g.items.map(({r,i})=>{const c=COURSES.find(x=>x.id===r.course);
+                            return <button key={i} data-wcb={dk+'/'+i} title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')}
+                              onClick={()=>onOpenInsp(dk,i)}
+                              style={{...CB,background:(c&&c.color)||'#64748b'}}>{(c&&c.initial)||'？'}</button>;})}
+                        </div>
+                      ))}
+                      <div style={INS_COL}>
+                        <button data-wiadd={dk} title="この日の車検を新しく受ける" onClick={()=>onAddInsp(dk,nextInspIdx(dk))}
+                          style={{...CB,background:'white',color:'#c2410c',border:'1.5px dashed #fb923c',fontSize:12}}>＋</button>
+                      </div>
+                    </div>
                   </td>;})}
               </tr>
               {/* 出勤：左＝出勤／右＝休み（B案・2026-10-21 ユーザー決定） */}
@@ -4379,16 +4394,19 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               {/* 時間枠：同じ枠に数件あれば積む */}
               {SCHED_SLOTS.map(slot=>{
                 const sp=isSpecialSlot(slot);
-                return <tr key={slot}>
-                  <td style={{...TM,...(sp?{background:'#faf5ff',color:'#7c3aed'}:{})}}>{slot}</td>
+                // ★30分ごとの帯。午前・未定・午後は時刻を持たない枠なので今までどおり薄紫
+                const h0=!sp&&isHourSlot(slot);
+                const cellBand=h0?{background:BAND_BG}:{};
+                return <tr key={slot} data-wband={h0?'1':'0'}>
+                  <td style={{...TM,...(sp?{background:'#faf5ff',color:'#7c3aed'}:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>{slot}</td>
                   {days.map(d=>{const dk=dkOf(d);
                     if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
                     const list=slotEntries(dk,slot);
                     if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
-                      style={{...TD,color:'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
+                      style={{...TD,...cellBand,color:'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
                       onMouseEnter={e=>{e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}
-                      onMouseLeave={e=>{e.currentTarget.style.background='';e.currentTarget.style.color='#cbd5e1';}}>＋</td>;
-                    return <td key={dk} style={TD}>
+                      onMouseLeave={e=>{e.currentTarget.style.background=h0?BAND_BG:'';e.currentTarget.style.color='#cbd5e1';}}>＋</td>;
+                    return <td key={dk} style={{...TD,...cellBand}}>
                       {list.map(({k,r},ri)=>(
                         <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
                           style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
@@ -4396,9 +4414,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                           <span title={(WORKS.find(w=>w.id===r.work)||{}).name||''}
                             style={{flexShrink:0,fontSize:9.5,fontWeight:900,color:'white',borderRadius:3,padding:'0 4px',
                               lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{r.work||'—'}</span>
-                          <span style={{fontWeight:700,color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis'}}>{r.name}</span>
+                          <span style={{fontWeight:700,color:'#1e293b',flexShrink:0}}>{r.name}</span>
                           {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
-                          {r.staff&&<span style={{...SB,minWidth:15,height:15,fontSize:9}} title={'担当 '+r.staff}>{staffIni({name:r.staff,ini:((staffList||[]).find(s=>s.name===r.staff)||{}).ini})}</span>}
+                          {/* ★担当者バッジは外し、代わりに内容を入る幅だけ出す（2026-10-23 ユーザー指示）。
+                              切れたら … 。全文はなぞると出る（1日表示と同じ考え方） */}
+                          {r.content&&<span data-wct="1" title={String(r.content)}
+                            style={{color:'#475569',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0,flex:1}}>
+                            {String(r.content).replace(/[\r\n]+/g,'　')}</span>}
                         </div>
                       ))}
                     </td>;})}

@@ -43,11 +43,15 @@ const seed = {
   // 整備：月の 09:00 に3件（積む確認）／火の 13:00 に1件
   [STOR + 'honten-sched']: {
     [MON]: {
-      '09:00': { name: '積一', work: 'Q', staff: '江川京志' },
+      '09:00': { name: '積一', work: 'Q', staff: '江川京志', content: 'エンジンオイル交換' },
       '09:00__1': { name: '積二', work: 'B', staff: '竹林直行' },
       '09:00__2': { name: '積三', work: '納', staff: '魚住圭' },
     },
-    [TUE]: { '13:00': { name: '火曜整備', work: 'M6', staff: '江川京志', loaner: '🔑 タント (1234)' } },
+    [TUE]: {
+      '13:00': { name: '火曜整備', work: 'M6', staff: '江川京志', loaner: '🔑 タント (1234)' },
+      // 長い内容：幅に入らないので … で切れる
+      '14:00': { name: '長文', work: 'Q', staff: '竹林直行', content: 'エアコンフィルター交換、エバポレーター洗浄、ブレーキ修理、ついでにワイパーも' },
+    },
   },
   [STOR + 'sanda-sched']: {},
   [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
@@ -159,6 +163,68 @@ const seed = {
   t('キャンセルの分は出さない', !!tue && tue.txt.length === 4);
   const tip = await page.evaluate(d => { const b = document.querySelector('[data-wins="' + d + '"] [data-wcb]'); return b ? b.getAttribute('title') : ''; }, TUE);
   t('なぞると「時間・氏名・コース」が出る', /09:00/.test(tip) && /マ一/.test(tip) && /マッハ車検/.test(tip), tip);
+
+  // ── ②-2 車検のバッジは2段ずつ・コースが変わったら列を変える（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-2 車検のバッジは2段ずつ積み、コースが変わったら列を変える');
+  const grp = await page.evaluate(d => {
+    const td = document.querySelector('[data-wins="' + d + '"]');
+    if (!td) return null;
+    const cols = [...td.querySelectorAll('[data-wgrp]')];
+    return {
+      n: cols.length,
+      letters: cols.map(c => [...c.querySelectorAll('[data-wcb]')].map(b => b.innerText.trim()).join('')),
+      rows: cols.map(c => getComputedStyle(c).gridTemplateRows),
+      flow: cols.map(c => getComputedStyle(c).gridAutoFlow),
+      size: (() => { const b = td.querySelector('[data-wcb]'); const r = b.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); })(),
+      addInOwnCol: !!(td.querySelector('[data-wiadd]') && !td.querySelector('[data-wgrp] [data-wiadd]')),
+    };
+  }, TUE);
+  t('★コースごとに列が分かれる（火曜は マ・ク・レ の3かたまり）', !!grp && grp.n === 3, grp);
+  t('★同じ列にコースが混ざらない', !!grp && grp.n === 3 && grp.letters.every(x => new Set(x.split('')).size === 1), grp);
+  t('★マッハ2台は1つの列に入る', !!grp && grp.letters[0] === 'ママ', grp);
+  t('★列は2段ずつ（上から下へ積み、いっぱいなら右の列へ）', !!grp && grp.n === 3 && grp.rows.every(r => r.split(' ').length === 2), grp);
+  t('★積む向きは縦（grid-auto-flow: column）', !!grp && grp.n === 3 && grp.flow.every(f => /column/.test(f)), grp);
+  t('★バッジの大きさは今までどおり 19x19', !!grp && grp.size === '19x19', grp);
+  t('★＋ はコースの列と別（かたまりに混ぜない）', !!grp && grp.n === 3 && grp.addInOwnCol, grp);
+
+  // ── ②-3 担当者バッジを外して内容を出す（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-3 担当者バッジを外して、内容を入る幅だけ出す');
+  const ent = await page.evaluate(d => {
+    const e = document.querySelector('[data-went="' + d + '/09:00"]');
+    if (!e) return null;
+    const ct = e.querySelector('[data-wct]');
+    return { txt: e.innerText.replace(/\s+/g, ''), hasCt: !!ct, ctTxt: ct ? ct.innerText.trim() : '',
+      ov: ct ? getComputedStyle(ct).textOverflow : '', wrap: ct ? getComputedStyle(ct).whiteSpace : '' };
+  }, MON);
+  t('★担当者の1文字バッジを行に出さない（江川京志＝江）', !!ent && ent.txt.indexOf('江') < 0, ent);
+  t('★代わりに内容が出る', !!ent && ent.hasCt && ent.ctTxt === 'エンジンオイル交換', ent);
+  t('入りきらない時は … で切る', !!ent && ent.ov === 'ellipsis' && /nowrap/.test(ent.wrap), ent);
+  const longCt = await page.evaluate(d => {
+    const e = document.querySelector('[data-went="' + d + '/14:00"]');
+    const ct = e && e.querySelector('[data-wct]');
+    if (!ct) return null;
+    return { cut: ct.scrollWidth > ct.clientWidth + 1, title: ct.getAttribute('title') || '',
+      fits: e.scrollWidth <= e.clientWidth + 1 };
+  }, TUE);
+  t('★長い内容でもセルからはみ出さない', !!longCt && longCt.fits, longCt);
+  t('★切れていても、なぞれば全文が出る', !!longCt && /ワイパー/.test(longCt.title), longCt);
+
+  // ── ②-4 30分ごとの帯（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-4 :00 の行は水色／:30 の行は白');
+  const band = await page.evaluate(() => {
+    const pick = (slot) => {
+      const tr = [...document.querySelectorAll('[data-weekview] tr')].find(x => x.children[0] && x.children[0].innerText.trim() === slot);
+      if (!tr) return null;
+      return { flag: tr.getAttribute('data-wband'), tm: getComputedStyle(tr.children[0]).backgroundColor,
+        cell: getComputedStyle(tr.children[3]).backgroundColor };
+    };
+    return { h9: pick('09:00'), h930: pick('09:30'), h10: pick('10:00'), am: pick('午前') };
+  });
+  t('★09:00 の行に色が付く', !!band.h9 && band.h9.flag === '1' && band.h9.cell !== 'rgba(0, 0, 0, 0)', band.h9);
+  t('★09:30 の行は白のまま', !!band.h930 && band.h930.flag === '0' && band.h930.cell === 'rgba(0, 0, 0, 0)', band.h930);
+  t('★10:00 の行はまた色が付く（30分ごとに切り替わる）', !!band.h10 && band.h10.flag === '1' && band.h10.cell === band.h9.cell, band.h10);
+  t('★時間の列は少し濃い色', !!band.h9 && band.h9.tm !== band.h9.cell, band.h9);
+  t('午前・未定・午後は時刻を持たないので帯を付けない', !!band.am && band.am.flag === '0', band.am);
 
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');
