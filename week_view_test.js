@@ -287,6 +287,35 @@ const seed = {
   t('★いちばん下の説明書きも出さない', rstr.legend === 0, rstr.legend);
   t('制限の中でも入力はできる（＋ は押せるまま）', !!rstr.in1 && rstr.in1.add && rstr.in1.cur === 'pointer', rstr.in1);
 
+  // ── ②-7 並べ方（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-7 週送りを真ん中に大きく／未定・午後は下に貼り付け／12:00・18:00 は細く');
+  const lay = await page.evaluate(() => {
+    const box = document.querySelector('[data-weekview]').getBoundingClientRect();
+    const nav = [...document.querySelectorAll('[data-wnav]')].map(b => {
+      const r = b.getBoundingClientRect(); const st = getComputedStyle(b);
+      return { txt: b.innerText.trim(), cx: Math.round(r.left + r.width / 2), w: Math.round(r.width), h: Math.round(r.height), fs: parseFloat(st.fontSize) };
+    });
+    const rowOf = slot => [...document.querySelectorAll('[data-weekview] tr')].find(x => x.children[0] && x.children[0].innerText.trim() === slot);
+    const info = slot => { const tr = rowOf(slot); if (!tr) return null;
+      const st = getComputedStyle(tr.children[0]);
+      return { pin: tr.getAttribute('data-wpin'), thin: tr.getAttribute('data-wthin'),
+        pos: st.position, h: Math.round(tr.getBoundingClientRect().height),
+        idx: [...tr.parentElement.children].indexOf(tr), n: tr.parentElement.children.length }; };
+    return { navCx: Math.round((box.left + box.right) / 2), nav,
+      mitei: info('未定'), gogo: info('午後'), gozen: info('午前'),
+      t12: info('12:00'), t18: info('18:00'), t9: info('09:00') };
+  });
+  const mid = lay.nav.length === 3 ? Math.round((lay.nav[0].cx + lay.nav[2].cx) / 2) : -1;
+  t('★週送りが帯の真ん中にある', mid > 0 && Math.abs(mid - lay.navCx) <= 40, { mid, center: lay.navCx });
+  t('★前より大きい（高さ30px以上・文字14px以上）', lay.nav.every(b => b.h >= 30 && b.fs >= 14), lay.nav);
+  t('3つとも出ている（前の週・今週・次の週）', lay.nav.map(b => b.txt).join(',').indexOf('今週') > 0, lay.nav);
+  t('★「未定」はいちばん下のほうに回っている', !!lay.mitei && lay.mitei.idx >= lay.mitei.n - 2, lay.mitei);
+  t('★「午後」はいちばん最後', !!lay.gogo && lay.gogo.idx === lay.gogo.n - 1, lay.gogo);
+  t('★2つとも下に貼り付けてある（スクロールしても消えない）', !!lay.mitei && lay.mitei.pin === '1' && lay.mitei.pos === 'sticky' && !!lay.gogo && lay.gogo.pos === 'sticky', { mitei: lay.mitei, gogo: lay.gogo });
+  t('「午前」は今までどおり上のまま', !!lay.gozen && lay.gozen.pin === '0' && lay.gozen.idx <= 3, lay.gozen);
+  t('★12:00 は細い', !!lay.t12 && lay.t12.thin === '1' && lay.t12.h < lay.t9.h, { t12: lay.t12, t9: lay.t9 });
+  t('★18:00 も細い', !!lay.t18 && lay.t18.thin === '1' && lay.t18.h < lay.t9.h, { t18: lay.t18, t9: lay.t9 });
+
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');
   const stack = await page.evaluate(d => {

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792728999593';
+    window.__APP_BUILD='build-1792730586998';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.70.2';
+const APP_VERSION = '3.70.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4316,6 +4316,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   //   週表は30分ごとの水色の帯と重なるので、**斜線の網掛け**にして見分けられるようにする。
   //   入力そのものは今までどおりできる（通るかどうかは保存時に見る）。
   const RESTR_BG='repeating-linear-gradient(45deg,#fee2e2,#fee2e2 4px,#fecaca 4px,#fecaca 8px)';
+  // ★「未定」「午後」はお昼の位置に置かず、いちばん下に回して**下に貼り付ける**（2026-10-23 ユーザー指示）。
+  //   スクロールしても消えないので、時刻の決まっていない分を入れ忘れない。
+  //   ★1日表示の並び（SCHED_SLOTS）は変えないこと。週表の中だけの並べ替え。
+  const WEEK_PIN=['未定','午後'];
+  const weekSlots=SCHED_SLOTS.filter(x=>WEEK_PIN.indexOf(x)<0).concat(WEEK_PIN);
+  // ★12:00 と 18:00 はほとんど入らないので細く（2026-10-23 ユーザー指示）
+  const THIN=['12:00','18:00'];
   const isHourSlot=(x)=>/:00$/.test(String(x||''));
   // コースごとのかたまりに分ける（並びは既に マ→ク→レ の順）
   const inspGroups=(rows)=>{const g=[];rows.forEach(x=>{const last=g[g.length-1];
@@ -4329,20 +4336,29 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         {/* 見出し＋週送り */}
         <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'6px 12px',
           background:headColor||'linear-gradient(135deg,#0e7490,#0891b2)',color:'white'}}>
-          <b style={{fontSize:15,fontWeight:800}}>⏰ タイムスケジュール（週）</b>
-          <span style={{fontSize:12.5,opacity:.95}}>{storeName}</span>
-          <span style={{fontSize:13,fontWeight:700}}>
-            {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+WEEK_DOW[0]+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+WEEK_DOW[6]+'）'}
-          </span>
-          <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+          {/* 左：見出し */}
+          <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:9,overflow:'hidden'}}>
+            <b style={{fontSize:15,fontWeight:800,whiteSpace:'nowrap'}}>⏰ タイムスケジュール（週）</b>
+            <span style={{fontSize:12.5,opacity:.95,whiteSpace:'nowrap'}}>{storeName}</span>
+            <span style={{fontSize:13,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+              {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+WEEK_DOW[0]+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+WEEK_DOW[6]+'）'}
+            </span>
+          </div>
+          {/* ★中：週送り。真ん中に、大きく（2026-10-23 ユーザー指示） */}
+          <div style={{flexShrink:0,display:'flex',gap:9,alignItems:'center'}}>
             {[['‹ 前の週',-1],['今週',0],['次の週 ›',1]].map(([t,v])=>(
               <button key={t} onClick={()=>onWeek(v)} data-wnav={String(v)}
-                style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-                  padding:'4px 12px',fontSize:12,fontWeight:700,color:'white',cursor:'pointer',fontFamily:'inherit'}}>{t}</button>
+                style={{background:v===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.22)',
+                  border:'2px solid rgba(255,255,255,.75)',borderRadius:10,
+                  padding:'8px 22px',fontSize:15,fontWeight:800,
+                  color:v===0?'#0e5a6b':'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{t}</button>
             ))}
+          </div>
+          {/* 右：✕ */}
+          <div style={{flex:1,display:'flex',justifyContent:'flex-end'}}>
             <button onClick={onClose} title="閉じる"
               style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',marginLeft:6,fontFamily:'inherit'}}>✕</button>
+                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕</button>
           </div>
         </div>
         <div style={{flex:1,minHeight:0,overflow:'auto'}}>
@@ -4419,22 +4435,28 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   </td>;})}
               </tr>
               {/* 時間枠：同じ枠に数件あれば積む */}
-              {SCHED_SLOTS.map(slot=>{
+              {weekSlots.map((slot,sx)=>{
                 const sp=isSpecialSlot(slot);
+                const thin=THIN.indexOf(slot)>=0;
+                // 下に貼り付ける分（未定・午後）。下から数えた段数ぶん持ち上げる
+                const pin=WEEK_PIN.indexOf(slot);
+                const pinSty=pin>=0?{position:'sticky',bottom:(WEEK_PIN.length-1-pin)*26,zIndex:5,
+                  boxShadow:'0 -2px 6px rgba(0,0,0,.12)'}:{};
                 // ★30分ごとの帯。午前・未定・午後は時刻を持たない枠なので今までどおり薄紫
                 const h0=!sp&&isHourSlot(slot);
                 const cellBand=h0?{background:BAND_BG}:{};
-                return <tr key={slot} data-wband={h0?'1':'0'}>
-                  <td style={{...TM,...(sp?{background:'#faf5ff',color:'#7c3aed'}:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>{slot}</td>
+                return <tr key={slot} data-wband={h0?'1':'0'} data-wpin={pin>=0?'1':'0'} data-wthin={thin?'1':'0'}>
+                  <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?{background:'#faf5ff',color:'#7c3aed'}:h0?{background:BAND_TM,color:'#0e5a6b'}:{}),...pinSty}}>{slot}</td>
                   {days.map(d=>{const dk=dkOf(d);
-                    if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                    if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{}),...pinSty}}/>;
                     // ★入庫制限（手で入れた分＋マッハ車検の自動分）。必ず restrCovers を通して見る
                     const rs=restrictionOf?restrictionOf(dk):null;
                     const rst=!sp&&restrCovers(rs,slot);
                     const mach=rst?machCovering(rs,slot):null;
                     const rsTip=rst?('入庫制限'+(mach?'（マッハ車検）':'')+'　'+restrLabels(rs).join('／')
                       +(restrExempt(rs).length?'　通せる作業：'+restrExempt(rs).join('・'):'')):undefined;
-                    const cellSty=rst?{background:RESTR_BG}:cellBand;
+                    const cellSty={...(rst?{background:RESTR_BG}:cellBand),...(thin?{height:15}:{}),
+                      ...(pin>=0?{...pinSty,background:(rst?RESTR_BG:'#faf5ff')}:{})};
                     const list=slotEntries(dk,slot);
                     if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} title={rsTip}
                       onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
