@@ -69,6 +69,9 @@ const seed = {
   // 本店に曜日の定休日は無い（実データどおり）。10/22（木）だけ手で休業日にする
   [STOR + 'honten-cdow']: [], [STOR + 'honten-cdate']: ['2026-10-22'],
   [STOR + 'sanda-cdow-v2']: [3], [STOR + 'sanda-cdate']: [],
+  // 入庫制限（店ごと。STOR 無しのキーだが Firestore では STOR が前に付く）
+  [STOR + 'honten-schedRestrictions']: { [TUE]: { ranges: [{ startTime: '10:00', endTime: '11:00' }], exemptWorks: ['B'] } },
+  [STOR + 'sanda-schedRestrictions']: {},
   [STOR + 'honten-cars']: [], [STOR + 'sanda-cars']: [], [STOR + 'rentalcars']: [],
   [STOR + 'honten-lres']: {}, [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
 };
@@ -226,6 +229,35 @@ const seed = {
   t('★時間の列は少し濃い色', !!band.h9 && band.h9.tm !== band.h9.cell, band.h9);
   t('午前・未定・午後は時刻を持たないので帯を付けない', !!band.am && band.am.flag === '0', band.am);
 
+  // ── ②-5 入庫制限を網掛けで出す（2026-10-23 ユーザー指示）──
+  console.log('\n■ ②-5 入庫制限を網掛けで出す');
+  const rstr = await page.evaluate(([d, other]) => {
+    const cell = (dk, slot) => {
+      const e = document.querySelector('[data-wadd="' + dk + '/' + slot + '"]') ||
+        [...document.querySelectorAll('[data-wrcell]')].find(x => (x.getAttribute('data-wadd') || '').indexOf(dk + '/' + slot) === 0);
+      if (!e) return null;
+      const st = getComputedStyle(e);
+      return { flag: e.getAttribute('data-wrcell'), bg: st.backgroundImage, title: e.getAttribute('title') || '', add: !!e.getAttribute('data-wadd'), cur: st.cursor };
+    };
+    const head = document.querySelector('[data-wrestr="' + d + '"]');
+    return {
+      in1: cell(d, '10:00'), in2: cell(d, '10:30'), mach: cell(d, '09:30'), out2: cell(d, '11:00'), free: cell(d, '11:30'),
+      otherDay: cell(other, '10:00'),
+      head: head ? head.innerText.replace(/\s+/g, '') : '',
+      headTitle: head ? head.getAttribute('title') : '',
+    };
+  }, [TUE, WED]);
+  t('★制限の中（10:00）は網掛けになる', !!rstr.in1 && rstr.in1.flag === '1' && /repeating-linear-gradient/.test(rstr.in1.bg), rstr.in1);
+  t('★10:30 も制限の中なので網掛け', !!rstr.in2 && rstr.in2.flag === '1', rstr.in2);
+  // ★マッハ車検（09:00入庫）の自動制限 09:00〜10:00 もここに出る
+  t('★マッハ車検の自動制限（09:30）も網掛けになる', !!rstr.mach && rstr.mach.flag === '1' && /マッハ車検/.test(rstr.mach.title), rstr.mach);
+  t('★どの制限にも入らない時間（11:30）は網掛けにしない', !!rstr.free && rstr.free.flag === '0', rstr.free);
+  t('★終わり（11:00）は制限に入らない', !!rstr.out2 && rstr.out2.flag === '0', rstr.out2);
+  t('★制限の無い日は網掛けにしない', !!rstr.otherDay && rstr.otherDay.flag === '0', rstr.otherDay);
+  t('★なぞると時間と通せる作業が出る', !!rstr.in1 && /10:00〜11:00/.test(rstr.in1.title) && /B/.test(rstr.in1.title), rstr.in1);
+  t('★日付の下に 🚫 と時間が出る', /🚫/.test(rstr.head) && /10:00〜11:00/.test(rstr.head), rstr.head);
+  t('制限の中でも入力はできる（＋ は押せるまま）', !!rstr.in1 && rstr.in1.add && rstr.in1.cur === 'pointer', rstr.in1);
+
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');
   const stack = await page.evaluate(d => {
@@ -298,6 +330,27 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-wnav="0"]'); if (b) b.click(); });
   await page.waitForTimeout(600);
   t('★「今週」で今日の週に戻る', await page.evaluate(() => /10\/19（月） 〜 10\/25（日）/.test(document.querySelector('[data-weekview]').innerText)));
+
+  // ── ⑦-2 日付のバッジを押すとその日のスケジュールへ（2026-10-23 ユーザー指示）──
+  console.log('\n■ ⑦-2 日付を押すとその日のスケジュールへ移る');
+  const dayBtn = await page.evaluate(d => {
+    const b = document.querySelector('[data-wday="' + d + '"]');
+    if (!b) return null;
+    const st = getComputedStyle(b);
+    return { tag: b.tagName, txt: b.innerText.replace(/\s+/g, ''), radius: st.borderRadius, cur: st.cursor, title: b.getAttribute('title') || '' };
+  }, WED);
+  t('★日付がバッジ（押せるボタン）になっている', !!dayBtn && dayBtn.tag === 'BUTTON' && parseFloat(dayBtn.radius) >= 10, dayBtn);
+  t('見た目で押せると分かる（指のカーソル・案内）', !!dayBtn && dayBtn.cur === 'pointer' && /スケジュール/.test(dayBtn.title), dayBtn);
+  await page.evaluate(d => { const b = document.querySelector('[data-wday="' + d + '"]'); if (b) b.click(); }, WED);
+  await page.waitForTimeout(1200);
+  t('★押すと週の表が閉じる', await page.evaluate(() => !document.querySelector('[data-weekview]')));
+  const moved = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ''));
+  t('★その日の1日表示になる（10月21日）', /10月21日|10\/21/.test(moved), moved.slice(0, 120));
+  t('★スケジュール画面に移っている（タイムスケジュールが出ている）',
+    await page.evaluate(() => [...document.querySelectorAll('th')].some(th => th.innerText.trim() === '代車・レンタカー')));
+  // 週表を開き直して続ける
+  await page.evaluate(() => { const b = document.querySelector('[data-weekbtn]'); if (b) b.click(); });
+  await page.waitForTimeout(900);
 
   // ── ⑧ 店を変えると中身も変わる ──
   console.log('\n■ ⑧ 店ごとに出す');
