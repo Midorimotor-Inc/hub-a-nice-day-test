@@ -212,11 +212,20 @@ const seed = {
     const e = document.querySelector('[data-went="' + d + '/14:00"]');
     const ct = e && e.querySelector('[data-wct]');
     if (!ct) return null;
-    return { cut: ct.scrollWidth > ct.clientWidth + 1, title: ct.getAttribute('title') || '',
+    return { cut: ct.scrollWidth > ct.clientWidth + 1,
       fits: e.scrollWidth <= e.clientWidth + 1 };
   }, TUE);
   t('★長い内容でもセルからはみ出さない', !!longCt && longCt.fits, longCt);
-  t('★切れていても、なぞれば全文が出る', !!longCt && /ワイパー/.test(longCt.title), longCt);
+  // ★2026-10-24 ユーザー指示：ブラウザの素の吹き出しではなく、1日表示と同じ角丸の吹き出しにする
+  await page.hover('[data-went="' + TUE + '/14:00"] [data-wct]').catch(() => {});
+  await page.waitForTimeout(400);
+  const ctip = await page.evaluate(() => { const e = document.querySelector('[data-wtip]'); if (!e) return null;
+    const st = getComputedStyle(e);
+    return { txt: e.innerText.replace(/s+/g, ' ').trim(), r: st.borderRadius, bw: st.borderTopWidth, bc: st.borderTopColor, pos: st.position }; });
+  t('★切れていても、なぞれば全文の吹き出しが出る', !!ctip && /ワイパー/.test(ctip.txt), ctip);
+  t('★吹き出しの角が丸い（1日表示と同じ 10px）', !!ctip && parseFloat(ctip.r) >= 10, ctip);
+  t('★1日表示と同じ水色の2px枠', !!ctip && parseFloat(ctip.bw) >= 2 && /8, 145, 178/.test(ctip.bc), ctip);
+  t('見出しに「内容（全文）」が出る', !!ctip && /内容（全文）/.test(ctip.txt), ctip);
 
   // ── ②-4 30分ごとの帯（2026-10-23 ユーザー指示）──
   console.log('\n■ ②-4 :00 の行は水色／:30 の行は白');

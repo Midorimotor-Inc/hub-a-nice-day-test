@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792828404746';
+    window.__APP_BUILD='build-1792829860497';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.72';
+const APP_VERSION = '3.72.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4275,6 +4275,24 @@ const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:
 const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeName,headColor,
     inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,inspLimits,
     onOpenInsp,onAddInsp,onOpenSched,onAddSched,onPickDay})=>{
+  // ★フックは「早い return」より前に置くこと（React の決まり。後ろに置くと数が合わず画面が落ちる）
+  // 据え置きの表（午後入庫・時間未定）は別の表なので、上の表にスクロールバーが出ると
+  // その幅のぶんだけ列がズレる（2026-10-24 ユーザー報告「10/24 はズレて見える」）。
+  // → 上の表のスクロールバーの幅を測って、下の表に同じだけ余白を入れる。
+  const scRef=useRef(null);
+  const [sbw,setSbw]=useState(0);
+  // 内容の吹き出し（1日表示の NoteCell と同じ見た目で出す）
+  const [tip,setTip]=useState(null);
+  useLayoutEffect(()=>{
+    if(!isOpen)return;
+    const el=scRef.current; if(!el)return;
+    const measure=()=>setSbw(Math.max(0,el.offsetWidth-el.clientWidth));
+    measure();
+    let ro=null;
+    try{ ro=new ResizeObserver(measure); ro.observe(el); }catch(e){}
+    window.addEventListener('resize',measure);
+    return()=>{ try{ro&&ro.disconnect(); }catch(e){} window.removeEventListener('resize',measure); };
+  },[isOpen,weekStart,storeId]);
   if(!isOpen||!weekStart)return null;
   const days=Array.from({length:7},(_,i)=>new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+i));
   const nowD=new Date();
@@ -4381,7 +4399,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
               {/* ★担当者バッジは外し、代わりに内容を入る幅だけ出す（2026-10-23 ユーザー指示）。
                   切れたら … 。全文はなぞると出る（1日表示と同じ考え方） */}
-              {r.content&&<span data-wct="1" title={String(r.content)}
+              {/* ★なぞると全文（2026-10-24 ユーザー指示：**1日表示（NoteCell）と同じ角丸の吹き出し**にする。
+                  ブラウザの素の吹き出しは四角くて素っ気ないため） */}
+              {r.content&&<span data-wct="1"
+                onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
+                  setTip({text:String(r.content),left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
+                onMouseLeave={()=>setTip(null)}
                 style={{color:'#475569',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0,flex:1}}>
                 {String(r.content).replace(/[\r\n]+/g,'　')}</span>}
             </div>
@@ -4423,7 +4446,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                 padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕</button>
           </div>
         </div>
-        <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+        <div ref={scRef} style={{flex:1,minHeight:0,overflow:'auto'}}>
           {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
               td の height:26 は最低の高さとして効く */}
           <table style={{borderCollapse:'collapse',width:'100%',height:'100%',minWidth:980,tableLayout:'fixed'}}>
@@ -4505,7 +4528,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         {/* ★「午後入庫」「入庫未定」は**スクロールする表の外**に据え置く（2026-10-23 ユーザー指示）。
             以前は sticky で貼り付けていたが、スクロールすると上の予定の字が重なって読めなくなった。
             表を分けてしまえば重なりようがない。**sticky に戻さないこと。** */}
-        <div data-wfoot="1" style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white'}}>
+        <div data-wfoot="1" style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white',paddingRight:sbw}}>
           <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
             <tbody>
               {WEEK_PIN.map((slot,ix)=>slotRow(slot,ix===WEEK_PIN.length-1))}
@@ -4514,6 +4537,23 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         </div>
         {/* ★いちばん下の説明書きは出さない（2026-10-23 ユーザー指示：表を最大限に広く使う）。
             色の意味・＋の働き・網掛けは、どれも「なぞると出る説明」で分かるようにしてある。 */}
+        {tip&&(()=>{
+          const W=Math.max(260,Math.min(380,(typeof window!=='undefined'?window.innerWidth:400)-24));
+          const left=Math.max(8,Math.min(tip.left,(window.innerWidth||1200)-W-8));
+          const below=tip.bottom+4, fits=below+160<=(window.innerHeight||800)-8;
+          const pos=fits?{top:below}:{bottom:Math.max(8,(window.innerHeight||800)-tip.top+4)};
+          return (
+            <div data-wtip="1" style={{position:'fixed',left,...pos,zIndex:9999,width:W,background:'white',
+              border:'2px solid #0891b2',borderRadius:10,boxShadow:'0 12px 32px rgba(0,0,0,0.22)',
+              padding:'10px 12px',pointerEvents:'none',whiteSpace:'normal',wordBreak:'break-word',
+              boxSizing:'border-box',textAlign:'left'}}>
+              <div style={{fontSize:10.5,fontWeight:800,color:'#0e7490',marginBottom:5,letterSpacing:'.04em'}}>📝 内容（全文）</div>
+              <div style={{fontSize:13,lineHeight:1.75,color:'#374151'}}>
+                {tip.text.split(String.fromCharCode(10)).map((x,i)=><div key={i}>{x}</div>)}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
