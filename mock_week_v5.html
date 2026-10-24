@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>週間カレンダー：最大化・検索（空き探し）</title>
+<!--
+  2026-10-24 ユーザー指示：
+   ① スケジュール画面の「画面表示拡大」を ✕ の左横へ
+   ② 週間カレンダーにも「最大化」を ✕ の左横に
+   ③ 週間カレンダーに「検索」を付ける
+      ・車検：マッハ車検は 10:00 と 14:00 が基本。検索すると**空いている日を明るく・埋まっている日を暗く**
+      ・整備：**作業の所要時間（30分・1時間…）を決めて**検索すると、その長さが取れる枠だけ明るく
+  ※ 実際に押して試せます。中身は 10/19〜10/25（本店）の形、氏名はダミー。本日＝10/21（水）。
+-->
+<style>
+  :root{ --ink:#1b2129; --ink2:#5b6676; --line:#e2e8f0; --today:#c2410c; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;background:#eef2f7;color:var(--ink);font-size:13px;line-height:1.6}
+  .wrap{max-width:1900px;margin:0 auto;padding:14px 12px 60px}
+  h1{font-size:18px;font-weight:900;margin-bottom:5px}
+  .lead{font-size:12.5px;color:var(--ink2);margin-bottom:12px;line-height:1.9}
+  .case{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+  .case h2{font-size:14px;font-weight:900;padding:11px 14px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .case h2 small{font-weight:600;color:var(--ink2);margin-left:8px;font-size:11.5px}
+  .pick{display:inline-block;margin-left:9px;font-size:11px;font-weight:800;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 8px}
+  .note{font-size:11.5px;color:var(--ink2);padding:10px 14px;background:#f8fafc;border-top:1px dashed var(--line);line-height:1.9}
+
+  /* 週表の見た目（本物に合わせてある） */
+  .hd{display:flex;align-items:center;gap:10px;padding:6px 12px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff}
+  .hd .l{flex:1;min-width:0;display:flex;align-items:center;gap:9px;white-space:nowrap}
+  .hd .c{flex-shrink:0;display:flex;gap:9px}
+  .hd .r{flex:1;display:flex;justify-content:flex-end;gap:7px;align-items:center}
+  .nv{background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.75);border-radius:10px;padding:8px 22px;font-size:15;font-weight:800;color:#fff;cursor:pointer;font-family:inherit}
+  .nv.on{background:rgba(255,255,255,.95);color:#0e5a6b}
+  .ic{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);border-radius:7px;padding:5px 11px;font-size:13px;font-weight:900;color:#fff;cursor:pointer;font-family:inherit}
+  .ic.icfind{background:#E8492E;border-color:rgba(255,255,255,.6)}
+
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  th,td{border:1px solid #d7dde5;padding:0}
+  th{background:#f1f5f9;font-size:11px;font-weight:800;padding:5px 4px;white-space:nowrap}
+  th.sun{color:#ef4444}th.sat{color:#2563eb}
+  .tm{width:62px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
+  .tm.h0{background:#cfeef7;color:#0e5a6b}
+  .tm.sp{background:#047857;color:#fff}
+  td.cell{height:30px;vertical-align:middle;padding:1px 3px;font-size:11.5px}
+  tr.h0 td.cell{background:#e6f6fb}
+  td.cell.sp{background:#f0fdf4}
+  td.cell.add{color:#cbd5e1;text-align:center;font-size:11px}
+  td.cell.rst{background:#fee2e2!important}
+  .ent{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .nm{font-weight:700;color:#1e293b;flex-shrink:0}
+  .ct{color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;line-height:15px}
+  .ins{padding:3px;background:#fff7ed;text-align:center}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;color:#fff;font-size:11px;font-weight:900;margin:1px}
+  .cb.m{background:#b91c1c}.cb.k{background:#1d4ed8}.cb.r{background:#d97706}
+  .plus{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;background:#fff;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px;font-weight:900;margin:1px 1px 1px 4px}
+  .stf{padding:3px;text-align:center;background:#f8fafc;line-height:1}
+  .sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;border-radius:4px;background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px}
+  .sb.off{background:#fff;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+  .under td{border-bottom:4px double #334155}
+  .t-col{border-left:3px solid var(--today)!important;border-right:3px solid var(--today)!important}
+
+  /* ── 検索のパネル ── */
+  .find{display:none;padding:10px 12px;background:#fff7ed;border-bottom:2px solid #fed7aa;align-items:center;gap:14px;flex-wrap:wrap}
+  .find.open{display:flex}
+  .find b{font-size:12.5px}
+  .seg{display:inline-flex;border:2px solid #cbd5e1;border-radius:9px;overflow:hidden}
+  .seg button{padding:6px 14px;border:none;background:#fff;font-size:12.5px;font-weight:800;color:#475569;cursor:pointer;font-family:inherit}
+  .seg button.on{background:#1d4ed8;color:#fff}
+  .seg.g button.on{background:#047857}
+  .go{padding:8px 20px;border:none;border-radius:9px;background:#E8492E;color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit}
+  .clr{padding:8px 14px;border:2px solid #cbd5e1;border-radius:9px;background:#fff;color:#475569;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit}
+  .hint{font-size:11.5px;color:#9a3412}
+
+  /* ── 検索中の暗く／明るく ── */
+  .searching td.cell,.searching td.ins{transition:all .15s}
+  .searching .dim{opacity:.28;filter:grayscale(.7)}
+  .searching .hit{background:#fffbe6!important;box-shadow:inset 0 0 0 3px #f59e0b;position:relative}
+  .searching .hit.ins{background:#fffbe6!important}
+  .searching th.dim{opacity:.4}
+  .badge{position:absolute;right:3px;top:1px;font-size:9.5px;font-weight:900;color:#b45309}
+  .res{font-size:12.5px;font-weight:800;color:#9a3412}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週間カレンダー：最大化・検索（空き探し）</h1>
+  <div class="lead">
+    <b>実際に押して試せます。</b>上の「🔍 検索」を押すと条件の欄が出ます。<br>
+    中身は 10/19〜10/25（本店）の形、氏名はダミー。本日＝10/21（水）。
+  </div>
+
+  <div class="case">
+    <h2>① ボタンの置き場所 <span class="pick">2026-10-24</span><small>右上に 🔍 検索／⛶ 最大化／✕ の順</small></h2>
+    <div style="padding:12px 14px">
+      <div class="hd" style="border-radius:9px">
+        <div class="l"><b style="font-size:15px">⏰ タイムスケジュール（週）</b><span style="font-size:12.5px;opacity:.95">本店</span>
+          <span style="font-size:13px;font-weight:700">10/19（月） 〜 10/25（日）</span></div>
+        <div class="c"><button class="nv">‹ 前の週</button><button class="nv on">今週</button><button class="nv">次の週 ›</button></div>
+        <div class="r"><button class="ic icfind" id="btnFind2">🔍 検索</button><button class="ic">⛶ 最大化</button><button class="ic">✕</button></div>
+      </div>
+    </div>
+    <div class="note">
+      ・<b>✕ の左が「⛶ 最大化」、その左が「🔍 検索」</b>。スケジュール画面（1日表示）の「画面表示拡大」も同じ並びに移します。<br>
+      ・最大化は、いまの窓（画面の 99.5%）を<b>ブラウザの全画面</b>に広げます。もう一度押すと戻ります。
+    </div>
+  </div>
+
+  <div class="case">
+    <h2>② 空き探し <span class="pick">試せます</span><small>🔍 検索 → 条件を選ぶ → 空いている所だけ明るく</small></h2>
+    <div style="padding:12px 14px">
+      <div class="hd" style="border-radius:9px 9px 0 0">
+        <div class="l"><b style="font-size:15px">⏰ タイムスケジュール（週）</b><span style="font-size:12.5px;opacity:.95">本店</span>
+          <span style="font-size:13px;font-weight:700">10/19（月） 〜 10/25（日）</span></div>
+        <div class="c"><button class="nv">‹ 前の週</button><button class="nv on">今週</button><button class="nv">次の週 ›</button></div>
+        <div class="r"><button class="ic icfind" id="btnFind">🔍 検索</button><button class="ic">⛶ 最大化</button><button class="ic">✕</button></div>
+      </div>
+      <div class="find" id="panel">
+        <span style="display:flex;align-items:center;gap:6px"><b>氏名・車種</b>
+          <input id="q" placeholder="例：田所／ハスラー" style="padding:7px 10px;border:2px solid #cbd5e1;border-radius:9px;font-size:13px;width:170px;font-family:inherit"></span>
+        <span style="color:#cbd5e1">｜</span>
+        <b>空きを探す</b>
+        <span class="seg" id="segKind">
+          <button data-kind="insp" class="on">🚗 車検</button>
+          <button data-kind="sched">⏰ 整備</button>
+        </span>
+        <span id="inspOpt">
+          <b>コース</b>
+          <span class="seg" id="segCourse">
+            <button data-c="マ" class="on">マッハ車検</button>
+            <button data-c="ク">クイック車検</button>
+            <button data-c="レ">レギュラー車検</button>
+          </span>
+          <span class="hint" id="courseHint">マッハは 10:00 と 14:00 が基本の枠です</span>
+        </span>
+        <span id="schedOpt" style="display:none">
+          <b>作業の所要時間</b>
+          <span class="seg g" id="segMin">
+            <button data-m="30" class="on">30分</button>
+            <button data-m="60">1時間</button>
+            <button data-m="90">1時間30分</button>
+            <button data-m="120">2時間</button>
+          </span>
+        </span>
+        <button class="go" id="btnGo">この条件で空きを探す</button>
+        <button class="clr" id="btnClr">やめる</button>
+        <span class="res" id="res"></span>
+      </div>
+      <table id="t"></table>
+    </div>
+    <div class="note">
+      ・<b>車検</b>：コースの<b>基本の枠</b>（マッハ＝10:00・14:00／クイック＝09:00・09:30／レギュラー＝11:00・13:00）を見て、
+        <b>空いている日だけ明るく</b>、埋まっている日は暗くします。明るい所の「＋」からそのまま受けられます。<br>
+      ・<b>整備</b>：選んだ<b>所要時間が続けて取れる所だけ</b>明るくします。30分なら1枠、1時間なら2枠続けて空いている所。
+        <b>入庫制限（赤）と休業日は空きに数えません。</b>右上に「60分」のように取れる長さを出します。<br>
+      ・<b>暗くするだけで、押せなくはしません</b>（どうしても入れたい時は暗い所にも入れられます）。
+    </div>
+  </div>
+</div>
+
+<script>
+  var SLOTS=['09:00','09:30','10:00','10:30','11:00','11:30','午前入庫','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+  var PIN=['午後入庫','時間未定'];
+  var DAYS=[{d:'10/19',w:'月'},{d:'10/20',w:'火'},{d:'10/21',w:'水',today:true},{d:'10/22',w:'木'},
+            {d:'10/23',w:'金'},{d:'10/24',w:'土',sat:true},{d:'10/25',w:'日',sun:true}];
+  // 車検（コースと入庫時間）
+  var INSP=[
+    [['マ','10:00'],['マ','14:00']],
+    [['マ','10:00'],['マ','14:00'],['ク','09:00'],['ク','09:30']],
+    [['マ','10:00']],
+    [],
+    [['マ','10:00'],['マ','14:00'],['ク','09:00']],
+    [['マ','14:00']],
+    [['マ','10:00'],['マ','14:00'],['ク','09:00']]
+  ];
+  // 整備（枠 → [作業,氏名,内容]）
+  var DATA=[
+    {'09:00':['Q','森','ガラスリペア'],'10:00':['Q','福島','リアショック'],'16:30':['Q','鈴木','エンジンオイル交換'],'17:00':['他','岸本','書類預かり']},
+    {'09:00':['⑫','田所','メンパ有'],'13:00':['Q','中田','エアコン洗浄'],'16:00':['N6','岩橋','']},
+    {'16:00':['M6','小林','']},
+    {'09:30':['納','小西',''],'15:00':['Q','吉田','エンジンオイル✕']},
+    {'09:00':['Q','吉田','エンジンオイル交換'],'13:30':['Q','北浦','エレメント交換'],'16:30':['Q','湯浅','オイル交換']},
+    {'11:00':['納','田中',''],'15:30':['M6','飯島','']},
+    {'09:00':['M6','古田','エンジンオイル交換'],'09:30':['M6','大島','メンパ出力済み'],'16:00':['Q','高石','イモビライザー登録']}
+  ];
+  var PINDATA={'午後入庫':{4:['納','宇佐美','']},'時間未定':{}};
+  // 入庫制限（マッハの自動制限：10:00〜11:00／14:00〜15:00）
+  var RESTR={0:['10:00','10:30','14:00','14:30'],1:['10:00','10:30','14:00','14:30'],2:['10:00','10:30'],
+             3:[],4:['10:00','10:30','14:00','14:30'],5:['14:00','14:30'],6:['10:00','10:30','14:00','14:30']};
+  var STAFF=[{n:'見取大介',c:'見'},{n:'岡上秀一',c:'岡'},{n:'竹林直行',c:'竹'},{n:'幸田桂紀',c:'幸'},
+             {n:'魚住圭',c:'魚'},{n:'舟田祥子',c:'舟'},{n:'江川京志',c:'江'},{n:'ダク',c:'ダ'},{n:'カビン',c:'カ'}];
+  var OFF=[['竹林直行'],['見取大介'],['幸田桂紀','魚住圭','舟田祥子'],['見取大介','江川京志'],['カビン'],['岡上秀一'],['岡上秀一','カビン','舟田祥子']];
+  // コースの基本の枠
+  var BASE={'マ':['10:00','14:00'],'ク':['09:00','09:30'],'レ':['11:00','13:00']};
+  var CC={'マ':'m','ク':'k','レ':'r'};
+  var WC={'Q':'#0891b2','⑫':'#4f46e5','M6':'#4f46e5','N6':'#4f46e5','納':'#047857','他':'#64748b'};
+  var isH0=function(s){return /:00$/.test(s)&&s.indexOf('入庫')<0&&s.indexOf('未定')<0;};
+  var isSp=function(s){return s.indexOf('入庫')>=0||s.indexOf('未定')>=0;};
+  var TIMES=SLOTS.filter(function(s){return !isSp(s);});   // 時刻のある枠だけ（続きを数える用）
+
+  function rowHtml(sl,isPin){
+    var h0=isH0(sl), sp=isSp(sl);
+    var h='<tr class="'+(h0?'h0':'')+'" data-slot="'+sl+'"><td class="tm'+(sp?' sp':(h0?' h0':''))+'">'+sl+'</td>';
+    DAYS.forEach(function(d,i){
+      var rst=!sp&&(RESTR[i]||[]).indexOf(sl)>=0;
+      var e=isPin?((PINDATA[sl]||{})[i]):((DATA[i]||{})[sl]);
+      var cls='cell'+(rst?' rst':'')+(sp?' sp':'')+(d.today?' t-col':'');
+      h+='<td class="'+cls+'" data-d="'+i+'" data-slot="'+sl+'"'+(e?'':' data-free="1"')+(rst?' data-rst="1"':'')+'>';
+      h+= e?('<div class="ent"><span class="wk" style="background:'+(WC[e[0]]||'#64748b')+'">'+e[0]+'</span><span class="nm">'+e[1]+'</span>'
+            +(e[2]?'<span class="ct">'+e[2]+'</span>':'')+'</div>'):(rst?'':'＋');
+      h+='</td>';
+    });
+    return h+'</tr>';
+  }
+  function build(){
+    var t=document.getElementById('t');
+    var h='<tr><th class="tm"></th>'+DAYS.map(function(d,i){
+      return '<th data-d="'+i+'" class="'+(d.sat?'sat':'')+(d.sun?' sun':'')+(d.today?' t-col':'')+'">'+d.d+'（'+d.w+'）</th>';}).join('')+'</tr>';
+    h+='<tr><td class="tm" style="background:#fff7ed;color:#9a3412">車検</td>'+DAYS.map(function(d,i){
+      return '<td class="ins'+(d.today?' t-col':'')+'" data-ins="'+i+'">'+(INSP[i]||[]).map(function(x){
+        return '<span class="cb '+CC[x[0]]+'" title="'+x[1]+'">'+x[0]+'</span>';}).join('')+'<span class="plus">＋</span></td>';}).join('')+'</tr>';
+    h+='<tr class="under"><td class="tm">出勤</td>'+DAYS.map(function(d,i){
+      var off=OFF[i]||[];
+      var on=STAFF.filter(function(s){return off.indexOf(s.n)<0;});
+      var of=STAFF.filter(function(s){return off.indexOf(s.n)>=0;});
+      return '<td class="stf'+(d.today?' t-col':'')+'">'+on.map(function(s){return '<span class="sb">'+s.c+'</span>';}).join('')
+        +of.map(function(s){return '<span class="sb off">'+s.c+'</span>';}).join('')+'</td>';}).join('')+'</tr>';
+    SLOTS.forEach(function(sl){h+=rowHtml(sl,false);});
+    PIN.forEach(function(sl){h+=rowHtml(sl,true);});
+    t.innerHTML=h;
+  }
+  build();
+
+  // ── 検索 ──
+  var kind='insp', course='マ', mins=30;
+  var panel=document.getElementById('panel'), tbl=document.getElementById('t'), res=document.getElementById('res');
+  function toggleFind(){ panel.classList.toggle('open'); if(panel.classList.contains('open')){ var q=document.getElementById('q'); if(q)q.focus(); } }
+  document.getElementById('btnFind').onclick=toggleFind;
+  var bf2=document.getElementById('btnFind2'); if(bf2) bf2.onclick=function(){ document.getElementById('panel').scrollIntoView({block:'center'}); toggleFind(); };
+  // 氏名・車種で探す：合う予定だけ明るく、ほかは暗く
+  function findText(q){
+    q=String(q||'').trim(); if(!q){clear();return;}
+    clear(); tbl.classList.add('searching');
+    var hit=0;
+    [].forEach.call(tbl.querySelectorAll('td.cell'),function(c){
+      var txt=c.innerText||'';
+      if(txt.indexOf(q)>=0){ hit++; c.classList.add('hit'); } else { c.classList.add('dim'); }
+    });
+    [].forEach.call(tbl.querySelectorAll('td.ins'),function(c){c.classList.add('dim');});
+    res.textContent='「'+q+'」に合うのは '+hit+' 件';
+  }
+  function segPick(id,fn){
+    document.getElementById(id).addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b)return;
+      [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
+      b.classList.add('on'); fn(b);
+    });
+  }
+  segPick('segKind',function(b){ kind=b.dataset.kind;
+    document.getElementById('inspOpt').style.display=kind==='insp'?'':'none';
+    document.getElementById('schedOpt').style.display=kind==='sched'?'':'none';
+    clear();
+  });
+  segPick('segCourse',function(b){ course=b.dataset.c;
+    document.getElementById('courseHint').textContent=
+      course==='マ'?'マッハは 10:00 と 14:00 が基本の枠です':
+      course==='ク'?'クイックは 09:00 と 09:30 が基本の枠です':'レギュラーは 11:00 と 13:00 が基本の枠です';
+    clear();
+  });
+  segPick('segMin',function(b){ mins=Number(b.dataset.m); clear(); });
+  function clear(){
+    tbl.classList.remove('searching');
+    [].forEach.call(tbl.querySelectorAll('.dim,.hit'),function(e){e.classList.remove('dim','hit');});
+    [].forEach.call(tbl.querySelectorAll('.badge'),function(e){e.remove();});
+    res.textContent='';
+  }
+  document.getElementById('btnClr').onclick=function(){ clear(); panel.classList.remove('open'); };
+  document.getElementById('btnGo').onclick=function(){
+    clear(); tbl.classList.add('searching');
+    var q=document.getElementById('q'); var qv=q?q.value.trim():'';
+    if(qv){ findText(qv); return; }
+    if(kind==='insp') findInsp(); else findSched();
+  };
+  function findInsp(){
+    var base=BASE[course], hit=0;
+    DAYS.forEach(function(d,i){
+      var used=(INSP[i]||[]).filter(function(x){return x[0]===course;}).map(function(x){return x[1];});
+      var free=base.filter(function(b){return used.indexOf(b)<0;});
+      var td=tbl.querySelector('[data-ins="'+i+'"]');
+      var th=tbl.querySelector('th[data-d="'+i+'"]');
+      if(free.length){ hit++; td.classList.add('hit','ins');
+        var s=document.createElement('span'); s.className='badge'; s.textContent=free.join('・')+' 空き'; td.appendChild(s);
+      } else { td.classList.add('dim'); th.classList.add('dim'); }
+      // その日の時間の枠は、空きが無い日だけ暗くする
+      [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){ if(!free.length)c.classList.add('dim'); });
+    });
+    res.textContent=hit+'日に空きがあります（'+course+'＝'+base.join('・')+'）';
+  }
+  function findSched(){
+    var need=Math.ceil(mins/30), hit=0;
+    DAYS.forEach(function(d,i){
+      var okStart={};
+      TIMES.forEach(function(sl,si){
+        if(si+need>TIMES.length) return;
+        var ok=true;
+        for(var k=0;k<need;k++){
+          var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+TIMES[si+k]+'"]');
+          if(!c||!c.dataset.free||c.dataset.rst){ok=false;break;}
+        }
+        if(ok)okStart[sl]=true;
+      });
+      TIMES.forEach(function(sl,si){
+        var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]');
+        if(!c)return;
+        if(okStart[sl]){ hit++; c.classList.add('hit');
+          var s=document.createElement('span'); s.className='badge'; s.textContent=mins+'分'; c.appendChild(s);
+        } else { c.classList.add('dim'); }
+      });
+      // 時刻を持たない枠は検索の対象外（暗くする）
+      ['午前入庫','午後入庫','時間未定'].forEach(function(sl){
+        var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]'); if(c)c.classList.add('dim');
+      });
+      [].forEach.call(tbl.querySelectorAll('[data-ins="'+i+'"]'),function(c){c.classList.add('dim');});
+    });
+    res.textContent=mins+'分とれる所が '+hit+' か所';
+  }
+</script>
+</body>
+</html>
