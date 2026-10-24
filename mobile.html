@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792826714915';
+  window.__APP_BUILD='build-1792827510388';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.71';
+const MOBILE_VERSION='3.71.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -2945,7 +2945,7 @@ const MemoSheet=({dateLabel,isNew,initContent,initBy,staffNames,items,onSave,onD
   );
 };
 
-const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,arrivedOv,mySchedPanel,onEditMemo,onToggleMemo})=>{
+const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,arrivedOv,mySchedPanel,onEditMemo,onToggleMemo,onMoveDay})=>{
   const sc=vsId==='honten'?'#1d4ed8':'#dc2626';
   const irows=(inspData[dk]||[]).filter(r=>r&&r.name&&!r.pendingApproval&&r.bookingStatus!=='cancelled');
   const sorted=[...irows.filter(r=>normStore(r.store)===vsId),...irows.filter(r=>!normStore(r.store)),...irows.filter(r=>normStore(r.store)&&normStore(r.store)!==vsId)];
@@ -2968,12 +2968,24 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:200,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
-        <div style={{padding:'14px 18px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:8}}>
-          <div style={{flex:1}}>
+        <div style={{padding:'14px 14px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:6}}>
+          {/* ★日にちの前後送り（2026-10-24 ユーザー要望：さっと見たい時に便利）。
+              カードを閉じずに前の日・次の日へ移る。月をまたいでもそのまま進む。 */}
+          {onMoveDay&&(
+            <button data-daynav="-1" title="前の日" onClick={()=>onMoveDay(-1)}
+              style={{width:40,height:40,borderRadius:12,background:'#f1f5f9',border:'none',fontSize:20,
+                color:'#475569',fontWeight:900,flexShrink:0,lineHeight:1}}>‹</button>
+          )}
+          <div style={{flex:1,minWidth:0,textAlign:onMoveDay?'center':'left'}}>
             <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b'}}>{m+1}月{d}日（{DOW[dow]}）</div>
             <div style={{fontSize:11,color:'#94a3b8',marginTop:1}}>車検 {irows.length}台 / 整備 {sched.length}件</div>
           </div>
-          <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0}}>✕</button>
+          {onMoveDay&&(
+            <button data-daynav="1" title="次の日" onClick={()=>onMoveDay(1)}
+              style={{width:40,height:40,borderRadius:12,background:'#f1f5f9',border:'none',fontSize:20,
+                color:'#475569',fontWeight:900,flexShrink:0,lineHeight:1}}>›</button>
+          )}
+          <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0,marginLeft:2}}>✕</button>
         </div>
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px'}}>
           {sorted.length>0&&(
@@ -7061,6 +7073,9 @@ const App=()=>{
       </div>
       {dayDetail&&<DayDetailModal {...dayDetail} onEditMemo={otherView?null:(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={otherView?null:toggleDayMemo} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
         onClose={()=>setDayDetail(null)}
+        onMoveDay={delta=>setDayDetail(p=>{ if(!p)return p;
+          const nd=new Date(p.y,p.m,p.d+delta);
+          return {dk:`${nd.getFullYear()}-${nd.getMonth()+1}-${nd.getDate()}`,y:nd.getFullYear(),m:nd.getMonth(),d:nd.getDate()}; })}
         mySchedPanel={<MySchedPanel compact dk={dayDetail.dk} user={{uid:user.uid,name:user.name}} pub={mySched} savePub={saveMySched} priv={myPriv}/>}
         onGoSchedule={(y,m,d)=>{setSchedInitDate({y,m,d});setTab('sched');setDayDetail(null);}}/>}
       {memoEdit&&(()=>{

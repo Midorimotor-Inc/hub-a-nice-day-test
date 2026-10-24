@@ -150,6 +150,44 @@ const PDK = `${prev.getFullYear()}-${prev.getMonth() + 1}-${prev.getDate()}`;   
 
   // 見た目を目で見たい時： SHOT=<保存先.png> node mobile_delivery_test.js
   if (process.env.SHOT) { await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /閉じる|キャンセル|✕/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); }); await page.waitForTimeout(600); await page.evaluate(() => { const r = document.querySelector('[data-mslot="13:00"]'); if (r) r.scrollIntoView({ block: 'start' }); }); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT }); }
+  // ── ⑥ カレンダーの日のカードに「前の日／次の日」（2026-10-24 ユーザー要望）──
+  console.log(String.fromCharCode(10) + '■ ⑥ カレンダーの日のカードに前後送り');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /閉じる|キャンセル|✕/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const d = [...document.querySelectorAll('div')].filter(e => /^(📅 )?カレンダー$/.test(e.innerText.trim()) && e.offsetParent !== null);
+    const target = d.length ? d[d.length - 1].parentElement : null;
+    if (target) target.click();
+  });
+  await page.waitForTimeout(1200);
+  // 今日の日を押して日のカードを開く
+  await page.evaluate(d => {
+    const cells = [...document.querySelectorAll('div')].filter(e => e.onclick && e.innerText.trim().split(String.fromCharCode(10))[0] === String(d));
+    if (cells.length) cells[0].click();
+  }, D);
+  await page.waitForTimeout(1000);
+  const head = () => page.evaluate(() => {
+    const b = document.querySelector('[data-daynav]');
+    const card = b ? b.parentElement : null;
+    return { has: !!b, txt: card ? card.innerText.replace(/s+/g, ' ').trim() : '' };
+  });
+  const h0 = await head();
+  t('★日のカードに前後送りのボタンが出る', h0.has, h0);
+  t('いま見ている日が出ている', new RegExp((M + 1) + '月' + D + '日').test(h0.txt), h0);
+  const size = await page.evaluate(() => { const b = document.querySelector('[data-daynav="1"]'); if (!b) return null; const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; });
+  t('★指で押せる大きさ（40px以上）', !!size && size.w >= 40 && size.h >= 40, size);
+  await page.evaluate(() => { const b = document.querySelector('[data-daynav="1"]'); if (b) b.click(); });
+  await page.waitForTimeout(800);
+  const h1 = await head();
+  t('★「›」で次の日になる', h1.has && !new RegExp((M + 1) + '月' + D + '日').test(h1.txt), h1);
+  await page.evaluate(() => { const b = document.querySelector('[data-daynav="-1"]'); if (b) b.click(); });
+  await page.waitForTimeout(800);
+  const h2 = await head();
+  t('★「‹」で元の日に戻る', new RegExp((M + 1) + '月' + D + '日').test(h2.txt), h2);
+  t('★送ってもカードは閉じない', h2.has, h2);
+
+  // 日のカードの見た目： SHOT2=<保存先.png> node mobile_delivery_test.js
+  if (process.env.SHOT2) { await page.screenshot({ path: process.env.SHOT2 }); }
   t('JSエラーなし', errs.length === 0, errs.slice(0, 2));
   console.log('\n──────── 結果 ' + pass + ' 件合格 / ' + fail + ' 件不合格 ────────');
   await browser.close(); server.close();
