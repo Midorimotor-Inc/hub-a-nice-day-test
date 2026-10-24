@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792829860497';
+    window.__APP_BUILD='build-1792830311535';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.72.1';
+const APP_VERSION = '3.73';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4335,6 +4335,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   //   （セルごとに模様が左上から描き直されるため）。ベタ塗りならズレようがない。
   //   **斜線・網掛けに戻さないこと。** 入力そのものは今までどおりできる（通るかは保存時に見る）。
   const RESTR_BG='#fee2e2';
+  // ★出勤の欄とスケジュールの欄の境目（2026-10-24 ユーザー指示・イ案）。
+  //   ふつうの細い線だと、出勤の行とその下の時間の行の見分けが付かなかった。
+  const STAFF_UNDER='4px double #334155';
+  // ★時刻を持たない枠（午前入庫・午後入庫・時間未定）の色（2026-10-24 ユーザー指示・B案）。
+  //   薄紫をやめて**緑地に白文字**。中の枠はうっすら緑。
+  const SP_TM={background:'#047857',color:'white'};
+  const SP_CELL='#f0fdf4';
+  // 時刻を持たない枠の呼び名（画面の言葉。「入庫未定」→「時間未定」に変更）
+  const spName=(x)=>x==='未定'?'時間未定':x==='午前'?'午前入庫':x==='午後'?'午後入庫':x;
   // ★本日の列は太枠で囲む（2026-10-24 ユーザー指示・ア案）。色はカレンダーの「今日」と同じ
   const TODAY_LINE='#c2410c';
   const todayCol=(dk)=>dk===todayDk?{borderLeft:'3px solid '+TODAY_LINE,borderRight:'3px solid '+TODAY_LINE}:{};
@@ -4369,8 +4378,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     // 本日の列。いちばん下の行だけ枠の底も閉じる
     const tcol=(dk)=>({...todayCol(dk),...(last&&dk===todayDk?{borderBottom:'3px solid '+TODAY_LINE}:{})});
     return <tr key={slot} data-wband={h0?'1':'0'} data-wpin={pinned?'1':'0'} data-wthin={thin?'1':'0'}>
-      <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?{background:'#faf5ff',color:'#7c3aed'}:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>
-        {slot==='未定'?'入庫未定':slot==='午前'?'午前入庫':slot==='午後'?'午後入庫':slot}</td>
+      <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?SP_TM:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>
+        {spName(slot)}</td>
       {days.map(d=>{const dk=dkOf(d);
         if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{}),...tcol(dk)}}/>;
         // ★入庫制限（手で入れた分＋マッハ車検の自動分）。必ず restrCovers を通して見る
@@ -4380,7 +4389,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         const rsTip=rst?('入庫制限'+(mach?'（マッハ車検）':'')+'　'+restrLabels(rs).join('／')
           +(restrExempt(rs).length?'　通せる作業：'+restrExempt(rs).join('・'):'')):undefined;
         const cellSty={...(rst?{background:RESTR_BG}:cellBand),...(thin?{height:15}:{}),
-          ...(sp?{background:rst?RESTR_BG:'#fdfaff'}:{})};
+          ...(sp?{background:rst?RESTR_BG:SP_CELL}:{})};
         const list=slotEntries(dk,slot);
         if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} title={rsTip}
           onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
@@ -4508,13 +4517,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               </tr>
               {/* 出勤：左＝出勤／右＝休み（B案・2026-10-21 ユーザー決定） */}
               <tr>
-                <td style={{...TM,color:'#475569'}}>出勤</td>
+                <td style={{...TM,color:'#475569',borderBottom:STAFF_UNDER}}>出勤</td>
                 {days.map(d=>{const dk=dkOf(d);
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk)}}/>;
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),borderBottom:STAFF_UNDER}}/>;
                   const offs=((dayOffData||{})[dk]||[]).concat((paidLeaveData||{})[dk]||[]);
                   const on=(staffList||[]).filter(s=>offs.indexOf(s.name)<0);
                   const off=(staffList||[]).filter(s=>offs.indexOf(s.name)>=0);
-                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk)}}>
+                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk),borderBottom:STAFF_UNDER}}>
                     {on.map(s=><span key={s.uid||s.name} style={SB} title={s.name}>{staffIni(s)}</span>)}
                     {off.length>0&&<span style={{display:'inline-block',width:1,height:13,background:'#e2e8f0',margin:'0 5px',verticalAlign:'middle'}}/>}
                     {off.map(s=><span key={s.uid||s.name} style={SB_OFF} title={s.name+'（休み）'}>{staffIni(s)}</span>)}

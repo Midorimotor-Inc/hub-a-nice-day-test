@@ -317,7 +317,7 @@ const seed = {
         idx: [...tr.parentElement.children].indexOf(tr), n: tr.parentElement.children.length }; };
     const scroller = [...document.querySelectorAll('[data-weekview] div')].find(e => e.scrollHeight > e.clientHeight + 20);
     return { navCx: Math.round((box.left + box.right) / 2), nav, boxBottom: Math.round(box.bottom),
-      mitei: info('入庫未定'), gogo: info('午後入庫'), gozen: info('午前入庫'),
+      mitei: info('時間未定'), gogo: info('午後入庫'), gozen: info('午前入庫'),
       t12: info('12:00'), t18: info('18:00'), t9: info('09:00'), t1130: info('11:30'), t13: info('13:00'),
       footRows: foot ? [...foot.querySelectorAll('tr')].map(x => x.children[0].innerText.trim()) : null,
       scrollable: !!scroller, footOutside: !!(foot && scroller && !scroller.contains(foot)) };
@@ -332,11 +332,28 @@ const seed = {
     { gozen: lay.gozen, t1130: lay.t1130, t13: lay.t13 });
   // 09:00 は予定が3件積まれていて高いので、細い枠（18:00）と比べる
   t('★午前入庫は細くしない（12:00 の細さを引き継がない）', !!lay.gozen && lay.gozen.thin === '0' && !!lay.t18 && lay.gozen.h > lay.t18.h, { gozen: lay.gozen, t18: lay.t18 });
-  t('★「午後入庫」「入庫未定」はこの順で下に据え置く（入庫未定がいちばん下）',
-    JSON.stringify(lay.footRows) === JSON.stringify(['午後入庫', '入庫未定']), lay.footRows);
+  t('★「午後入庫」「時間未定」はこの順で下に据え置く（時間未定がいちばん下）',
+    JSON.stringify(lay.footRows) === JSON.stringify(['午後入庫', '時間未定']), lay.footRows);
   t('★2つともスクロールする表の外にある（上の予定と重ならない）',
     !!lay.gogo && lay.gogo.inFoot && !!lay.mitei && lay.mitei.inFoot, { gogo: lay.gogo, mitei: lay.mitei });
   t('★据え置きの表は画面のいちばん下にある', !!lay.mitei && lay.boxBottom - (lay.mitei.top + lay.mitei.h) < 12, { mitei: lay.mitei, bottom: lay.boxBottom });
+  // ★2026-10-24 ユーザー決定：出勤の下は二重線（イ案）／時刻を持たない枠は緑地に白文字（B案）
+  const look2 = await page.evaluate(() => {
+    const wv = document.querySelector('[data-weekview]');
+    const stf = wv.querySelector('[data-wstf]');
+    const rowOf = slot => [...wv.querySelectorAll('tr')].find(x => x.children[0] && x.children[0].innerText.trim() === slot);
+    const sp = rowOf('午前入庫'), hh = rowOf('09:00');
+    const px = e => { const st = getComputedStyle(e); return { bs: st.borderBottomStyle, bw: st.borderBottomWidth }; };
+    const tm = e => { const st = getComputedStyle(e.children[0]); return { bg: st.backgroundColor, c: st.color }; };
+    return { stf: stf ? px(stf) : null, sp: sp ? tm(sp) : null, hh: hh ? tm(hh) : null,
+      spCell: sp ? getComputedStyle(sp.children[2]).backgroundColor : '' };
+  });
+  t('★出勤の欄の下が二重線', !!look2.stf && look2.stf.bs === 'double' && parseFloat(look2.stf.bw) >= 3, look2.stf);
+  t('★午前入庫などの時間の列が緑地', !!look2.sp && look2.sp.bg === 'rgb(4, 120, 87)', look2.sp);
+  t('★その文字は白', !!look2.sp && look2.sp.c === 'rgb(255, 255, 255)', look2.sp);
+  t('★中の枠はうっすら緑', !!look2.spCell && look2.spCell === 'rgb(240, 253, 244)', look2.spCell);
+  t('ふつうの時間の列は今までどおり（緑にしない）', !!look2.hh && look2.hh.bg !== 'rgb(4, 120, 87)', look2.hh);
+
   t('★18:00 は細い', !!lay.t18 && lay.t18.thin === '1' && lay.t18.h < lay.t9.h, { t18: lay.t18, t9: lay.t9 });
 
   // ── ②-8 本日の列を太枠で囲む（2026-10-24 ユーザー指示・ア案）──
