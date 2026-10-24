@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792827510388';
+    window.__APP_BUILD='build-1792828404746';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.71.1';
+const APP_VERSION = '3.72';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4312,10 +4312,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     color:'white',fontSize:11,fontWeight:900,border:'none',cursor:'pointer',fontFamily:'inherit'};
   // ★30分ごとの帯（2026-10-23 ユーザー指示）：:00 の行は水色、:30 の行は白
   const BAND_BG='#e6f6fb', BAND_TM='#cfeef7';
-  // ★入庫制限は網掛けで出す（2026-10-23 ユーザー指示）。1日表示はベタ塗りだが、
-  //   週表は30分ごとの水色の帯と重なるので、**斜線の網掛け**にして見分けられるようにする。
-  //   入力そのものは今までどおりできる（通るかどうかは保存時に見る）。
-  const RESTR_BG='repeating-linear-gradient(45deg,#fee2e2,#fee2e2 4px,#fecaca 4px,#fecaca 8px)';
+  // ★入庫制限の色（2026-10-24 ユーザー決定）：**1日表示と同じ ベタの薄いピンク**。
+  //   はじめ斜線のゼブラにしたが、:00 と :30 で1時間続く時に**行の境目で模様がズレて見えた**
+  //   （セルごとに模様が左上から描き直されるため）。ベタ塗りならズレようがない。
+  //   **斜線・網掛けに戻さないこと。** 入力そのものは今までどおりできる（通るかは保存時に見る）。
+  const RESTR_BG='#fee2e2';
+  // ★本日の列は太枠で囲む（2026-10-24 ユーザー指示・ア案）。色はカレンダーの「今日」と同じ
+  const TODAY_LINE='#c2410c';
+  const todayCol=(dk)=>dk===todayDk?{borderLeft:'3px solid '+TODAY_LINE,borderRight:'3px solid '+TODAY_LINE}:{};
   // ★時刻を持たない枠の置き方（2026-10-23 ユーザー指示）
   //   ・12:00 の枠はやめる（ほとんど入らない）。**その場所に「午前」を置く**（午前の入庫＝お昼までに入る分）
   //   ・「午後」「入庫未定」は**スクロールする表の外**に出し、画面の下に据え置く（入庫未定がいちばん下）
@@ -4337,18 +4341,20 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const inspGroups=(rows)=>{const g=[];rows.forEach(x=>{const last=g[g.length-1];
     if(last&&last.cid===x.r.course)last.items.push(x);else g.push({cid:x.r.course,items:[x]});});return g;};
   // 1つの時間の行。表の中でも、下に据え置く表でも同じものを使う
-  const slotRow=(slot)=>{
+  const slotRow=(slot,last)=>{
     const sp=isSpecialSlot(slot);
     const thin=THIN.indexOf(slot)>=0;
     const pinned=WEEK_PIN.indexOf(slot)>=0;
     // ★30分ごとの帯。午前・未定・午後は時刻を持たない枠なので薄紫
     const h0=!sp&&isHourSlot(slot);
     const cellBand=h0?{background:BAND_BG}:{};
+    // 本日の列。いちばん下の行だけ枠の底も閉じる
+    const tcol=(dk)=>({...todayCol(dk),...(last&&dk===todayDk?{borderBottom:'3px solid '+TODAY_LINE}:{})});
     return <tr key={slot} data-wband={h0?'1':'0'} data-wpin={pinned?'1':'0'} data-wthin={thin?'1':'0'}>
       <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?{background:'#faf5ff',color:'#7c3aed'}:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>
         {slot==='未定'?'入庫未定':slot==='午前'?'午前入庫':slot==='午後'?'午後入庫':slot}</td>
       {days.map(d=>{const dk=dkOf(d);
-        if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{})}}/>;
+        if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{}),...tcol(dk)}}/>;
         // ★入庫制限（手で入れた分＋マッハ車検の自動分）。必ず restrCovers を通して見る
         const rs=restrictionOf?restrictionOf(dk):null;
         const rst=!sp&&restrCovers(rs,slot);
@@ -4360,10 +4366,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         const list=slotEntries(dk,slot);
         if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} title={rsTip}
           onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
-          style={{...TD,...cellSty,color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
+          style={{...TD,...cellSty,...tcol(dk),color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
           onMouseEnter={e=>{if(!rst){e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}}
           onMouseLeave={e=>{if(!rst){e.currentTarget.style.background=cellSty.background||'';e.currentTarget.style.color='#cbd5e1';}}}>＋</td>;
-        return <td key={dk} data-wrcell={rst?'1':'0'} title={rsTip} style={{...TD,...cellSty}}>
+        return <td key={dk} data-wrcell={rst?'1':'0'} title={rsTip} style={{...TD,...cellSty,...tcol(dk)}}>
           {list.map(({k,r},ri)=>(
             <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
               style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
@@ -4426,7 +4432,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                 <th style={{...TH,width:54,minWidth:54}}></th>
                 {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
                   const dowCol=i===6?'#ef4444':i===5?'#2563eb':'#1b2129';
-                  return <th key={dk} style={{...TH,...(dk===todayDk?{background:'#cffafe'}:{})}}>
+                  return <th key={dk} data-wtoday={dk===todayDk?'1':'0'}
+                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:'3px solid '+TODAY_LINE}:{}),...todayCol(dk)}}>
                     {/* ★日付のバッジ。押すとその日の1日表示へ移る（2026-10-23 ユーザー指示） */}
                     <button data-wday={dk} title={(d.getMonth()+1)+'/'+d.getDate()+' のスケジュールを開く'}
                       onClick={()=>onPickDay&&onPickDay(d.getFullYear(),d.getMonth(),d.getDate())}
@@ -4446,7 +4453,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               <tr>
                 <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
                 {days.map(d=>{const dk=dkOf(d);
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk)}}/>;
                   // ★台数制限（2026-10-23 ユーザー指示）。制限をかけた日は「最大N台」を出し、
                   //   **その台数に達したら**（＝もう受けられない）欄ぜんぶを赤い網掛けにする。
                   const lim=(inspLimits||{})[dk];
@@ -4454,7 +4461,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   const full=lim!=null&&cnt>=lim;
                   return <td key={dk} data-wins={dk} data-wfull={full?'1':'0'}
                     title={lim!=null?('車検の台数制限　最大'+lim+'台（いま'+cnt+'台）'+(full?'　★上限に達しています':''))  :undefined}
-                    style={{...TD,background:full?RESTR_BG:'#fff7ed',padding:'3px'}}>
+                    style={{...TD,background:full?RESTR_BG:'#fff7ed',padding:'3px',...todayCol(dk)}}>
                     <div style={INS_GRP}>
                       {inspGroups(inspOf(dk)).map((g,gi)=>(
                         <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
@@ -4480,11 +4487,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               <tr>
                 <td style={{...TM,color:'#475569'}}>出勤</td>
                 {days.map(d=>{const dk=dkOf(d);
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR}}/>;
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk)}}/>;
                   const offs=((dayOffData||{})[dk]||[]).concat((paidLeaveData||{})[dk]||[]);
                   const on=(staffList||[]).filter(s=>offs.indexOf(s.name)<0);
                   const off=(staffList||[]).filter(s=>offs.indexOf(s.name)>=0);
-                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1}}>
+                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk)}}>
                     {on.map(s=><span key={s.uid||s.name} style={SB} title={s.name}>{staffIni(s)}</span>)}
                     {off.length>0&&<span style={{display:'inline-block',width:1,height:13,background:'#e2e8f0',margin:'0 5px',verticalAlign:'middle'}}/>}
                     {off.map(s=><span key={s.uid||s.name} style={SB_OFF} title={s.name+'（休み）'}>{staffIni(s)}</span>)}
@@ -4501,7 +4508,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         <div data-wfoot="1" style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white'}}>
           <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
             <tbody>
-              {WEEK_PIN.map(slot=>slotRow(slot))}
+              {WEEK_PIN.map((slot,ix)=>slotRow(slot,ix===WEEK_PIN.length-1))}
             </tbody>
           </table>
         </div>

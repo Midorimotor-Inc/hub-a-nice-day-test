@@ -242,14 +242,14 @@ const seed = {
       const td = document.querySelector('[data-wins="' + dk + '"]');
       if (!td) return null;
       const tag = td.querySelector('[data-wlim]');
-      return { flag: td.getAttribute('data-wfull'), bg: getComputedStyle(td).backgroundImage,
+      return { flag: td.getAttribute('data-wfull'), bg: getComputedStyle(td).backgroundImage, bgc: getComputedStyle(td).backgroundColor,
         tag: tag ? tag.innerText.replace(/s+/g, '') : '', title: td.getAttribute('title') || '',
         n: td.querySelectorAll('[data-wcb]').length, add: !!td.querySelector('[data-wiadd]') };
     };
     return { full: one(full), room: one(room), none: one(none) };
   }, [WED, SUN, MON]);
   t('★制限をかけた日に「最大N台」が出る', !!lim.full && lim.full.tag === '最大2台', lim.full);
-  t('★上限に達したら車検の欄が赤い網掛けになる（2台/最大2台）', !!lim.full && lim.full.flag === '1' && /repeating-linear-gradient/.test(lim.full.bg), lim.full);
+  t('★上限に達したら車検の欄が薄いピンクになる（2台/最大2台）', !!lim.full && lim.full.flag === '1' && lim.full.bgc === 'rgb(254, 226, 226)', lim.full);
   t('★まだ空きがある日は網掛けにしない（1台/最大5台）', !!lim.room && lim.room.tag === '最大5台' && lim.room.flag === '0', lim.room);
   t('★制限をかけていない日は何も出さない', !!lim.none && lim.none.tag === '' && lim.none.flag === '0', lim.none);
   t('なぞると「最大N台（いま○台）」が出る', !!lim.full && /最大2台（いま2台）/.test(lim.full.title), lim.full);
@@ -263,7 +263,7 @@ const seed = {
         [...document.querySelectorAll('[data-wrcell]')].find(x => (x.getAttribute('data-wadd') || '').indexOf(dk + '/' + slot) === 0);
       if (!e) return null;
       const st = getComputedStyle(e);
-      return { flag: e.getAttribute('data-wrcell'), bg: st.backgroundImage, title: e.getAttribute('title') || '', add: !!e.getAttribute('data-wadd'), cur: st.cursor };
+      return { flag: e.getAttribute('data-wrcell'), bg: st.backgroundImage, bgc: st.backgroundColor, title: e.getAttribute('title') || '', add: !!e.getAttribute('data-wadd'), cur: st.cursor };
     };
     const head = document.querySelector('[data-wrestr="' + d + '"]');
     return {
@@ -274,7 +274,9 @@ const seed = {
       legend: [...document.querySelectorAll('[data-weekview] *')].filter(x => /マッハ車検$/.test(x.textContent || '') && x.children.length === 0).length,
     };
   }, [TUE, WED]);
-  t('★制限の中（10:00）は網掛けになる', !!rstr.in1 && rstr.in1.flag === '1' && /repeating-linear-gradient/.test(rstr.in1.bg), rstr.in1);
+  // ★2026-10-24 ユーザー決定：斜線のゼブラはやめて、1日表示と同じベタの薄いピンク（#fee2e2）
+  t('★制限の中（10:00）はベタの薄いピンクになる', !!rstr.in1 && rstr.in1.flag === '1' && rstr.in1.bgc === 'rgb(254, 226, 226)', rstr.in1);
+  t('★斜線のゼブラは使わない（行の境目でズレるため）', !!rstr.in1 && !/repeating-linear-gradient/.test(rstr.in1.bg), rstr.in1);
   t('★10:30 も制限の中なので網掛け', !!rstr.in2 && rstr.in2.flag === '1', rstr.in2);
   // ★マッハ車検（09:00入庫）の自動制限 09:00〜10:00 もここに出る
   t('★マッハ車検の自動制限（09:30）も網掛けになる', !!rstr.mach && rstr.mach.flag === '1' && /マッハ車検/.test(rstr.mach.title), rstr.mach);
@@ -327,6 +329,31 @@ const seed = {
     !!lay.gogo && lay.gogo.inFoot && !!lay.mitei && lay.mitei.inFoot, { gogo: lay.gogo, mitei: lay.mitei });
   t('★据え置きの表は画面のいちばん下にある', !!lay.mitei && lay.boxBottom - (lay.mitei.top + lay.mitei.h) < 12, { mitei: lay.mitei, bottom: lay.boxBottom });
   t('★18:00 は細い', !!lay.t18 && lay.t18.thin === '1' && lay.t18.h < lay.t9.h, { t18: lay.t18, t9: lay.t9 });
+
+  // ── ②-8 本日の列を太枠で囲む（2026-10-24 ユーザー指示・ア案）──
+  console.log(String.fromCharCode(10) + '■ ②-8 本日の列を太枠で囲む');
+  const tdy = await page.evaluate(() => {
+    const wv = document.querySelector('[data-weekview]');
+    const th = wv.querySelector('[data-wtoday="1"]');
+    if (!th) return null;
+    const ix = [...th.parentElement.children].indexOf(th);
+    const other = [...wv.querySelectorAll('[data-wtoday]')].find(x => x.getAttribute('data-wtoday') === '0');
+    const px = e => { const st = getComputedStyle(e); return { l: st.borderLeftWidth, r: st.borderRightWidth, t: st.borderTopWidth, b: st.borderBottomWidth, c: st.borderLeftColor }; };
+    const rows = [...wv.querySelectorAll('tr')].filter(r => r.children.length > ix);
+    const col = rows.map(r => px(r.children[ix]));
+    const foot = document.querySelector('[data-wfoot]');
+    const fr = foot ? [...foot.querySelectorAll('tr')] : [];
+    const lastCell = fr.length ? fr[fr.length - 1].children[ix] : null;
+    return { head: px(th), other: other ? px(other) : null, thick: col.filter(x => parseFloat(x.l) >= 3 && parseFloat(x.r) >= 3).length, rows: col.length,
+      bottom: lastCell ? px(lastCell).b : '' };
+  });
+  t('★本日の見出しに印が付く', !!tdy, tdy);
+  t('★本日の列の左右が太い（3px以上）', !!tdy && parseFloat(tdy.head.l) >= 3 && parseFloat(tdy.head.r) >= 3, tdy && tdy.head);
+  t('★上も閉じている（見出しの上に線）', !!tdy && parseFloat(tdy.head.t) >= 3, tdy && tdy.head);
+  t('★いちばん下も閉じている（据え置きの表の最後）', !!tdy && parseFloat(tdy.bottom) >= 3, tdy && tdy.bottom);
+  t('★色はカレンダーの今日と同じオレンジ', !!tdy && /194, 65, 12/.test(tdy.head.c), tdy && tdy.head.c);
+  t('★本日の列は上から下までずっと太枠', !!tdy && tdy.rows >= 10 && tdy.thick === tdy.rows, tdy);
+  t('ほかの日は太くしない', !!tdy && !!tdy.other && parseFloat(tdy.other.l) < 3, tdy && tdy.other);
 
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');
