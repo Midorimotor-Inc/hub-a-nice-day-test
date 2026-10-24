@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1792733088429';
+  window.__APP_BUILD='build-1792826714915';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.70.4';
+const MOBILE_VERSION='3.71';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3991,13 +3991,20 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
               </div>
             );
           })()}
-          {/* 納車（この日に納車する車検・予定）を派生表示。タップで元の予約を開く。deliveryDateは任意項目 */}
+          {/* ★納車はタイムスケジュールの【納車時間の枠の中】に出す（2026-10-24 ユーザー指示）。
+              以前は一番上に緑の箱でまとめて出していたが、何時の納車なのか枠を見て分からなかった。
+              PC版と同じ考え方（_dlBySlot）。deliveryDate は任意項目。タップで元の予約が開く。 */}
           {(()=>{
-            const dls=[];
+            const dlBySlot={};
+            const putDl=(r,extra)=>{
+              const b=getBaseSlot(r.deliveryTime||'未定');
+              const slot=SCHED_SLOTS.indexOf(b)>=0?b:'未定';
+              (dlBySlot[slot]=dlBySlot[slot]||[]).push({r,...extra});
+            };
             Object.keys(inspData||{}).forEach(wdk=>{
               (inspData[wdk]||[]).forEach((r,ix)=>{ if(!r||!r.name||r.deliveryDate!==dk||r.bookingStatus==='cancelled')return;
                 if((normStore(r.store)||'honten')!==vsId)return;
-                dls.push({r,wdk,ix,kind:'insp'});
+                putDl(r,{wdk,ix,kind:'insp'});
               });
             });
             Object.keys(sd||{}).forEach(wdk=>{
@@ -4005,39 +4012,33 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                 const r=sd[wdk][sk];
                 if(!r||!r.name||r.deliveryDate!==dk)return;
                 if(wdk===dk&&getBaseSlot(sk)===getBaseSlot(r.deliveryTime||'未定'))return; // 自分自身の枠と重なる時は出さない
-                dls.push({r,wdk,sk,kind:'sched'});
+                putDl(r,{wdk,sk,kind:'sched'});
               });
             });
-            if(dls.length===0)return null;
-            const slotIx=v=>{const i=SCHED_SLOTS.indexOf(getBaseSlot(v||'未定'));return i<0?999:i;};
-            dls.sort((a,b)=>slotIx(a.r.deliveryTime)-slotIx(b.r.deliveryTime));
-            return(
-              <div style={{margin:'0 0 8px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:12,padding:'8px 10px'}}>
-                <div style={{fontWeight:900,fontSize:12,color:'#047857',marginBottom:4}}>🏁 納車（{dls.length}件）</div>
-                {dls.map((d,di)=>{
-                  const r=d.r,wl=d.wdk.split('-');
-                  const loaner=d.kind==='insp'
-                    ?(r.rentalLabel||getLoanerLabel(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`,myCars)||'')
-                    :(r.rentalLabel||getLoanerLabel(myLoanerRes,d.wdk,r.name,`sched-${d.wdk}-${d.sk}`,myCars)||'');
-                  return(
-                  <div key={'dl-'+d.kind+'-'+d.wdk+'-'+(d.ix??d.sk)+'-'+di}
-                    onClick={()=>d.kind==='insp'?onOpenEdit({type:'insp',dk:d.wdk,idx:d.ix,isNew:false}):onOpenEdit({type:'sched',dk:d.wdk,slot:d.sk,isNew:false})}
-                    style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',padding:'6px 2px',borderTop:'1px dashed #a7f3d0',cursor:'pointer'}}>
-                    <span style={{fontSize:11,fontWeight:800,color:'#047857'}}>{deliverySlotLabel(r.deliveryTime||'未定')}</span>
-                    <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
-                    {r.carType&&<span style={{fontSize:11,color:'#64748b'}}>🚗{r.carType}</span>}
-                    {loaner&&<span style={{fontSize:11,color:'#0284c7'}}>{!r.rentalLabel&&d.kind==='insp'&&getLoanerLocked(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`)&&'🔒 '}{loaner}</span>}
-                    {/* ★納車日の備考（濃い字）と入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
-                    {r.deliveryNote&&<span style={{fontSize:11,color:'#064e3b',fontWeight:700}}>{r.deliveryNote}</span>}
-                    {r.noteToDelivery&&(d.kind==='insp'?r.note:r.content)&&
-                      <span style={{fontSize:11,color:'#374151',background:'#d1fae5',border:'1px solid #6ee7b7',borderRadius:6,padding:'0 6px'}}>{(d.kind==='insp'?r.note:r.content)}</span>}
-                    <span style={{marginLeft:'auto',fontSize:10,fontWeight:800,color:'#047857',whiteSpace:'nowrap'}}>{(r.entryDate&&r.entryDate!==d.wdk)?r.entryDate.split('-').slice(1).join('/')+'入庫':wl[1]+'/'+wl[2]+(d.kind==='insp'?'車検':'予定')} → 納車 ›</span>
-                  </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+            // 納車の1行（枠の中に出す緑の行）
+            const dlRow=(d,di)=>{
+              const r=d.r,wl=d.wdk.split('-');
+              const loaner=d.kind==='insp'
+                ?(r.rentalLabel||getLoanerLabel(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`,myCars)||'')
+                :(r.rentalLabel||getLoanerLabel(myLoanerRes,d.wdk,r.name,`sched-${d.wdk}-${d.sk}`,myCars)||'');
+              return (
+                <div key={'dl-'+d.kind+'-'+d.wdk+'-'+(d.ix??d.sk)+'-'+di} data-mdl="1"
+                  onClick={()=>d.kind==='insp'?onOpenEdit({type:'insp',dk:d.wdk,idx:d.ix,isNew:false}):onOpenEdit({type:'sched',dk:d.wdk,slot:d.sk,isNew:false})}
+                  style={{marginBottom:4,padding:'3px 6px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:8,cursor:'pointer'}}>
+                  <span style={{fontSize:10,fontWeight:900,color:'#fff',background:'#047857',borderRadius:5,padding:'1px 5px',marginRight:5}}>🏁 納車</span>
+                  <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
+                  {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
+                  {loaner&&<span style={{fontSize:10,color:'#0284c7',marginLeft:5}}>{!r.rentalLabel&&d.kind==='insp'&&getLoanerLocked(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`)&&'🔒 '}{loaner}</span>}
+                  <span style={{fontSize:10,fontWeight:800,color:'#047857',marginLeft:5,whiteSpace:'nowrap'}}>
+                    {(r.entryDate&&r.entryDate!==d.wdk)?r.entryDate.split('-').slice(1).join('/')+'入庫':wl[1]+'/'+wl[2]+(d.kind==='insp'?'車検':'予定')} ›</span>
+                  {/* ★納車日の備考（濃い字）と入庫時の備考（薄い緑・スイッチが入っている時だけ）（2026-10-02・C案） */}
+                  {r.deliveryNote&&<div style={{fontSize:11,color:'#064e3b',fontWeight:700,marginTop:1}}>{r.deliveryNote}</div>}
+                  {r.noteToDelivery&&(d.kind==='insp'?r.note:r.content)&&
+                    <div style={{fontSize:11,color:'#374151',marginTop:1}}>{(d.kind==='insp'?r.note:r.content)}</div>}
+                </div>
+              );
+            };
+            return (
           <div style={{background:'white',borderRadius:12,overflow:'hidden',border:'1px solid #e0f2fe'}}>
             {SCHED_SLOTS.map(slot=>{
               const day=sd[dk]||{};
@@ -4046,6 +4047,9 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
               if(slot==='未定'){ if(day['12:30'])subKeys.push('12:30'); subKeys.push(...Object.keys(day).filter(k=>k.startsWith('12:30__'))); }
               const dks=subKeys.filter(k=>{const r=day[k];return r&&r.name;});
               const isEmpty=dks.length===0;
+              // ★その枠に出す納車（2026-10-24）。整備が無くても納車があれば空には見せない
+              const dls=dlBySlot[slot]||[];
+              const emptyLook=isEmpty&&dls.length===0;
               const spc=isSpecialSlot(slot);
               const restricted=isSlotRestricted(slot); // 入庫制限の時間帯（PC版と同じく整備予約のみ制限）
               // 制限中でも「制限解除の作業」の予約が入っている枠は、入庫時間の欄だけ制限色を残して
@@ -4056,11 +4060,11 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
               const _sk=_r0?dk+'|'+(_r0.name||dks[0]):null;
               const _schedArr=_r0?((arrivedOv&&_sk in arrivedOv)?arrivedOv[_sk]:!!_r0.arrived):false;
               return(
-                <div key={slot} style={{display:'flex',borderBottom:'1px solid #f0fdfa',background:restricted?'#fee2e2':isEmpty?(spc?'#fdfaff':'white'):(spc?'#f5f0ff':'#f0fdfa')}}>
+                <div key={slot} data-mslot={slot} style={{display:'flex',borderBottom:'1px solid #f0fdfa',background:restricted?'#fee2e2':emptyLook?(spc?'#fdfaff':'white'):(spc?'#f5f0ff':'#f0fdfa')}}>
                   {/* ★時刻欄をタップすると、その枠の予約に入庫済みチェックが入る */}
                   {/* 押した直後は手元の保持を優先（古いキャッシュで点滅しないように） */}
                   <div onClick={e=>{e.preventDefault();e.stopPropagation();const k=dks[0];const r0=k&&day[k];if(r0&&r0.name&&onToggleArrived)onToggleArrived('sched',dk,k);}}
-                    style={{width:44,flexShrink:0,padding:'8px 4px',fontSize:11,fontWeight:700,color:_schedArr?'#dc2626':(spc?(isEmpty?'#7c3aed':'#9333ea'):(isEmpty?'#475569':'#0e7490')),background:_schedArr?'#fde047':undefined,textAlign:'center',borderRight:`2px solid ${spc?(isEmpty?'#f3e8ff':'#d8b4fe'):(isEmpty?'#f0f9ff':'#99f6e4')}`}}>{_schedArr?'✓':slot}</div>
+                    style={{width:44,flexShrink:0,padding:'8px 4px',fontSize:11,fontWeight:700,color:_schedArr?'#dc2626':(spc?(emptyLook?'#7c3aed':'#9333ea'):(emptyLook?'#475569':'#0e7490')),background:_schedArr?'#fde047':undefined,textAlign:'center',borderRight:`2px solid ${spc?(emptyLook?'#f3e8ff':'#d8b4fe'):(emptyLook?'#f0f9ff':'#99f6e4')}`}}>{_schedArr?'✓':slot}</div>
                   <div style={{flex:1,padding:'5px 9px',background:exemptInSlot?'white':undefined}}>
                     {dks.map((key,ki)=>{
                       const r=day[key];
@@ -4078,6 +4082,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                         </div>
                       );
                     })}
+                    {dls.map(dlRow)}
                     {!otherView&&<div onClick={()=>{
                         if(isHoliday){blockNew();return;}
                         const free=subKeys.find(k=>!day[k]||!day[k].name)||makeSlotKey(slot,subKeys.length);
@@ -4091,6 +4096,8 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
               );
             })}
           </div>
+            );
+          })()}
         </div>
         <div style={{margin:'12px 12px 20px'}}>
           <div style={{fontWeight:900,fontSize:13,color:'#7c3aed',marginBottom:6}}>📝 備考・メモ</div>
