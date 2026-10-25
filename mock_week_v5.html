@@ -163,9 +163,10 @@
       ・<b>車検（クイック・レギュラー）</b>：枠ではなく<b>台数</b>で見ます（2026-10-25 決定）。
         1日6台まで（制限を掛けた日はその数）、<b>レギュラーは1日3台まで</b>。右上に「あと3台」と出ます。
         見本として 10/23（金）に「最大3台」の制限を掛けてあります。<br>
-      ・<b>整備</b>：選んだ<b>所要時間が続けて取れる所だけ</b>明るくします。30分なら1枠、1時間なら2枠続けて空いている所。
-        <b>入庫制限（赤）と休業日は空きに数えません。</b>
-        <b>1時間なら30分の枠2つをひとまとめ</b>にして1つの枠で囲い、「60分」と出します（1時間半なら3つ）。<br>
+      ・<b>整備</b>：<b>空いている「続き」を丸ごと1つの枠</b>で囲います。
+        13:00〜15:00 が空いていれば、1時間ずつに刻まず<b>2時間まとめて1つの枠</b>。
+        その中のどこで取るか（13:30〜14:30 など）は<b>使う人が決めます</b>。
+        選んだ所要時間より<b>短い続きは取れないので暗く</b>します。<b>入庫制限（赤）と休業日は空きに数えません。</b><br>
       ・<b>【保留】12ヶ月点検だけは朝預かり・夕方返し</b>なので、この所要時間の考え方に当てはまりません（2026-10-25 ユーザー指示・いったん保留）。<br>
       ・<b>暗くするだけで、押せなくはしません</b>（どうしても入れたい時は暗い所にも入れられます）。
     </div>
@@ -345,33 +346,34 @@
     DAYS.forEach(function(d,i){
       var cell=function(sl){return tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]');};
       var freeAt=function(sl){var c=cell(sl);return !!(c&&c.dataset.free&&!c.dataset.rst);};
-      // 続けて空いている所を見つけ、所要時間ぶんずつ **ひとかたまり** にして囲う
+      // ★空いている「続き」を**丸ごと1つの枠**で囲う（2026-10-25 ユーザー指示）。
+      //   1時間ずつに刻まない。13:00〜15:00 が空いていれば 2時間まとめて1つの枠。
+      //   その中のどこで取るか（13:30〜14:30 など）は使う人が決める。
+      //   所要時間より短い続きは取れないので暗くする。
       var used={};
       var si=0;
       while(si<TIMES.length){
         if(!freeAt(TIMES[si])){si++;continue;}
         var run=si; while(run<TIMES.length&&freeAt(TIMES[run]))run++;   // [si,run) が続けて空き
-        var p=si;
-        while(p+need<=run){
-          for(var k=0;k<need;k++){
-            var c=cell(TIMES[p+k]); if(!c)continue;
+        if(run-si>=need){
+          for(var k=si;k<run;k++){
+            var c=cell(TIMES[k]); if(!c)continue;
             c.classList.add('blk');
-            if(k===0)c.classList.add('top');
-            if(k===need-1)c.classList.add('bot');
-            used[TIMES[p+k]]=true;
+            if(k===si)c.classList.add('top');
+            if(k===run-1)c.classList.add('bot');
+            used[TIMES[k]]=true;
           }
-          var head=cell(TIMES[p]);
-          if(head){ var s3=document.createElement('span'); s3.className='badge'; s3.textContent=mins+'分'; head.appendChild(s3); }
-          hit++; p+=need;
+          hit++;
         }
         si=run;
       }
-      // かたまりに入らなかった所は暗く
+      // 取れない所（続きが短い・埋まっている）は暗く
       TIMES.forEach(function(sl){ if(!used[sl]){ var c=cell(sl); if(c)c.classList.add('dim'); } });
       ['午前入庫','午後入庫','時間未定'].forEach(function(sl){ var c=cell(sl); if(c)c.classList.add('dim'); });
       [].forEach.call(tbl.querySelectorAll('[data-ins="'+i+'"]'),function(c){c.classList.add('dim');});
     });
-    res.textContent=mins+'分とれる所が '+hit+' か所';
+    var nm=({30:'30分',60:'1時間',90:'1時間半',120:'2時間'})[mins]||(mins+'分');
+    res.textContent=nm+'以上とれる空きが '+hit+' か所';
   }
 </script>
 </body>
