@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792830311535';
+    window.__APP_BUILD='build-1792898024644';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.73';
+const APP_VERSION = '3.74';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4266,6 +4266,19 @@ const StaffRegisterModal=memo(({isOpen,onClose,staffListH,staffListS,onSave})=>{
 //   ★この画面は読むだけ。保存はすべて今までの予約カード（BookingModal）を通る。
 // ════════════════════════════════════════════════════════════
 const WEEK_DOW = ['月','火','水','木','金','土','日'];
+// ── 空き探し（v3.74・2026-10-25 ユーザー決定）──────────────────────
+//  ・マッハ車検は 10:00 と 14:00 が基本の枠。空いている方をオレンジで囲い「マッハ可」、
+//    すでに入っている方は赤い札で「マッハ車検」（入庫から1時間＝2枠）
+//  ・クイック・レギュラーは枠ではなく **台数** で見る（1日6台まで／制限を掛けた日はその数、レギュラーは3台まで）
+//  ・整備は **空いている続きを丸ごと1つの枠**で囲う（1時間ずつに刻まない）。
+//    どこで取るかは使う人が決める。選んだ所要時間より短い続きは取れないので暗くする
+//  ・空いていない所は **ほぼ黒の網掛け（45%）**。押せなくはしない
+const MACH_FIND_SLOTS=['10:00','14:00'];
+const WEEK_MINS=[{m:30,label:'30分'},{m:60,label:'1時間'},{m:90,label:'1時間半'},{m:120,label:'2時間'}];
+const WEEK_DAY_LIMIT=6;     // その日に受けられる車検の台数（制限を掛けた日はその数）
+const WEEK_REG_LIMIT=3;     // レギュラー車検は1日3台まで
+const WEEK_DIM='rgba(0,0,0,.45)';
+const weekMinOf=(x)=>{const m=String(x||'').match(/^(\d+):(\d+)$/);return m?Number(m[1])*60+Number(m[2]):-1;};
 // 月曜はじまりの週頭
 const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
 // スタッフの1文字。**既定は名前の先頭1文字**。かぶる時・ご希望はスタッフ設定の「1文字」で手で決める。
@@ -4283,6 +4296,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const [sbw,setSbw]=useState(0);
   // 内容の吹き出し（1日表示の NoteCell と同じ見た目で出す）
   const [tip,setTip]=useState(null);
+  // 最大化（ブラウザの全画面）と空き探し
+  const fsRef=useRef(null);
+  const [isFs,setIsFs]=useState(false);
+  const [find,setFind]=useState({open:false,kind:'insp',course:1,mins:30,run:false});
+  useEffect(()=>{const h=()=>{try{setIsFs(!!document.fullscreenElement);}catch(e){}};
+    document.addEventListener('fullscreenchange',h);return()=>document.removeEventListener('fullscreenchange',h);},[]);
+  useEffect(()=>{ setFind(p=>({...p,run:false})); },[weekStart,storeId]);
+  useEffect(()=>{ if(!isOpen) setFind(p=>({...p,open:false,run:false})); },[isOpen]);
   useLayoutEffect(()=>{
     if(!isOpen)return;
     const el=scRef.current; if(!el)return;
@@ -4363,6 +4384,64 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     return o;})();
   // ★18:00 はほとんど入らないので細く（12:00 は枠ごとやめた）
   const THIN=['18:00'];
+  // ★探した結果。dayDim＝その日まるごと暗く／dayLab＝車検の欄に出す札／cell＝枠ごとの印
+  const weekTimes=mainSlots.filter(x=>!isSpecialSlot(x));
+  const sr=find.run?(()=>{
+    const dayDim={},dayLab={},cell={};
+    days.forEach(d=>{
+      const dk=dkOf(d);
+      if(isClosed(d)){dayDim[dk]=true;return;}
+      if(find.kind==='insp'){
+        const rows=inspOf(dk);
+        if(find.course===1){
+          const taken=rows.filter(x=>Number(x.r.course)===1).map(x=>getBaseSlot(x.r.time||''));
+          const free=MACH_FIND_SLOTS.filter(t=>taken.indexOf(t)<0);
+          if(!free.length){dayDim[dk]=true;return;}
+          dayLab[dk]=free.join('・')+' 空き';
+          MACH_FIND_SLOTS.forEach(t=>{
+            const ix=weekTimes.indexOf(t); if(ix<0)return;
+            const pair=[weekTimes[ix],weekTimes[ix+1]].filter(Boolean);
+            const isFree=free.indexOf(t)>=0;
+            pair.forEach((sl,k)=>{
+              const key=dk+'|'+sl, o=cell[key]||(cell[key]={});
+              if(isFree){o.blk=true;o.top=(k===0);o.bot=(k===pair.length-1);}
+              if(k===0){o.lab=isFree?'マッハ可':'マッハ車検';o.labKind=isFree?'ok':'mach';}
+            });
+          });
+        }else{
+          const lim=(inspLimits||{})[dk];
+          let rest=(lim!=null?lim:WEEK_DAY_LIMIT)-rows.length;
+          if(find.course===3)rest=Math.min(rest,WEEK_REG_LIMIT-rows.filter(x=>Number(x.r.course)===3).length);
+          if(rest<=0){dayDim[dk]=true;return;}
+          dayLab[dk]='あと'+rest+'台';
+        }
+      }else{
+        const need=Math.ceil(find.mins/30);
+        const rs=restrictionOf?restrictionOf(dk):null;
+        const freeAt=(sl)=>slotEntries(dk,sl).length===0&&!restrCovers(rs,sl);
+        let i=0;
+        while(i<weekTimes.length){
+          if(!freeAt(weekTimes[i])){i++;continue;}
+          let run=i;
+          while(run+1<weekTimes.length&&freeAt(weekTimes[run+1])
+            &&weekMinOf(weekTimes[run+1])-weekMinOf(weekTimes[run])===30) run++;
+          if(run-i+1>=need){
+            for(let k=i;k<=run;k++){const key=dk+'|'+weekTimes[k],o=cell[key]||(cell[key]={});
+              o.blk=true;o.top=(k===i);o.bot=(k===run);}
+          }
+          i=run+1;
+        }
+      }
+    });
+    return {dayDim,dayLab,cell};
+  })():null;
+  const srCell=(dk,slot)=>sr?(sr.cell[dk+'|'+slot]||null):null;
+  // 暗くする覆い（文字の上に重ねる）
+  const DimOv=()=><span style={{position:'absolute',inset:0,background:WEEK_DIM,pointerEvents:'none',zIndex:3}}/>;
+  const BLK={borderLeft:'2px solid #f59e0b',borderRight:'2px solid #f59e0b',background:'#fffbe6'};
+  const LAB=(kind)=>({position:'absolute',left:'50%',top:'100%',transform:'translate(-50%,-50%)',
+    fontSize:11,fontWeight:900,whiteSpace:'nowrap',zIndex:4,padding:'1px 8px',borderRadius:9,
+    color:'white',background:kind==='ok'?'#d97706':'#b91c1c'});
   const isHourSlot=(x)=>/:00$/.test(String(x||''));
   // コースごとのかたまりに分ける（並びは既に マ→ク→レ の順）
   const inspGroups=(rows)=>{const g=[];rows.forEach(x=>{const last=g[g.length-1];
@@ -4370,6 +4449,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   // 1つの時間の行。表の中でも、下に据え置く表でも同じものを使う
   const slotRow=(slot,last)=>{
     const sp=isSpecialSlot(slot);
+    // ★空き探しの印（2026-10-25）。dayDim＝その日まるごと／blk＝明るい枠／lab＝真ん中の札
+    const sDim=(dk)=>!!(sr&&(sr.dayDim[dk]||(find.kind==='sched'&&!srCell(dk,slot))));
+    const sBlk=(dk)=>{const b=srCell(dk,slot);
+      return (b&&b.blk)?{...BLK,...(b.top?{borderTop:'2px solid #f59e0b'}:{}),...(b.bot?{borderBottom:'2px solid #f59e0b'}:{})}:{};};
+    const sLab=(dk)=>{const b=srCell(dk,slot);
+      return (b&&b.lab)?<span style={LAB(b.labKind)}>{b.lab}</span>:null;};
     const thin=THIN.indexOf(slot)>=0;
     const pinned=WEEK_PIN.indexOf(slot)>=0;
     // ★30分ごとの帯。午前・未定・午後は時刻を持たない枠なので薄紫
@@ -4381,7 +4466,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
       <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?SP_TM:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>
         {spName(slot)}</td>
       {days.map(d=>{const dk=dkOf(d);
-        if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{}),...tcol(dk)}}/>;
+        if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...(thin?{height:15}:{}),...tcol(dk),
+          ...(sDim(dk)?{position:'relative'}:{})}}>{sDim(dk)&&<DimOv/>}</td>;
         // ★入庫制限（手で入れた分＋マッハ車検の自動分）。必ず restrCovers を通して見る
         const rs=restrictionOf?restrictionOf(dk):null;
         const rst=!sp&&restrCovers(rs,slot);
@@ -4391,12 +4477,16 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         const cellSty={...(rst?{background:RESTR_BG}:cellBand),...(thin?{height:15}:{}),
           ...(sp?{background:rst?RESTR_BG:SP_CELL}:{})};
         const list=slotEntries(dk,slot);
-        if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} title={rsTip}
+        if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
           onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
-          style={{...TD,...cellSty,...tcol(dk),color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
-          onMouseEnter={e=>{if(!rst){e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}}
-          onMouseLeave={e=>{if(!rst){e.currentTarget.style.background=cellSty.background||'';e.currentTarget.style.color='#cbd5e1';}}}>＋</td>;
-        return <td key={dk} data-wrcell={rst?'1':'0'} title={rsTip} style={{...TD,...cellSty,...tcol(dk)}}>
+          style={{...TD,...cellSty,...tcol(dk),...sBlk(dk),position:'relative',
+            color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
+          onMouseEnter={e=>{if(!rst&&!sr){e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}}
+          onMouseLeave={e=>{if(!rst&&!sr){e.currentTarget.style.background=cellSty.background||'';e.currentTarget.style.color='#cbd5e1';}}}>
+          ＋{sLab(dk)}{sDim(dk)&&<DimOv/>}</td>;
+        return <td key={dk} data-wrcell={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
+          style={{...TD,...cellSty,...tcol(dk),...sBlk(dk),position:'relative'}}>
+          {sLab(dk)}{sDim(dk)&&<DimOv/>}
           {list.map(({k,r},ri)=>(
             <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
               style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
@@ -4424,8 +4514,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:900,display:'flex',
       alignItems:'center',justifyContent:'center',padding:0}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} data-weekview="1"
-        style={{background:'white',borderRadius:12,width:'99.5vw',height:'98.5vh',display:'flex',
+      <div ref={fsRef} onClick={e=>e.stopPropagation()} data-weekview="1"
+        style={{background:'white',borderRadius:isFs?0:12,width:isFs?'100vw':'99.5vw',height:isFs?'100vh':'98.5vh',display:'flex',
           flexDirection:'column',overflow:'hidden',boxShadow:'0 30px 80px rgba(0,0,0,.45)'}}>
         {/* 見出し＋週送り */}
         <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:10,padding:'6px 12px',
@@ -4448,13 +4538,76 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   color:v===0?'#0e5a6b':'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{t}</button>
             ))}
           </div>
-          {/* 右：✕ */}
-          <div style={{flex:1,display:'flex',justifyContent:'flex-end'}}>
+          {/* 右：🔍 検索／⛶ 最大化／✕（2026-10-25 ユーザー指示：この並び） */}
+          <div style={{flex:1,display:'flex',justifyContent:'flex-end',gap:7,alignItems:'center'}}>
+            <button data-wfind="1" title="空いている所を探す" onClick={()=>setFind(p=>({...p,open:!p.open}))}
+              style={{background:find.open?'#E8492E':'rgba(255,255,255,.2)',
+                border:'1px solid rgba(255,255,255,.55)',borderRadius:7,padding:'4px 11px',
+                fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
+            <button data-wfs="1" title={isFs?'元の大きさに戻す':'画面いっぱいに広げる'}
+              onClick={()=>{try{ if(document.fullscreenElement){document.exitFullscreen&&document.exitFullscreen();}
+                else if(fsRef.current&&fsRef.current.requestFullscreen){fsRef.current.requestFullscreen();} }catch(e){}}}
+              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+              {isFs?'⛶ 戻す':'⛶ 最大化'}</button>
             <button onClick={onClose} title="閉じる"
               style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
                 padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕</button>
           </div>
         </div>
+        {/* ★空き探しの帯（2026-10-25 ユーザー指示） */}
+        {find.open&&(()=>{
+          const seg=(on)=>({padding:'6px 14px',border:'none',background:on?'#1d4ed8':'white',
+            color:on?'white':'#475569',fontSize:12.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'});
+          const segG=(on)=>({...seg(on),background:on?'#047857':'white',color:on?'white':'#475569'});
+          const box={display:'inline-flex',border:'2px solid #cbd5e1',borderRadius:9,overflow:'hidden'};
+          const n=sr?Object.keys(sr.dayLab).length:0;
+          const blk=sr?Object.keys(sr.cell).filter(k=>sr.cell[k].top).length:0;
+          const mn=(WEEK_MINS.find(x=>x.m===find.mins)||{}).label||'';
+          return (
+            <div data-wfindbar="1" style={{flexShrink:0,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap',
+              padding:'9px 12px',background:'#fff7ed',borderBottom:'2px solid #fed7aa'}}>
+              <b style={{fontSize:12.5}}>空きを探す</b>
+              <span style={box}>
+                <button data-wkind="insp" onClick={()=>setFind(p=>({...p,kind:'insp',run:false}))} style={seg(find.kind==='insp')}>🚗 車検</button>
+                <button data-wkind="sched" onClick={()=>setFind(p=>({...p,kind:'sched',run:false}))} style={seg(find.kind==='sched')}>⏰ 整備</button>
+              </span>
+              {find.kind==='insp'?(
+                <React.Fragment>
+                  <b style={{fontSize:12.5}}>コース</b>
+                  <span style={box}>
+                    {COURSES.map(c=>(
+                      <button key={c.id} data-wcourse={c.id} onClick={()=>setFind(p=>({...p,course:c.id,run:false}))}
+                        style={seg(find.course===c.id)}>{c.name}</button>
+                    ))}
+                  </span>
+                  <span style={{fontSize:11.5,color:'#9a3412'}}>
+                    {find.course===1?'マッハは 10:00 と 14:00 の枠で見ます'
+                      :find.course===3?'レギュラーは台数で見ます（1日3台まで）'
+                      :'クイックは台数で見ます（1日6台まで／制限を掛けた日はその数）'}</span>
+                </React.Fragment>
+              ):(
+                <React.Fragment>
+                  <b style={{fontSize:12.5}}>作業の所要時間</b>
+                  <span style={box}>
+                    {WEEK_MINS.map(x=>(
+                      <button key={x.m} data-wmin={x.m} onClick={()=>setFind(p=>({...p,mins:x.m,run:false}))}
+                        style={segG(find.mins===x.m)}>{x.label}</button>
+                    ))}
+                  </span>
+                </React.Fragment>
+              )}
+              <button data-wgo="1" onClick={()=>setFind(p=>({...p,run:true}))}
+                style={{padding:'8px 20px',border:'none',borderRadius:9,background:'#E8492E',color:'white',
+                  fontSize:13,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>この条件で空きを探す</button>
+              <button data-wclr="1" onClick={()=>setFind(p=>({...p,run:false}))}
+                style={{padding:'8px 14px',border:'2px solid #cbd5e1',borderRadius:9,background:'white',
+                  color:'#475569',fontSize:12.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>やめる</button>
+              {sr&&<span data-wres="1" style={{fontSize:12.5,fontWeight:800,color:'#9a3412'}}>
+                {find.kind==='insp'?(n+'日に空きがあります'):(mn+'以上とれる空きが '+blk+' か所')}</span>}
+            </div>
+          );
+        })()}
         <div ref={scRef} style={{flex:1,minHeight:0,overflow:'auto'}}>
           {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
               td の height:26 は最低の高さとして効く */}
@@ -4464,8 +4617,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                 <th style={{...TH,width:54,minWidth:54}}></th>
                 {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
                   const dowCol=i===6?'#ef4444':i===5?'#2563eb':'#1b2129';
-                  return <th key={dk} data-wtoday={dk===todayDk?'1':'0'}
-                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:'3px solid '+TODAY_LINE}:{}),...todayCol(dk)}}>
+                  const hDim=!!(sr&&sr.dayDim[dk]);
+                  return <th key={dk} data-wtoday={dk===todayDk?'1':'0'} data-wdim={hDim?'1':'0'}
+                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:'3px solid '+TODAY_LINE}:{}),...todayCol(dk),
+                      ...(hDim?{position:'relative'}:{})}}>
+                    {hDim&&<DimOv/>}
                     {/* ★日付のバッジ。押すとその日の1日表示へ移る（2026-10-23 ユーザー指示） */}
                     <button data-wday={dk} title={(d.getMonth()+1)+'/'+d.getDate()+' のスケジュールを開く'}
                       onClick={()=>onPickDay&&onPickDay(d.getFullYear(),d.getMonth(),d.getDate())}
@@ -4485,7 +4641,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               <tr>
                 <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
                 {days.map(d=>{const dk=dkOf(d);
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk)}}/>;
+                  const iDim=!!(sr&&(sr.dayDim[dk]||find.kind==='sched'));
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),
+                    ...(iDim?{position:'relative'}:{})}}>{iDim&&<DimOv/>}</td>;
                   // ★台数制限（2026-10-23 ユーザー指示）。制限をかけた日は「最大N台」を出し、
                   //   **その台数に達したら**（＝もう受けられない）欄ぜんぶを赤い網掛けにする。
                   const lim=(inspLimits||{})[dk];
@@ -4493,7 +4651,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   const full=lim!=null&&cnt>=lim;
                   return <td key={dk} data-wins={dk} data-wfull={full?'1':'0'}
                     title={lim!=null?('車検の台数制限　最大'+lim+'台（いま'+cnt+'台）'+(full?'　★上限に達しています':''))  :undefined}
-                    style={{...TD,background:full?RESTR_BG:'#fff7ed',padding:'3px',...todayCol(dk)}}>
+                    style={{...TD,background:full?RESTR_BG:'#fff7ed',padding:'3px',...todayCol(dk),
+                      ...(sr&&sr.dayLab[dk]?{background:'#fffbe6',boxShadow:'inset 0 0 0 2px #f59e0b'}:{}),position:'relative'}}>
+                    {sr&&sr.dayLab[dk]&&<span data-wdaylab="1" style={{position:'absolute',right:4,top:1,fontSize:9.5,fontWeight:900,color:'#b45309'}}>{sr.dayLab[dk]}</span>}
+                    {iDim&&<DimOv/>}
                     <div style={INS_GRP}>
                       {inspGroups(inspOf(dk)).map((g,gi)=>(
                         <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
@@ -4519,11 +4680,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               <tr>
                 <td style={{...TM,color:'#475569',borderBottom:STAFF_UNDER}}>出勤</td>
                 {days.map(d=>{const dk=dkOf(d);
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),borderBottom:STAFF_UNDER}}/>;
+                  const fDim=!!(sr&&sr.dayDim[dk]);
+                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),borderBottom:STAFF_UNDER,
+                    ...(fDim?{position:'relative'}:{})}}>{fDim&&<DimOv/>}</td>;
                   const offs=((dayOffData||{})[dk]||[]).concat((paidLeaveData||{})[dk]||[]);
                   const on=(staffList||[]).filter(s=>offs.indexOf(s.name)<0);
                   const off=(staffList||[]).filter(s=>offs.indexOf(s.name)>=0);
-                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk),borderBottom:STAFF_UNDER}}>
+                  return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk),borderBottom:STAFF_UNDER,
+                    ...(fDim?{position:'relative'}:{})}}>
+                    {fDim&&<DimOv/>}
                     {on.map(s=><span key={s.uid||s.name} style={SB} title={s.name}>{staffIni(s)}</span>)}
                     {off.length>0&&<span style={{display:'inline-block',width:1,height:13,background:'#e2e8f0',margin:'0 5px',verticalAlign:'middle'}}/>}
                     {off.map(s=><span key={s.uid||s.name} style={SB_OFF} title={s.name+'（休み）'}>{staffIni(s)}</span>)}
@@ -14876,20 +15041,6 @@ function AppInner() {
 
               </div>
               <div style={{display:'flex',alignItems:'center',gap:5}}>
-                <div style={{position:'relative',display:'flex',alignItems:'center'}}>
-                  <button data-fs-toggle="1" onClick={toggleFullscreen} title={isFullscreen?'全画面を終了して元のウインドウに戻す':'全画面表示（ブラウザのタブ・お気に入りバーを隠して大きく表示）'}
-                    style={{display:'flex',alignItems:'center',gap:4,padding:isFullscreen?'6px 12px':'5px 10px',
-                      background:isFullscreen?'white':'rgba(255,255,255,0.18)',
-                      border:isFullscreen?'2px solid white':'2px solid rgba(255,255,255,0.55)',
-                      borderRadius:8,cursor:'pointer',fontWeight:isFullscreen?900:700,fontSize:isFullscreen?12:11,
-                      color:isFullscreen?'#c2410c':'white',whiteSpace:'nowrap',
-                      animation:fsHint?'hubFsNudge .7s ease-in-out 2':'none'}}
-                    onMouseEnter={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.32)';}}
-                    onMouseLeave={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.18)';}}>
-                    {isFullscreen?<Shrink size={14}/>:<Expand size={14}/>}{isFullscreen?'元に戻す':'全画面'}
-                  </button>
-                  <style>{'@keyframes hubFsNudge{0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 0 rgba(255,255,255,.9)}20%{transform:translateY(3px) scale(1.06);box-shadow:0 0 0 6px rgba(255,255,255,.45)}40%{transform:translateY(-2px) scale(1.06)}60%{transform:translateY(2px) scale(1.04);box-shadow:0 0 0 10px rgba(255,255,255,0)}}'}</style>
-                </div>
                 <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',background:userStore.bg,borderRadius:8,border:`2px solid ${userStore.color}33`}}>
                   <span style={{width:22,height:22,borderRadius:'50%',background:userStore.color,color:'white',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:11}}>{String(currentUser?.name||'').charAt(0)}</span>
                   <span style={{fontWeight:700,color:userStore.accent,fontSize:12}}>{currentUser?.name}</span>
@@ -14928,6 +15079,22 @@ function AppInner() {
                   </button>
                   {/* 📋クリップボードコピーは廃止（戻せず一部データのみで紛らわしいため）。バックアップは自動保存＋🕒復旧に一本化。 */}
                   <button onClick={()=>{releaseLock(curLockKey);setAuthAutoOff(true);setCurrentUserPersist(null);setCurLockKey(null);setModalOpen(false);}} title="ログアウト" style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center'}}><LogOut size={14}/></button>
+                </div>
+                {/* ★「全画面」は ✕ のすぐ左に置く（2026-10-25 ユーザー指示）。
+                    画面を広げる操作と閉じる操作を右端にまとめる */}
+                <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                  <button data-fs-toggle="1" onClick={toggleFullscreen} title={isFullscreen?'全画面を終了して元のウインドウに戻す':'全画面表示（ブラウザのタブ・お気に入りバーを隠して大きく表示）'}
+                    style={{display:'flex',alignItems:'center',gap:4,padding:isFullscreen?'6px 12px':'5px 10px',
+                      background:isFullscreen?'white':'rgba(255,255,255,0.18)',
+                      border:isFullscreen?'2px solid white':'2px solid rgba(255,255,255,0.55)',
+                      borderRadius:8,cursor:'pointer',fontWeight:isFullscreen?900:700,fontSize:isFullscreen?12:11,
+                      color:isFullscreen?'#c2410c':'white',whiteSpace:'nowrap',
+                      animation:fsHint?'hubFsNudge .7s ease-in-out 2':'none'}}
+                    onMouseEnter={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.32)';}}
+                    onMouseLeave={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.18)';}}>
+                    {isFullscreen?<Shrink size={14}/>:<Expand size={14}/>}{isFullscreen?'元に戻す':'全画面'}
+                  </button>
+                  <style>{'@keyframes hubFsNudge{0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 0 rgba(255,255,255,.9)}20%{transform:translateY(3px) scale(1.06);box-shadow:0 0 0 6px rgba(255,255,255,.45)}40%{transform:translateY(-2px) scale(1.06)}60%{transform:translateY(2px) scale(1.04);box-shadow:0 0 0 10px rgba(255,255,255,0)}}'}</style>
                 </div>
                 {/* ★いちばん右端の ✕（この画面を閉じる）。2026-10-07 ユーザー指示：赤・確認は出さない */}
                 <span style={{width:1,height:22,background:'rgba(255,255,255,.4)',margin:'0 3px',flexShrink:0}}/>

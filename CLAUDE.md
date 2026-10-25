@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -1073,6 +1073,24 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - **内容の吹き出しは1日表示（`NoteCell`）と同じ見た目**（角丸10px・水色2px枠・白地・「📝 内容（全文）」）。
   ブラウザの素の `title` はやめた（四角くて素っ気ない・2026-10-24 ユーザー指示）。目印は `data-wtip`。
 - 検査は `node week_view_test.js`（111件）。
+- **週間カレンダーの「空き探し」と「最大化」（v3.74・2026-10-25 ユーザー決定）**：
+  ・右上の並びは **🔍 検索 → ⛶ 最大化 → ✕**。**1日表示の「全画面」も ✕ の左横へ移した**（広げる操作と閉じる操作を右端にまとめる）。
+    最大化はブラウザの全画面（`requestFullscreen`）。窓に `fsRef`、`fullscreenchange` を見て札を「⛶ 戻す」に変える。
+  ・**マッハ車検は 10:00 と 14:00 が基本の枠**（`MACH_FIND_SLOTS`）。空いている方を**オレンジの枠で囲って「マッハ可」**、
+    すでに入っている方は**赤い札で「マッハ車検」**。囲いは**入庫から1時間＝2枠**。両方ふさがっている日は**その日まるごと暗く**。
+  ・**クイック・レギュラーは枠ではなく台数で見る**（ユーザー指示）。1日6台（`WEEK_DAY_LIMIT`）／制限を掛けた日はその数／
+    レギュラーは3台まで（`WEEK_REG_LIMIT`）。空きがあれば車検の欄に「あと○台」。**時間の枠は囲わない。**
+  ・**整備は所要時間（30分・1時間・1時間半・2時間）**を選ぶ。**空いている続きを丸ごと1つの枠で囲う**（1時間ずつに刻まない）。
+    **どこで取るかは使う人が決める**ので、**枠の中に「何分」とは出さない**（2026-10-25 ユーザー指示）。
+    選んだ所要時間より短い続きは取れないので暗くする。入庫制限（マッハの自動制限も含む）が掛かった枠は空きに数えない。
+  ・**網掛けは ほぼ黒の 45%（`WEEK_DIM=rgba(0,0,0,.45)`・固定）**。5段階の濃さを見てもらって決めた。**濃さを選ぶ仕掛けは入れない。**
+    囲いの線は **2px**（3px は太すぎた）。**札（マッハ可・マッハ車検）は枠のど真ん中**（`LAB`＝`left:50%/top:100%`＋`translate(-50%,-50%)`）。
+  ・**氏名・車種は出さない**（2026-10-25 ユーザー指示：今のところ不要）。
+  ・**12ヶ月点検は朝預かりの夕方返しなので保留**（所要時間の考え方に当てはめない）。
+  ・★**`mainSlots` より後ろで `weekTimes`/`sr` を計算すること**。前に置くと「初期化前に使えない」で週表そのものが出なくなる（一度踏んだ）。
+  ・週を送る／店を変える／窓を閉じると探した結果は消える（古い網掛けを引きずらない）。
+  ・モックは `mock_week_v5.html`（実際に触れる）。検査は **`node week_find_test.js`（49件）**。
+    `SHOT=<保存先.png> SHOT2=<保存先.png> node week_find_test.js` で見た目も撮れる。
 
 ### スマホ：納車は「納車時間の枠の中」に出す（v3.71・2026-10-24・テスト版のみ）
 - ユーザー報告「**スマホの納車表示がタイムスケジュールの一番上に来るので、タイムスケジュールの時間に表示してほしい**」。
