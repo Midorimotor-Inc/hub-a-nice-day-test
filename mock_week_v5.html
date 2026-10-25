@@ -79,7 +79,15 @@
   .searching .dim{position:relative}
   .searching .dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--dimA,.45));pointer-events:none;z-index:3}
   .searching th.dim::after{inset:0}
-  .searching .hit{background:#fffbe6!important;box-shadow:inset 0 0 0 3px #f59e0b;position:relative}
+  /* ★枠は細めに（2026-10-25 ユーザー指示） */
+  .searching .hit{background:#fffbe6!important;box-shadow:inset 0 0 0 2px #f59e0b;position:relative}
+  /* ★所要時間は「枠をまとめて1つ」で囲う。1時間なら30分の枠2つをひとまとめに */
+  .searching .blk{background:#fffbe6!important;position:relative;
+    border-left:2px solid #f59e0b!important;border-right:2px solid #f59e0b!important}
+  .searching .blk.top{border-top:2px solid #f59e0b!important}
+  .searching .blk.bot{border-bottom:2px solid #f59e0b!important}
+  /* 赤い入庫制限の枠に出す「マッハ車検」 */
+  .machlab{position:absolute;left:4px;top:1px;font-size:10px;font-weight:900;color:#b91c1c}
   .searching .hit.ins{background:#fffbe6!important}
   .searching th.dim{position:relative}
   .badge{position:absolute;right:3px;top:1px;font-size:9.5px;font-weight:900;color:#b45309}
@@ -120,9 +128,6 @@
         <div class="r"><button class="ic icfind" id="btnFind">🔍 検索</button><button class="ic">⛶ 最大化</button><button class="ic">✕</button></div>
       </div>
       <div class="find" id="panel">
-        <span style="display:flex;align-items:center;gap:6px"><b>氏名・車種</b>
-          <input id="q" placeholder="例：田所／ハスラー" style="padding:7px 10px;border:2px solid #cbd5e1;border-radius:9px;font-size:13px;width:170px;font-family:inherit"></span>
-        <span style="color:#cbd5e1">｜</span>
         <b>空きを探す</b>
         <span class="seg" id="segKind">
           <button data-kind="insp" class="on">🚗 車検</button>
@@ -146,15 +151,6 @@
             <button data-m="120">2時間</button>
           </span>
         </span>
-        <span style="color:#cbd5e1">｜</span>
-        <b>網掛けの濃さ</b>
-        <span class="seg" id="segDim">
-          <button data-a=".78">濃い 78%</button>
-          <button data-a=".70">70%</button>
-          <button data-a=".62">62%</button>
-          <button data-a=".55">55%</button>
-          <button data-a=".45" class="on">薄い 45%</button>
-        </span>
         <button class="go" id="btnGo">この条件で空きを探す</button>
         <button class="clr" id="btnClr">やめる</button>
         <span class="res" id="res"></span>
@@ -162,12 +158,14 @@
       <table id="t"></table>
     </div>
     <div class="note">
-      ・<b>車検（マッハ）</b>：<b>10:00・14:00 の枠</b>が空いている日だけ明るく。右上に「14:00 空き」と出ます。<br>
+      ・<b>車検（マッハ）</b>：<b>10:00・14:00 の枠</b>が空いている日だけ明るく。右上に「14:00 空き」と出ます。
+        <b>すでに入っている方</b>は赤い入庫制限の枠に「マッハ車検」と出し、<b>空いている方</b>はオレンジの枠で囲います（入庫から1時間＝2枠）。<br>
       ・<b>車検（クイック・レギュラー）</b>：枠ではなく<b>台数</b>で見ます（2026-10-25 決定）。
         1日6台まで（制限を掛けた日はその数）、<b>レギュラーは1日3台まで</b>。右上に「あと3台」と出ます。
         見本として 10/23（金）に「最大3台」の制限を掛けてあります。<br>
       ・<b>整備</b>：選んだ<b>所要時間が続けて取れる所だけ</b>明るくします。30分なら1枠、1時間なら2枠続けて空いている所。
-        <b>入庫制限（赤）と休業日は空きに数えません。</b>右上に「60分」のように取れる長さを出します。<br>
+        <b>入庫制限（赤）と休業日は空きに数えません。</b>
+        <b>1時間なら30分の枠2つをひとまとめ</b>にして1つの枠で囲い、「60分」と出します（1時間半なら3つ）。<br>
       ・<b>【保留】12ヶ月点検だけは朝預かり・夕方返し</b>なので、この所要時間の考え方に当てはまりません（2026-10-25 ユーザー指示・いったん保留）。<br>
       ・<b>暗くするだけで、押せなくはしません</b>（どうしても入れたい時は暗い所にも入れられます）。
     </div>
@@ -254,23 +252,13 @@
   // ── 検索 ──
   var kind='insp', course='マ', mins=30;
   var panel=document.getElementById('panel'), tbl=document.getElementById('t'), res=document.getElementById('res');
-  function toggleFind(){ panel.classList.toggle('open'); if(panel.classList.contains('open')){ var q=document.getElementById('q'); if(q)q.focus(); } }
+  function toggleFind(){ panel.classList.toggle('open'); }
   document.getElementById('btnFind').onclick=toggleFind;
   var bf2=document.getElementById('btnFind2'); if(bf2) bf2.onclick=function(){ document.getElementById('panel').scrollIntoView({block:'center'}); toggleFind(); };
-  // 氏名・車種で探す：合う予定だけ明るく、ほかは暗く
-  function findText(q){
-    q=String(q||'').trim(); if(!q){clear();return;}
-    clear(); tbl.classList.add('searching');
-    var hit=0;
-    [].forEach.call(tbl.querySelectorAll('td.cell'),function(c){
-      var txt=c.innerText||'';
-      if(txt.indexOf(q)>=0){ hit++; c.classList.add('hit'); } else { c.classList.add('dim'); }
-    });
-    [].forEach.call(tbl.querySelectorAll('td.ins'),function(c){c.classList.add('dim');});
-    res.textContent='「'+q+'」に合うのは '+hit+' 件';
-  }
+  // ボタンの並び（押した1つだけ色が付く）
   function segPick(id,fn){
-    document.getElementById(id).addEventListener('click',function(e){
+    var el=document.getElementById(id); if(!el)return;
+    el.addEventListener('click',function(e){
       var b=e.target.closest('button'); if(!b)return;
       [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
       b.classList.add('on'); fn(b);
@@ -289,76 +277,98 @@
     clear();
   });
   segPick('segMin',function(b){ mins=Number(b.dataset.m); clear(); });
-  // 網掛けの濃さ：押すとその場で変わる（探したあとでも変えられる）
-  segPick('segDim',function(b){ document.documentElement.style.setProperty('--dimA',b.dataset.a); });
   function clear(){
     tbl.classList.remove('searching');
-    [].forEach.call(tbl.querySelectorAll('.dim,.hit'),function(e){e.classList.remove('dim','hit');});
+    [].forEach.call(tbl.querySelectorAll('.dim,.hit,.blk'),function(e){e.classList.remove('dim','hit','blk','top','bot');});
+    [].forEach.call(tbl.querySelectorAll('.machlab'),function(e){e.remove();});
     [].forEach.call(tbl.querySelectorAll('.badge'),function(e){e.remove();});
     res.textContent='';
   }
   document.getElementById('btnClr').onclick=function(){ clear(); panel.classList.remove('open'); };
   document.getElementById('btnGo').onclick=function(){
     clear(); tbl.classList.add('searching');
-    var q=document.getElementById('q'); var qv=q?q.value.trim():'';
-    if(qv){ findText(qv); return; }
     if(kind==='insp') findInsp(); else findSched();
   };
   function findInsp(){
     var hit=0;
     DAYS.forEach(function(d,i){
       var rows=INSP[i]||[];
-      var ok=false, label='';
+      var ok=false, label='', freeSlots=[], takenSlots=[];
       if(course==='マ'){
-        // マッハ＝基本の枠（10:00・14:00）が空いているか
-        var used=rows.filter(function(x){return x[0]==='マ';}).map(function(x){return x[1];});
-        var free=MACH_SLOTS.filter(function(b){return used.indexOf(b)<0;});
-        ok=free.length>0; label=free.join('・')+' 空き';
+        // マッハ＝10:00・14:00 の枠で見る
+        takenSlots=rows.filter(function(x){return x[0]==='マ';}).map(function(x){return x[1];});
+        freeSlots=MACH_SLOTS.filter(function(b){return takenSlots.indexOf(b)<0;});
+        ok=freeSlots.length>0; label=freeSlots.join('・')+' 空き';
       }else{
-        // クイック・レギュラー＝その日の台数で見る（枠は決めない）
+        // クイック・レギュラー＝台数で見る（時間の枠は囲わない）
         var lim=(LIMIT[i]!=null?LIMIT[i]:DAY_LIMIT);
         var rest=lim-rows.length;
         if(course==='レ'){ rest=Math.min(rest,REG_LIMIT-rows.filter(function(x){return x[0]==='レ';}).length); }
-        ok=rest>0; label='あと'+rest+'台';
-        if(rest<=0) label='いっぱい';
+        ok=rest>0; label=rest>0?('あと'+rest+'台'):'いっぱい';
       }
       var td=tbl.querySelector('[data-ins="'+i+'"]');
       var th=tbl.querySelector('th[data-d="'+i+'"]');
       if(ok){ hit++; td.classList.add('hit','ins');
-        var s=document.createElement('span'); s.className='badge'; s.textContent=label; td.appendChild(s);
-      } else { td.classList.add('dim'); th.classList.add('dim'); }
-      // ★日ごと：空きの無い日は **列ぜんぶ**（車検・出勤・時間の枠）を暗くする
-      if(!ok){
+        var s1=document.createElement('span'); s1.className='badge'; s1.textContent=label; td.appendChild(s1);
+      } else {
+        td.classList.add('dim'); th.classList.add('dim');
         [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){c.classList.add('dim');});
         var tr=tbl.querySelectorAll('tr')[2]; if(tr&&tr.children[i+1])tr.children[i+1].classList.add('dim');
+        return;
       }
+      if(course!=='マ') return;   // クイック・レギュラーは日ごとの表示だけ
+      // ★埋まっている方：赤い入庫制限の枠に「マッハ車検」と出す（入庫から1時間＝2枠）
+      takenSlots.forEach(function(sl){
+        var si=TIMES.indexOf(sl);
+        [0,1].forEach(function(k){
+          var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+TIMES[si+k]+'"]');
+          if(!c)return;
+          c.style.position='relative';
+          if(k===0){ var m=document.createElement('span'); m.className='machlab'; m.textContent='マッハ車検'; c.appendChild(m); }
+        });
+      });
+      // ★空いている方：オレンジの枠で囲う（入庫から1時間＝2枠をひとまとめ）
+      freeSlots.forEach(function(sl){
+        var si=TIMES.indexOf(sl);
+        [0,1].forEach(function(k){
+          var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+TIMES[si+k]+'"]');
+          if(!c)return;
+          c.classList.add('blk'); if(k===0)c.classList.add('top'); if(k===1)c.classList.add('bot');
+          if(k===0){ var s2=document.createElement('span'); s2.className='badge'; s2.textContent='マッハ可'; c.appendChild(s2); }
+        });
+      });
     });
     res.textContent=hit+'日に空きがあります（'+(course==='マ'?'マッハ＝10:00・14:00 の枠':'台数で判定')+'）';
   }
   function findSched(){
     var need=Math.ceil(mins/30), hit=0;
     DAYS.forEach(function(d,i){
-      var okStart={};
-      TIMES.forEach(function(sl,si){
-        if(si+need>TIMES.length) return;
-        var ok=true;
-        for(var k=0;k<need;k++){
-          var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+TIMES[si+k]+'"]');
-          if(!c||!c.dataset.free||c.dataset.rst){ok=false;break;}
+      var cell=function(sl){return tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]');};
+      var freeAt=function(sl){var c=cell(sl);return !!(c&&c.dataset.free&&!c.dataset.rst);};
+      // 続けて空いている所を見つけ、所要時間ぶんずつ **ひとかたまり** にして囲う
+      var used={};
+      var si=0;
+      while(si<TIMES.length){
+        if(!freeAt(TIMES[si])){si++;continue;}
+        var run=si; while(run<TIMES.length&&freeAt(TIMES[run]))run++;   // [si,run) が続けて空き
+        var p=si;
+        while(p+need<=run){
+          for(var k=0;k<need;k++){
+            var c=cell(TIMES[p+k]); if(!c)continue;
+            c.classList.add('blk');
+            if(k===0)c.classList.add('top');
+            if(k===need-1)c.classList.add('bot');
+            used[TIMES[p+k]]=true;
+          }
+          var head=cell(TIMES[p]);
+          if(head){ var s3=document.createElement('span'); s3.className='badge'; s3.textContent=mins+'分'; head.appendChild(s3); }
+          hit++; p+=need;
         }
-        if(ok)okStart[sl]=true;
-      });
-      TIMES.forEach(function(sl,si){
-        var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]');
-        if(!c)return;
-        if(okStart[sl]){ hit++; c.classList.add('hit');
-          var s=document.createElement('span'); s.className='badge'; s.textContent=mins+'分'; c.appendChild(s);
-        } else { c.classList.add('dim'); }
-      });
-      // 時刻を持たない枠は検索の対象外（暗くする）
-      ['午前入庫','午後入庫','時間未定'].forEach(function(sl){
-        var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+sl+'"]'); if(c)c.classList.add('dim');
-      });
+        si=run;
+      }
+      // かたまりに入らなかった所は暗く
+      TIMES.forEach(function(sl){ if(!used[sl]){ var c=cell(sl); if(c)c.classList.add('dim'); } });
+      ['午前入庫','午後入庫','時間未定'].forEach(function(sl){ var c=cell(sl); if(c)c.classList.add('dim'); });
       [].forEach.call(tbl.querySelectorAll('[data-ins="'+i+'"]'),function(c){c.classList.add('dim');});
     });
     res.textContent=mins+'分とれる所が '+hit+' か所';
