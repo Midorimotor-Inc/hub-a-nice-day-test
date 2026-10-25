@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792901239546';
+    window.__APP_BUILD='build-1792904806504';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.74.1';
+const APP_VERSION = '3.75';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4279,6 +4279,7 @@ const WEEK_DAY_LIMIT=6;     // その日に受けられる車検の台数（制�
 const WEEK_REG_LIMIT=3;     // レギュラー車検は1日3台まで
 const WEEK_DIM='rgba(0,0,0,.45)';
 const WEEK_OK='#047857';     // 「マッハ可」の札。赤い「マッハ車検」と見分けるため緑（2026-10-25 ユーザー指示）
+const WEEK_TAKEN='#fca5a5';  // すでに入っている「マッハ車検」の札。薄い赤（緑の「マッハ可」と見分ける）
 const weekMinOf=(x)=>{const m=String(x||'').match(/^(\d+):(\d+)$/);return m?Number(m[1])*60+Number(m[2]):-1;};
 // 月曜はじまりの週頭
 const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
@@ -4288,7 +4289,7 @@ const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:
 
 const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeName,headColor,
     inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,inspLimits,
-    onOpenInsp,onAddInsp,onOpenSched,onAddSched,onPickDay})=>{
+    onOpenInsp,onAddInsp,onAddMach,onOpenSched,onAddSched,onPickDay})=>{
   // ★フックは「早い return」より前に置くこと（React の決まり。後ろに置くと数が合わず画面が落ちる）
   // 据え置きの表（午後入庫・時間未定）は別の表なので、上の表にスクロールバーが出ると
   // その幅のぶんだけ列がズレる（2026-10-24 ユーザー報告「10/24 はズレて見える」）。
@@ -4323,8 +4324,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const dkOf=(d)=>dateKey(d.getFullYear(),d.getMonth(),d.getDate());
   const mine=(r)=>!!r&&(r.store===storeId||(r.store==null&&storeId==='honten'));
   // 車検：コース順（マ→ク→レ）、同じコースなら入庫の早い順
+  // ★車検は【両店あわせて】出す（2026-10-25 ユーザー指示）。insp は両店が1本に入っていて
+  //   台数制限（inspLimits）も両店共通なので、見ている店だけに絞ると台数が合わない。
+  //   他店の予約はバッジに白いふちを付けて見分ける（mine で判定）。
   const inspOf=(dk)=>(inspData[dk]||[]).map((r,i)=>({r,i}))
-    .filter(x=>x.r&&x.r.name&&x.r.bookingStatus!=='cancelled'&&mine(x.r))
+    .filter(x=>x.r&&x.r.name&&x.r.bookingStatus!=='cancelled')
     .sort((a,b)=>{const c=courseOrd(a.r.course)-courseOrd(b.r.course);if(c)return c;
       return String(a.r.time||'~~').localeCompare(String(b.r.time||'~~'));});
   // 新しい車検を入れる行＝空いている最初の行（詰めない。代車の紐付けを壊さないため）
@@ -4395,6 +4399,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
       if(isClosed(d)){dayDim[dk]=true;return;}
       if(find.kind==='insp'){
         const rows=inspOf(dk);
+        // ★台数制限がいちばん強い（2026-10-25 ユーザー指示）。制限を掛けた日で上限に達していたら
+        //   コースに関係なく受けられない（11/2・11/3 のような「0台」の日もここで止まる）。
+        const dayLim=(inspLimits||{})[dk];
+        if(dayLim!=null&&rows.length>=dayLim){dayDim[dk]=true;return;}
         if(find.course===1){
           const taken=rows.filter(x=>Number(x.r.course)===1).map(x=>getBaseSlot(x.r.time||''));
           const free=MACH_FIND_SLOTS.filter(t=>taken.indexOf(t)<0);
@@ -4411,8 +4419,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
             });
           });
         }else{
-          const lim=(inspLimits||{})[dk];
-          let rest=(lim!=null?lim:WEEK_DAY_LIMIT)-rows.length;
+          let rest=(dayLim!=null?dayLim:WEEK_DAY_LIMIT)-rows.length;
           if(find.course===3)rest=Math.min(rest,WEEK_REG_LIMIT-rows.filter(x=>Number(x.r.course)===3).length);
           if(rest<=0){dayDim[dk]=true;return;}
           dayLab[dk]='あと'+rest+'台';
@@ -4441,9 +4448,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   // 暗くする覆い（文字の上に重ねる）
   const DimOv=()=><span style={{position:'absolute',inset:0,background:WEEK_DIM,pointerEvents:'none',zIndex:3}}/>;
   const BLK={borderLeft:'2px solid #f59e0b',borderRight:'2px solid #f59e0b',background:'#fffbe6'};
-  const LAB=(kind)=>({position:'absolute',left:'50%',top:'100%',transform:'translate(-50%,-50%)',
-    fontSize:11,fontWeight:900,whiteSpace:'nowrap',zIndex:4,padding:'1px 8px',borderRadius:9,
-    color:'white',background:kind==='ok'?WEEK_OK:'#b91c1c'});
+  // 札は枠のど真ん中。「マッハ可」＝緑＋＋ボタン／「マッハ車検」＝薄い赤（2026-10-25 ユーザー指示）
+  const LABW={position:'absolute',left:'50%',top:'100%',transform:'translate(-50%,-50%)',zIndex:4,
+    display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'};
+  const LAB=(kind)=>({fontSize:11,fontWeight:900,whiteSpace:'nowrap',padding:'1px 8px',borderRadius:9,
+    color:kind==='ok'?'white':'#7f1d1d',background:kind==='ok'?WEEK_OK:WEEK_TAKEN,
+    border:'1px solid '+(kind==='ok'?WEEK_OK:'#ef4444')});
+  const LABADD={display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
+    borderRadius:'50%',border:'1.5px dashed #fb923c',background:'white',color:'#c2410c',padding:0,
+    fontSize:12,fontWeight:900,lineHeight:1,cursor:'pointer',fontFamily:'inherit'};
   const isHourSlot=(x)=>/:00$/.test(String(x||''));
   // コースごとのかたまりに分ける（並びは既に マ→ク→レ の順）
   const inspGroups=(rows)=>{const g=[];rows.forEach(x=>{const last=g[g.length-1];
@@ -4456,7 +4469,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     const sBlk=(dk)=>{const b=srCell(dk,slot);
       return (b&&b.blk)?{...BLK,...(b.top?{borderTop:'2px solid #f59e0b'}:{}),...(b.bot?{borderBottom:'2px solid #f59e0b'}:{})}:{};};
     const sLab=(dk)=>{const b=srCell(dk,slot);
-      return (b&&b.lab)?<span style={LAB(b.labKind)}>{b.lab}</span>:null;};
+      if(!b||!b.lab)return null;
+      // ★空いている時は札の隣に ＋。押すとこの日・この時間でマッハ車検の予約カードが開く
+      //   （ここはタイムスケジュール＝一般整備の枠だが、車検として受ける。2026-10-25 ユーザー指示）
+      return <span style={LABW}>
+        <span style={LAB(b.labKind)}>{b.lab}</span>
+        {b.labKind==='ok'&&<button data-wmachadd={dk+'/'+slot} title={'この日の '+slot+' でマッハ車検を受ける'}
+          onClick={e=>{e.stopPropagation();onAddMach(dk,nextInspIdx(dk),slot);}} style={LABADD}>＋</button>}
+      </span>;};
     const thin=THIN.indexOf(slot)>=0;
     const pinned=WEEK_PIN.indexOf(slot)>=0;
     // ★30分ごとの帯。午前・未定・午後は時刻を持たない枠なので薄紫
@@ -4661,9 +4681,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                       {inspGroups(inspOf(dk)).map((g,gi)=>(
                         <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
                           {g.items.map(({r,i})=>{const c=COURSES.find(x=>x.id===r.course);
-                            return <button key={i} data-wcb={dk+'/'+i} title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')}
+                            const oth=!mine(r);   // 他店の予約（車検は両店あわせて出している）
+                            return <button key={i} data-wcb={dk+'/'+i} data-wcboth={oth?'1':'0'}
+                              title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')}
                               onClick={()=>onOpenInsp(dk,i)}
-                              style={{...CB,background:(c&&c.color)||'#64748b'}}>{(c&&c.initial)||'？'}</button>;})}
+                              style={{...CB,background:(c&&c.color)||'#64748b',
+                                ...(oth?{border:'1.5px solid white',boxShadow:'0 0 0 1.5px '+((c&&c.color)||'#64748b')}:{})}}>{(c&&c.initial)||'？'}</button>;})}
                         </div>
                       ))}
                       <div style={INS_COL}>
@@ -8344,7 +8367,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           {isInsp&&(
             <div>
               <label style={LBL}>入庫時間 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>900→9:00</span></label>
-              <div ref={timeRef} tabIndex={0}
+              <div ref={timeRef} tabIndex={0} data-insptime="1"
                 onFocus={()=>setKbField('time')} onBlur={()=>{setKbField('');setTimeout(()=>setShowTmPk(false),150);}}
                 onKeyDown={onTimeKb} onClick={()=>setShowTmPk(p=>!p)}
                 style={{...INP,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',...KB('time')}}>
@@ -13275,7 +13298,7 @@ function AppInner() {
   },[schedData]);
 
   // モーダルを開く（即時・非同期なし）
-  const handleOpenModal=useCallback((type,dk,idx,slot,isNew=false)=>{
+  const handleOpenModal=useCallback((type,dk,idx,slot,isNew=false,preset=null)=>{
     if(!currentUser)return;
     // 削除モード
     if(isNew==='delete'){
@@ -13321,7 +13344,7 @@ function AppInner() {
     setModalType(type);setModalDk(dk);setModalIdx(idx||0);setModalSlot(slot||'');originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;
     setModalIsNew(isNew);
     const data=isNew
-      ?(type==='insp'?{...blankInsp(),_idx:idx||0}:{...blankSched(),_slot:slot||''})
+      ?(type==='insp'?{...blankInsp(),...(preset||{}),_idx:idx||0}:{...blankSched(),...(preset||{}),_slot:slot||''})
       :(type==='insp'?{...((inspData[dk]||[])[idx]||blankInsp()),_idx:idx||0}:{...( schedData[dk]?.[slot]||blankSched()),_slot:slot||''});
     setModalData(data);
     // 既存データにレンタカー情報があれば復元（編集時の再表示用）
@@ -16641,6 +16664,7 @@ function AppInner() {
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setWeekOpen(false);}}
         onOpenInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',false)}
         onAddInsp={(dk,idx)=>handleOpenModal('insp',dk,idx,'',true)}
+        onAddMach={(dk,idx,time)=>handleOpenModal('insp',dk,idx,'',true,{course:1,time})}
         onOpenSched={(dk,slot)=>handleOpenModal('sched',dk,0,slot,false)}
         onAddSched={(dk,slot)=>handleOpenModal('sched',dk,0,slot,true)}/>
 

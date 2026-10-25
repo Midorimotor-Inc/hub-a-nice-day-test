@@ -160,16 +160,19 @@ const seed = {
     const td = document.querySelector('[data-wins="' + d + '"]');
     if (!td) return null;
     const bs = [...td.querySelectorAll('[data-wcb]')];
-    return { txt: bs.map(b => b.innerText.trim()).join(''), colors: bs.map(b => getComputedStyle(b).backgroundColor), plus: !!td.querySelector('[data-wiadd]') };
+    return { txt: bs.map(b => b.innerText.trim()).join(''), colors: bs.map(b => getComputedStyle(b).backgroundColor), plus: !!td.querySelector('[data-wiadd]'), oth: bs.map(b => b.getAttribute('data-wcboth')).join('') };
   }, TUE);
-  t('★火曜はコース順に「ママクレ」と並ぶ（入れた順ではない）', !!tue && tue.txt === 'ママクレ', tue);
+  t('★火曜はコース順に「マママクレ」と並ぶ（入れた順ではない／両店あわせて）', !!tue && tue.txt === 'マママクレ', tue);
   t('マッハは赤（185,28,28）', !!tue && /185, 28, 28/.test(tue.colors[0]), tue && tue.colors[0]);
-  t('クイックは青（29,78,216）', !!tue && /29, 78, 216/.test(tue.colors[2]), tue && tue.colors[2]);
-  t('レギュラーは橙（217,119,6）', !!tue && /217, 119, 6/.test(tue.colors[3]), tue && tue.colors[3]);
+  t('クイックは青（29,78,216）', !!tue && /29, 78, 216/.test(tue.colors[3]), tue && tue.colors[3]);
+  t('レギュラーは橙（217,119,6）', !!tue && /217, 119, 6/.test(tue.colors[4]), tue && tue.colors[4]);
   t('★「○台」の文字は出さない', !!tue && !/台/.test(tue.txt));
   t('★バッジの横に ＋ がある（予約カードへ直接）', !!tue && tue.plus);
-  t('★他店（三田店）の車検は混ざらない', !!tue && tue.txt.length === 4, tue);
-  t('キャンセルの分は出さない', !!tue && tue.txt.length === 4);
+  // ★車検は両店あわせて出す（2026-10-25 ユーザー指示）。insp は両店が1本に入っていて
+  //   台数制限も両店共通なので、見ている店だけに絞ると台数が合わない。
+  t('★★他店（三田店）の車検も出す（両店あわせて5台）', !!tue && tue.txt.length === 5, tue);
+  t('★★他店の分だけ白いふちで見分けられる', !!tue && tue.oth === '01000', tue);
+  t('キャンセルの分は出さない', !!tue && tue.txt.length === 5);
   const tip = await page.evaluate(d => { const b = document.querySelector('[data-wins="' + d + '"] [data-wcb]'); return b ? b.getAttribute('title') : ''; }, TUE);
   t('なぞると「時間・氏名・コース」が出る', /09:00/.test(tip) && /マ一/.test(tip) && /マッハ車検/.test(tip), tip);
 
@@ -190,7 +193,7 @@ const seed = {
   }, TUE);
   t('★コースごとに列が分かれる（火曜は マ・ク・レ の3かたまり）', !!grp && grp.n === 3, grp);
   t('★同じ列にコースが混ざらない', !!grp && grp.n === 3 && grp.letters.every(x => new Set(x.split('')).size === 1), grp);
-  t('★マッハ2台は1つの列に入る', !!grp && grp.letters[0] === 'ママ', grp);
+  t('★マッハ3台（両店あわせて）は 2段＋1 の同じかたまりに入る', !!grp && grp.letters[0] === 'マママ', grp);
   t('★列は2段ずつ（上から下へ積み、いっぱいなら右の列へ）', !!grp && grp.n === 3 && grp.rows.every(r => r.split(' ').length === 2), grp);
   t('★積む向きは縦（grid-auto-flow: column）', !!grp && grp.n === 3 && grp.flow.every(f => /column/.test(f)), grp);
   t('★バッジの大きさは今までどおり 19x19', !!grp && grp.size === '19x19', grp);
@@ -489,7 +492,7 @@ const seed = {
     return { head: el ? /三田店/.test(el.innerText) : false, n: td ? td.querySelectorAll('[data-wcb]').length : -1, staff: el ? /藤原昭人/.test(el.innerHTML) : false };
   }, TUE);
   t('★三田店で開くと見出しが三田店', sanda.head, sanda);
-  t('★三田店の車検だけ出る（火曜は1台）', sanda.n === 1, sanda);
+  t('★★三田店で開いても車検は両店ぶん出る（火曜は5台）', sanda.n === 5, sanda);
   t('★スタッフも三田店の人', sanda.staff, sanda);
   const wedSanda = await page.evaluate(d => {
     const el = document.querySelector('[data-weekview]');

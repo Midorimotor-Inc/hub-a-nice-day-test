@@ -22,7 +22,7 @@ const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '
 // 画面の日付を 2026-10-21（水）に固定。週は 10/19（月）〜10/25（日）
 const FIX = [2026, 10, 21];
 const dk = (d) => FIX[0] + '-' + FIX[1] + '-' + d;
-const MON = dk(19), TUE = dk(20), WED = dk(21), THU = dk(22), FRI = dk(23), SAT = dk(24);
+const MON = dk(19), TUE = dk(20), WED = dk(21), THU = dk(22), FRI = dk(23), SAT = dk(24), SUN = dk(25);
 const C = (n) => ({ MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 }[n]);
 const ins = (course, time, name) => ({ name, course, time, store: 'honten', bookingStatus: 'confirmed' });
 
@@ -38,6 +38,8 @@ const seed = {
     [FRI]: [ins(2, '09:00', 'ク四')],
     // 土＝レギュラー3台（レギュラーは上限／クイックならまだ入る）
     [SAT]: [ins(3, '09:00', 'レ一'), ins(3, '10:00', 'レ二'), ins(3, '11:00', 'レ三')],
+    // 日＝三田店のクイック1台（本店で見ていても出る／台数にも数える）
+    [SUN]: [{ name: '三田ク', course: 2, time: '10:00', store: 'sanda', bookingStatus: 'confirmed' }],
   },
   // 整備：水の 09:00 と 13:00 だけ埋める（09:30〜11:30 と 13:30〜18:00 が続きの空き）
   [STOR + 'honten-sched']: {
@@ -185,7 +187,12 @@ const seed = {
   await tap('[data-wcourse="1"]'); await page.waitForTimeout(200);
   await tap('[data-wgo]'); await page.waitForTimeout(700);
   const res = await page.evaluate(() => { const r = document.querySelector('[data-wres]'); return r ? r.innerText.replace(/\s+/g, '') : ''; });
-  t('★結果の数が出る（火だけ埋まっているので6日）', /6日に空きがあります/.test(res), res);
+  t('★結果の数が出る（火＝枠ずまり・木＝台数制限で 5日）', /5日に空きがあります/.test(res), res);
+  const thuIns = await insAt(THU), thuCell = await cellAt('10:00', C('THU'));
+  t('★★台数制限でいっぱいの日はマッハでも「可」にしない（木＝最大3台・3台入っている）',
+    (await headDim(THU)) === '1' && !!thuIns && thuIns.lab === '', thuIns);
+  t('★★その日は時間の枠も暗いまま（マッハ可の札を出さない）',
+    !!thuCell && thuCell.dim === '1' && !/マッハ可/.test(thuCell.txt), thuCell)
   const iMon = await insAt(MON), iWed = await insAt(WED);
   t('★月（10:00 だけ入っている）は「14:00 空き」', !!iMon && iMon.lab === '14:00空き', iMon);
   t('★水（車検なし）は「10:00・14:00 空き」', !!iWed && iWed.lab === '10:00・14:00空き', iWed);
@@ -206,15 +213,60 @@ const seed = {
   });
   t('★札は枠のど真ん中（左右・上下とも中央寄せ）', !!lab && lab.left !== 'auto' && /matrix/.test(lab.tr), lab);
   const labCol = await page.evaluate(() => {
-    const pick = (re) => { const s = [...document.querySelectorAll('[data-weekview] span')].find(e => re.test(e.innerText)); return s ? getComputedStyle(s).backgroundColor : ''; };
+    const pick = (re) => { const s = [...document.querySelectorAll('[data-weekview] span')].find(e => re.test(e.innerText) && !e.querySelector('span')); return s ? getComputedStyle(s).backgroundColor : ''; };
     return { ok: pick(/^マッハ可$/), mach: pick(/^マッハ車検$/) };
   });
   t('★「マッハ可」の札は緑（赤い「マッハ車検」と見分けるため）', labCol.ok === 'rgb(4, 120, 87)', labCol);
-  t('★「マッハ車検」の札は赤のまま', labCol.mach === 'rgb(185, 28, 28)', labCol);
+  t('★「マッハ車検」の札は薄い赤（緑の「マッハ可」と見分ける）', labCol.mach === 'rgb(252, 165, 165)', labCol);
   t('★氏名・車種は出さない', !!w10 && !/朝一|昼一/.test(w10.txt), w10);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
   const dimc = await cellAt('09:00', C('TUE'));
   t('★網掛けは ほぼ黒の45%', !!dimc && dimc.ovbg === 'rgba(0, 0, 0, 0.45)', dimc);
+
+  // ── ③-2 「マッハ可」の隣の ＋ から直接マッハ車検を受ける ──
+  console.log("\n■ ③-2 「マッハ可」の隣の ＋ から直接マッハ車検を受ける");
+  const addBtn = await page.evaluate(d => {
+    const b = document.querySelector('[data-wmachadd="' + d + '/10:00"]');
+    return b ? { txt: b.innerText.replace(/[^＋]/g, ''), title: b.getAttribute('title') || '' } : null;
+  }, WED);
+  t('★★「マッハ可」の隣に ＋ がある', !!addBtn && addBtn.txt === '＋', addBtn);
+  t('★★何をする ＋ なのか案内が出る', !!addBtn && /マッハ車検/.test(addBtn.title), addBtn);
+  t('★★すでに入っている「マッハ車検」の方には ＋ を出さない',
+    await page.evaluate(d => !document.querySelector('[data-wmachadd="' + d + '/10:00"]'), MON));
+  await page.evaluate(d => { const b = document.querySelector('[data-wmachadd="' + d + '/10:00"]'); if (b) b.click(); }, WED);
+  await page.waitForTimeout(1300);
+  const card = await page.evaluate(() => {
+    const m = document.querySelector('.booking-modal-inner'); if (!m) return null;
+    const cs = [...document.querySelectorAll('[data-kbkey="course"] button')]
+      .map(b => ({ n: b.innerText.replace(/[ \t\r\n]+/g, ''), col: getComputedStyle(b).borderTopColor }));
+    const tm = document.querySelector('[data-insptime]');
+    return { on: cs.filter(c => c.col === 'rgb(185, 28, 28)').map(c => c.n), all: cs.length,
+      time: tm ? tm.innerText.replace(/[ \t\r\n]+/g, '') : '', head: m.innerText.replace(/[ \t\r\n]+/g, '').slice(0, 60) };
+  });
+  t('★★押すと予約カードが開く', !!card, card);
+  t('★★コースはマッハ車検が選ばれている', !!card && card.on.length === 1 && /マッハ/.test(card.on[0]), card);
+  t('★★入庫時間はその枠（10:00）が入っている', !!card && /10:00/.test(card.time), card);
+  t('★★その日の予約カードになっている（10/21）', !!card && /10.21|10月21日/.test(card.head), card);
+  await page.evaluate(() => { const b = [...document.querySelectorAll('.booking-modal-inner button')].find(e => e.innerText.trim() === 'キャンセル'); if (b) b.click(); });
+  await page.waitForTimeout(1000);
+  t('★★閉じると週の表に戻る（探した結果はそのまま）',
+    await page.evaluate(() => !document.querySelector('.booking-modal-inner') && !!document.querySelector('[data-weekview]')));
+
+  // ── ③-3 車検のバッジは両店あわせて ──
+  console.log("\n■ ③-3 車検のバッジは両店あわせて出す");
+  const sun = await page.evaluate(d => {
+    const td = document.querySelector('[data-wins="' + d + '"]'); if (!td) return null;
+    const bs = [...td.querySelectorAll('[data-wcb]')];
+    return { n: bs.length, oth: bs.map(b => b.getAttribute('data-wcboth')), title: bs.map(b => b.getAttribute('title') || '') };
+  }, SUN);
+  t('★★本店で見ていても三田店の車検が出る', !!sun && sun.n === 1, sun);
+  t('★★他店のバッジは白いふちで見分けられる', !!sun && sun.oth[0] === '1', sun);
+  t('★★どの店の入庫か案内に出る', !!sun && /三田店入庫/.test(sun.title[0]), sun);
+  const monB = await page.evaluate(d => {
+    const td = document.querySelector('[data-wins="' + d + '"]');
+    return td ? [...td.querySelectorAll('[data-wcb]')].map(b => b.getAttribute('data-wcboth')) : null;
+  }, MON);
+  t('★★自分の店の分にはふちを付けない', !!monB && monB.join(',') === '0', monB);
 
   // ── ④ クイック・レギュラーは台数 ──
   console.log('\n■ ④ クイック・レギュラーは台数で見る');
@@ -224,6 +276,8 @@ const seed = {
   t('★木（制限3台・3台入っている）はいっぱい＝見出しまで暗く', (await headDim(THU)) === '1');
   t('★金（1台だけ）は「あと5台」', !!qFri && qFri.lab === 'あと5台', qFri);
   t('★土（レギュラー3台）はクイックならまだ入る', !!qSat && qSat.lab === 'あと3台', qSat);
+  const qSun = await insAt(SUN);
+  t('★★台数は両店あわせて数える（日＝三田店の1台を引いて あと5台）', !!qSun && qSun.lab === 'あと5台', qSun);
   t('★クイックの時は時間の枠を囲わない', !(await anyBlock()));
   await tap('[data-wcourse="3"]'); await page.waitForTimeout(200);
   await tap('[data-wgo]'); await page.waitForTimeout(700);
