@@ -87,7 +87,12 @@
   .searching .blk.top{border-top:2px solid #f59e0b!important}
   .searching .blk.bot{border-bottom:2px solid #f59e0b!important}
   /* 赤い入庫制限の枠に出す「マッハ車検」 */
-  .machlab{position:absolute;left:4px;top:1px;font-size:10px;font-weight:900;color:#b91c1c}
+  /* ★「マッハ車検」「マッハ可」は2つの枠のど真ん中に置く（2026-10-25 ユーザー指示）。
+     1枠目の下端（top:100%）に置いて半分持ち上げると、2枠ぶんの中央に来る */
+  .machlab,.machok{position:absolute;left:50%;top:100%;transform:translate(-50%,-50%);
+    font-size:11px;font-weight:900;white-space:nowrap;z-index:4;padding:1px 8px;border-radius:9px}
+  .machlab{color:#fff;background:#b91c1c}
+  .machok{color:#fff;background:#d97706}
   .searching .hit.ins{background:#fffbe6!important}
   .searching th.dim{position:relative}
   .badge{position:absolute;right:3px;top:1px;font-size:9.5px;font-weight:900;color:#b45309}
@@ -281,7 +286,7 @@
   function clear(){
     tbl.classList.remove('searching');
     [].forEach.call(tbl.querySelectorAll('.dim,.hit,.blk'),function(e){e.classList.remove('dim','hit','blk','top','bot');});
-    [].forEach.call(tbl.querySelectorAll('.machlab'),function(e){e.remove();});
+    [].forEach.call(tbl.querySelectorAll('.machlab,.machok'),function(e){e.remove();});
     [].forEach.call(tbl.querySelectorAll('.badge'),function(e){e.remove();});
     res.textContent='';
   }
@@ -335,7 +340,7 @@
           var c=tbl.querySelector('td[data-d="'+i+'"][data-slot="'+TIMES[si+k]+'"]');
           if(!c)return;
           c.classList.add('blk'); if(k===0)c.classList.add('top'); if(k===1)c.classList.add('bot');
-          if(k===0){ var s2=document.createElement('span'); s2.className='badge'; s2.textContent='マッハ可'; c.appendChild(s2); }
+          if(k===0){ c.style.position='relative'; var s2=document.createElement('span'); s2.className='machok'; s2.textContent='マッハ可'; c.appendChild(s2); }
         });
       });
     });
