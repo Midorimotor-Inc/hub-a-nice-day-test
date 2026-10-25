@@ -112,12 +112,12 @@ const seed = {
     if (!tr) return null;
     const td = tr.children[di + 1]; if (!td) return null;
     const st = getComputedStyle(td);
-    const ov = [...td.querySelectorAll('span')].find(s => getComputedStyle(s).position === 'absolute' && getComputedStyle(s).inset.indexOf('0px') === 0);
+    const ovs = [...td.querySelectorAll('span')].filter(s => getComputedStyle(s).position === 'absolute' && getComputedStyle(s).inset.indexOf('0px') === 0).map(s => getComputedStyle(s).backgroundColor);
     return {
       dim: td.getAttribute('data-wdim'), txt: td.innerText.replace(/\s+/g, ''),
       bt: parseFloat(st.borderTopWidth), bb: parseFloat(st.borderBottomWidth),
       bl: st.borderLeftColor, bg: st.backgroundColor,
-      ovbg: ov ? getComputedStyle(ov).backgroundColor : '',
+      ovs: ovs, ovbg: ovs[ovs.length - 1] || '',
     };
   }, [label, dayIdx]);
   const insAt = (d) => page.evaluate(x => {
@@ -228,7 +228,7 @@ const seed = {
   t('★氏名・車種は出さない', !!w10 && !/朝一|昼一/.test(w10.txt), w10);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
   const dimc = await cellAt('09:00', C('TUE'));
-  t('★網掛けは ほぼ黒の45%', !!dimc && dimc.ovbg === 'rgba(0, 0, 0, 0.45)', dimc);
+  t('★網掛けは ほぼ黒の45%', !!dimc && dimc.ovs.indexOf('rgba(0, 0, 0, 0.45)') >= 0, dimc);
 
   // ── ③-2 「マッハ可」の隣の ＋ から直接マッハ車検を受ける ──
   console.log("\n■ ③-2 「マッハ可」の隣の ＋ から直接マッハ車検を受ける");
@@ -297,32 +297,49 @@ const seed = {
   const mins = await page.evaluate(() => [...document.querySelectorAll('[data-wmin]')].map(e => e.innerText.replace(/\s+/g, '')));
   t('★所要時間は 30分・1時間・1時間半・2時間の4つ', mins.join(',') === '30分,1時間,1時間半,2時間', mins);
   t('★整備の時はコースを出さない', await page.evaluate(() => document.querySelectorAll('[data-wcourse]').length === 0));
+  // ★2時間：マッハ枠（10:00〜11:00・14:00〜15:00）で切れるので、午後の 15:00〜17:30 だけがとれる
   await tap('[data-wmin="120"]'); await page.waitForTimeout(200);
   await tap('[data-wgo]'); await page.waitForTimeout(800);
-  const s0900 = await cellAt('09:00', C('WED')), s1000 = await cellAt('10:00', C('WED'));
-  const s1030 = await cellAt('10:30', C('WED')), s1100 = await cellAt('11:00', C('WED'));
+  const s0900 = await cellAt('09:00', C('WED'));
+  const s1000 = await cellAt('10:00', C('WED')), s1030 = await cellAt('10:30', C('WED'));
   const s1400 = await cellAt('14:00', C('WED')), s1430 = await cellAt('14:30', C('WED'));
-  const s1500 = await cellAt('15:00', C('WED')), s1600 = await cellAt('16:00', C('WED')), s1800 = await cellAt('18:00', C('WED'));
+  const s1100 = await cellAt('11:00', C('WED'));
+  const s1500 = await cellAt('15:00', C('WED')), s1600 = await cellAt('16:00', C('WED'));
+  const s1730 = await cellAt('17:30', C('WED')), s1800 = await cellAt('18:00', C('WED'));
   t('★埋まっている 09:00 は暗く', !!s0900 && s0900.dim === '1', s0900);
   t('★★マッハ車検の枠（10:00・10:30）は整備では常に暗い', !!s1000 && s1000.dim === '1' && !!s1030 && s1030.dim === '1', { s1000, s1030 });
   t('★★14:00・14:30 も同じく暗い', !!s1400 && s1400.dim === '1' && !!s1430 && s1430.dim === '1', { s1400, s1430 });
   t('★★マッハ枠は文字を出さず暗くするだけ', !!s1000 && !/マッハ/.test(s1000.txt) && !!s1400 && !/マッハ/.test(s1400.txt), { s1000, s1400 });
   t('★★マッハ枠の中でも ＋ は押せる（入力は止めない）', !!s1000 && /＋/.test(s1000.txt), s1000);
+  t('★★18:00 は受付していないので常に暗い', !!s1800 && s1800.dim === '1', s1800);
+  t('★★18:00 も ＋ は押せる（入力は止めない）', !!s1800 && /＋/.test(s1800.txt), s1800);
   t('★2時間とれる続きだけを囲う（15:00 から始まる）', !!s1500 && s1500.bt >= 2 && ORANGE.test(s1500.bl), s1500);
   t('★1時間ずつに刻まない（16:00 の上に線を入れない）', !!s1600 && s1600.bt < 2, s1600);
-  t('★囲いは 18:00 で終わる（下に線）', !!s1800 && s1800.bb >= 2, s1800);
+  t('★★囲いは 17:30 で終わる（18:00 の手前まで）', !!s1730 && s1730.bb >= 2, s1730);
   t('★★マッハ枠で切れて2時間とれない所は暗い（11:00〜11:30）', !!s1100 && s1100.dim === '1', s1100);
   t('★枠の中に「何分」は出さない', !!s1500 && !/分/.test(s1500.txt), s1500);
-  const nres = await page.evaluate(() => { const r = document.querySelector('[data-wres]'); return r ? r.innerText.replace(/\s+/g, '') : ''; });
-  t('★とれる所の数が出る', /2時間以上とれる空きが\d+か所/.test(nres), nres);
+  const nres = await page.evaluate(() => { const r = document.querySelector('[data-wres]'); return r ? r.innerText.replace(/[ \t\r\n]+/g, '') : ''; });
+  t('★とれる所の数が出る', /2時間以上とれる空きが[1-9][0-9]*か所/.test(nres), nres);
+
+  // ★1時間：続けて空いている所をまとめて囲う
+  await tap('[data-wmin="60"]'); await page.waitForTimeout(200);
+  await tap('[data-wgo]'); await page.waitForTimeout(800);
+  const m1100 = await cellAt('11:00', C('WED')), m1130 = await cellAt('11:30', C('WED'));
+  const m1500 = await cellAt('15:00', C('WED')), m1730 = await cellAt('17:30', C('WED'));
+  const m1800 = await cellAt('18:00', C('WED'));
+  t('★1時間なら 11:00〜11:30 も囲う', !!m1100 && m1100.bt >= 2 && !!m1130 && m1130.bb >= 2 && m1130.bt < 2, { m1100, m1130 });
+  t('★午後は 15:00〜17:30 をひとまとめ', !!m1500 && m1500.bt >= 2 && !!m1730 && m1730.bb >= 2, { m1500, m1730 });
+  t('★★1時間でも 18:00 は暗いまま', !!m1800 && m1800.dim === '1', m1800);
+
+  // ★30分：1枠だけでも囲う
   await tap('[data-wmin="30"]'); await page.waitForTimeout(200);
   await tap('[data-wgo]'); await page.waitForTimeout(800);
-  const h0930 = await cellAt('09:30', C('WED')), h1100 = await cellAt('11:00', C('WED'));
-  const h1130 = await cellAt('11:30', C('WED')), h1000 = await cellAt('10:00', C('WED'));
+  const h0930 = await cellAt('09:30', C('WED')), h1330 = await cellAt('13:30', C('WED'));
+  const h1000 = await cellAt('10:00', C('WED')), h1800 = await cellAt('18:00', C('WED'));
   t('★30分なら 09:30 の1枠だけでも囲う', !!h0930 && h0930.bt >= 2 && h0930.bb >= 2, h0930);
-  t('★11:00〜11:30 は続きなので1つの枠にまとめる', !!h1100 && h1100.bt >= 2 && !!h1130 && h1130.bb >= 2 && h1130.bt < 2, { h1100, h1130 });
+  t('★13:30 の1枠も囲う', !!h1330 && h1330.bt >= 2 && h1330.bb >= 2, h1330);
   t('★★30分でもマッハ枠は空けたまま（暗い）', !!h1000 && h1000.dim === '1', h1000);
-
+  t('★★30分でも 18:00 は暗いまま', !!h1800 && h1800.dim === '1', h1800);
   if (process.env.SHOT2) await page.screenshot({ path: process.env.SHOT2, fullPage: true });
   // ── ⑥ やめる ──
   console.log('\n■ ⑥ やめると元に戻る');

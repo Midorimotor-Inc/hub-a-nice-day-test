@@ -478,6 +478,38 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-weekbtn]'); if (b) b.click(); });
   await page.waitForTimeout(900);
 
+  // ── ⑦-2 本日より前の列をうっすら暗く（15%・2026-10-25 ユーザー決定）──
+  console.log("\n■ ⑦-2 本日より前の列をうっすら暗く（15%）");
+  const dim = await page.evaluate(([mon, tue, wed, thu]) => {
+    const col = (dk) => {
+      const th = document.querySelector('[data-wday="' + dk + '"]');
+      const ins = document.querySelector('[data-wins="' + dk + '"]');
+      const stf = document.querySelector('[data-wstf="' + dk + '"]');
+      const cel = document.querySelector('[data-wadd^="' + dk + '/"]');
+      const has = (e) => !!(e && e.querySelector('[data-wpast]'));
+      return { head: has(th && th.closest('th')), ins: has(ins), stf: has(stf), cell: has(cel) };
+    };
+    const any = document.querySelector('[data-wpast]');
+    const foot = document.querySelector('[data-wfoot]');
+    return { mon: col(mon), tue: col(tue), wed: col(wed), thu: col(thu),
+      alpha: any ? getComputedStyle(any).backgroundColor : '',
+      z: any ? getComputedStyle(any).zIndex : '',
+      pe: any ? getComputedStyle(any).pointerEvents : '',
+      footPast: !!(foot && foot.querySelector('[data-wpast]')) };
+  }, [MON, TUE, WED, dk(22)]);
+  t('★★月（本日より前）は見出しも暗くする', dim.mon.head, dim);
+  t('★★車検の欄にも掛かる（元の色が残ってまだらにならない）', dim.mon.ins, dim);
+  t('★★出勤の欄にも掛かる', dim.mon.stf, dim);
+  t('★★時間の枠にも掛かる', dim.mon.cell, dim);
+  t('★★火（本日より前）も同じ', dim.tue.head && dim.tue.ins && dim.tue.stf && dim.tue.cell, dim);
+  t('★★本日（水）は暗くしない（オレンジの太枠で目立たせているため）',
+    !dim.wed.head && !dim.wed.ins && !dim.wed.stf && !dim.wed.cell, dim);
+  t('★★先の日（木）も暗くしない', !dim.thu.head && !dim.thu.ins && !dim.thu.stf, dim);
+  t('★★濃さは15%', dim.alpha === 'rgba(0, 0, 0, 0.15)', dim);
+  t('★★網掛け（45%）より下に敷く（重なっても濁らない）', String(dim.z) === '2', dim);
+  t('★★覆いは押せない（＋ や バッジの邪魔をしない）', dim.pe === 'none', dim);
+  t('★★据え置きの表（午後入庫・時間未定）にも掛かる', dim.footPast, dim);
+
   // ── ⑧ 店を変えると中身も変わる ──
   console.log('\n■ ⑧ 店ごとに出す');
   await page.evaluate(() => { const b = [...document.querySelectorAll('[data-weekview] button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); });
