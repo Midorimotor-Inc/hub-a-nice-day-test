@@ -132,7 +132,7 @@
             <button data-c="ク">クイック車検</button>
             <button data-c="レ">レギュラー車検</button>
           </span>
-          <span class="hint" id="courseHint">マッハは 10:00 と 14:00 が基本の枠です</span>
+          <span class="hint" id="courseHint">マッハは 10:00 と 14:00 の枠で見ます</span>
         </span>
         <span id="schedOpt" style="display:none">
           <b>作業の所要時間</b>
@@ -150,10 +150,13 @@
       <table id="t"></table>
     </div>
     <div class="note">
-      ・<b>車検</b>：コースの<b>基本の枠</b>（マッハ＝10:00・14:00／クイック＝09:00・09:30／レギュラー＝11:00・13:00）を見て、
-        <b>空いている日だけ明るく</b>、埋まっている日は暗くします。明るい所の「＋」からそのまま受けられます。<br>
+      ・<b>車検（マッハ）</b>：<b>10:00・14:00 の枠</b>が空いている日だけ明るく。右上に「14:00 空き」と出ます。<br>
+      ・<b>車検（クイック・レギュラー）</b>：枠ではなく<b>台数</b>で見ます（2026-10-25 決定）。
+        1日6台まで（制限を掛けた日はその数）、<b>レギュラーは1日3台まで</b>。右上に「あと3台」と出ます。
+        見本として 10/23（金）に「最大3台」の制限を掛けてあります。<br>
       ・<b>整備</b>：選んだ<b>所要時間が続けて取れる所だけ</b>明るくします。30分なら1枠、1時間なら2枠続けて空いている所。
         <b>入庫制限（赤）と休業日は空きに数えません。</b>右上に「60分」のように取れる長さを出します。<br>
+      ・<b>【保留】12ヶ月点検だけは朝預かり・夕方返し</b>なので、この所要時間の考え方に当てはまりません（2026-10-25 ユーザー指示・いったん保留）。<br>
       ・<b>暗くするだけで、押せなくはしません</b>（どうしても入れたい時は暗い所にも入れられます）。
     </div>
   </div>
@@ -191,8 +194,12 @@
   var STAFF=[{n:'見取大介',c:'見'},{n:'岡上秀一',c:'岡'},{n:'竹林直行',c:'竹'},{n:'幸田桂紀',c:'幸'},
              {n:'魚住圭',c:'魚'},{n:'舟田祥子',c:'舟'},{n:'江川京志',c:'江'},{n:'ダク',c:'ダ'},{n:'カビン',c:'カ'}];
   var OFF=[['竹林直行'],['見取大介'],['幸田桂紀','魚住圭','舟田祥子'],['見取大介','江川京志'],['カビン'],['岡上秀一'],['岡上秀一','カビン','舟田祥子']];
-  // コースの基本の枠
-  var BASE={'マ':['10:00','14:00'],'ク':['09:00','09:30'],'レ':['11:00','13:00']};
+  // ★マッハだけ「基本の枠」で見る（10:00・14:00）。
+  //   クイック・レギュラーは枠ではなく**台数**で見る（2026-10-25 ユーザー決定）。
+  var MACH_SLOTS=['10:00','14:00'];
+  var DAY_LIMIT=6;          // その日に受けられる車検の台数（制限を掛けた日はその数）
+  var REG_LIMIT=3;          // レギュラー車検は1日3台まで
+  var LIMIT={4:3};          // 10/23（金）だけ「最大3台」の制限を掛けてある（見本）
   var CC={'マ':'m','ク':'k','レ':'r'};
   var WC={'Q':'#0891b2','⑫':'#4f46e5','M6':'#4f46e5','N6':'#4f46e5','納':'#047857','他':'#64748b'};
   var isH0=function(s){return /:00$/.test(s)&&s.indexOf('入庫')<0&&s.indexOf('未定')<0;};
@@ -264,8 +271,9 @@
   });
   segPick('segCourse',function(b){ course=b.dataset.c;
     document.getElementById('courseHint').textContent=
-      course==='マ'?'マッハは 10:00 と 14:00 が基本の枠です':
-      course==='ク'?'クイックは 09:00 と 09:30 が基本の枠です':'レギュラーは 11:00 と 13:00 が基本の枠です';
+      course==='マ'?'マッハは 10:00 と 14:00 の枠で見ます':
+      course==='ク'?'クイックは台数で見ます（1日6台まで／制限を掛けた日はその数）':
+                   'レギュラーは台数で見ます（1日3台まで）';
     clear();
   });
   segPick('segMin',function(b){ mins=Number(b.dataset.m); clear(); });
@@ -283,19 +291,31 @@
     if(kind==='insp') findInsp(); else findSched();
   };
   function findInsp(){
-    var base=BASE[course], hit=0;
+    var hit=0;
     DAYS.forEach(function(d,i){
-      var used=(INSP[i]||[]).filter(function(x){return x[0]===course;}).map(function(x){return x[1];});
-      var free=base.filter(function(b){return used.indexOf(b)<0;});
+      var rows=INSP[i]||[];
+      var ok=false, label='';
+      if(course==='マ'){
+        // マッハ＝基本の枠（10:00・14:00）が空いているか
+        var used=rows.filter(function(x){return x[0]==='マ';}).map(function(x){return x[1];});
+        var free=MACH_SLOTS.filter(function(b){return used.indexOf(b)<0;});
+        ok=free.length>0; label=free.join('・')+' 空き';
+      }else{
+        // クイック・レギュラー＝その日の台数で見る（枠は決めない）
+        var lim=(LIMIT[i]!=null?LIMIT[i]:DAY_LIMIT);
+        var rest=lim-rows.length;
+        if(course==='レ'){ rest=Math.min(rest,REG_LIMIT-rows.filter(function(x){return x[0]==='レ';}).length); }
+        ok=rest>0; label='あと'+rest+'台';
+        if(rest<=0) label='いっぱい';
+      }
       var td=tbl.querySelector('[data-ins="'+i+'"]');
       var th=tbl.querySelector('th[data-d="'+i+'"]');
-      if(free.length){ hit++; td.classList.add('hit','ins');
-        var s=document.createElement('span'); s.className='badge'; s.textContent=free.join('・')+' 空き'; td.appendChild(s);
+      if(ok){ hit++; td.classList.add('hit','ins');
+        var s=document.createElement('span'); s.className='badge'; s.textContent=label; td.appendChild(s);
       } else { td.classList.add('dim'); th.classList.add('dim'); }
-      // その日の時間の枠は、空きが無い日だけ暗くする
-      [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){ if(!free.length)c.classList.add('dim'); });
+      [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){ if(!ok)c.classList.add('dim'); });
     });
-    res.textContent=hit+'日に空きがあります（'+course+'＝'+base.join('・')+'）';
+    res.textContent=hit+'日に空きがあります（'+(course==='マ'?'マッハ＝10:00・14:00 の枠':'台数で判定')+'）';
   }
   function findSched(){
     var need=Math.ceil(mins/30), hit=0;
