@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792904806504';
+    window.__APP_BUILD='build-1792906197888';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.75';
+const APP_VERSION = '3.76';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4279,7 +4279,11 @@ const WEEK_DAY_LIMIT=6;     // その日に受けられる車検の台数（制�
 const WEEK_REG_LIMIT=3;     // レギュラー車検は1日3台まで
 const WEEK_DIM='rgba(0,0,0,.45)';
 const WEEK_OK='#047857';     // 「マッハ可」の札。赤い「マッハ車検」と見分けるため緑（2026-10-25 ユーザー指示）
-const WEEK_TAKEN='#fca5a5';  // すでに入っている「マッハ車検」の札。薄い赤（緑の「マッハ可」と見分ける）
+const WEEK_TAKEN='#fecaca';  // 「マッハ予約済み」の札。ごく薄い赤（緑の「マッハ可」と見分ける）
+// ★整備で空きを探す時、マッハ車検の枠（10:00〜11:00・14:00〜15:00）は常に空けておく（本店のみ）。
+//   先に一般整備を入れてしまうとマッハ車検が入れられなくなるため（2026-10-25 ユーザー指示）。
+//   前日・当日になってまだ空いていれば、入力する人が自分の判断で入れてよい＝入力は止めない。
+const WEEK_HOLD_LABEL='マッハ枠';
 const weekMinOf=(x)=>{const m=String(x||'').match(/^(\d+):(\d+)$/);return m?Number(m[1])*60+Number(m[2]):-1;};
 // 月曜はじまりの週頭
 const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
@@ -4415,7 +4419,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
             pair.forEach((sl,k)=>{
               const key=dk+'|'+sl, o=cell[key]||(cell[key]={});
               if(isFree){o.blk=true;o.top=(k===0);o.bot=(k===pair.length-1);}
-              if(k===0){o.lab=isFree?'マッハ可':'マッハ車検';o.labKind=isFree?'ok':'mach';}
+              if(k===0){o.lab=isFree?'マッハ可':'マッハ予約済み';o.labKind=isFree?'ok':'mach';}
             });
           });
         }else{
@@ -4427,7 +4431,17 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
       }else{
         const need=Math.ceil(find.mins/30);
         const rs=restrictionOf?restrictionOf(dk):null;
-        const freeAt=(sl)=>slotEntries(dk,sl).length===0&&!restrCovers(rs,sl);
+        // ★マッハ車検の枠は整備の空きに数えない（本店のみ・2026-10-25 ユーザー指示）
+        const hold={};
+        if(storeId==='honten')MACH_FIND_SLOTS.forEach(t=>{
+          const ix=weekTimes.indexOf(t); if(ix<0)return;
+          [weekTimes[ix],weekTimes[ix+1]].filter(Boolean).forEach((sl,k)=>{
+            hold[sl]=true;
+            const o=cell[dk+'|'+sl]||(cell[dk+'|'+sl]={});
+            if(k===0){o.lab=WEEK_HOLD_LABEL;o.labKind='hold';}
+          });
+        });
+        const freeAt=(sl)=>!hold[sl]&&slotEntries(dk,sl).length===0&&!restrCovers(rs,sl);
         let i=0;
         while(i<weekTimes.length){
           if(!freeAt(weekTimes[i])){i++;continue;}
@@ -4452,8 +4466,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const LABW={position:'absolute',left:'50%',top:'100%',transform:'translate(-50%,-50%)',zIndex:4,
     display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'};
   const LAB=(kind)=>({fontSize:11,fontWeight:900,whiteSpace:'nowrap',padding:'1px 8px',borderRadius:9,
-    color:kind==='ok'?'white':'#7f1d1d',background:kind==='ok'?WEEK_OK:WEEK_TAKEN,
-    border:'1px solid '+(kind==='ok'?WEEK_OK:'#ef4444')});
+    color:kind==='ok'?'white':'#991b1b',
+    background:kind==='ok'?WEEK_OK:(kind==='hold'?'white':WEEK_TAKEN),
+    border:(kind==='ok'?'1px solid '+WEEK_OK:(kind==='hold'?'1px dashed #f87171':'1px solid #fca5a5'))});
   const LABADD={display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
     borderRadius:'50%',border:'1.5px dashed #fb923c',background:'white',color:'#c2410c',padding:0,
     fontSize:12,fontWeight:900,lineHeight:1,cursor:'pointer',fontFamily:'inherit'};
@@ -4465,7 +4480,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const slotRow=(slot,last)=>{
     const sp=isSpecialSlot(slot);
     // ★空き探しの印（2026-10-25）。dayDim＝その日まるごと／blk＝明るい枠／lab＝真ん中の札
-    const sDim=(dk)=>!!(sr&&(sr.dayDim[dk]||(find.kind==='sched'&&!srCell(dk,slot))));
+    // 整備は「囲いに入っていない枠」を暗くする（マッハ枠のように札だけ出す枠も暗いまま）
+    const sDim=(dk)=>{const b=srCell(dk,slot);
+      return !!(sr&&(sr.dayDim[dk]||(find.kind==='sched'&&!(b&&b.blk))));};
     const sBlk=(dk)=>{const b=srCell(dk,slot);
       return (b&&b.blk)?{...BLK,...(b.top?{borderTop:'2px solid #f59e0b'}:{}),...(b.bot?{borderBottom:'2px solid #f59e0b'}:{})}:{};};
     const sLab=(dk)=>{const b=srCell(dk,slot);
