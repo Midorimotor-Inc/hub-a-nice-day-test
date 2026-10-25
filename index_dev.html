@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792916510196';
+    window.__APP_BUILD='build-1792971166152';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.77.2';
+const APP_VERSION = '3.77.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4608,13 +4608,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
             </span>
           </div>
           {/* ★中：週送り。真ん中に、大きく（2026-10-23 ユーザー指示）。
-              🔍 検索は「次の週」の隣に置くが、週送りの3つは真ん中のままにしたいので、
+              🔍 空き検索は「次の週」の隣に置くが、週送りの3つは真ん中のままにしたいので、
               左に【見えない同じ大きさの控え】を入れて釣り合いを取る（2026-10-25 ユーザー指示） */}
           <div style={{flexShrink:0,display:'flex',gap:9,alignItems:'center'}}>
             <button aria-hidden="true" tabIndex={-1} data-wfindghost="1"
               style={{visibility:'hidden',pointerEvents:'none',marginLeft:5,
                 border:'2px solid transparent',borderRadius:10,padding:'8px 20px',fontSize:15,fontWeight:800,
-                fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
+                fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 空き検索</button>
             {[['‹ 前の週',-1],['今週',0],['次の週 ›',1]].map(([t,v])=>(
               <button key={t} onClick={()=>onWeek(v)} data-wnav={String(v)}
                 style={{background:v===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.22)',
@@ -4622,12 +4622,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   padding:'8px 22px',fontSize:15,fontWeight:800,
                   color:v===0?'#0e5a6b':'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{t}</button>
             ))}
-            {/* ★🔍 検索は「次の週」の隣（真ん中寄り）に置く。2026-10-25 ユーザー指示 */}
+            {/* ★🔍 空き検索は「次の週」の隣（真ん中寄り）に置く。2026-10-25 ユーザー指示。札の名前は 2026-10-26 に「空き検索」へ */}
             <button data-wfind="1" title="空いている所を探す" onClick={()=>setFind(p=>({...p,open:!p.open}))}
               style={{background:'#E8492E',marginLeft:5,
                 border:(find.open?'2px solid white':'2px solid rgba(255,255,255,.75)'),borderRadius:10,
                 padding:'8px 20px',fontSize:15,fontWeight:800,
-                color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
+                color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 空き検索</button>
           </div>
           {/* 右：⛶ 最大化／✕ */}
           <div style={{flex:1,display:'flex',justifyContent:'flex-end',gap:7,alignItems:'center'}}>
@@ -4720,6 +4720,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                         fontSize:11.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
                       {(d.getMonth()+1)+'/'+d.getDate()+'（'+WEEK_DOW[i]+'）'}
                     </button>
+                    {/* ★日付の右隣に、その日の車検の合計台数（両店あわせて）。2026-10-26 ユーザー指示：合計だけでよい */}
+                    {!cl&&<span data-wdaycnt={dk} title={'この日の車検　合計 '+inspOf(dk).length+'台（両店あわせて）'}
+                      style={{marginLeft:5,display:'inline-flex',alignItems:'center',padding:'2px 7px',borderRadius:9,
+                        border:'1px solid #fed7aa',background:'#fff7ed',color:'#9a3412',
+                        fontSize:11,fontWeight:900,whiteSpace:'nowrap',verticalAlign:'middle'}}>{inspOf(dk).length}台</span>}
                     {cl&&<div style={{fontWeight:700,color:CLOSED_FG,fontSize:10}}>{CLOSED_LABEL}</div>}
                   </th>;})}
               </tr>

@@ -146,7 +146,7 @@ const seed = {
   if (process.env.SHOT0) await page.screenshot({ path: process.env.SHOT0, fullPage: true });
 
   // ── ① ボタンの置き場所 ──
-  console.log('\n■ ① 🔍 検索は週送りの隣／右上は ⛶ 最大化 → ✕');
+  console.log('\n■ ① 🔍 空き検索は週送りの隣／右上は ⛶ 最大化 → ✕');
   const top = await page.evaluate(() => {
     const f = document.querySelector('[data-wfind]'), s = document.querySelector('[data-wfs]');
     if (!f || !s) return null;
@@ -157,7 +157,11 @@ const seed = {
       fs: rt.findIndex(x => /最大化|戻す/.test(x)), x: rt.indexOf('✕'), ttl: s.getAttribute('title') || '',
       mid: Math.round(fr.left + fr.width / 2), w: window.innerWidth, h: Math.round(fr.height) };
   });
-  t('★「🔍 検索」のボタンがある', !!top && top.find >= 0, top);
+  t('★「🔍 空き検索」のボタンがある', !!top && top.find >= 0, top);
+  const findLab = await page.evaluate(() => { const b = document.querySelector('[data-wfind]'); return b ? b.innerText.replace(/\s+/g, '') : ''; });
+  t('★★札の名前は「空き検索」（2026-10-26 ユーザー指示）', findLab === '🔍空き検索', findLab);
+  const ghostLab = await page.evaluate(() => { const b = document.querySelector('[data-wfindghost]'); return b ? b.textContent.replace(/\s+/g, '') : ''; });
+  t('★★釣り合いの控えも同じ名前（週送りが真ん中に残る）', ghostLab === '🔍空き検索', ghostLab);
   const findBtn = await page.evaluate(() => { const b = document.querySelector('[data-wfind]'); return b ? getComputedStyle(b).backgroundColor : ''; });
   t('★検索ボタンは（押す前から）赤い', findBtn === 'rgb(232, 73, 46)', findBtn);
   t('★「⛶ 最大化」のボタンがある', !!top && top.fs >= 0, top);

@@ -173,6 +173,19 @@ const seed = {
   t('★★他店（三田店）の車検も出す（両店あわせて5台）', !!tue && tue.txt.length === 5, tue);
   t('★★他店の分だけ白いふちで見分けられる', !!tue && tue.oth === '01000', tue);
   t('キャンセルの分は出さない', !!tue && tue.txt.length === 5);
+  // ★日付の右隣に、その日の車検の合計台数（両店あわせて）。2026-10-26 ユーザー指示：合計だけ
+  const cnt = await page.evaluate(ds => ds.map(d => {
+    const b = document.querySelector('[data-wdaycnt="' + d + '"]');
+    if (!b) return null;
+    const btn = document.querySelector('[data-wday="' + d + '"]');
+    const r = b.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    return { txt: b.innerText.trim(), right: r.left >= br.right - 1, title: b.getAttribute('title') || '' };
+  }), [MON, TUE, WED]);
+  t('★★日付の右隣に車検の合計台数が出る（火＝両店あわせて5台）', !!cnt[1] && cnt[1].txt === '5台', cnt);
+  t('★★月は1台・水は2台', !!cnt[0] && cnt[0].txt === '1台' && !!cnt[2] && cnt[2].txt === '2台', cnt);
+  t('★★合計だけを出す（コースごとの数は出さない）', !!cnt[1] && /^[0-9]+台$/.test(cnt[1].txt), cnt);
+  t('★★日付のバッジより右にある', !!cnt[1] && cnt[1].right, cnt);
+  t('なぞると「両店あわせて」と出る', !!cnt[1] && /両店/.test(cnt[1].title), cnt);
   const tip = await page.evaluate(d => { const b = document.querySelector('[data-wins="' + d + '"] [data-wcb]'); return b ? b.getAttribute('title') : ''; }, TUE);
   t('なぞると「時間・氏名・コース」が出る', /09:00/.test(tip) && /マ一/.test(tip) && /マッハ車検/.test(tip), tip);
 
@@ -445,6 +458,7 @@ const seed = {
     return { label: th ? th.innerText.replace(/\s+/g, '') : '', ins: !!document.querySelector('[data-wins="' + d + '"]'), add: !!document.querySelector('[data-wadd^="' + d + '/"]') };
   }, dk(22));
   t('★休業日は見出しに「休業日」と出る', /休業日/.test(closed.label), closed);
+  t('★休業日には車検の合計台数を出さない', await page.evaluate(d => !document.querySelector('[data-wdaycnt="' + d + '"]'), dk(22)));
   t('★休業日の列には車検の ＋ を出さない', !closed.ins, closed);
   t('★休業日の列には空き枠の ＋ を出さない', !closed.add, closed);
   t('営業日（水）には空き枠の ＋ が出る', await page.evaluate(d => !!document.querySelector('[data-wadd^="' + d + '/"]'), WED));
