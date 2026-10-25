@@ -68,8 +68,10 @@
   .ent{display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden}
   .wk{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;
     color:white;font-size:9.5px;font-weight:900;flex-shrink:0}
-  /* ★これが「本日より前」の薄暗く。背景の上に重ねるので元の色が残る */
-  .past{background-image:linear-gradient(var(--pb),var(--pb))}
+  /* ★これが「本日より前」の薄暗く。本体の網掛けと同じで【セルの上に重ねる】。
+     背景色を塗り替える書き方だと、車検の欄（#fff7ed）や 00分の帯（#e6f6fb）のように
+     background を指定しているセルに乗らず、まだらに見える（2026-10-25 ユーザー指摘） */
+  .ov{position:absolute;inset:0;background:var(--pb);pointer-events:none;z-index:3}
   .cap{color:#e2e8f0;font-size:12.5px;margin:0 12px 10px}
 </style>
 </head>
@@ -127,7 +129,9 @@ var TIMES=['09:00','09:30','10:00','10:30','11:00','11:30','午前入庫','13:00
 var FOOT=['午後入庫','時間未定'];
 var SPECIAL={'午前入庫':1,'午後入庫':1,'時間未定':1};
 
-function pastCls(i){ if(PAST[i])return ' past'; if(i===TODAY&&document.getElementById('incToday').checked)return ' past'; return ''; }
+function isPast(i){ if(PAST[i])return true; return (i===TODAY&&document.getElementById('incToday').checked); }
+function pastCls(i){ return ''; }                       // 背景は塗り替えない
+function ov(i){ return isPast(i)?'<span class="ov"></span>':''; }   // 上に重ねる覆い
 function colCls(i){ return (i===TODAY?' td0 td1':''); }
 
 function build(){
@@ -140,7 +144,7 @@ function build(){
     cls+=colCls(i)+pastCls(i);
     var inner=(i===TODAY)?'<span class="dbadge">'+d[0]+'（'+d[1]+'）</span>'
       :'<span class="dplain'+(d[1]==='日'?' sun':(d[1]==='土'?' sat':''))+'">'+d[0]+'（'+d[1]+'）</span>';
-    h+='<th class="'+cls.trim()+'">'+inner+'</th>';
+    h+='<th class="'+cls.trim()+'">'+ov(i)+inner+'</th>';
   }
   h+='</tr></thead><tbody>';
   // 車検
@@ -156,12 +160,12 @@ function build(){
     g+='<div class="col"><span class="cb plus">＋</span></div>';
     if(LIMIT[i]!=null)g+='<div class="lim">最大'+LIMIT[i]+'台</div>';
     g+='</div>';
-    h+='<td class="ins'+colCls(i)+pastCls(i)+'">'+g+'</td>';
+    h+='<td class="ins'+colCls(i)+'">'+ov(i)+g+'</td>';
   }
   h+='</tr>';
   // 出勤
   h+='<tr><td class="tm stf">出勤</td>';
-  for(var i=0;i<7;i++) h+='<td class="stf'+colCls(i)+pastCls(i)+'"><span class="sb">江</span><span class="sb">竹</span></td>';
+  for(var i=0;i<7;i++) h+='<td class="stf'+colCls(i)+'">'+ov(i)+'<span class="sb">江</span><span class="sb">竹</span></td>';
   h+='</tr>';
   // 時間
   for(var r=0;r<TIMES.length;r++) h+=row(TIMES[r]);
@@ -183,7 +187,7 @@ function row(slot){
       ? '<div class="ent"><span class="wk" style="background:'+e[1]+'">'+e[0]+'</span><b>'+e[2]+'</b>'
         +'<span style="color:#64748b;overflow:hidden;text-overflow:ellipsis">'+e[3]+'</span></div>'
       : '<span class="add">＋</span>';
-    h+='<td class="'+colCls(i).trim()+pastCls(i)+'">'+inner+'</td>';
+    h+='<td class="'+colCls(i).trim()+'">'+ov(i)+inner+'</td>';
   }
   return h+'</tr>';
 }
