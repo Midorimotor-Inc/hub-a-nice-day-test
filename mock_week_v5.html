@@ -77,7 +77,7 @@
   .searching td.cell,.searching td.ins{transition:all .15s}
   /* ★2026-10-25 ユーザー指示：薄く白けるのではなく **ほぼダークブラックの網掛け**（少しだけ透ける） */
   .searching .dim{position:relative}
-  .searching .dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.78);pointer-events:none;z-index:3}
+  .searching .dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--dimA,.62));pointer-events:none;z-index:3}
   .searching th.dim::after{inset:0}
   .searching .hit{background:#fffbe6!important;box-shadow:inset 0 0 0 3px #f59e0b;position:relative}
   .searching .hit.ins{background:#fffbe6!important}
@@ -145,6 +145,15 @@
             <button data-m="90">1時間30分</button>
             <button data-m="120">2時間</button>
           </span>
+        </span>
+        <span style="color:#cbd5e1">｜</span>
+        <b>網掛けの濃さ</b>
+        <span class="seg" id="segDim">
+          <button data-a=".78">濃い 78%</button>
+          <button data-a=".70">70%</button>
+          <button data-a=".62" class="on">62%</button>
+          <button data-a=".55">55%</button>
+          <button data-a=".45">薄い 45%</button>
         </span>
         <button class="go" id="btnGo">この条件で空きを探す</button>
         <button class="clr" id="btnClr">やめる</button>
@@ -280,6 +289,8 @@
     clear();
   });
   segPick('segMin',function(b){ mins=Number(b.dataset.m); clear(); });
+  // 網掛けの濃さ：押すとその場で変わる（探したあとでも変えられる）
+  segPick('segDim',function(b){ document.documentElement.style.setProperty('--dimA',b.dataset.a); });
   function clear(){
     tbl.classList.remove('searching');
     [].forEach.call(tbl.querySelectorAll('.dim,.hit'),function(e){e.classList.remove('dim','hit');});
