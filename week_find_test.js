@@ -1,5 +1,5 @@
 // 週間カレンダーの「空き探し（🔍 検索）」と「⛶ 最大化」の検査（v3.74・2026-10-25 ユーザー決定）
-//   ① 右上の並びは 🔍 検索 → ⛶ 最大化 → ✕
+//   ① 🔍 検索は週送りの隣（真ん中寄り）／右上は ⛶ 最大化 → ✕
 //   ② マッハ車検＝10:00・14:00 の枠で見る。空いている方をオレンジで囲い「マッハ可」、
 //      すでに入っている方は「マッハ車検」。両方ふさがっている日はまるごと暗く
 //   ③ クイック・レギュラーは台数で見る（1日6台／制限を掛けた日はその数／レギュラーは3台まで）
@@ -144,21 +144,27 @@ const seed = {
   await page.waitForTimeout(1200);
   t('週間カレンダーが開く', await page.evaluate(() => !!document.querySelector('[data-weekview]')));
 
-  // ── ① 右上の並び ──
-  console.log('\n■ ① 右上は 🔍 検索 → ⛶ 最大化 → ✕ の順');
+  // ── ① ボタンの置き場所 ──
+  console.log('\n■ ① 🔍 検索は週送りの隣／右上は ⛶ 最大化 → ✕');
   const top = await page.evaluate(() => {
     const f = document.querySelector('[data-wfind]'), s = document.querySelector('[data-wfs]');
     if (!f || !s) return null;
-    const bar = f.parentElement;
-    const txt = [...bar.children].map(e => e.innerText.replace(/\s+/g, ''));
-    return { txt, find: txt.findIndex(x => /検索/.test(x)), fs: txt.findIndex(x => /最大化|戻す/.test(x)), x: txt.indexOf('✕'), ttl: s.getAttribute('title') || '' };
+    const nav = [...f.parentElement.children].map(e => e.innerText.replace(/\s+/g, ''));
+    const rt = [...s.parentElement.children].map(e => e.innerText.replace(/\s+/g, ''));
+    const fr = f.getBoundingClientRect();
+    return { nav, rt, find: nav.findIndex(x => /検索/.test(x)), next: nav.findIndex(x => /次の週/.test(x)),
+      fs: rt.findIndex(x => /最大化|戻す/.test(x)), x: rt.indexOf('✕'), ttl: s.getAttribute('title') || '',
+      mid: Math.round(fr.left + fr.width / 2), w: window.innerWidth, h: Math.round(fr.height) };
   });
   t('★「🔍 検索」のボタンがある', !!top && top.find >= 0, top);
   const findBtn = await page.evaluate(() => { const b = document.querySelector('[data-wfind]'); return b ? getComputedStyle(b).backgroundColor : ''; });
   t('★検索ボタンは（押す前から）赤い', findBtn === 'rgb(232, 73, 46)', findBtn);
   t('★「⛶ 最大化」のボタンがある', !!top && top.fs >= 0, top);
-  t('★並びは 検索 → 最大化 → ✕', !!top && top.find < top.fs && top.fs < top.x, top);
-  t('★最大化は ✕ のすぐ左', !!top && top.x === top.fs + 1, top);
+  t('★★検索は週送りと同じまとまりにある', !!top && top.next >= 0, top);
+  t('★★検索は「次の週」のすぐ右どなり', !!top && top.find === top.next + 1, top);
+  t('★★検索は画面の真ん中寄り（右端ではない）', !!top && top.mid > top.w * 0.45 && top.mid < top.w * 0.85, top);
+  t('★★検索のボタンは週送りと同じ大きさ（高さ35px以上）', !!top && top.h >= 35, top);
+  t('★右上は 最大化 → ✕ の順', !!top && top.fs >= 0 && top.x === top.fs + 1, top);
   t('最大化に案内が出る', !!top && /広げ|戻す/.test(top.ttl), top);
   t('押しても落ちない（全画面は端末まかせ）', await tap('[data-wfs]'));
   await page.waitForTimeout(300);
@@ -300,7 +306,7 @@ const seed = {
   t('★埋まっている 09:00 は暗く', !!s0900 && s0900.dim === '1', s0900);
   t('★★マッハ車検の枠（10:00・10:30）は整備では常に暗い', !!s1000 && s1000.dim === '1' && !!s1030 && s1030.dim === '1', { s1000, s1030 });
   t('★★14:00・14:30 も同じく暗い', !!s1400 && s1400.dim === '1' && !!s1430 && s1430.dim === '1', { s1400, s1430 });
-  t('★★なぜ暗いのか分かるように「マッハ枠」と出す', !!s1000 && /マッハ枠/.test(s1000.txt) && !!s1400 && /マッハ枠/.test(s1400.txt), { s1000, s1400 });
+  t('★★マッハ枠は文字を出さず暗くするだけ', !!s1000 && !/マッハ/.test(s1000.txt) && !!s1400 && !/マッハ/.test(s1400.txt), { s1000, s1400 });
   t('★★マッハ枠の中でも ＋ は押せる（入力は止めない）', !!s1000 && /＋/.test(s1000.txt), s1000);
   t('★2時間とれる続きだけを囲う（15:00 から始まる）', !!s1500 && s1500.bt >= 2 && ORANGE.test(s1500.bl), s1500);
   t('★1時間ずつに刻まない（16:00 の上に線を入れない）', !!s1600 && s1600.bt < 2, s1600);

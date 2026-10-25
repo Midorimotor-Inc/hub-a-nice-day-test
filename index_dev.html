@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792906197888';
+    window.__APP_BUILD='build-1792908031367';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.76';
+const APP_VERSION = '3.76.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4283,7 +4283,7 @@ const WEEK_TAKEN='#fecaca';  // 「マッハ予約済み」の札。ごく薄い
 // ★整備で空きを探す時、マッハ車検の枠（10:00〜11:00・14:00〜15:00）は常に空けておく（本店のみ）。
 //   先に一般整備を入れてしまうとマッハ車検が入れられなくなるため（2026-10-25 ユーザー指示）。
 //   前日・当日になってまだ空いていれば、入力する人が自分の判断で入れてよい＝入力は止めない。
-const WEEK_HOLD_LABEL='マッハ枠';
+//   ★札は出さない。暗くするだけ（2026-10-25 ユーザー指示）。
 const weekMinOf=(x)=>{const m=String(x||'').match(/^(\d+):(\d+)$/);return m?Number(m[1])*60+Number(m[2]):-1;};
 // 月曜はじまりの週頭
 const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
@@ -4435,11 +4435,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         const hold={};
         if(storeId==='honten')MACH_FIND_SLOTS.forEach(t=>{
           const ix=weekTimes.indexOf(t); if(ix<0)return;
-          [weekTimes[ix],weekTimes[ix+1]].filter(Boolean).forEach((sl,k)=>{
-            hold[sl]=true;
-            const o=cell[dk+'|'+sl]||(cell[dk+'|'+sl]={});
-            if(k===0){o.lab=WEEK_HOLD_LABEL;o.labKind='hold';}
-          });
+          [weekTimes[ix],weekTimes[ix+1]].filter(Boolean).forEach(sl=>{hold[sl]=true;});
         });
         const freeAt=(sl)=>!hold[sl]&&slotEntries(dk,sl).length===0&&!restrCovers(rs,sl);
         let i=0;
@@ -4467,8 +4463,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'};
   const LAB=(kind)=>({fontSize:11,fontWeight:900,whiteSpace:'nowrap',padding:'1px 8px',borderRadius:9,
     color:kind==='ok'?'white':'#991b1b',
-    background:kind==='ok'?WEEK_OK:(kind==='hold'?'white':WEEK_TAKEN),
-    border:(kind==='ok'?'1px solid '+WEEK_OK:(kind==='hold'?'1px dashed #f87171':'1px solid #fca5a5'))});
+    background:kind==='ok'?WEEK_OK:WEEK_TAKEN,
+    border:'1px solid '+(kind==='ok'?WEEK_OK:'#fca5a5')});
   const LABADD={display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,
     borderRadius:'50%',border:'1.5px dashed #fb923c',background:'white',color:'#c2410c',padding:0,
     fontSize:12,fontWeight:900,lineHeight:1,cursor:'pointer',fontFamily:'inherit'};
@@ -4567,8 +4563,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+WEEK_DOW[0]+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+WEEK_DOW[6]+'）'}
             </span>
           </div>
-          {/* ★中：週送り。真ん中に、大きく（2026-10-23 ユーザー指示） */}
+          {/* ★中：週送り。真ん中に、大きく（2026-10-23 ユーザー指示）。
+              🔍 検索は「次の週」の隣に置くが、週送りの3つは真ん中のままにしたいので、
+              左に【見えない同じ大きさの控え】を入れて釣り合いを取る（2026-10-25 ユーザー指示） */}
           <div style={{flexShrink:0,display:'flex',gap:9,alignItems:'center'}}>
+            <button aria-hidden="true" tabIndex={-1} data-wfindghost="1"
+              style={{visibility:'hidden',pointerEvents:'none',marginLeft:5,
+                border:'2px solid transparent',borderRadius:10,padding:'8px 20px',fontSize:15,fontWeight:800,
+                fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
             {[['‹ 前の週',-1],['今週',0],['次の週 ›',1]].map(([t,v])=>(
               <button key={t} onClick={()=>onWeek(v)} data-wnav={String(v)}
                 style={{background:v===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.22)',
@@ -4576,13 +4578,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   padding:'8px 22px',fontSize:15,fontWeight:800,
                   color:v===0?'#0e5a6b':'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{t}</button>
             ))}
-          </div>
-          {/* 右：🔍 検索／⛶ 最大化／✕（2026-10-25 ユーザー指示：この並び） */}
-          <div style={{flex:1,display:'flex',justifyContent:'flex-end',gap:7,alignItems:'center'}}>
+            {/* ★🔍 検索は「次の週」の隣（真ん中寄り）に置く。2026-10-25 ユーザー指示 */}
             <button data-wfind="1" title="空いている所を探す" onClick={()=>setFind(p=>({...p,open:!p.open}))}
-              style={{background:'#E8492E',
-                border:(find.open?'2px solid white':'1px solid rgba(255,255,255,.55)'),borderRadius:7,padding:find.open?'3px 10px':'4px 11px',
-                fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
+              style={{background:'#E8492E',marginLeft:5,
+                border:(find.open?'2px solid white':'2px solid rgba(255,255,255,.75)'),borderRadius:10,
+                padding:'8px 20px',fontSize:15,fontWeight:800,
+                color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 検索</button>
+          </div>
+          {/* 右：⛶ 最大化／✕ */}
+          <div style={{flex:1,display:'flex',justifyContent:'flex-end',gap:7,alignItems:'center'}}>
             <button data-wfs="1" title={isFs?'元の大きさに戻す':'画面いっぱいに広げる'}
               onClick={()=>{try{ if(document.fullscreenElement){document.exitFullscreen&&document.exitFullscreen();}
                 else if(fsRef.current&&fsRef.current.requestFullscreen){fsRef.current.requestFullscreen();} }catch(e){}}}

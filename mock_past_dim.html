@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：本日より前を薄暗くする（濃さ比べ）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#334155;font-family:'Yu Gothic UI','Meiryo',sans-serif;color:#0f172a}
+  /* ── 選ぶところ ───────────────────────────── */
+  .pick{position:sticky;top:0;z-index:50;background:#0f172a;color:white;padding:10px 14px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-bottom:2px solid #475569}
+  .pick b{font-size:13.5px}
+  .seg{display:inline-flex;border:2px solid #64748b;border-radius:9px;overflow:hidden}
+  .seg button{padding:7px 15px;border:none;background:white;color:#475569;font-size:13px;font-weight:800;
+    cursor:pointer;font-family:inherit}
+  .seg button.on{background:#E8492E;color:white}
+  .pick label{font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .note{font-size:12px;color:#cbd5e1}
+  /* ── 窓 ──────────────────────────────── */
+  .win{margin:10px;background:white;border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+  .head{display:flex;align-items:center;gap:10px;padding:6px 12px;color:white;
+    background:linear-gradient(135deg,#1e3a8a,#1d4ed8)}
+  .head .l{flex:1;min-width:0;display:flex;align-items:center;gap:9px;overflow:hidden}
+  .head .l b{font-size:15px}
+  .head .l span{font-size:12.5px;opacity:.95;white-space:nowrap}
+  .nav{flex-shrink:0;display:flex;gap:9px;align-items:center}
+  .nav button{border:2px solid rgba(255,255,255,.75);border-radius:10px;padding:8px 22px;font-size:15px;
+    font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;background:rgba(255,255,255,.22);color:white}
+  .nav button.now{background:rgba(255,255,255,.95);color:#0e5a6b}
+  .nav button.find{background:#E8492E;padding:8px 20px;margin-left:5px}
+  .r{flex:1;display:flex;justify-content:flex-end;gap:7px;align-items:center}
+  .r button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);border-radius:7px;
+    padding:4px 11px;font-size:13px;font-weight:900;color:white;cursor:pointer;font-family:inherit}
+  /* ── 表 ──────────────────────────────── */
+  table{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed}
+  th,td{border:1px solid #d7dde5;font-size:11.5px;vertical-align:middle;height:26px;padding:1px 3px;position:relative}
+  th{padding:5px 4px;font-size:11px;font-weight:800;white-space:nowrap;background:#f1f5f9}
+  .tm{width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
+  tr.h0 td,tr.h0 th{background:#e6f6fb}
+  tr.h0 td.tm{background:#cfeef7}
+  tr.sp td{background:#f0fdf4}
+  tr.sp td.tm{background:#047857;color:white}
+  td.ins{background:#fff7ed;padding:3px}
+  td.tm.ins{color:#9a3412}
+  td.stf{background:#f8fafc;text-align:center;padding:3px;line-height:1;border-bottom:4px double #334155}
+  td.tm.stf{border-bottom:4px double #334155}
+  .add{color:#cbd5e1;text-align:center;font-size:11px;display:block}
+  /* 本日の列 */
+  .td0{border-left:3px solid #c2410c}
+  .td1{border-right:3px solid #c2410c}
+  th.today{background:#ffedd5;border-top:3px solid #c2410c}
+  .dbadge{display:inline-block;padding:1px 9px;border-radius:10px;background:#0f766e;color:white;font-weight:900}
+  .dplain{display:inline-block;padding:1px 9px;border-radius:10px;background:#fff;border:1px solid #cbd5e1}
+  .sun{color:#dc2626}.sat{color:#2563eb}
+  /* 車検バッジ */
+  .grp{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:wrap;padding:1px 0}
+  .col{display:grid;grid-template-rows:repeat(2,19px);grid-auto-flow:column;gap:2px}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+    color:white;font-size:11px;font-weight:900}
+  .cb.plus{background:white;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px}
+  .lim{align-self:center;padding:1px 6px;border-radius:4px;background:#fff;color:#dc2626;border:1.5px solid #dc2626;
+    font-size:9.5px;font-weight:900;white-space:nowrap}
+  /* スタッフ */
+  .sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+    border-radius:4px;font-size:10px;font-weight:800;background:#e2e8f0;color:#334155;margin:0 1px}
+  /* 予定 */
+  .ent{display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden}
+  .wk{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;
+    color:white;font-size:9.5px;font-weight:900;flex-shrink:0}
+  /* ★これが「本日より前」の薄暗く。背景の上に重ねるので元の色が残る */
+  .past{background-image:linear-gradient(var(--pb),var(--pb))}
+  .cap{color:#e2e8f0;font-size:12.5px;margin:0 12px 10px}
+</style>
+</head>
+<body>
+
+<div class="pick">
+  <b>本日より前の薄暗く</b>
+  <span class="seg" id="seg">
+    <button data-a="0">なし</button>
+    <button data-a=".05">5%</button>
+    <button data-a=".10" class="on">10%</button>
+    <button data-a=".15">15%</button>
+    <button data-a=".20">20%</button>
+    <button data-a=".25">25%</button>
+  </span>
+  <label><input type="checkbox" id="incToday"> 本日（10/21）も薄暗くする</label>
+  <span class="note">※ 見比べながら押してください。決まった濃さをそのまま入れます。</span>
+</div>
+
+<div class="win">
+  <div class="head">
+    <div class="l"><b>⏰ タイムスケジュール（週）</b><span>本店</span><span>10/19（月） 〜 10/25（日）</span></div>
+    <div class="nav">
+      <!-- 見えない控え。週送りの3つを真ん中に保つため（本体と同じ作り） -->
+      <button class="find" style="visibility:hidden;pointer-events:none">🔍 検索</button>
+      <button>‹ 前の週</button>
+      <button class="now">今週</button>
+      <button>次の週 ›</button>
+      <button class="find">🔍 検索</button>
+    </div>
+    <div class="r"><button>⛶ 最大化</button><button>✕</button></div>
+  </div>
+  <table id="tbl"></table>
+</div>
+<div class="cap">※ このモックは見た目だけです。10/19（月）・10/20（火）が「本日より前」、10/21（水）が本日（オレンジの太枠）です。</div>
+
+<script>
+var DAYS=[['10/19','月',0],['10/20','火',0],['10/21','水',1],['10/22','木',0],['10/23','金',0],['10/24','土',0],['10/25','日',0]];
+var PAST=[true,true,false,false,false,false,false];      // 本日より前
+var TODAY=2;
+// 車検（コース・台数）
+var INSP=[[['マ',1]],[['マ',2],['ク',1],['レ',1]],[],[['ク',3]],[['ク',1]],[['レ',3]],[['ク',1]]];
+var LIMIT=[null,null,null,3,null,null,null];
+var COL={'マ':'#b91c1c','ク':'#1d4ed8','レ':'#d97706'};
+// 整備（日の番号 → 枠 → [作業の印,色,氏名,内容]）
+var SCH={
+  0:{'09:00':['Q','#0891b2','川上','オイル交換'],'14:00':['B','#7c3aed','西村','鈑金 左前'],'16:00':['N1','#059669','東','1ヶ月点検']},
+  1:{'11:00':['⑫','#be185d','山本','12ヶ月点検'],'15:30':['R','#ea580c','森','リコール']},
+  2:{'09:00':['Q','#0891b2','朝一','エンジンオイル交換'],'13:00':['B','#7c3aed','昼一','鈑金']},
+  4:{'10:00':['M6','#0d9488','岸本','メンパ6ヶ月']},
+  5:{'09:30':['納','#16a34a','大山','納車']}
+};
+var TIMES=['09:00','09:30','10:00','10:30','11:00','11:30','午前入庫','13:00','13:30','14:00','14:30',
+           '15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+var FOOT=['午後入庫','時間未定'];
+var SPECIAL={'午前入庫':1,'午後入庫':1,'時間未定':1};
+
+function pastCls(i){ if(PAST[i])return ' past'; if(i===TODAY&&document.getElementById('incToday').checked)return ' past'; return ''; }
+function colCls(i){ return (i===TODAY?' td0 td1':''); }
+
+function build(){
+  var h='';
+  // 見出し
+  h+='<thead><tr><th class="tm"></th>';
+  for(var i=0;i<7;i++){
+    var d=DAYS[i], cls='';
+    if(i===TODAY)cls+=' today';
+    cls+=colCls(i)+pastCls(i);
+    var inner=(i===TODAY)?'<span class="dbadge">'+d[0]+'（'+d[1]+'）</span>'
+      :'<span class="dplain'+(d[1]==='日'?' sun':(d[1]==='土'?' sat':''))+'">'+d[0]+'（'+d[1]+'）</span>';
+    h+='<th class="'+cls.trim()+'">'+inner+'</th>';
+  }
+  h+='</tr></thead><tbody>';
+  // 車検
+  h+='<tr><td class="tm ins">車検</td>';
+  for(var i=0;i<7;i++){
+    var g='<div class="grp">';
+    for(var k=0;k<INSP[i].length;k++){
+      var c=INSP[i][k][0], n=INSP[i][k][1];
+      g+='<div class="col">';
+      for(var m=0;m<n;m++) g+='<span class="cb" style="background:'+COL[c]+'">'+c+'</span>';
+      g+='</div>';
+    }
+    g+='<div class="col"><span class="cb plus">＋</span></div>';
+    if(LIMIT[i]!=null)g+='<div class="lim">最大'+LIMIT[i]+'台</div>';
+    g+='</div>';
+    h+='<td class="ins'+colCls(i)+pastCls(i)+'">'+g+'</td>';
+  }
+  h+='</tr>';
+  // 出勤
+  h+='<tr><td class="tm stf">出勤</td>';
+  for(var i=0;i<7;i++) h+='<td class="stf'+colCls(i)+pastCls(i)+'"><span class="sb">江</span><span class="sb">竹</span></td>';
+  h+='</tr>';
+  // 時間
+  for(var r=0;r<TIMES.length;r++) h+=row(TIMES[r]);
+  h+='</tbody>';
+  document.getElementById('tbl').innerHTML=h;
+  // 据え置き（午後入庫・時間未定）
+  var f='<tbody>';
+  for(var r=0;r<FOOT.length;r++) f+=row(FOOT[r]);
+  f+='</tbody>';
+  document.getElementById('tbl').insertAdjacentHTML('beforeend',f);
+}
+function row(slot){
+  var sp=!!SPECIAL[slot], half=(slot.indexOf(':00')>0);
+  var cls=sp?'sp':(half?'h0':'');
+  var h='<tr class="'+cls+'"><td class="tm">'+slot+'</td>';
+  for(var i=0;i<7;i++){
+    var e=(SCH[i]||{})[slot];
+    var inner=e
+      ? '<div class="ent"><span class="wk" style="background:'+e[1]+'">'+e[0]+'</span><b>'+e[2]+'</b>'
+        +'<span style="color:#64748b;overflow:hidden;text-overflow:ellipsis">'+e[3]+'</span></div>'
+      : '<span class="add">＋</span>';
+    h+='<td class="'+colCls(i).trim()+pastCls(i)+'">'+inner+'</td>';
+  }
+  return h+'</tr>';
+}
+function setA(a){ document.documentElement.style.setProperty('--pb','rgba(0,0,0,'+a+')'); }
+document.getElementById('seg').addEventListener('click',function(ev){
+  var b=ev.target.closest('button'); if(!b)return;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
+  b.classList.add('on'); setA(b.dataset.a);
+});
+document.getElementById('incToday').addEventListener('change',build);
+setA('.10'); build();
+</script>
+</body>
+</html>
