@@ -75,10 +75,13 @@
 
   /* ── 検索中の暗く／明るく ── */
   .searching td.cell,.searching td.ins{transition:all .15s}
-  .searching .dim{opacity:.28;filter:grayscale(.7)}
+  /* ★2026-10-25 ユーザー指示：薄く白けるのではなく **ほぼダークブラックの網掛け**（少しだけ透ける） */
+  .searching .dim{position:relative}
+  .searching .dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.78);pointer-events:none;z-index:3}
+  .searching th.dim::after{inset:0}
   .searching .hit{background:#fffbe6!important;box-shadow:inset 0 0 0 3px #f59e0b;position:relative}
   .searching .hit.ins{background:#fffbe6!important}
-  .searching th.dim{opacity:.4}
+  .searching th.dim{position:relative}
   .badge{position:absolute;right:3px;top:1px;font-size:9.5px;font-weight:900;color:#b45309}
   .res{font-size:12.5px;font-weight:800;color:#9a3412}
 </style>
@@ -313,7 +316,11 @@
       if(ok){ hit++; td.classList.add('hit','ins');
         var s=document.createElement('span'); s.className='badge'; s.textContent=label; td.appendChild(s);
       } else { td.classList.add('dim'); th.classList.add('dim'); }
-      [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){ if(!ok)c.classList.add('dim'); });
+      // ★日ごと：空きの無い日は **列ぜんぶ**（車検・出勤・時間の枠）を暗くする
+      if(!ok){
+        [].forEach.call(tbl.querySelectorAll('td[data-d="'+i+'"]'),function(c){c.classList.add('dim');});
+        var tr=tbl.querySelectorAll('tr')[2]; if(tr&&tr.children[i+1])tr.children[i+1].classList.add('dim');
+      }
     });
     res.textContent=hit+'日に空きがあります（'+(course==='マ'?'マッハ＝10:00・14:00 の枠':'台数で判定')+'）';
   }
