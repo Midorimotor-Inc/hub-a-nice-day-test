@@ -151,6 +151,8 @@ const seed = {
     return { txt, find: txt.findIndex(x => /検索/.test(x)), fs: txt.findIndex(x => /最大化|戻す/.test(x)), x: txt.indexOf('✕'), ttl: s.getAttribute('title') || '' };
   });
   t('★「🔍 検索」のボタンがある', !!top && top.find >= 0, top);
+  const findBtn = await page.evaluate(() => { const b = document.querySelector('[data-wfind]'); return b ? getComputedStyle(b).backgroundColor : ''; });
+  t('★検索ボタンは（押す前から）赤い', findBtn === 'rgb(232, 73, 46)', findBtn);
   t('★「⛶ 最大化」のボタンがある', !!top && top.fs >= 0, top);
   t('★並びは 検索 → 最大化 → ✕', !!top && top.find < top.fs && top.fs < top.x, top);
   t('★最大化は ✕ のすぐ左', !!top && top.x === top.fs + 1, top);
@@ -203,6 +205,12 @@ const seed = {
     return { left: st.left, top: st.top, tr: st.transform, fw: st.fontWeight };
   });
   t('★札は枠のど真ん中（左右・上下とも中央寄せ）', !!lab && lab.left !== 'auto' && /matrix/.test(lab.tr), lab);
+  const labCol = await page.evaluate(() => {
+    const pick = (re) => { const s = [...document.querySelectorAll('[data-weekview] span')].find(e => re.test(e.innerText)); return s ? getComputedStyle(s).backgroundColor : ''; };
+    return { ok: pick(/^マッハ可$/), mach: pick(/^マッハ車検$/) };
+  });
+  t('★「マッハ可」の札は緑（赤い「マッハ車検」と見分けるため）', labCol.ok === 'rgb(4, 120, 87)', labCol);
+  t('★「マッハ車検」の札は赤のまま', labCol.mach === 'rgb(185, 28, 28)', labCol);
   t('★氏名・車種は出さない', !!w10 && !/朝一|昼一/.test(w10.txt), w10);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
   const dimc = await cellAt('09:00', C('TUE'));
@@ -256,12 +264,24 @@ const seed = {
   t('★帯は出たまま（条件を変えてもう一度探せる）', await page.evaluate(() => !!document.querySelector('[data-wfindbar]')));
   await tap('[data-wfind]'); await page.waitForTimeout(400);
   t('★🔍 をもう一度押すと帯が畳まれる', await page.evaluate(() => !document.querySelector('[data-wfindbar]')));
-  // 週を送ると探した結果は消える
+  // ★週を送っても探した条件はそのまま（2026-10-25 ユーザー指示）
   await tap('[data-wfind]'); await page.waitForTimeout(300);
-  await tap('[data-wgo]'); await page.waitForTimeout(600);
+  await tap('[data-wkind="insp"]'); await page.waitForTimeout(200);
+  await tap('[data-wcourse="1"]'); await page.waitForTimeout(200);
+  await tap('[data-wgo]'); await page.waitForTimeout(700);
+  const before = await dimCount();
   await page.evaluate(() => { const b = [...document.querySelectorAll('[data-weekview] button')].find(e => /次の週/.test(e.innerText)); if (b) b.click(); });
-  await page.waitForTimeout(800);
-  t('★週を送ると探した結果は消える（古い網掛けを引きずらない）', (await dimCount()) === 0);
+  await page.waitForTimeout(900);
+  t('★週を送っても検索は解除されない（帯も条件もそのまま）',
+    await page.evaluate(() => { const b = document.querySelector('[data-wfindbar]'); return !!b && /マッハ/.test(b.innerText); }));
+  const after = await page.evaluate(() => ({
+    res: (document.querySelector('[data-wres]') || {}).innerText || '',
+    lab: [...document.querySelectorAll('[data-wdaylab]')].length,
+  }));
+  t('★新しい週で計算し直す（その週の空きが出る）', /日に空きがあります/.test(after.res.replace(/s+/g, '')) && after.lab > 0, after);
+  t('★古い週の網掛けを引きずらない（全部暗いまま、にならない）', (await dimCount()) !== before || before === 0, { before });
+  await tap('[data-wclr]'); await page.waitForTimeout(500);
+  t('★「やめる」は今までどおり効く', (await dimCount()) === 0);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 2));
   console.log('\n──────── 結果 ' + pass + ' 件合格 / ' + fail + ' 件不合格 ────────');
