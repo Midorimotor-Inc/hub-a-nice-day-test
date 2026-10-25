@@ -61,6 +61,15 @@
     background-size:var(--p) var(--p)}
   .machlab{position:relative;z-index:2;font-size:9.5px;font-weight:900;color:#b91c1c;padding-left:2px}
   .cap{color:#e2e8f0;font-size:12.5px;margin:0 12px 10px;line-height:1.7}
+  /* 太さの見比べ */
+  .samp{display:flex;gap:12px;flex-wrap:wrap;margin:10px 10px 0}
+  .samp .one{background:white;border-radius:8px;padding:7px 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+  .samp .one>b{display:block;font-size:11.5px;color:#475569;margin-bottom:4px}
+  .samp .one.on>b{color:#E8492E}
+  .samp .box{width:210px;border:1px solid #d7dde5;cursor:pointer}
+  .samp .cell{height:28px;position:relative;background:var(--base)}
+  .samp .cell+.cell{border-top:1px solid #d7dde5}
+  .samp .zz{position:absolute;inset:0;pointer-events:none}
   .cap b{color:white}
 </style>
 </head>
@@ -76,9 +85,12 @@
   </span>
   <b>線の太さ</b>
   <span class="seg" id="segW">
-    <button data-w="3px">細い</button>
-    <button data-w="5px" class="on">ふつう</button>
-    <button data-w="7px">太い</button>
+    <button data-w="1.5px">1.5</button>
+    <button data-w="2px">2</button>
+    <button data-w="2.5px" class="on">2.5</button>
+    <button data-w="3px">3</button>
+    <button data-w="4px">4</button>
+    <button data-w="5px">5（今）</button>
   </span>
   <b>つなぎ目</b>
   <span class="seg" id="segA">
@@ -94,6 +106,7 @@
   <span class="note">※ 10:00〜11:00 のように :00 と :30 が続く所で見比べてください。スクロールしても崩れません。</span>
 </div>
 
+<div class="samp" id="samples"></div>
 <div class="win">
   <div class="head">
     <div class="l"><b>⏰ タイムスケジュール（週）</b><span>本店</span><span>10/19（月） 〜 10/25（日）</span></div>
@@ -186,7 +199,7 @@ function setVar(k,v){ document.documentElement.style.setProperty(k,v); }
 document.getElementById('segC').addEventListener('click',function(ev){
   var b=ev.target.closest('button'); if(!b)return;
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
-  b.classList.add('on'); setVar('--stripe',b.dataset.c); setVar('--base',b.dataset.b);
+  b.classList.add('on'); setVar('--stripe',b.dataset.c); setVar('--base',b.dataset.b); samples();
 });
 document.getElementById('segB').addEventListener('click',function(ev){
   var b=ev.target.closest('button'); if(!b)return;
@@ -197,16 +210,43 @@ window.addEventListener('load',phase);
 document.getElementById('segW').addEventListener('click',function(ev){
   var b=ev.target.closest('button'); if(!b)return;
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
-  b.classList.add('on'); setVar('--w',b.dataset.w); phase();
+  b.classList.add('on'); setVar('--w',b.dataset.w); phase(); samples();
 });
 document.getElementById('segA').addEventListener('click',function(ev){
   var b=ev.target.closest('button'); if(!b)return;
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.remove('on');});
   b.classList.add('on'); align=(b.dataset.a==='1'); phase();
 });
+// ★太さの見比べ。どれも :00 と :30 の2枠に分けて、つなぎ目が見えるようにしてある
+function samples(){
+  var host=document.getElementById("samples"); host.innerHTML="";
+  var cur=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--w"))||2.5;
+  [1.5,2,2.5,3,4,5].forEach(function(w){
+    var one=document.createElement("div");
+    one.className="one"+(Math.abs(w-cur)<0.01?" on":"");
+    one.innerHTML="<b>線の太さ "+w+"px"+(w===5?"（今の体験版）":"")+"</b>"+
+      "<div class=\"box\"><div class=\"cell\"><span class=\"zz\"></span></div>"+
+      "<div class=\"cell\"><span class=\"zz\"></span></div></div>";
+    one.addEventListener("click",function(){
+      setVar("--w",w+"px");
+      [].forEach.call(document.querySelectorAll("#segW button"),function(x){
+        x.classList.toggle("on",parseFloat(x.dataset.w)===w); });
+      phase(); samples();
+    });
+    host.appendChild(one);
+    var p=w*2*Math.SQRT2, box=one.querySelector(".box").getBoundingClientRect();
+    [].forEach.call(one.querySelectorAll(".zz"),function(z){
+      var r=z.getBoundingClientRect();
+      z.style.backgroundImage="repeating-linear-gradient(45deg,var(--stripe) 0 "+w+"px,transparent "+w+"px "+(w*2)+"px)";
+      z.style.backgroundSize=p.toFixed(3)+"px "+p.toFixed(3)+"px";
+      var mod=function(v){return ((v%p)+p)%p;};
+      z.style.backgroundPosition=(-mod(r.left-box.left)).toFixed(2)+"px "+(-mod(r.top-box.top)).toFixed(2)+"px";
+    });
+  });
+}
 window.addEventListener('resize',phase);
-setVar('--stripe','rgba(220,38,38,.16)'); setVar('--base','#fff5f5'); setVar('--w','5px'); setVar('--bd','#d7dde5');
-build();
+setVar('--stripe','rgba(220,38,38,.16)'); setVar('--base','#fff5f5'); setVar('--w','2.5px'); setVar('--bd','#d7dde5');
+build(); samples();
 </script>
 </body>
 </html>
