@@ -286,9 +286,31 @@ const seed = {
       legend: [...document.querySelectorAll('[data-weekview] *')].filter(x => /マッハ車検$/.test(x.textContent || '') && x.children.length === 0).length,
     };
   }, [TUE, WED]);
-  // ★2026-10-24 ユーザー決定：斜線のゼブラはやめて、1日表示と同じベタの薄いピンク（#fee2e2）
-  t('★制限の中（10:00）はベタの薄いピンクになる', !!rstr.in1 && rstr.in1.flag === '1' && rstr.in1.bgc === 'rgb(254, 226, 226)', rstr.in1);
-  t('★斜線のゼブラは使わない（行の境目でズレるため）', !!rstr.in1 && !/repeating-linear-gradient/.test(rstr.in1.bg), rstr.in1);
+  // ★2026-10-25 ユーザー決定：斜めのゼブラに戻す（薄い赤）。ただし枠の境目でズレない作りにすること
+  t('★★制限の中（10:00）は斜めのゼブラになる', !!rstr.in1 && rstr.in1.flag === '1'
+    && /repeating-linear-gradient\(45deg/.test(rstr.in1.bg) && rstr.in1.bgc === 'rgb(255, 245, 245)', rstr.in1);
+  // ★背景1枚の大きさを繰り返し幅で固定していないと、高さの違う枠で模様の位相が変わってズレる
+  const zb = await page.evaluate(() => {
+    const P = +(5 * 2 * Math.SQRT2).toFixed(3);
+    const tb = document.querySelector('[data-weekview] table');
+    const base = tb.getBoundingClientRect();
+    const cells = [...document.querySelectorAll('[data-weekview] [data-wzb="1"]')];
+    const mod = (v) => (((v % P) + P) % P);
+    const chk = cells.map(td => {
+      const st = getComputedStyle(td), r = td.getBoundingClientRect();
+      const p = st.backgroundPosition.split(' ').map(parseFloat);
+      return { size: st.backgroundSize, origin: st.backgroundOrigin,
+        dx: Math.abs(-p[0] - mod(r.left - base.left)), dy: Math.abs(-p[1] - mod(r.top - base.top)) };
+    });
+    return { n: cells.length, P: P,
+      sizeOk: chk.every(c => c.size === P + 'px ' + P + 'px'),
+      originOk: chk.every(c => c.origin === 'border-box'),
+      worst: chk.reduce((m, c) => Math.max(m, c.dx, c.dy), 0),
+      one: chk[0] };
+  });
+  t('★★背景1枚の大きさを繰り返し幅で固定している（枠の高さが違ってもズレない）', zb.n > 0 && zb.sizeOk, zb);
+  t('★★基準は枠の外側（border-box）', zb.originOk, zb);
+  t('★★どの枠も表の左上からの位置に模様の位相が合っている', zb.n > 0 && zb.worst < 0.1, zb);
   t('★10:30 も制限の中なので網掛け', !!rstr.in2 && rstr.in2.flag === '1', rstr.in2);
   // ★マッハ車検（09:00入庫）の自動制限 09:00〜10:00 もここに出る
   t('★マッハ車検の自動制限（09:30）も網掛けになる', !!rstr.mach && rstr.mach.flag === '1' && /マッハ車検/.test(rstr.mach.title), rstr.mach);

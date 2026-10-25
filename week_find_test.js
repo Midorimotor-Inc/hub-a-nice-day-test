@@ -143,6 +143,7 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-weeknav]'); if (b) b.click(); });
   await page.waitForTimeout(1200);
   t('週間カレンダーが開く', await page.evaluate(() => !!document.querySelector('[data-weekview]')));
+  if (process.env.SHOT0) await page.screenshot({ path: process.env.SHOT0, fullPage: true });
 
   // ── ① ボタンの置き場所 ──
   console.log('\n■ ① 🔍 検索は週送りの隣／右上は ⛶ 最大化 → ✕');

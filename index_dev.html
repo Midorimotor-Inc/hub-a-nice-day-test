@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792911652626';
+    window.__APP_BUILD='build-1792916015219';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.77';
+const APP_VERSION = '3.77.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4287,6 +4287,17 @@ const WEEK_PAST='rgba(0,0,0,.15)';
 //   整備の空き探しでは候補にしない（常に暗い）。16:00・17:00 台は今までどおり作業する。
 //   マッハ枠と同じで、入力そのものは止めない（どうしても入れたい時は ＋ から入れられる）。
 const WEEK_NO_IN='18:00';
+// ★入庫制限の網掛けは【斜めのゼブラ】（v3.78・2026-10-25 ユーザー決定。モックで濃さと太さを確認）。
+//   ★【重要】背景1枚の大きさ（backgroundSize）を模様の繰り返し幅に固定すること。
+//     CSS の斜めグラデーションは【その箱の真ん中】を基準に描かれるので、固定しないと
+//     高さの違う枠（「マッハ車検」の札がある枠は背が高い）で模様の位相が変わり、
+//     位置をずらしても :00 と :30 の境目でズレる（2026-10-25 ユーザー指摘で発覚）。
+//   ★そのうえで、表の左上からの位置ぶんだけ背景をずらして位相をそろえる（下の useLayoutEffect）。
+//     これで枠をまたいでも列をまたいでも、1枚の紙に描いたのと同じ見え方になる。
+const ZB_W=5;                                   // 縞の太さ
+const ZB_P=+(ZB_W*2*Math.SQRT2).toFixed(3);     // 模様の繰り返し幅（縦にも横にもこの幅で繰り返す）
+const ZB_IMG='repeating-linear-gradient(45deg,rgba(220,38,38,.16) 0 '+ZB_W+'px,transparent '+ZB_W+'px '+(ZB_W*2)+'px)';
+const ZB_STY={backgroundImage:ZB_IMG,backgroundSize:ZB_P+'px '+ZB_P+'px',backgroundOrigin:'border-box'};
 const WEEK_OK='#047857';     // 「マッハ可」の札。赤い「マッハ車検」と見分けるため緑（2026-10-25 ユーザー指示）
 const WEEK_TAKEN='#fecaca';  // 「マッハ予約済み」の札。ごく薄い赤（緑の「マッハ可」と見分ける）
 // ★整備で空きを探す時、マッハ車検の枠（10:00〜11:00・14:00〜15:00）は常に空けておく（本店のみ）。
@@ -4330,6 +4341,19 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     window.addEventListener('resize',measure);
     return()=>{ try{ro&&ro.disconnect(); }catch(e){} window.removeEventListener('resize',measure); };
   },[isOpen,weekStart,storeId]);
+  // ★入庫制限の斜めゼブラ：枠の境目で模様がズレないよう、表の左上からの位置ぶんだけ背景をずらす。
+  //   （背景1枚の大きさは ZB_STY で固定済み＝どの枠でも同じ位相になっている）
+  //   依存を書かない＝描き直すたびに測り直す。スクロールでは表ごと動くので測り直しは要らない。
+  useLayoutEffect(()=>{
+    const root=fsRef.current; if(!root)return;
+    const tb=root.querySelector('table'); if(!tb)return;
+    const base=tb.getBoundingClientRect();
+    const mod=(v)=>(((v%ZB_P)+ZB_P)%ZB_P);
+    root.querySelectorAll('[data-wzb="1"]').forEach(td=>{
+      const r=td.getBoundingClientRect();
+      td.style.backgroundPosition=(-mod(r.left-base.left)).toFixed(2)+'px '+(-mod(r.top-base.top)).toFixed(2)+'px';
+    });
+  });
   if(!isOpen||!weekStart)return null;
   const days=Array.from({length:7},(_,i)=>new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+i));
   const nowD=new Date();
@@ -4378,7 +4402,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   //   はじめ斜線のゼブラにしたが、:00 と :30 で1時間続く時に**行の境目で模様がズレて見えた**
   //   （セルごとに模様が左上から描き直されるため）。ベタ塗りならズレようがない。
   //   **斜線・網掛けに戻さないこと。** 入力そのものは今までどおりできる（通るかは保存時に見る）。
-  const RESTR_BG='#fee2e2';
+  const RESTR_BG='#fee2e2';      // 車検の台数制限（いっぱいの日）はベタのまま
+  const RESTR_BASE='#fff5f5';    // 入庫制限のセルの下地。この上に斜めゼブラを重ねる
   // ★出勤の欄とスケジュールの欄の境目（2026-10-24 ユーザー指示・イ案）。
   //   ふつうの細い線だと、出勤の行とその下の時間の行の見分けが付かなかった。
   const STAFF_UNDER='4px double #334155';
@@ -4528,17 +4553,17 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         const mach=rst?machCovering(rs,slot):null;
         const rsTip=rst?('入庫制限'+(mach?'（マッハ車検）':'')+'　'+restrLabels(rs).join('／')
           +(restrExempt(rs).length?'　通せる作業：'+restrExempt(rs).join('・'):'')):undefined;
-        const cellSty={...(rst?{background:RESTR_BG}:cellBand),...(thin?{height:15}:{}),
-          ...(sp?{background:rst?RESTR_BG:SP_CELL}:{})};
+        const cellSty={...(rst?{background:RESTR_BASE,...ZB_STY}:cellBand),...(thin?{height:15}:{}),
+          ...(sp?{background:SP_CELL}:{})};
         const list=slotEntries(dk,slot);
-        if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
+        if(list.length===0)return <td key={dk} data-wadd={dk+'/'+slot} data-wrcell={rst?'1':'0'} data-wzb={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
           onClick={()=>onAddSched(dk,nextSlotKey(dk,slot))}
           style={{...TD,...cellSty,...tcol(dk),...sBlk(dk),position:'relative',
             color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
           onMouseEnter={e=>{if(!rst&&!sr){e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}}
           onMouseLeave={e=>{if(!rst&&!sr){e.currentTarget.style.background=cellSty.background||'';e.currentTarget.style.color='#cbd5e1';}}}>
           ＋<PastOv dk={dk}/>{sLab(dk)}{sDim(dk)&&<DimOv/>}</td>;
-        return <td key={dk} data-wrcell={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
+        return <td key={dk} data-wrcell={rst?'1':'0'} data-wzb={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
           style={{...TD,...cellSty,...tcol(dk),...sBlk(dk),position:'relative'}}>
           <PastOv dk={dk}/>{sLab(dk)}{sDim(dk)&&<DimOv/>}
           {list.map(({k,r},ri)=>(
