@@ -291,7 +291,7 @@ const seed = {
     && /repeating-linear-gradient\(45deg/.test(rstr.in1.bg) && rstr.in1.bgc === 'rgb(255, 245, 245)', rstr.in1);
   // ★背景1枚の大きさを繰り返し幅で固定していないと、高さの違う枠で模様の位相が変わってズレる
   const zb = await page.evaluate(() => {
-    const P = +(5 * 2 * Math.SQRT2).toFixed(3);
+    const P = +(2.5 * 2 * Math.SQRT2).toFixed(3);   // 縞の太さ×2×√2
     const tb = document.querySelector('[data-weekview] table');
     const base = tb.getBoundingClientRect();
     const cells = [...document.querySelectorAll('[data-weekview] [data-wzb="1"]')];

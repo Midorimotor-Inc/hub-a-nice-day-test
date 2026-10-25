@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792916015219';
+    window.__APP_BUILD='build-1792916510196';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.77.1';
+const APP_VERSION = '3.77.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4294,7 +4294,7 @@ const WEEK_NO_IN='18:00';
 //     位置をずらしても :00 と :30 の境目でズレる（2026-10-25 ユーザー指摘で発覚）。
 //   ★そのうえで、表の左上からの位置ぶんだけ背景をずらして位相をそろえる（下の useLayoutEffect）。
 //     これで枠をまたいでも列をまたいでも、1枚の紙に描いたのと同じ見え方になる。
-const ZB_W=5;                                   // 縞の太さ
+const ZB_W=2.5;                                 // 縞の太さ（2026-10-25 ユーザー決定。モックで6段階を見比べて 2.5px）
 const ZB_P=+(ZB_W*2*Math.SQRT2).toFixed(3);     // 模様の繰り返し幅（縦にも横にもこの幅で繰り返す）
 const ZB_IMG='repeating-linear-gradient(45deg,rgba(220,38,38,.16) 0 '+ZB_W+'px,transparent '+ZB_W+'px '+(ZB_W*2)+'px)';
 const ZB_STY={backgroundImage:ZB_IMG,backgroundSize:ZB_P+'px '+ZB_P+'px',backgroundOrigin:'border-box'};
