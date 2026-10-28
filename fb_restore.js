@@ -181,7 +181,7 @@ const pickFrom = () => {
 
     // ── 何がどう変わるか組み立てる（まだ書かない）──
     const plan = [];   // {base,id,next,addDays,delDays,sameAs}
-    let nChanged = 0, nRemoved = 0;
+    let nChanged = 0, nRemoved = 0, nExisting = 0;
     const skipped = [];
 
     for (const base of targets) {
@@ -191,6 +191,7 @@ const pickFrom = () => {
       let src; try { src = JSON.parse(srcRaw); } catch (e) { skipped.push(base + '（控えの中身が読めません）'); continue; }
 
       const curSnap = await db.collection('kv').doc(id).get();
+      if (curSnap.exists) nExisting++;   // いま何か入っているか（＝戻す前の控えで守るものがあるか）
       const curRaw = curSnap.exists ? (curSnap.data() || {}).v : undefined;
       let cur = null; try { cur = typeof curRaw === 'string' ? JSON.parse(curRaw) : null; } catch (e) { cur = null; }
 
@@ -286,6 +287,11 @@ const pickFrom = () => {
     if (NOPRE) {
       console.log('');
       console.log('  ⚠ --no-pre が付いているので、戻す前の控えを取りません。');
+    } else if (!nExisting) {
+      // ★全部消えた後は控えを取れない（控えを取る道具は0件をエラーにする）。
+      //   そもそも失うものが無いので、ここは飛ばして先へ進む（2026-10-28 の全消去の予行演習で判明）
+      console.log('');
+      console.log('── いま空っぽなので、戻す前の控えは取りません（失うものがありません）──');
     } else {
       console.log('');
       console.log('── 念のため、いまの中身の控えを取ります ──');
