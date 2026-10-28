@@ -35,10 +35,13 @@ const KEEP = Math.max(1, Number(arg('--keep', '30')) || 30);
 const SKIP = [/^myprv-/, /^auth-/, /^handoff/, /^locks$/, /^list-pending$/, /^diag-/, /^gasping$/, /^snap/];
 const skip = base => SKIP.some(re => re.test(base));
 
-// 日付（その土地の時刻で YYYY-MM-DD / YYYY-MM-DD_HHMM）
+// 日付（その土地の時刻で YYYY-MM-DD / YYYY-MM-DD_HHMMSS）
+//   ★秒まで入れること。分までだと、同じ分に2回取った時に前の控えを上書きしてしまう
+//     （2026-10-28 の避難訓練で実際に踏んだ：「消す前の控え」を、その14秒後の
+//      「戻す前の控え」が同じ名前で上書きし、戻す元にしていた命綱が消えた）
 const two = n => (n < 10 ? '0' : '') + n;
 const stamp = (d, withTime) => d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate())
-  + (withTime ? '_' + two(d.getHours()) + two(d.getMinutes()) : '');
+  + (withTime ? '_' + two(d.getHours()) + two(d.getMinutes()) + two(d.getSeconds()) : '');
 
 const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
 
@@ -101,8 +104,12 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
     // ── 書く（控えのファイル。顧客名や電話が入るのでリポジトリの外）──
     fs.mkdirSync(OUT_DIR, { recursive: true });
     const tag = DEV ? 'dev' : 'prod';
-    const name = 'hub-backup-' + tag + '-' + stamp(started, true) + '.json';
-    const file = path.join(OUT_DIR, name);
+    // ★すでにある控えには絶対に上書きしない（念のための二重の歯止め）
+    let file = path.join(OUT_DIR, 'hub-backup-' + tag + '-' + stamp(started, true) + '.json');
+    for (let i = 2; fs.existsSync(file) && i < 100; i++) {
+      file = path.join(OUT_DIR, 'hub-backup-' + tag + '-' + stamp(started, true) + '-' + i + '.json');
+    }
+    if (fs.existsSync(file)) throw new Error('同じ名前の控えが多すぎます（上書きを避けるため中止）');
     const body = {
       これは何: 'Hub a Nice Day の控え（まるごと）。戻す時は node fb_restore.js を使う。',
       環境: ENVNAME, 接頭辞: PREFIX,
