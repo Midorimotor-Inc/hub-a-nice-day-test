@@ -141,7 +141,7 @@
     ・月の区切りは<b>車検をした日</b>です。<br>
     ・<b>週ごとに分けて</b>あります。月末にまとめてやらず、1週終わったところで確認できます。<br>
     ・<b>名前が違う行はオレンジ</b>で出ます。そこだけ見れば済みます。<br>
-    ・車検証の使用者が<b>未記入の行は赤</b>で出ます。押すとその場で入れられます。<br>
+    ・車検証の使用者が<b>未入力の行は赤</b>で出ます。押すとその場で入れられます。<br>
     ・チェックは<b>「確認した」の印</b>です。誰がいつ押したかも残ります。
   </div>
 </div>
@@ -259,7 +259,7 @@
         if(r.checked)tr.className+=' checked';
 
         var us = r.kind==='empty'
-          ? '<span class="empty" data-ed="1">未記入（押して入れる）</span>'
+          ? '<span class="empty" data-ed="1">未入力</span>'
           : (r.user + (r.kind==='diff'?'<span class="flag">名前が違う</span>':'<span class="same"> （同じ）</span>'));
 
         tr.innerHTML=
