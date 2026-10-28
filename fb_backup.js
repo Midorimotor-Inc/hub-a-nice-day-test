@@ -21,7 +21,26 @@
 const fs = require('fs'), path = require('path');
 
 const KEY_FILE = process.env.HUB_FB_KEY || 'C:/Users/A/Documents/Hub重要書類/firebase-admin.json';
-const MOD = path.join(process.env.LOCALAPPDATA || '', 'Temp', 'hub-verify', 'node_modules');
+// ── 復旧の部品（firebase-admin）の居場所 ──
+//   ★Temp は Windows の掃除で消える場所なので、消えない所から先に探す
+//     （2026-10-28：Temp だけを見ていたため、掃除された日に復旧できなくなる状態だった）
+//   USB や共有PCへ一式を移した時も、道具のとなりに node_modules を置けばそのまま動く
+const MOD = (() => {
+  const cand = [
+    process.env.HUB_FB_MOD,                                               // ① 場所を指定された時
+    path.join(__dirname, 'node_modules'),                                 // ② 道具のとなり（USBの一式）
+    path.join(__dirname, '..', '復旧道具', 'node_modules'),                 // ③ 道具の隣のフォルダ
+    'C:/Users/A/Documents/Hub重要書類/復旧道具/node_modules',               // ④ このPCの決まった場所
+    path.join(process.env.LOCALAPPDATA || '', 'Temp', 'hub-verify', 'node_modules'), // ⑤ 最後の頼み（消えうる）
+  ].filter(Boolean);
+  for (const c of cand) {
+    try { if (fs.existsSync(path.join(c, 'firebase-admin'))) return c; } catch (e) {}
+  }
+  console.error('✖ 復旧の部品（firebase-admin）が見つかりません。探した場所：');
+  cand.forEach(c => console.error('    ' + c));
+  console.error('  → Hub重要書類\\復旧道具\\node_modules があるか確かめてください。');
+  process.exit(1);
+})();
 const admin = require(path.join(MOD, 'firebase-admin'));
 
 const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def; };

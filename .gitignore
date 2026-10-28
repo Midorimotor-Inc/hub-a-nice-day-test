@@ -12,3 +12,5 @@ render-loaner.png
 shot-fs-*.png
 shot-nav-*.png
 backup-prod-*-staff.json
+
+node_modules/
