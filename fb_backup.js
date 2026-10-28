@@ -46,6 +46,11 @@ const admin = require(path.join(MOD, 'firebase-admin'));
 const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def; };
 const DEV = process.argv.indexOf('--dev') >= 0;
 const DRY = process.argv.indexOf('--dry') >= 0;
+// --daily：その日の控えがもう取れていれば何もしない（毎朝のタスク専用）
+//   ★ノートPCは夜スリープするので「8時ちょうど」には取れない日がある。
+//     そこで「毎朝8時」と「PCを使い始めた時」の2つから呼び、先に取れた方だけを生かす。
+//     手で取る時・訓練の控え・戻す前の控えには付けないこと（必ず取る必要があるため）。
+const DAILY = process.argv.indexOf('--daily') >= 0;
 const PREFIX = DEV ? 'hub-v8-dev-' : 'hub-v8-';
 const ENVNAME = DEV ? 'テスト版' : '本番';
 const OUT_DIR = arg('--out', 'C:/Users/A/Documents/Hub重要書類/hub-backup');
@@ -78,6 +83,19 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
 (async () => {
   const started = new Date();
   const note = { env: ENVNAME, at: started.toISOString(), ok: false, keys: 0, bytes: 0, file: '', error: '' };
+
+  // ── その日の控えがもう取れていれば、何もしないで終わる（--daily の時だけ）──
+  if (DAILY) {
+    try {
+      const tag0 = DEV ? 'dev' : 'prod';
+      const head = 'hub-backup-' + tag0 + '-' + stamp(started, false);
+      const got = fs.readdirSync(OUT_DIR).some(f => f.indexOf(head) === 0 && f.endsWith('.json'));
+      if (got) {
+        console.log('今日（' + stamp(started, false) + '）の' + ENVNAME + 'の控えは、もう取れています。何もしません。');
+        process.exit(0);
+      }
+    } catch (e) { /* 置き場所がまだ無い時などは、そのまま取りにいく */ }
+  }
 
   try {
     // ── 歯止め：この道具は読むだけ。書き込みの入口を塞いでおく ──
