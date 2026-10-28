@@ -1,0 +1,147 @@
+// Hub の中身を「まるごと1本のファイル」に控える（2026-10-28 ユーザー依頼）
+//   ★読むだけ。Firestore には一切書き込まない（歯止めは下の guard）。
+//   ★アプリ（index_dev.html など）には一切触らない。外側で動く独立した仕組み。
+//
+//   node fb_backup.js              … 本番の控えを取る
+//   node fb_backup.js --dev        … テスト版の控えを取る
+//   node fb_backup.js --dry        … 下見（中身を数えるだけ・ファイルは書かない）
+//   node fb_backup.js --out <場所> … 保存先を変える（既定は下の OUT_DIR）
+//   node fb_backup.js --keep 30    … 何本残すか（既定30本。古いものから消す）
+//
+//   なぜ要るか：
+//     Hub の中の「時点保存」は “開いている画面” が作るので、誰も開かなければ作られない
+//     （2026-09-30 から2週間止まっていた前科がある）。こちらは画面と無関係に毎朝動き、
+//     Firebase ごと何かあっても PC の中にファイルが残る＝最後の砦。
+//
+//   控えに入れないもの（意図的）：
+//     ・myprv-*     … 個人のマイスケジュール（本人しか読めないもの）
+//     ・auth-* / handoff … 端末の登録・引き継ぎの印（ファイルに残すとかえって危ない）
+//     ・locks / list-pending / diag-* / gasping … 作業中の印・調査の記録
+//     ・snap*       … Hub の中の時点保存（この控えが同じ役目をする）
+const fs = require('fs'), path = require('path');
+
+const KEY_FILE = process.env.HUB_FB_KEY || 'C:/Users/A/Documents/Hub重要書類/firebase-admin.json';
+const MOD = path.join(process.env.LOCALAPPDATA || '', 'Temp', 'hub-verify', 'node_modules');
+const admin = require(path.join(MOD, 'firebase-admin'));
+
+const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : def; };
+const DEV = process.argv.indexOf('--dev') >= 0;
+const DRY = process.argv.indexOf('--dry') >= 0;
+const PREFIX = DEV ? 'hub-v8-dev-' : 'hub-v8-';
+const ENVNAME = DEV ? 'テスト版' : '本番';
+const OUT_DIR = arg('--out', 'C:/Users/A/Documents/Hub重要書類/hub-backup');
+const KEEP = Math.max(1, Number(arg('--keep', '30')) || 30);
+
+const SKIP = [/^myprv-/, /^auth-/, /^handoff/, /^locks$/, /^list-pending$/, /^diag-/, /^gasping$/, /^snap/];
+const skip = base => SKIP.some(re => re.test(base));
+
+// 日付（その土地の時刻で YYYY-MM-DD / YYYY-MM-DD_HHMM）
+const two = n => (n < 10 ? '0' : '') + n;
+const stamp = (d, withTime) => d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate())
+  + (withTime ? '_' + two(d.getHours()) + two(d.getMinutes()) : '');
+
+const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
+
+(async () => {
+  const started = new Date();
+  const note = { env: ENVNAME, at: started.toISOString(), ok: false, keys: 0, bytes: 0, file: '', error: '' };
+
+  try {
+    // ── 歯止め：この道具は読むだけ。書き込みの入口を塞いでおく ──
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(KEY_FILE, 'utf8'))) });
+    const db = admin.firestore();
+    for (const m of ['set', 'update', 'delete', 'create']) {
+      admin.firestore.DocumentReference.prototype[m] = function () {
+        throw new Error('この道具は読むだけです（' + m + ' は使えません）');
+      };
+    }
+
+    console.log('── ' + ENVNAME + ' の控えを取ります' + (DRY ? '（下見・ファイルは書きません）' : '') + ' ──');
+
+    // ── 読む（Admin SDK なので、まとめ読みがそのまま使える）──
+    const snap = await db.collection('kv').get();
+    const data = {}; let keys = 0, bytes = 0, broken = 0;
+    const skipped = [];
+    snap.forEach(doc => {
+      const id = doc.id;
+      if (id.indexOf(PREFIX) !== 0) return;                       // 別の環境のもの
+      if (!DEV && id.indexOf('hub-v8-dev-') === 0) return;        // 本番の控えにテスト版を混ぜない
+      const base = id.slice(PREFIX.length);
+      if (skip(base)) { skipped.push(base); return; }
+      const v = (doc.data() || {}).v;
+      if (typeof v !== 'string') return;
+      try { JSON.parse(v); } catch (e) { broken++; }              // 読めない値があれば数えて知らせる
+      data[id] = v; keys++; bytes += Buffer.byteLength(v, 'utf8');
+    });
+
+    // ── 中身のあらまし（人が見て「ちゃんと入っている」と分かるように）──
+    const cnt = (key, how) => { try { return how(JSON.parse(data[PREFIX + key] || 'null')); } catch (e) { return 0; } };
+    const rows = o => o ? Object.keys(o).reduce((n, d) => n + (Array.isArray(o[d]) ? o[d].filter(r => r && r.name).length : 0), 0) : 0;
+    const slots = o => o ? Object.keys(o).reduce((n, d) => n + Object.keys(o[d] || {}).filter(k => (o[d][k] || {}).name).length, 0) : 0;
+    const summary = {
+      車検の予約: cnt('insp', rows) + cnt('insp-arch', rows),
+      整備の予定: cnt('honten-sched', slots) + cnt('sanda-sched', slots),
+      代車の貸出: cnt('honten-lres', o => o ? Object.keys(o).reduce((n, c) => n + Object.keys(o[c] || {}).length, 0) : 0)
+        + cnt('sanda-lres', o => o ? Object.keys(o).reduce((n, c) => n + Object.keys(o[c] || {}).length, 0) : 0),
+      レンタカーの貸出: cnt('rres', o => o ? Object.keys(o).reduce((n, c) => n + Object.keys(o[c] || {}).length, 0) : 0),
+      // cf-index は [{name,count},...] の配列（本番で確認・2026-10-28）
+      顧客ファイル: cnt('cf-index', o => (Array.isArray(o) ? o.length : 0)),
+      顧客ファイルの行: cnt('cf-index', o => (Array.isArray(o) ? o.reduce((n, f) => n + (Number(f && f.count) || 0), 0) : 0)),
+      車両管理: cnt('vehicles-v2', o => (Array.isArray(o) ? o.length : 0)),
+      共有スケジュール: cnt('mysched', o => (o ? Object.keys(o).length : 0)),
+    };
+
+    console.log('  読んだ項目　' + keys + ' 件 / ' + mb(bytes));
+    Object.keys(summary).forEach(k => console.log('  ' + k + '　' + summary[k] + ' 件'));
+    if (broken) console.log('  ⚠ 中身が読めない項目が ' + broken + ' 件ありました（控えにはそのまま入れています）');
+    if (!keys) throw new Error('1件も読めませんでした（鍵か環境の指定が違う可能性）');
+
+    if (DRY) { console.log('下見なので、ファイルは書きませんでした。'); return; }
+
+    // ── 書く（控えのファイル。顧客名や電話が入るのでリポジトリの外）──
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+    const tag = DEV ? 'dev' : 'prod';
+    const name = 'hub-backup-' + tag + '-' + stamp(started, true) + '.json';
+    const file = path.join(OUT_DIR, name);
+    const body = {
+      これは何: 'Hub a Nice Day の控え（まるごと）。戻す時は node fb_restore.js を使う。',
+      環境: ENVNAME, 接頭辞: PREFIX,
+      作成日時: started.toISOString(), 作成日時_表示: started.toLocaleString('ja-JP'),
+      項目数: keys, 大きさ: bytes, あらまし: summary,
+      入れていないもの: SKIP.map(String),
+      data,
+    };
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(body));
+    fs.renameSync(tmp, file);     // 途中で止まっても中途半端なファイルが残らない
+
+    // ── 書けたものを読み直して確かめる（壊れた控えを「取れた」と言わないため）──
+    const back = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Object.keys(back.data || {}).length !== keys) throw new Error('書いた控えを読み直したら件数が合いません');
+
+    console.log('  ✔ ' + file + '（' + mb(fs.statSync(file).size) + '）');
+
+    // ── 古い控えを片づける（新しい方から KEEP 本だけ残す）──
+    const mine = fs.readdirSync(OUT_DIR).filter(f => f.indexOf('hub-backup-' + tag + '-') === 0 && f.endsWith('.json')).sort().reverse();
+    mine.slice(KEEP).forEach(f => { try { fs.unlinkSync(path.join(OUT_DIR, f)); console.log('  （古い控えを1本片づけました：' + f + '）'); } catch (e) {} });
+    console.log('  残っている控え　' + Math.min(mine.length, KEEP) + ' 本（最大 ' + KEEP + ' 本）');
+
+    note.ok = true; note.keys = keys; note.bytes = bytes; note.file = file; note.あらまし = summary;
+  } catch (e) {
+    note.error = String((e && e.message) || e);
+    console.error('  ✖ 控えを取れませんでした：' + note.error);
+  } finally {
+    // ── 結果を必ず残す（失敗を握りつぶさない。これが2週間気づけなかった原因だった）──
+    //    ただし下見（--dry）は控えを取っていないので、記録も「最後の控え」も書き換えない
+    if (DRY) process.exit(0);
+    try {
+      fs.mkdirSync(OUT_DIR, { recursive: true });
+      const tag = DEV ? 'dev' : 'prod';
+      fs.writeFileSync(path.join(OUT_DIR, 'hub-backup-status-' + tag + '.json'), JSON.stringify(note, null, 1));
+      fs.appendFileSync(path.join(OUT_DIR, 'hub-backup.log'),
+        started.toLocaleString('ja-JP') + '\t' + ENVNAME + '\t' + (note.ok ? 'OK' : 'NG')
+        + '\t' + note.keys + '件\t' + mb(note.bytes) + '\t' + (note.error || path.basename(note.file)) + '\n');
+    } catch (e) {}
+    process.exit(note.ok ? 0 : 1);
+  }
+})();
