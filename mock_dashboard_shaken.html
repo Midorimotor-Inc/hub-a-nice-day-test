@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：車検 使用者確認リスト（ダッシュボード）</title>
+<!--
+  2026-10-28 整備からの依頼のモック（見本）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  ・決まったこと（2026-10-28 ユーザー）：
+      月の区切り＝車検をした日の月／載せるのは終わった車検だけ／チェックは「確認した」の1つ
+  ・毎月150台ほど。月の途中でも週ごとにチェックできるようにする
+-->
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#ffffff; --line:#e2e8f0; --ink:#1f2a37; --sub:#64748b;
+    --head1:#1e3a8a; --head2:#1d4ed8;           /* メイン=青（テスト版はオレンジになります） */
+    --ok:#047857; --okbg:#ecfdf5; --warn:#b45309; --warnbg:#fff7ed; --warnline:#fed7aa;
+    --chk:#fde68a; --chkink:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;}
+  header{background:linear-gradient(135deg,var(--head1),var(--head2));color:#fff;padding:10px 16px;
+         border-bottom:3px solid #1e40af;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.5px}
+  .tag{font-size:11px;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;font-weight:700}
+  .spacer{flex:1}
+  header button{font:inherit;font-size:12px;font-weight:700;color:#fff;background:rgba(255,255,255,.16);
+         border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:6px 12px;cursor:pointer}
+  .wrap{padding:14px 16px 40px;max-width:1500px;margin:0 auto}
+
+  /* 月送り＋進捗 */
+  .bar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+       display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .mnav{display:flex;align-items:center;gap:6px}
+  .mnav button{font:inherit;font-size:13px;font-weight:700;background:#f8fafc;border:1px solid var(--line);
+       border-radius:8px;padding:7px 11px;cursor:pointer;color:var(--ink)}
+  .mnav .cur{font-size:19px;font-weight:900;padding:0 10px;min-width:160px;text-align:center}
+  .prog{flex:1;min-width:260px;display:flex;flex-direction:column;gap:5px}
+  .prog .txt{font-size:13px;font-weight:700;color:var(--sub)}
+  .prog .txt b{color:var(--ok);font-size:15px}
+  .track{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden}
+  .fill{height:100%;background:linear-gradient(90deg,#10b981,#047857);transition:width .25s}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .filters button{font:inherit;font-size:12px;font-weight:700;background:#fff;border:1.5px solid var(--line);
+       border-radius:20px;padding:7px 13px;cursor:pointer;color:var(--sub)}
+  .filters button.on{background:var(--head2);border-color:var(--head2);color:#fff}
+  .filters button .n{opacity:.8;font-weight:800}
+
+  /* 週の見出し */
+  .week{display:flex;align-items:center;gap:10px;margin:18px 0 8px}
+  .week h2{font-size:15px;margin:0;font-weight:900;color:var(--head1)}
+  .week .cnt{font-size:12px;font-weight:700;color:var(--sub);background:#fff;border:1px solid var(--line);
+       border-radius:16px;padding:4px 10px}
+  .week .done{font-size:12px;font-weight:800;color:var(--ok);background:var(--okbg);
+       border:1px solid #a7f3d0;border-radius:16px;padding:4px 10px}
+  .week .rest{font-size:12px;font-weight:800;color:var(--warn);background:var(--warnbg);
+       border:1px solid var(--warnline);border-radius:16px;padding:4px 10px}
+  .week hr{flex:1;border:none;border-top:2px dotted #cbd5e1}
+  .week button{font:inherit;font-size:12px;font-weight:700;background:#fff;border:1px solid var(--line);
+       border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--sub)}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 10px;font-size:13.5px;text-align:left;border-bottom:1px solid #eef2f6;vertical-align:middle}
+  th{background:#f8fafc;font-size:12px;font-weight:800;color:var(--sub);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.dk{white-space:nowrap;font-weight:700;color:var(--sub);width:86px}
+  td.nm{font-weight:700;width:19%}
+  td.us{width:19%}
+  td.car{color:var(--sub);width:20%}
+  td.st{color:var(--sub);width:8%;white-space:nowrap}
+  td.ck{width:120px;text-align:center}
+
+  .diff{background:var(--warnbg)}
+  .diff td.us{font-weight:800;color:#9a3412}
+  .flag{font-size:11px;font-weight:800;color:#9a3412;background:#ffedd5;border:1px solid var(--warnline);
+        border-radius:9px;padding:2px 7px;margin-left:6px;white-space:nowrap}
+  .same{font-size:11px;font-weight:700;color:var(--sub)}
+  .empty{font-size:12px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;
+         border-radius:9px;padding:3px 8px;cursor:pointer}
+  .edit{font:inherit;font-size:13px;width:92%;padding:4px 6px;border:1.5px solid var(--head2);border-radius:6px}
+
+  /* 入庫済みチェックと同じ見た目（白い丸 → 黄色地に赤✓） */
+  .mark{width:30px;height:30px;border-radius:50%;border:2px solid #cbd5e1;background:#fff;
+        cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+        font-size:17px;font-weight:900;color:transparent;transition:all .12s}
+  .mark:hover{border-color:var(--head2)}
+  .mark.on{background:var(--chk);border-color:#f59e0b;color:var(--chkink)}
+  tr.checked{opacity:.58}
+  tr.checked td.nm{text-decoration:line-through}
+  .by{display:block;font-size:10.5px;color:var(--sub);margin-top:3px;white-space:nowrap}
+
+  .note{margin-top:16px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+        font-size:13px;color:var(--sub);line-height:1.8}
+  .note b{color:var(--ink)}
+  .mocknote{margin:0 0 12px;background:#fff7ed;border:2px solid var(--warnline);border-radius:10px;
+        padding:10px 14px;font-size:13px;color:#9a3412;font-weight:700;line-height:1.7}
+  .none{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:26px;text-align:center;
+        color:var(--sub);font-size:14px;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏠 ダッシュボード</h1>
+  <span class="tag">車検　使用者の確認</span>
+  <span class="spacer"></span>
+  <button>🖨 印刷</button>
+  <button>← スケジュールに戻る</button>
+</header>
+
+<div class="wrap">
+  <p class="mocknote">これは<b>見本（モック）</b>です。出てくる名前はすべて架空で、本物のデータにはつながっていません。
+    押して動きを確かめられます。配色はメイン（青）で作ってあります（テスト版はオレンジになります）。</p>
+
+  <div class="bar">
+    <div class="mnav">
+      <button id="prev">‹ 前の月</button>
+      <span class="cur" id="cur">2026年10月</span>
+      <button id="next">次の月 ›</button>
+    </div>
+    <div class="prog">
+      <div class="txt" id="ptxt"></div>
+      <div class="track"><div class="fill" id="pfill"></div></div>
+    </div>
+    <div class="filters">
+      <button class="on" data-f="all">すべて <span class="n" id="n-all"></span></button>
+      <button data-f="todo">未確認だけ <span class="n" id="n-todo"></span></button>
+      <button data-f="done">チェック済み <span class="n" id="n-done"></span></button>
+      <button data-f="diff">名前が違うものだけ <span class="n" id="n-diff"></span></button>
+    </div>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="note">
+    <b>この画面の決まりごと</b><br>
+    ・載るのは<b>車検が終わった（納車済みの）分だけ</b>です。予約中の分は出ません。<br>
+    ・月の区切りは<b>車検をした日</b>です。<br>
+    ・<b>週ごとに分けて</b>あります。月末にまとめてやらず、1週終わったところで確認できます。<br>
+    ・<b>名前が違う行はオレンジ</b>で出ます。そこだけ見れば済みます。<br>
+    ・車検証の使用者が<b>未記入の行は赤</b>で出ます。押すとその場で入れられます。<br>
+    ・チェックは<b>「確認した」の印</b>です。誰がいつ押したかも残ります。
+  </div>
+</div>
+
+<script>
+(function(){
+  // ── 架空の名前（本物とは一切関係ありません）──
+  var SEI=['青木','井上','上田','遠藤','大西','加藤','木村','久保','黒田','小西','斉藤','柴田','清水','鈴木',
+           '瀬戸','高橋','田中','辻','寺田','永井','西村','野口','橋本','林','東','福田','松本','宮本','森','山口'];
+  var MEI=['一郎','歩','香織','健太','咲','翔','大樹','直美','真希','学','陽子','涼','和也','優','理恵','徹'];
+  var HOJIN=['商事','工業','運送','建設','産業','興業','物流','電機'];
+  var CAR=['ワゴンR','スペーシア','ハスラー','アルト','ジムニー','スイフト','ソリオ','エブリイ',
+           'タント','ムーヴ','N-BOX','フィット','ヤリス','ノート','デイズ','ルークス'];
+  var STAFF=['岡田','竹内','幸田','魚住','舟橋','江川'];
+
+  // 安定した疑似乱数（毎回同じ見本が出るように）
+  var seed=20261028;
+  function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+  function pick(a){ return a[Math.floor(rnd()*a.length)]; }
+
+  var MONTHS=[{y:2026,m:9,n:138},{y:2026,m:10,n:150},{y:2026,m:11,n:62}];
+  var mi=1;              // 最初は10月
+  var filter='all';
+  var data={};           // 月ごとの行
+
+  function build(y,m,n){
+    var last=new Date(y,m,0).getDate();
+    var today=(y===2026&&m===10)?27:last;     // 10月は27日まで終わっている想定
+    var rows=[];
+    for(var i=0;i<n;i++){
+      var d=1+Math.floor(rnd()*today);
+      var sei=pick(SEI), nm=sei+'　'+pick(MEI);
+      var r={ d:d, name:nm, car:pick(CAR), no:String(1000+Math.floor(rnd()*8999)).slice(0,4),
+              staff:pick(STAFF), checked:false, by:'' };
+      var t=rnd();
+      if(t<0.14){                       // 法人名義など＝名前が違う
+        r.user=sei+pick(HOJIN); r.kind='diff';
+      }else if(t<0.19){                  // 家族名義＝姓は同じで名が違う
+        r.user=sei+'　'+pick(MEI); r.kind=(r.user===nm)?'same':'diff';
+      }else if(t<0.23){                  // まだ入っていない
+        r.user=''; r.kind='empty';
+      }else{
+        r.user=nm; r.kind='same';
+      }
+      // 月の前半はもう確認済み、という想定（週ごとに進めている様子）
+      if(d<=14 && rnd()<0.86){ r.checked=true; r.by=pick(STAFF)+'　'+m+'/'+Math.min(last,d+2); }
+      rows.push(r);
+    }
+    rows.sort(function(a,b){ return a.d-b.d; });
+    return rows;
+  }
+  MONTHS.forEach(function(x){ data[x.y+'-'+x.m]=build(x.y,x.m,x.n); });
+
+  function key(){ return MONTHS[mi].y+'-'+MONTHS[mi].m; }
+  function weekOf(d){ return Math.min(5,Math.ceil(d/7)); }
+
+  function render(){
+    var M=MONTHS[mi], rows=data[key()];
+    document.getElementById('cur').textContent=M.y+'年'+M.m+'月';
+    document.getElementById('prev').disabled=(mi===0);
+    document.getElementById('next').disabled=(mi===MONTHS.length-1);
+
+    var done=rows.filter(function(r){return r.checked;}).length;
+    var diff=rows.filter(function(r){return r.kind==='diff'||r.kind==='empty';}).length;
+    var pct=rows.length?Math.round(done/rows.length*100):0;
+    document.getElementById('ptxt').innerHTML=
+      '確認済み <b>'+done+'</b> / '+rows.length+' 台　（残り '+(rows.length-done)+' 台・'+pct+'%）';
+    document.getElementById('pfill').style.width=pct+'%';
+    document.getElementById('n-all').textContent=rows.length;
+    document.getElementById('n-todo').textContent=rows.length-done;
+    document.getElementById('n-done').textContent=done;
+    document.getElementById('n-diff').textContent=diff;
+
+    var shown=rows.filter(function(r){
+      if(filter==='todo')return !r.checked;
+      if(filter==='done')return r.checked;
+      if(filter==='diff')return r.kind==='diff'||r.kind==='empty';
+      return true;
+    });
+
+    var host=document.getElementById('list');
+    host.innerHTML='';
+    if(!shown.length){
+      host.innerHTML='<div class="none">この条件に当てはまる車検はありません。</div>';
+      return;
+    }
+    [1,2,3,4,5].forEach(function(w){
+      var ws=shown.filter(function(r){return weekOf(r.d)===w;});
+      if(!ws.length)return;
+      var all=rows.filter(function(r){return weekOf(r.d)===w;});
+      var wd=all.filter(function(r){return r.checked;}).length;
+
+      var h=document.createElement('div');
+      h.className='week';
+      var rest=all.length-wd;
+      h.innerHTML='<h2>第'+w+'週（'+((w-1)*7+1)+'日〜'+Math.min(w*7,31)+'日）</h2>'+
+        '<span class="cnt">'+all.length+' 台</span>'+
+        (rest===0?'<span class="done">✓ この週は確認ずみ</span>'
+                 :'<span class="rest">未確認 '+rest+' 台</span>')+
+        '<hr>'+(rest?'<button data-w="'+w+'">この週をまとめて確認ずみにする</button>':'');
+      host.appendChild(h);
+      var b=h.querySelector('button');
+      if(b)b.onclick=function(){
+        if(!confirm('第'+w+'週の '+rest+' 台を、まとめて「確認した」にします。よろしいですか。'))return;
+        all.forEach(function(r){ if(!r.checked){ r.checked=true; r.by='江川　'+MONTHS[mi].m+'/27'; } });
+        render();
+      };
+
+      var t=document.createElement('table');
+      t.innerHTML='<tr><th>車検日</th><th>顧客名（来店者）</th><th>車検証の使用者</th>'+
+                  '<th>車種・ナンバー</th><th>担当</th><th>確認</th></tr>';
+      ws.forEach(function(r){
+        var tr=document.createElement('tr');
+        if(r.kind==='diff'||r.kind==='empty')tr.className='diff';
+        if(r.checked)tr.className+=' checked';
+
+        var us = r.kind==='empty'
+          ? '<span class="empty" data-ed="1">未記入（押して入れる）</span>'
+          : (r.user + (r.kind==='diff'?'<span class="flag">名前が違う</span>':'<span class="same"> （同じ）</span>'));
+
+        tr.innerHTML=
+          '<td class="dk">'+MONTHS[mi].m+'/'+r.d+'</td>'+
+          '<td class="nm">'+r.name+'</td>'+
+          '<td class="us">'+us+'</td>'+
+          '<td class="car">'+r.car+'　'+r.no+'</td>'+
+          '<td class="st">'+r.staff+'</td>'+
+          '<td class="ck"><span class="mark'+(r.checked?' on':'')+'">✓</span>'+
+            (r.checked&&r.by?'<span class="by">'+r.by+'</span>':'')+'</td>';
+
+        tr.querySelector('.mark').onclick=function(){
+          r.checked=!r.checked;
+          r.by=r.checked?('江川　'+MONTHS[mi].m+'/27'):'';
+          render();
+        };
+        var ed=tr.querySelector('[data-ed]');
+        if(ed)ed.onclick=function(){
+          var cell=tr.querySelector('td.us');
+          cell.innerHTML='<input class="edit" placeholder="車検証の使用者を入れる">';
+          var inp=cell.querySelector('input');
+          inp.focus();
+          inp.onkeydown=function(e){ if(e.key==='Enter')inp.blur(); };
+          inp.onblur=function(){
+            var v=inp.value.trim();
+            if(v){ r.user=v; r.kind=(v===r.name)?'same':'diff'; }
+            render();
+          };
+        };
+        t.appendChild(tr);
+      });
+      host.appendChild(t);
+    });
+  }
+
+  document.getElementById('prev').onclick=function(){ if(mi>0){mi--;render();} };
+  document.getElementById('next').onclick=function(){ if(mi<MONTHS.length-1){mi++;render();} };
+  Array.prototype.forEach.call(document.querySelectorAll('.filters button'),function(b){
+    b.onclick=function(){
+      filter=b.getAttribute('data-f');
+      Array.prototype.forEach.call(document.querySelectorAll('.filters button'),function(x){
+        x.classList.toggle('on',x===b);
+      });
+      render();
+    };
+  });
+  render();
+})();
+</script>
+</body>
+</html>
