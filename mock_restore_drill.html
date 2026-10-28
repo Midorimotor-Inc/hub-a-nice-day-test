@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>避難訓練の体験版 ｜ Hub a Nice Day</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#ffffff; --ink:#1b2129; --sub:#64748b; --line:#d7dde5;
+    --head:linear-gradient(135deg,#9a3412,#ea580c);
+    --ok:#047857; --ng:#dc2626; --warn:#b45309;
+    --band:#e6f6fb; --insp:#fff7ed;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Meiryo",system-ui,sans-serif;
+    -webkit-text-size-adjust:100%}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px 60px}
+
+  header{background:var(--head);color:#fff;padding:14px 0 16px;margin-bottom:16px}
+  header .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  header b{font-size:19px;font-weight:800}
+  .pill{display:inline-block;padding:4px 12px;border-radius:999px;font-size:12.5px;font-weight:800;
+    background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.7)}
+
+  .note{background:#fffbeb;border:2px solid #fcd34d;border-radius:12px;padding:12px 14px;
+    font-size:13.5px;line-height:1.8;margin-bottom:16px}
+  .note b{color:var(--warn)}
+
+  /* 進み具合 */
+  .steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .step{flex:1 1 180px;background:var(--card);border:2px solid var(--line);border-radius:12px;
+    padding:10px 12px;font-size:13px;line-height:1.6;opacity:.45;transition:.25s}
+  .step .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+    border-radius:50%;background:#94a3b8;color:#fff;font-weight:900;font-size:12px;margin-right:7px}
+  .step.on{opacity:1;border-color:#ea580c;box-shadow:0 4px 14px rgba(234,88,12,.18)}
+  .step.on .n{background:#ea580c}
+  .step.done{opacity:1;border-color:#86efac}
+  .step.done .n{background:var(--ok)}
+  .step.done .n::after{content:"✓"}
+  .step.done .n span{display:none}
+  .step strong{font-weight:800}
+
+  /* 数字 */
+  .counts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .cnt{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:9px 16px;min-width:130px}
+  .cnt .t{font-size:12px;color:var(--sub);font-weight:700}
+  .cnt .v{font-size:26px;font-weight:900;line-height:1.2;transition:.3s}
+  .cnt.zero .v{color:var(--ng)}
+  .cnt.back .v{color:var(--ok)}
+
+  /* 週の表 */
+  .board{background:var(--card);border:2px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+  .board .bt{background:#334155;color:#fff;padding:8px 14px;font-size:13.5px;font-weight:800;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .board .bt span{font-weight:700;opacity:.9;font-size:12px}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:760px}
+  th,td{border:1px solid var(--line);padding:3px 4px;font-size:11.5px;vertical-align:middle}
+  th{background:#f1f5f9;font-weight:800;font-size:11.5px;white-space:nowrap;text-align:center;padding:6px 4px}
+  td.tm{background:#f8fafc;color:var(--sub);font-weight:800;text-align:center;width:52px;white-space:nowrap}
+  tr.band td{background:var(--band)}
+  tr.band td.tm{background:#d9eef6}
+  td.insp{background:var(--insp)}
+  .cell{min-height:22px}
+  .ent{display:block;background:#fff;border:1px solid var(--line);border-radius:5px;
+    padding:2px 5px;margin:2px 0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:opacity .45s, transform .45s}
+  .ent .w{display:inline-block;background:#0e7490;color:#fff;border-radius:3px;padding:0 4px;
+    font-size:9.5px;font-weight:800;margin-right:4px}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:4px;
+    color:#fff;font-size:10.5px;font-weight:900;margin:1px;transition:opacity .45s, transform .45s}
+  .cb.m{background:#b91c1c}.cb.q{background:#1d4ed8}.cb.r{background:#d97706}
+  .gone{opacity:0;transform:translateY(-6px)}
+  .fresh{animation:pop .6s ease}
+  @keyframes pop{0%{opacity:0;transform:scale(.8)}60%{transform:scale(1.06)}100%{opacity:1;transform:scale(1)}}
+
+  /* 操作 */
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0 12px}
+  button{font-family:inherit;font-size:15px;font-weight:800;border-radius:11px;padding:13px 22px;
+    border:2px solid transparent;cursor:pointer;transition:.15s}
+  button:disabled{opacity:.35;cursor:default}
+  .go{background:#ea580c;color:#fff}
+  .go:not(:disabled):hover{background:#c2410c}
+  .danger{background:var(--ng);color:#fff}
+  .danger:not(:disabled):hover{background:#b91c1c}
+  .safe{background:var(--ok);color:#fff}
+  .safe:not(:disabled):hover{background:#065f46}
+  .ghost{background:#fff;color:#475569;border-color:#cbd5e1}
+  .hint{font-size:13px;color:var(--sub);line-height:1.7}
+
+  /* 記録 */
+  .log{background:#0f172a;color:#cbd5e1;border-radius:12px;padding:12px 14px;font-size:12.5px;
+    line-height:1.9;font-family:"Consolas","Courier New",monospace;min-height:120px}
+  .log div{opacity:0;animation:fade .4s forwards}
+  @keyframes fade{to{opacity:1}}
+  .log .g{color:#6ee7b7}.log .r{color:#fca5a5}.log .y{color:#fcd34d}.log .d{color:#64748b}
+
+  .result{display:none;border-radius:14px;padding:16px 18px;margin-top:16px;font-size:14.5px;line-height:1.9}
+  .result.show{display:block}
+  .result.ok{background:#ecfdf5;border:2px solid #6ee7b7}
+  .result b{font-size:17px}
+
+  h2{font-size:15px;margin:22px 0 8px}
+  .foot{margin-top:28px;font-size:13px;color:var(--sub);line-height:1.9;
+    border-top:1px solid var(--line);padding-top:14px}
+  @media(max-width:640px){
+    header b{font-size:16px}
+    button{font-size:14px;padding:12px 16px;flex:1 1 100%}
+    .cnt{flex:1 1 calc(50% - 5px);min-width:0}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <b>🧯 避難訓練の体験版</b>
+    <span class="pill">練習用の見本</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="note">
+    これは<b>「こういう手順でやります」を見ていただくための見本</b>です。<br>
+    ここに出ている名前はすべて<b>架空のもの</b>で、実際のデータは一切つながっていません。<br>
+    本番でこの操作を行うことは<b>絶対にありません</b>。訓練で使うのは<b>テスト版（練習用の Hub）だけ</b>です。
+  </div>
+
+  <div class="steps">
+    <div class="step on" id="s1"><span class="n"><span>1</span></span><strong>控えを取る</strong><br>消す直前にもう1本</div>
+    <div class="step" id="s2"><span class="n"><span>2</span></span><strong>わざと消す</strong><br>1週間ぶんの予定</div>
+    <div class="step" id="s3"><span class="n"><span>3</span></span><strong>控えから戻す</strong><br>消えた分だけ</div>
+    <div class="step" id="s4"><span class="n"><span>4</span></span><strong>数を確かめる</strong><br>消す前と同じか</div>
+  </div>
+
+  <div class="counts">
+    <div class="cnt" id="c1"><div class="t">車検の予約</div><div class="v" id="v1">0</div></div>
+    <div class="cnt" id="c2"><div class="t">整備の予定</div><div class="v" id="v2">0</div></div>
+    <div class="cnt" id="c3"><div class="t">控えの中の件数</div><div class="v" id="v3">—</div></div>
+  </div>
+
+  <div class="board">
+    <div class="bt">
+      <span id="boardTitle">⏰ タイムスケジュール（週）　テスト版・本店　10/26（月）〜 11/1（日）</span>
+      <span id="boardState">そのまま</span>
+    </div>
+    <div class="scroll">
+      <table id="tbl"></table>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="go"     id="btn1">① いまの控えを取る</button>
+    <button class="danger" id="btn2" disabled>② わざと1週間ぶん消す</button>
+    <button class="safe"   id="btn3" disabled>③ 控えから戻す</button>
+    <button class="ghost"  id="btnR">はじめからやり直す</button>
+  </div>
+  <div class="hint" id="hint">まず「① いまの控えを取る」を押してください。実際の訓練でも、消す直前にもう1本取ります（二重の保険）。</div>
+
+  <h2>裏で起きていること</h2>
+  <div class="log" id="log"></div>
+
+  <div class="result ok" id="result">
+    <b>✅ 元どおりに戻りました。</b><br>
+    消す前と戻したあとで、<b>車検・整備とも件数がぴったり一致</b>しています。<br>
+    これが「<b>消えても必ず戻せる</b>」ということです。本番で万一のことがあっても、同じ手順で戻します。
+  </div>
+
+  <div class="foot">
+    <b>実際の訓練について</b><br>
+    ・使うのは<b>テスト版だけ</b>です。本番は読むだけで、消したり書き換えたりしません。<br>
+    ・かかる時間は<b>10分ほど</b>。江川さんは見ているだけで結構です。<br>
+    ・戻すのは<b>消えた分だけ</b>で、ほかの日の予定には触りません。<br>
+    ・店長にも見ていただけると、一番の答えになると思います。
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var DAYS = ['10/26（月）','10/27（火）','10/28（水）','10/29（木）','10/30（金）','10/31（土）','11/1（日）'];
+  var TIMES = ['09:00','09:30','10:00','11:00','13:00','14:00','15:00','16:00','17:00'];
+
+  // 架空の予定（実在の方とは関係ありません）
+  var INSP = [['m','q'],['m','m','q','r'],['m','q'],['m','q','q'],['m','m','q','r'],['m','q'],['m']];
+  var SCHED = [
+    [['09:00','Q','青木','エンジンオイル交換'],['11:00','納','井上',''],['15:00','B','上田','バンパー見積']],
+    [['09:30','M6','遠藤','メンパ出力済み'],['13:00','Q','小川','エアコンフィルター'],['16:00','他','加藤','書類預かり']],
+    [['09:00','⑫','木村','代車あり'],['14:00','Q','工藤','オイル・エレメント'],['17:00','納','小林','']],
+    [['10:00','Q','斉藤','ベルト交換'],['13:00','R','佐野','クランクプーリ'],['15:00','M12','柴田','']],
+    [['09:00','Q','鈴木','タイヤ交換'],['11:00','M6','関口','メンパ有'],['14:00','他','高橋','相談']],
+    [['09:30','Q','田中','オイル交換'],['13:00','納','辻','']],
+    [['10:00','Q','中村','ブレーキパッド点検']]
+  ];
+  var CODE = {m:'マ',q:'ク',r:'レ'};
+
+  var el = function(id){ return document.getElementById(id); };
+  var tbl = el('tbl'), log = el('log');
+  var backup = null, deleted = false, before = null;
+
+  function build(){
+    var h = '<thead><tr><th style="width:52px"></th>';
+    DAYS.forEach(function(d,i){ h += '<th'+(i===6?' style="color:#ef4444"':(i===5?' style="color:#2563eb"':''))+'>'+d+'</th>'; });
+    h += '</tr></thead><tbody>';
+    // 車検の行
+    h += '<tr><td class="tm">車検</td>';
+    DAYS.forEach(function(_,i){
+      h += '<td class="insp"><div class="cell" data-insp="'+i+'">';
+      INSP[i].forEach(function(c,j){ h += '<span class="cb '+c+'" data-k="i'+i+'-'+j+'">'+CODE[c]+'</span>'; });
+      h += '</div></td>';
+    });
+    h += '</tr>';
+    // 時間の行
+    TIMES.forEach(function(t){
+      var band = t.slice(-2) === '00' ? ' class="band"' : '';
+      h += '<tr'+band+'><td class="tm">'+t+'</td>';
+      DAYS.forEach(function(_,i){
+        h += '<td><div class="cell" data-slot="'+i+'-'+t+'">';
+        SCHED[i].forEach(function(r,j){
+          if(r[0] !== t) return;
+          h += '<span class="ent" data-k="s'+i+'-'+j+'"><span class="w">'+r[1]+'</span>'+r[2]+(r[3]?' <span style="color:#64748b">'+r[3]+'</span>':'')+'</span>';
+        });
+        h += '</div></td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody>';
+    tbl.innerHTML = h;
+  }
+
+  function counts(){
+    var i = tbl.querySelectorAll('.cb:not(.gone)').length;
+    var s = tbl.querySelectorAll('.ent:not(.gone)').length;
+    return { insp:i, sched:s };
+  }
+  function paint(state){
+    var c = counts();
+    el('v1').textContent = c.insp; el('v2').textContent = c.sched;
+    el('c1').className = 'cnt' + (c.insp===0?' zero':(state==='back'?' back':''));
+    el('c2').className = 'cnt' + (c.sched===0?' zero':(state==='back'?' back':''));
+  }
+  function say(txt, cls, wait){
+    setTimeout(function(){
+      var d = document.createElement('div');
+      d.className = cls || '';
+      d.innerHTML = txt;
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    }, wait||0);
+  }
+  function step(n){
+    [1,2,3,4].forEach(function(i){
+      var e = el('s'+i);
+      e.className = 'step' + (i<n ? ' done' : (i===n ? ' on' : ''));
+    });
+  }
+
+  // ── ① 控えを取る ──
+  el('btn1').onclick = function(){
+    this.disabled = true;
+    before = counts();
+    backup = { name:'hub-backup-dev-2026-10-29_0912.json', insp:before.insp, sched:before.sched };
+    el('v3').textContent = before.insp + before.sched;
+    say('<span class="d">$ node fb_backup.js --dev</span>');
+    say('── テスト版 の控えを取ります ──', '', 350);
+    say('　読んだ項目　107 件 / 2.46MB', '', 900);
+    say('　車検の予約　'+before.insp+' 件　／　整備の予定　'+before.sched+' 件', '', 1200);
+    say('　<span class="g">✔ '+backup.name+'（2.80MB）</span>', '', 1600);
+    say('　<span class="d">※ 書いた控えを読み直して、件数が合うことを確かめました</span>', '', 1900);
+    setTimeout(function(){
+      step(2);
+      el('btn2').disabled = false;
+      el('hint').innerHTML = '控えが1本できました。<b>ここから先は、この控えがあるので何があっても戻せます。</b>では、わざと消してみます。';
+      el('boardState').textContent = '控えを取りました';
+    }, 2100);
+  };
+
+  // ── ② わざと消す ──
+  el('btn2').onclick = function(){
+    this.disabled = true;
+    say('<span class="y">── ここから訓練：わざと1週間ぶんを消します ──</span>');
+    var all = [].slice.call(tbl.querySelectorAll('.cb, .ent'));
+    all.forEach(function(e,i){ setTimeout(function(){ e.classList.add('gone'); paint(); }, 60 + i*28); });
+    var t = 60 + all.length*28;
+    say('　<span class="r">✖ 10/26〜11/1 の車検 '+before.insp+' 件を消しました</span>', '', t);
+    say('　<span class="r">✖ 10/26〜11/1 の整備 '+before.sched+' 件を消しました</span>', '', t+300);
+    say('　<span class="r">この1週間の予定が、画面から全部なくなりました</span>', '', t+600);
+    setTimeout(function(){
+      step(3);
+      deleted = true;
+      el('btn3').disabled = false;
+      el('boardState').textContent = '⚠ 消えました';
+      el('hint').innerHTML = '<b style="color:#dc2626">1週間ぶんの予定が全部消えました。</b>　本番でこれが起きたら血の気が引きます。では戻します。';
+      paint();
+    }, t+700);
+  };
+
+  // ── ③ 戻す ──
+  el('btn3').onclick = function(){
+    this.disabled = true;
+    say('<span class="d">$ node fb_restore.js --dev --from '+backup.name+' --days 2026-10-26..2026-11-01</span>');
+    say('── 控えから戻します ──', '', 350);
+    say('　控え　'+backup.name, '', 700);
+    say('　<span class="d">戻すのは消えた1週間ぶんだけ。ほかの日には触りません</span>', '', 1000);
+    var all = [].slice.call(tbl.querySelectorAll('.cb, .ent'));
+    setTimeout(function(){
+      all.forEach(function(e,i){
+        setTimeout(function(){
+          e.classList.remove('gone'); e.classList.add('fresh');
+          paint('back');
+        }, i*28);
+      });
+    }, 1400);
+    var t = 1400 + all.length*28;
+    say('　<span class="g">✔ 車検 '+backup.insp+' 件を戻しました</span>', '', t);
+    say('　<span class="g">✔ 整備 '+backup.sched+' 件を戻しました</span>', '', t+300);
+    setTimeout(function(){
+      step(5);
+      var c = counts();
+      var same = (c.insp===before.insp && c.sched===before.sched);
+      say('── 確かめます ──', '', 0);
+      say('　消す前　車検 '+before.insp+' 件 / 整備 '+before.sched+' 件', '', 250);
+      say('　戻した後　車検 '+c.insp+' 件 / 整備 '+c.sched+' 件', '', 500);
+      say(same ? '　<span class="g">✔ ぴったり一致しました</span>' : '　<span class="r">✖ 合いません</span>', '', 800);
+      el('boardState').textContent = '✅ 元どおり';
+      el('hint').innerHTML = '<b style="color:#047857">戻りました。</b>　これが実際の訓練で見ていただく流れです。';
+      el('result').classList.add('show');
+      paint('back');
+    }, t+600);
+  };
+
+  el('btnR').onclick = function(){
+    build(); log.innerHTML = ''; backup = null; deleted = false; before = null;
+    el('v3').textContent = '—';
+    el('btn1').disabled = false; el('btn2').disabled = true; el('btn3').disabled = true;
+    el('result').classList.remove('show');
+    el('boardState').textContent = 'そのまま';
+    el('hint').innerHTML = 'まず「① いまの控えを取る」を押してください。実際の訓練でも、消す直前にもう1本取ります（二重の保険）。';
+    step(1); paint();
+  };
+
+  build(); paint();
+})();
+</script>
+</body>
+</html>
