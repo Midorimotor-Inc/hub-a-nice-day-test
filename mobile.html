@@ -1274,7 +1274,7 @@ const removePendingStore=pid=>savePendingStore(loadPending().filter(p=>p.pid!==p
 // ══ 予約データのコアロジック（PC版と同一。挙動を変えないこと）══
 // 全角数字→半角（PC の toHankakuNum と同じ）。ひらがなのまま ３３１０ と打っても 3310 になる。
 const toHankakuNum=(v)=>String(v==null?'':v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',staff:'',carType:'',no:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
+const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',user:'',staff:'',carType:'',no:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
 // dk("2026-7-9") ⇔ <input type=date>("2026-07-09") 変換
 const dkToInputDate=(dk)=>{if(!dk)return'';const p=String(dk).split('-');return p.length===3?`${p[0]}-${String(p[1]).padStart(2,'0')}-${String(p[2]).padStart(2,'0')}`:'';};
 const inputDateToDk=(v)=>{if(!v)return'';const p=v.split('-').map(Number);return p.length===3?`${p[0]}-${p[1]}-${p[2]}`:'';};
@@ -3406,10 +3406,25 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
         </div>
         {lockedBy&&<div style={{margin:'10px 16px 0',padding:'8px 12px',background:'#fff7ed',border:'1.5px solid #fed7aa',borderRadius:10,fontSize:12,color:'#92400e',fontWeight:700}}>🔒 {lockedBy}さんが編集中の可能性があります。保存は慎重に。</div>}
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px 4px',display:'flex',flexDirection:'column',gap:12}}>
+          {/* 氏名（車検は来店者氏名。すぐ下に車検証の使用者を1行足す・2026-10-29 整備からの依頼）
+              ★スマホは横に割らず「2行」にする（2026-10-28 ユーザー決定）。
+                画面が狭く、横半分だと1つの欄に10文字ほどしか見えないため。
+              ★整備のカードには出さない（車検証の話なので）。 */}
           <div>
-            <label style={LBL}>氏名 *</label>
+            <label style={LBL}>{isInsp?'来店者氏名 *':'氏名 *'}</label>
             <input value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="お客様名" style={INP}/>
           </div>
+          {isInsp&&(
+          <div>
+            <div style={{...LBL,display:'flex',alignItems:'center',gap:8}}>
+              <span>車検証の使用者</span>
+              <button type="button" data-userSame="1" onClick={()=>setForm(p=>({...p,user:p.name||''}))}
+                style={{fontSize:11,fontWeight:800,color:'#1d4ed8',background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:7,padding:'3px 10px',cursor:'pointer',fontFamily:'inherit'}}>同じ</button>
+            </div>
+            <input data-userfld="1" value={form.user||''} onChange={e=>setForm(p=>({...p,user:e.target.value}))}
+              placeholder="同じなら「同じ」を押す" style={INP}/>
+          </div>
+          )}
           <div style={{display:'flex',gap:10}}>
             <div style={{flex:1}}>
               <label style={LBL}>車種 *</label>

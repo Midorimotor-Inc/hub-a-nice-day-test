@@ -92,7 +92,29 @@ const hasLabel = (page, re) => page.evaluate(r =>
   head('① 車検の予約カード');
   await page.getByText('車検テスト', { exact: false }).last().click({ timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(1200);
-  t('車検のカードが開く', await hasLabel(page, '^氏名'));
+  // ★車検のカードの氏名は「来店者氏名」になった（2026-10-29 整備からの依頼）。
+  //   整備のカードは今までどおり「氏名」。
+  t('車検のカードが開く', await hasLabel(page, '^来店者氏名'));
+  // ── 車検証の使用者（陸運局へ出す時、来店者と名前が違うと不都合になるため）──
+  const userFld = () => page.evaluate(() => {
+    const i = document.querySelector('[data-userfld]');
+    if (!i || i.offsetParent === null) return null;
+    return { v: i.value, size: parseFloat(getComputedStyle(i).fontSize) };
+  });
+  const u0 = await userFld();
+  t('★車検のカードに「車検証の使用者」の欄がある', !!u0, u0);
+  t('★はじめは空（勝手に入れない）', !!u0 && u0.v === '', u0 && u0.v);
+  t('★16px以上（iPhoneが拡大しない）', !!u0 && u0.size >= 16, u0 && u0.size);
+  t('★氏名より下にある（2行になっている）', await page.evaluate(() => {
+    const ls = [...document.querySelectorAll('label')];
+    const nm = ls.find(e => /^来店者氏名/.test(e.innerText.trim()));
+    const u = document.querySelector('[data-userfld]');
+    return !!(nm && u) && u.getBoundingClientRect().top > nm.getBoundingClientRect().top;
+  }));
+  await page.click('[data-userSame]').catch(() => {});
+  await page.waitForTimeout(300);
+  const u1 = await userFld();
+  t('★「同じ」を押すと来店者氏名が入る', !!u1 && u1.v === '車検テスト', u1 && u1.v);
   const p1 = await phoneInfo(page);
   t('★電話の欄がある', !!p1, p1);
   t('電話のキーボードが出る（type=tel）', !!p1 && p1.type === 'tel', p1 && p1.type);
@@ -196,6 +218,10 @@ const hasLabel = (page, re) => page.evaluate(r =>
   await page.getByText('整備テスト', { exact: false }).last().click({ timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(1200);
   t('整備のカードが開く', await hasLabel(page, '^氏名'));
+  t('★整備のカードには車検証の使用者を出さない', await page.evaluate(() => {
+    const i = document.querySelector('[data-userfld]');
+    return !i || i.offsetParent === null;
+  }));
   const p2 = await phoneInfo(page);
   t('★電話の欄がある', !!p2, p2);
   t('16px以上', !!p2 && p2.fs >= 16, p2 && p2.fs);

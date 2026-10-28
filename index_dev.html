@@ -2155,7 +2155,7 @@ const toTimeStr = (v) => {
   if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return v;
   return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
 };
-const blankInsp  = () => ({name:'',staff:'',carType:'',no:'',phone:'',address:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
+const blankInsp  = () => ({name:'',user:'',staff:'',carType:'',no:'',phone:'',address:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
 
 // ── 「この保存で日付が変わったか」の判定（必ずこれを使う）──────────────
 //   モーダルは日付を触らないと _targetDk を【空文字】で返す。生の値のまま
@@ -7699,6 +7699,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const [staffInput,setStaffInput]=useState('');
   const [showStaff,setShowStaff]=useState(false);
   const nameRef=useRef(null);
+  const userRef=useRef(null);   // 車検証の使用者（車検のカードだけ）
   const staffRef=useRef(null);
   const carRef=useRef(null);
   const carNoRef=useRef(null);     // ナンバー4桁（2026-09-30）
@@ -7802,7 +7803,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const canDelete=!!onDelete;
 
   // ── キーボード操作 ──────────────────────────────────────────
-  const INSP_ORDER=['name','staff','car','carno','course','tokuten','time','note'];
+  const INSP_ORDER=['name','user','staff','car','carno','course','tokuten','time','note'];
   //   ★整備は先頭に時間帯（2026-10-15）。畳んだ状態から追加した時はここが必須の欄になる。
   const SCHED_ORDER=['slot','name','staff','car','carno','work','shimi','note'];
   const ORDER=isInsp?INSP_ORDER:SCHED_ORDER;
@@ -7832,6 +7833,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     const next=ORDER[i+1]; setKbField(next);
     if(next==='slot'){slotRef.current?.focus();centerField(slotRef.current);}
     else if(next==='name'){nameRef.current?.focus();centerField(nameRef.current);}
+    else if(next==='user'){userRef.current?.focus();centerField(userRef.current);}
     else if(next==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(next==='car'){carRef.current?.focus();centerField(carRef.current);}
     else if(next==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
@@ -7849,6 +7851,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     const prev=ORDER[i-1]; setKbField(prev);
     if(prev==='slot'){slotRef.current?.focus();centerField(slotRef.current);}
     else if(prev==='name'){nameRef.current?.focus();centerField(nameRef.current);}
+    else if(prev==='user'){userRef.current?.focus();centerField(userRef.current);}
     else if(prev==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(prev==='car'){carRef.current?.focus();centerField(carRef.current);}
     else if(prev==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
@@ -8214,13 +8217,39 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             </div>
             );
           })()}
-          {/* 氏名 */}
+          {/* 氏名（車検は「来店者氏名」と「車検証の使用者」の2つに割る・2026-10-29 整備からの依頼）
+              ★陸運局へ出す時、車検証の使用者と来店した人の名前が違うと不都合があるため、
+                両方を別々に持ち、ダッシュボードの「車検 使用者の確認」で突き合わせる。
+              ★左右の入力欄を同じ行にそろえるため、見出しの行は左右とも同じ高さ(22px)にすること。
+                右だけ「同じ」ボタンがあると背が高くなり、入力欄が1段ずれて見える（モックで実測して決めた）。
+              ★整備のカードは今までどおり氏名1つ（車検証の話なので使用者は持たない）。 */}
+          {isInsp ? (
+          <div style={{display:'flex',gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{...LBL,marginBottom:5,height:22,display:'flex',alignItems:'center'}}>来店者氏名 *</div>
+              <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+                onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
+                onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name')}}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{...LBL,marginBottom:5,height:22,display:'flex',alignItems:'center',gap:8}}>
+                <span>車検証の使用者</span>
+                <button type="button" data-userSame="1" onClick={()=>setForm(p=>({...p,user:p.name||''}))}
+                  style={{fontSize:11,fontWeight:800,color:'#1d4ed8',background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:7,padding:'3px 10px',cursor:'pointer',fontFamily:'inherit'}}>同じ</button>
+              </div>
+              <input ref={userRef} data-userfld="1" value={form.user||''} onChange={e=>setForm({...form,user:e.target.value})}
+                onFocus={()=>setKbField('user')} onBlur={()=>setKbField('')}
+                onKeyDown={e=>onKbNav(e,'user')} placeholder="同じなら「同じ」を押す" style={{...INP,...KB('user')}}/>
+            </div>
+          </div>
+          ) : (
           <div>
             <label style={LBL}>氏名 *</label>
             <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
               onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
               onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name')}}/>
           </div>
+          )}
           {/* 担当 */}
           <div>
             <label style={LBL}>担当 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>番号を打って Enter で名前に変わります・ダブルクリックで一覧</span></label>
