@@ -41,8 +41,11 @@
   .body{padding:12px 14px 14px}
   .lb{font-size:10.5px;font-weight:800;color:var(--sub);margin:9px 0 3px}
   .lb:first-child{margin-top:0}
-  .lbrow{display:flex;align-items:center;gap:8px;margin:9px 0 3px}
+  /* ★左右の入力欄を同じ行にそろえるため、見出しの行は左右とも同じ高さにする
+       （右だけ「同じ」ボタンがあると背が高くなり、入力欄が1段ずれて見える） */
+  .lbrow{display:flex;align-items:center;gap:8px;margin:9px 0 3px;height:22px}
   .lbrow .lb{margin:0}
+  .two{align-items:flex-start}
   input,select{font:inherit;width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;
         font-size:13.5px;color:var(--ink);background:#fff}
   .two{display:flex;gap:10px}
@@ -126,7 +129,7 @@
 
           <div class="two">
             <div>
-              <div class="lb">来店者氏名</div>
+              <div class="lbrow"><span class="lb">来店者氏名</span></div>
               <input id="p-name" value="佐藤　健太">
             </div>
             <div>
@@ -158,37 +161,11 @@
     </div>
   </div>
 
-  <h2 class="sec">スマホ版<small>2026-10-28 ユーザー決定：2行になってよいので B案</small></h2>
+  <h2 class="sec">スマホ版<small>2026-10-28 ユーザー決定：2行になってよい</small></h2>
   <div class="row">
 
-    <div style="opacity:.55">
-      <span class="pick" style="background:#94a3b8">A案　横に半分ずつ（不採用）</span>
-      <div class="phone">
-        <div class="phead"><span class="n">‹</span><span class="d">10月28日（水）</span><span class="n">✕</span></div>
-        <div class="pbody">
-          <div class="two">
-            <div><div class="lb">来店者氏名</div><input id="a-name" value="佐藤　健太"></div>
-            <div>
-              <div class="lbrow"><span class="lb">車検証の使用者</span><button class="same" id="a-same">同じ</button></div>
-              <input id="a-user" placeholder="同じなら押す">
-            </div>
-          </div>
-          <div class="hit" id="a-hit"></div>
-          <div class="two" style="margin-top:4px">
-            <div><div class="lb">車種</div><input value="スペーシア" readonly></div>
-            <div><div class="lb">担当</div><input value="竹内" readonly></div>
-          </div>
-          <div class="lb">ナンバー 4桁</div><input value="3310" readonly>
-          <div class="lb">電話</div><input value="090-1234-5678" readonly>
-          <div class="lb">コース</div>
-          <div class="chips"><span class="chip">マ</span><span class="chip on">ク</span><span class="chip">レ</span></div>
-          <div class="save"><button class="ok">保存</button></div>
-        </div>
-      </div>
-    </div>
-
     <div>
-      <span class="pick b">★ B案　下に1行足す（2行になってOK）　← これで作ります</span>
+      <span class="pick b">★ 2行（下に1行足す）　← これで作ります</span>
       <div class="phone">
         <div class="phead"><span class="n">‹</span><span class="d">10月28日（水）</span><span class="n">✕</span></div>
         <div class="pbody">
@@ -241,7 +218,6 @@
     upd();
   }
   wire('p-name','p-user','p-same','p-hit');
-  wire('a-name','a-user','a-same','a-hit');
   wire('b-name','b-user','b-same','b-hit');
 })();
 </script>
