@@ -80,8 +80,10 @@
   .fld input{width:100%;font:inherit;font-size:14px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px}
   .half{display:flex;gap:10px}
   .half .fld{flex:1;margin-bottom:0}
-  .same{font:inherit;font-size:11.5px;font-weight:800;color:var(--head2);background:#eff6ff;
-        border:1.5px solid #bfdbfe;border-radius:7px;padding:5px 9px;cursor:pointer;margin-top:5px}
+  .nrow{display:flex;align-items:center;gap:8px}
+  .same{font:inherit;font-size:11px;font-weight:800;color:var(--head2);background:#eff6ff;
+        border:1.5px solid #bfdbfe;border-radius:7px;padding:3px 10px;cursor:pointer}
+  .same:hover{background:#dbeafe}
   .hint{font-size:11.5px;color:var(--sub);margin-top:5px;line-height:1.6}
   .hit{font-size:11.5px;font-weight:800;color:#9a3412;background:var(--warnbg);border:1px solid var(--warnline);
        border-radius:8px;padding:6px 9px;margin-top:7px;line-height:1.6}
@@ -170,12 +172,15 @@
       <div class="lab new">こうしたい</div>
       <div class="half">
         <div class="fld"><div class="n">来店者氏名</div><input id="c-name" value="佐藤　健太"></div>
-        <div class="fld"><div class="n">車検証の使用者</div><input id="c-user" placeholder="違う時だけ入れる"></div>
+        <div class="fld">
+          <div class="n nrow">車検証の使用者<button class="same" id="c-same">同じ</button></div>
+          <input id="c-user" placeholder="同じなら「同じ」を押す">
+        </div>
       </div>
-      <button class="same" id="c-same">← 来店者と同じ</button>
       <div class="hit" id="c-hit">いまは<b>未入力</b>です。ダッシュボードのリストに<b>赤で「未入力」</b>と出ます。</div>
       <div class="hint">幅を半分に割って、右に「車検証の使用者」を足します。<br>
-        入れた内容は、そのまま<b>使用者の確認リストに出ます</b>。</div>
+        <b>同じなら「同じ」を押すだけ</b>。押さなければ空のままです（勝手には入りません）。<br>
+        違う人の場合は手で入れられます。入れた内容は<b>使用者の確認リストにそのまま出ます</b>。</div>
     </div>
   </div>
 
