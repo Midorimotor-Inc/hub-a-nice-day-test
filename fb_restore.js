@@ -125,10 +125,20 @@ const pickFrom = () => {
   if (!from) throw new Error('--from <控え.json> か --from last を指定してください');
   if (from !== 'last') return from;
   const tag = WANT_PROD ? 'prod' : 'dev';
-  const mine = fs.readdirSync(OUT_DIR)
-    .filter(f => f.indexOf('hub-backup-' + tag + '-') === 0 && f.endsWith('.json')).sort().reverse();
-  if (!mine.length) throw new Error(OUT_DIR + ' に ' + tag + ' の控えがありません');
-  return path.join(OUT_DIR, mine[0]);
+  // PCの控え → Google ドライブの写し の順に探す（PCを入れ替えた時でも戻せるように）
+  const dirs = [OUT_DIR, arg('--also', 'G:/マイドライブ/Hub控え')];
+  for (const d of dirs) {
+    let mine = [];
+    try {
+      mine = fs.readdirSync(d)
+        .filter(f => f.indexOf('hub-backup-' + tag + '-') === 0 && f.endsWith('.json')).sort().reverse();
+    } catch (e) {}
+    if (mine.length) {
+      if (d !== OUT_DIR) console.log('  （PCに控えが無いので、Google ドライブの写しを使います）');
+      return path.join(d, mine[0]);
+    }
+  }
+  throw new Error(tag + ' の控えが見つかりません。探した場所：' + dirs.join('　'));
 };
 
 (async () => {

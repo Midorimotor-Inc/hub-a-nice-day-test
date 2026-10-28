@@ -52,6 +52,17 @@ const OUT_DIR = arg('--out', 'C:/Users/A/Documents/Hub重要書類/hub-backup');
 const KEEP = Math.max(1, Number(arg('--keep', '30')) || 30);
 
 const SKIP = [/^myprv-/, /^auth-/, /^handoff/, /^locks$/, /^list-pending$/, /^diag-/, /^gasping$/, /^snap/];
+
+// ── 写し先（Google ドライブの同期フォルダ）──
+//   ★PCの控えが「主」、ここは「写し」。Drive が無くても控えは取れる（写しだけ飛ばす）
+//   ★写すのは控えのファイルだけ。鍵（firebase-admin.json）は入れない
+const MIRROR = (() => {
+  const d = arg('--also', 'G:/マイドライブ/Hub控え');
+  if (d === 'off') return '';
+  // 親（マイドライブ）があるときだけ使う。無ければ写さない（エラーにしない）
+  try { if (fs.existsSync(path.dirname(d))) return d; } catch (e) {}
+  return '';
+})();
 const skip = base => SKIP.some(re => re.test(base));
 
 // 日付（その土地の時刻で YYYY-MM-DD / YYYY-MM-DD_HHMMSS）
@@ -152,6 +163,30 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
     mine.slice(KEEP).forEach(f => { try { fs.unlinkSync(path.join(OUT_DIR, f)); console.log('  （古い控えを1本片づけました：' + f + '）'); } catch (e) {} });
     console.log('  残っている控え　' + Math.min(mine.length, KEEP) + ' 本（最大 ' + KEEP + ' 本）');
 
+    // ── 写しを Google ドライブへ（主の控えは上で書けている。ここで失敗しても控えは残る）──
+    if (MIRROR) {
+      try {
+        fs.mkdirSync(MIRROR, { recursive: true });
+        const to = path.join(MIRROR, path.basename(file));
+        const t2 = to + '.tmp';
+        fs.copyFileSync(file, t2);
+        fs.renameSync(t2, to);                 // 途中で止まっても半端な写しが残らない
+        if (fs.statSync(to).size !== fs.statSync(file).size) throw new Error('写しの大きさが合いません');
+        console.log('  ✔ 写しを置きました　' + to);
+        // 写し先も同じ本数だけ残す
+        const m2 = fs.readdirSync(MIRROR).filter(f => f.indexOf('hub-backup-' + tag + '-') === 0 && f.endsWith('.json')).sort().reverse();
+        m2.slice(KEEP).forEach(f => { try { fs.unlinkSync(path.join(MIRROR, f)); } catch (e) {} });
+        note.mirror = to;
+      } catch (e) {
+        // ★黙って飛ばさない。記録に残して画面にも出す（これが2週間気づけなかった原因だった）
+        note.mirrorError = String((e && e.message) || e);
+        console.log('  ⚠ 写しを置けませんでした（控え自体は取れています）：' + note.mirrorError);
+      }
+    } else {
+      note.mirrorError = '写し先がありません（Google ドライブが見つからない）';
+      console.log('  ⚠ 写し先が見つからないので、写しは置いていません');
+    }
+
     note.ok = true; note.keys = keys; note.bytes = bytes; note.file = file; note.あらまし = summary;
   } catch (e) {
     note.error = String((e && e.message) || e);
@@ -166,7 +201,8 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
       fs.writeFileSync(path.join(OUT_DIR, 'hub-backup-status-' + tag + '.json'), JSON.stringify(note, null, 1));
       fs.appendFileSync(path.join(OUT_DIR, 'hub-backup.log'),
         started.toLocaleString('ja-JP') + '\t' + ENVNAME + '\t' + (note.ok ? 'OK' : 'NG')
-        + '\t' + note.keys + '件\t' + mb(note.bytes) + '\t' + (note.error || path.basename(note.file)) + '\n');
+        + '\t' + note.keys + '件\t' + mb(note.bytes) + '\t' + (note.error || path.basename(note.file))
+        + '\t写し:' + (note.mirror ? 'OK' : ('NG ' + (note.mirrorError || ''))) + '\n');
     } catch (e) {}
     process.exit(note.ok ? 0 : 1);
   }
