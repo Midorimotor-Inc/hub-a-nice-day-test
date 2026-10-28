@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：予約カード（来店者氏名／車検証の使用者）</title>
+<!--
+  2026-10-28 予約カードの見本（モック）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  ・変更するのは「氏名」の行だけ。ほかの欄は今のままです
+  ・スマホは A案（横に半分ずつ）と B案（下に1行足す）の2案を並べてあります
+-->
+<style>
+  :root{ --ink:#1f2a37; --sub:#64748b; --line:#e2e8f0; --bg:#f1f5f9;
+         --blue:#1d4ed8; --ok:#047857; --okbg:#ecfdf5; --warn:#9a3412; --warnbg:#fff7ed;
+         --red:#b91c1c; --redbg:#fef2f2; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif}
+  header{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:10px 16px;
+         display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-bottom:3px solid #1e40af}
+  header h1{font-size:17px;margin:0;font-weight:800}
+  .tag{font-size:11px;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;font-weight:700}
+  .wrap{padding:14px 16px 50px;max-width:1500px;margin:0 auto}
+  .mocknote{margin:0 0 14px;background:var(--warnbg);border:2px solid #fed7aa;border-radius:10px;
+        padding:10px 14px;font-size:13px;color:var(--warn);font-weight:700;line-height:1.7}
+  h2.sec{font-size:16px;font-weight:900;margin:24px 0 10px;color:#1e3a8a}
+  h2.sec small{font-weight:700;color:var(--sub);font-size:12.5px;margin-left:10px}
+  .row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+
+  /* 共通のカード見た目 */
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 20px rgba(15,23,42,.08)}
+  .ttl{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .ttl .dt{font-size:15px;font-weight:900}
+  .ttl .kind{font-size:11px;font-weight:800;color:#fff;background:#0891b2;border-radius:8px;padding:3px 9px}
+  .ttl .store{font-size:11px;font-weight:800;color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;
+        border-radius:8px;padding:3px 9px}
+  .ttl .sp{flex:1}
+  .ttl .x{font-size:15px;font-weight:900;color:#dc2626;cursor:pointer}
+  .body{padding:12px 14px 14px}
+  .lb{font-size:10.5px;font-weight:800;color:var(--sub);margin:9px 0 3px}
+  .lb:first-child{margin-top:0}
+  .lbrow{display:flex;align-items:center;gap:8px;margin:9px 0 3px}
+  .lbrow .lb{margin:0}
+  input,select{font:inherit;width:100%;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;
+        font-size:13.5px;color:var(--ink);background:#fff}
+  .two{display:flex;gap:10px}
+  .two>div{flex:1}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:12px;font-weight:800;border:1.5px solid var(--line);border-radius:20px;padding:6px 13px;
+        cursor:pointer;background:#fff;color:var(--sub)}
+  .chip.on{background:#0891b2;border-color:#0891b2;color:#fff}
+  .same{font:inherit;font-size:11px;font-weight:800;color:var(--blue);background:#eff6ff;
+        border:1.5px solid #bfdbfe;border-radius:7px;padding:3px 10px;cursor:pointer}
+  .same:hover{background:#dbeafe}
+  .save{margin-top:14px;display:flex;gap:8px}
+  .save button{font:inherit;font-size:13px;font-weight:900;border:none;border-radius:9px;padding:10px 18px;cursor:pointer}
+  .save .ok{background:#16a34a;color:#fff;flex:1}
+  .save .del{background:#fee2e2;color:#b91c1c;border:1.5px solid #fecaca}
+  .hit{font-size:11.5px;font-weight:800;border-radius:8px;padding:7px 10px;margin-top:8px;line-height:1.6}
+
+  .pc{width:620px;max-width:100%}
+  .old{width:360px;max-width:100%;opacity:.85}
+  .old .body{padding-bottom:16px}
+  .oldlab{font-size:12px;font-weight:900;color:var(--warn);margin-bottom:6px}
+  .newlab{font-size:12px;font-weight:900;color:var(--ok);margin-bottom:6px}
+
+  /* スマホの枠 */
+  .phone{width:390px;max-width:100%;background:#fff;border:10px solid #334155;border-radius:30px;overflow:hidden}
+  .phead{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:9px 12px;
+         display:flex;align-items:center;gap:8px}
+  .phead .d{font-size:14px;font-weight:900;flex:1;text-align:center}
+  .phead .n{font-size:17px;font-weight:900;cursor:pointer}
+  .pbody{padding:12px}
+  .phone .lb{font-size:11px}
+  .phone input,.phone select{font-size:16px;padding:9px 10px}   /* iPhoneの自動拡大よけ */
+  .phone .chip{font-size:13px;padding:8px 14px}
+
+  .note{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+        font-size:13px;color:var(--sub);line-height:1.9}
+  .note b{color:var(--ink)}
+  .pick{display:inline-block;font-size:12px;font-weight:900;color:#fff;background:#1d4ed8;
+        border-radius:20px;padding:4px 12px;margin-bottom:8px}
+  .pick.b{background:#047857}
+</style>
+</head>
+<body>
+<header>
+  <h1>🗂 予約カードの見本</h1>
+  <span class="tag">車検カード　来店者氏名／車検証の使用者</span>
+</header>
+
+<div class="wrap">
+  <p class="mocknote">これは<b>見本（モック）</b>です。名前はすべて架空で、本物のデータにはつながっていません。
+    <b>変えるのは氏名の行だけ</b>で、ほかの欄は今のままです。実際に打って動きを確かめられます。</p>
+
+  <h2 class="sec">PC版<small>氏名の欄を半分に割って、右に「車検証の使用者」を足します</small></h2>
+  <div class="row">
+
+    <div>
+      <div class="oldlab">いま</div>
+      <div class="card old">
+        <div class="ttl"><span class="dt">10月28日（水）</span><span class="kind">車検 ①</span>
+          <span class="sp"></span><span class="x">✕</span></div>
+        <div class="body">
+          <div class="lb">氏名</div><input value="佐藤　健太" readonly>
+          <div class="lb">担当</div><input value="竹内" readonly>
+          <div class="two">
+            <div><div class="lb">車種</div><input value="スペーシア" readonly></div>
+            <div><div class="lb">ナンバー 4桁</div><input value="3310" readonly></div>
+          </div>
+          <div class="hit" style="background:var(--warnbg);color:var(--warn);border:1px solid #fed7aa">
+            車検証の使用者を書くところがありません</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:360px">
+      <div class="newlab">こうしたい</div>
+      <div class="card pc">
+        <div class="ttl"><span class="dt">10月28日（水）</span><span class="kind">車検 ①</span>
+          <span class="store">本店</span><span class="sp"></span><span class="x">✕</span></div>
+        <div class="body">
+          <div class="lb">📅 入庫日（車検日）</div><input value="2026-10-28" readonly>
+
+          <div class="two">
+            <div>
+              <div class="lb">来店者氏名</div>
+              <input id="p-name" value="佐藤　健太">
+            </div>
+            <div>
+              <div class="lbrow"><span class="lb">車検証の使用者</span><button class="same" id="p-same">同じ</button></div>
+              <input id="p-user" placeholder="同じなら「同じ」を押す">
+            </div>
+          </div>
+          <div class="hit" id="p-hit"></div>
+
+          <div class="lb">担当</div><input value="竹内" readonly>
+          <div class="two">
+            <div><div class="lb">車種</div><input value="スペーシア" readonly></div>
+            <div><div class="lb">ナンバー 4桁</div><input value="3310" readonly></div>
+          </div>
+          <div class="two">
+            <div><div class="lb">電話</div><input value="090-1234-5678" readonly></div>
+            <div><div class="lb">住所</div><input value="神戸市北区八多町" readonly></div>
+          </div>
+          <div class="lb">コース</div>
+          <div class="chips"><span class="chip">マッハ</span><span class="chip on">クイック</span><span class="chip">レギュラー</span></div>
+          <div class="two" style="margin-top:9px">
+            <div><div class="lb">入庫時間</div><input value="10:00" readonly></div>
+            <div><div class="lb">特典</div><input value="-" readonly></div>
+          </div>
+          <div class="lb">備考</div><input value="" readonly>
+          <div class="save"><button class="ok">保存</button><button class="del">削除</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">スマホ版<small>2026-10-28 ユーザー決定：2行になってよいので B案</small></h2>
+  <div class="row">
+
+    <div style="opacity:.55">
+      <span class="pick" style="background:#94a3b8">A案　横に半分ずつ（不採用）</span>
+      <div class="phone">
+        <div class="phead"><span class="n">‹</span><span class="d">10月28日（水）</span><span class="n">✕</span></div>
+        <div class="pbody">
+          <div class="two">
+            <div><div class="lb">来店者氏名</div><input id="a-name" value="佐藤　健太"></div>
+            <div>
+              <div class="lbrow"><span class="lb">車検証の使用者</span><button class="same" id="a-same">同じ</button></div>
+              <input id="a-user" placeholder="同じなら押す">
+            </div>
+          </div>
+          <div class="hit" id="a-hit"></div>
+          <div class="two" style="margin-top:4px">
+            <div><div class="lb">車種</div><input value="スペーシア" readonly></div>
+            <div><div class="lb">担当</div><input value="竹内" readonly></div>
+          </div>
+          <div class="lb">ナンバー 4桁</div><input value="3310" readonly>
+          <div class="lb">電話</div><input value="090-1234-5678" readonly>
+          <div class="lb">コース</div>
+          <div class="chips"><span class="chip">マ</span><span class="chip on">ク</span><span class="chip">レ</span></div>
+          <div class="save"><button class="ok">保存</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="pick b">★ B案　下に1行足す（2行になってOK）　← これで作ります</span>
+      <div class="phone">
+        <div class="phead"><span class="n">‹</span><span class="d">10月28日（水）</span><span class="n">✕</span></div>
+        <div class="pbody">
+          <div class="lb">来店者氏名</div><input id="b-name" value="佐藤　健太">
+          <div class="lbrow"><span class="lb">車検証の使用者</span><button class="same" id="b-same">同じ</button></div>
+          <input id="b-user" placeholder="同じなら「同じ」を押す">
+          <div class="hit" id="b-hit"></div>
+          <div class="two" style="margin-top:4px">
+            <div><div class="lb">車種</div><input value="スペーシア" readonly></div>
+            <div><div class="lb">担当</div><input value="竹内" readonly></div>
+          </div>
+          <div class="lb">ナンバー 4桁</div><input value="3310" readonly>
+          <div class="lb">電話</div><input value="090-1234-5678" readonly>
+          <div class="lb">コース</div>
+          <div class="chips"><span class="chip">マ</span><span class="chip on">ク</span><span class="chip">レ</span></div>
+          <div class="save"><button class="ok">保存</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>スマホは B案で決まりました</b>（2026-10-28）。2行になってよい、とのことです。<br>
+    ・<b>B案</b>…1行ぶん縦に長くなりますが、欄が広いので<b>長い名前や法人名でも読めます</b>。指でも押しやすいです。<br>
+    ・A案（横に半分ずつ）は、画面が狭く1つの欄に10文字ほどしか見えないため見送りました。<br><br>
+    <b>どちらにしても</b><br>
+    ・何もしなければ<b>空のまま</b>です（勝手には入りません）。<br>
+    ・<b>「同じ」を押すと</b>来店者氏名がそのまま入ります。<br>
+    ・違う人の場合は手で入れられます。<br>
+    ・入れた内容は、そのまま<b>ダッシュボードの「車検 使用者の確認」リスト</b>に出ます。
+  </div>
+</div>
+
+<script>
+(function(){
+  function wire(nameId,userId,sameId,hitId){
+    var nm=document.getElementById(nameId), us=document.getElementById(userId),
+        sm=document.getElementById(sameId), hit=document.getElementById(hitId);
+    function upd(){
+      var n=nm.value.trim(), u=us.value.trim();
+      if(!u){ hit.style.background='#fef2f2'; hit.style.border='1px solid #fecaca'; hit.style.color='#b91c1c';
+              hit.innerHTML='未入力　→　リストに<b>赤で「未入力」</b>と出ます'; }
+      else if(u===n){ hit.style.background='#ecfdf5'; hit.style.border='1px solid #a7f3d0'; hit.style.color='#047857';
+              hit.innerHTML='来店者と同じ　→　リストに<b>「（同じ）」</b>と薄く出ます'; }
+      else { hit.style.background='#fff7ed'; hit.style.border='1px solid #fed7aa'; hit.style.color='#9a3412';
+              hit.innerHTML='名前が違う　→　リストに<b>オレンジで「名前が違う」</b>と出ます'; }
+    }
+    nm.oninput=upd; us.oninput=upd;
+    sm.onclick=function(){ us.value=nm.value; upd(); };
+    upd();
+  }
+  wire('p-name','p-user','p-same','p-hit');
+  wire('a-name','a-user','a-same','a-hit');
+  wire('b-name','b-user','b-same','b-hit');
+})();
+</script>
+</body>
+</html>
