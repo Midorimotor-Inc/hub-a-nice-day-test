@@ -90,7 +90,21 @@ const countBranch = (base, v) => {
 
       // 控えに入らない数項目を戻す
       if (REXTRA) {
-        const ex = JSON.parse(fs.readFileSync(REXTRA, 'utf8'));
+        // `last` ＝いちばん新しい訓練用の控えを自動で選ぶ（デスクトップのボタンから使う）
+        let exPath = REXTRA;
+        if (REXTRA === 'last') {
+          const mine = fs.readdirSync(OUT_DIR)
+            .filter(f => f.indexOf('hub-drill-extra-dev-') === 0 && f.endsWith('.json')).sort().reverse();
+          if (!mine.length) {
+            console.log('訓練用の控え（hub-drill-extra-dev-*.json）がありません。');
+            console.log('控えに入らない数項目（auth-devices・locks など）は戻せませんが、');
+            console.log('どれも中身がほとんど無いものなので、予約や顧客のデータには影響しません。');
+            process.exit(0);
+          }
+          exPath = path.join(OUT_DIR, mine[0]);
+          console.log('いちばん新しい訓練用の控えを使います：' + path.basename(exPath));
+        }
+        const ex = JSON.parse(fs.readFileSync(exPath, 'utf8'));
         if (ex.接頭辞 !== DST) throw new Error('この控えはテスト版のものではありません（' + ex.接頭辞 + '）');
         const ids = Object.keys(ex.data || {});
         console.log('── 控えに入らない数項目を戻します（' + ids.length + ' 項目）──');
