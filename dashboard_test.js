@@ -100,18 +100,36 @@ const seed = {
   const click = (x) => page.evaluate(s => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes(s) && e.offsetParent !== null); if (b) { b.click(); return true; } return false; }, x);
   const see = async (s, ms = 20000) => { try { await page.waitForFunction(x => document.body.innerText.includes(x), s, { timeout: ms }); return true; } catch (e) { return false; } };
 
-  await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
-  await see(ME.name); await click(ME.name); await click('でログイン');
-  await see('スケジュール'); await click('このまま使う');
-  await page.waitForTimeout(2400);
+  const login = async (q) => {
+    await page.goto('http://localhost:' + PORT + '/index_dev.html' + (q || ''), { waitUntil: 'domcontentloaded' });
+    await see(ME.name); await click(ME.name); await click('でログイン');
+    await see('スケジュール'); await click('このまま使う');
+    await page.waitForTimeout(2400);
+  };
+  await login();
 
   console.log('\n■ ① 入口');
-  t('★上の並びに「🏠 ダッシュボード」のボタンがある', await page.evaluate(() => {
+  t('★ヘッダーのまん中に「🏠 ダッシュボード」のボタンがある', await page.evaluate(() => {
     const b = document.querySelector('[data-dashnav]'); return !!b && /ダッシュボード/.test(b.innerText);
   }));
-  await page.evaluate(() => document.querySelector('[data-dashnav]').click());
-  await page.waitForTimeout(900);
-  t('★押すとダッシュボードが開く', await page.evaluate(() => !!document.querySelector('[data-dash]')));
+  t('★★ほんとうに画面のまん中にある（左右の中身に引きずられない）', await page.evaluate(() => {
+    const b = document.querySelector('[data-dashnav]'); if (!b) return false;
+    const r = b.getBoundingClientRect();
+    return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2) <= 6;
+  }), await page.evaluate(() => { const b = document.querySelector('[data-dashnav]'); const r = b.getBoundingClientRect(); return { mid: (r.left + r.right) / 2, half: window.innerWidth / 2 }; }));
+  // ★押すと別タブで開く（2026-10-29 ユーザー指示）。中身はこのアプリそのものを ?dash=1 で開くだけ。
+  const [pop] = await Promise.all([
+    ctx.waitForEvent('page'),
+    page.evaluate(() => document.querySelector('[data-dashnav]').click()),
+  ]);
+  t('★押すと別タブが開く', !!pop);
+  t('★そのタブは同じアプリを ?dash=1 で開いている', !!pop && /index_dev\.html\?dash=1$/.test(pop.url()), pop && pop.url());
+  await pop.close();
+  // この検査では同じタブの中で見たいので、?dash=1 で開き直す
+  await login('?dash=1');
+  t('★?dash=1 で開くと、最初からダッシュボードが出ている', await page.evaluate(() => !!document.querySelector('[data-dash]')));
+  t('★アドレスから印が外れている（開き直しても出っぱなしにならない）',
+    await page.evaluate(() => location.search === ''), await page.evaluate(() => location.search));
   // ★v3.79.1 から、まず入口の画面が出る（これから項目が増えるため）
   t('★まず入口の画面が出る（いきなりリストではない）', await page.evaluate(() =>
     !!document.querySelector('[data-dashtile="shaken"]') && !document.querySelector('[data-dashrow]')));

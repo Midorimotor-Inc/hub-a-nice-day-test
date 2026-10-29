@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793251750500';
+    window.__APP_BUILD='build-1793253938236';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.79.2';
+const APP_VERSION = '3.80.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4989,7 +4989,8 @@ const dashStamp = (o) => {
   return String(o.by||'')+'　'+(d.getMonth()+1)+'/'+d.getDate();
 };
 
-const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPickDay,storeName,headColor})=>{
+const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPickDay,storeName,headColor,
+    vehAlert,canAdmin,onOpenVehicle,onOpenStaff,onOpenHoliday,onOpenRestore,onOpenOffline})=>{
   // ★フックは「早い return」より前に置くこと（React の決まり）
   const [mon,setMon]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
   const [filt,setFilt]=useState('all');
@@ -5101,6 +5102,9 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                   <b style={{color:'#1f2a37',fontSize:14}}>{nowM.getFullYear()}年{nowM.getMonth()+1}月{nowM.getDate()}日　{storeName}</b><br/>
                   見たいものを押してください。<b>これから</b>と書いてあるものは、まだ中身がありません。
                 </div>
+                <div style={{fontSize:13,fontWeight:900,color:'#1e3a8a',margin:'4px 0 9px',
+                  display:'flex',alignItems:'center',gap:8}}>仕事の確認
+                  <span style={{flex:1,borderTop:'2px dotted #cbd5e1'}}/></div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(330px,1fr))',gap:14}}>
                   <div data-dashtile="shaken" onClick={()=>setPage('shaken')} title="車検証の使用者の確認リストを開く"
                     style={{...TILE,cursor:'pointer',borderColor:'#93b4e6'}}>
@@ -5119,9 +5123,56 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                       車検証の使用者と、来店した人が同じか確かめます。<br/>
                       <b>名前が違う・未入力 {ndiff}台</b>。週ごとに確認できます。</p>
                   </div>
+                  {/* ★車両管理（2026-10-29 ユーザー指示でここへ移した）。
+                      赤・オレンジがあると、スケジュール画面のダッシュボードのボタンに「！」が出る。 */}
+                  {(()=>{
+                    const va=vehAlert||{red:0,orange:0,yellow:0,level:0};
+                    const bg=va.level>=3?BADGE('#fef2f2','#b91c1c','#fecaca')
+                      :va.level===2?BADGE('#fff7ed','#b45309','#fed7aa')
+                      :va.level===1?BADGE('#fefce8','#a16207','#fde68a')
+                      :BADGE('#ecfdf5','#047857','#a7f3d0');
+                    const lab=va.level>=3?('期日ぎれ '+va.red+'台'):va.level===2?('もうすぐ '+va.orange+'台')
+                      :va.level===1?('そろそろ '+va.yellow+'台'):'異常なし';
+                    return (
+                      <div data-dashtile="vehicle" onClick={()=>onOpenVehicle&&onOpenVehicle()}
+                        title="車両管理を開く（工場代車・レンタカー・社用車・展示車の点検）"
+                        style={{...TILE,cursor:'pointer',borderColor:va.level>=2?'#fdba74':'#e2e8f0'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:10}}>
+                          <span style={{fontSize:26,lineHeight:1}}>🔔</span>
+                          <h3 style={{fontSize:16,margin:0,fontWeight:900,flex:1}}>車両管理</h3>
+                          <span data-vehbdg={String(va.level)} style={bg}>{lab}</span>
+                        </div>
+                        <p style={{margin:0,fontSize:13,color:'#64748b',lineHeight:1.75}}>
+                          🔴 期日ぎれ {va.red}台　🟠 もうすぐ {va.orange}台　🟡 そろそろ {va.yellow}台<br/>
+                          工場代車・レンタカー・社用車・展示車の点検と期限。</p>
+                      </div>);
+                  })()}
                   {soon('🔍','顧客を探す','ブロードリーフが見られない時の控えとして。ここから一般整備の予約にも入れるようにします。')}
                   {soon('💾','控えの状態','毎朝の控えが取れているか、Google ドライブに写しがあるかを出します。')}
                   {soon('🔔','来店の目安アラート','前回から一定の期間が空いたお客様を知らせる、という案があります。まだ何も決まっていません。')}
+                </div>
+                {/* ★設定・道具（2026-10-29 ユーザー指示でスケジュール画面から移した）。
+                    どれも【このアプリの中の仕組み】なので、そのまま呼ぶだけ。作り直していない。
+                    設定の画面はダッシュボードより上（zIndex 2000〜）に出るので、閉じるとここへ戻る。 */}
+                <div style={{fontSize:13,fontWeight:900,color:'#1e3a8a',margin:'22px 0 9px',
+                  display:'flex',alignItems:'center',gap:8}}>設定・道具
+                  <span style={{flex:1,borderTop:'2px dotted #cbd5e1'}}/></div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:14}}>
+                  {[
+                    ['staff','👥','スタッフ管理','名前・番号・バッジ・週表示の1文字',onOpenStaff,true],
+                    ['holiday','⚙','休業日の設定','定休日・第2火曜・臨時の休み',onOpenHoliday,true],
+                    ['restore','🕒','データ復旧','時点保存から戻す（開けるのは決まった人だけ）',onOpenRestore,true],
+                    ['offline','💾','オフライン予定表の控え','ネットが止まった時に紙で使う控えを出す',onOpenOffline,false],
+                  ].filter(x=>!x[5]||canAdmin).map(([id,ic,ttl,txt,fn])=>(
+                    <div key={id} data-dashtool={id} onClick={()=>fn&&fn()} title={ttl}
+                      style={{...TILE,minHeight:100,cursor:'pointer'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <span style={{fontSize:22,lineHeight:1}}>{ic}</span>
+                        <h3 style={{fontSize:14.5,margin:0,fontWeight:900,flex:1}}>{ttl}</h3>
+                      </div>
+                      <p style={{margin:0,fontSize:12.5,color:'#64748b',lineHeight:1.7}}>{txt}</p>
+                    </div>
+                  ))}
                 </div>
               </div>);
           })():(<React.Fragment>
@@ -5775,6 +5826,11 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
 // 招待メールのリンクに付いている印（?inv=…）。開くだけで誰の登録か伝わるので、
 // アドレスを打つ段を飛ばして6桁の入力から始める（ユーザー指摘 2026-09-15）。
 // 登録が済んだら（やめた時も）URLから印を外す。残すと開き直すたびに登録画面が出る。
+// ★ダッシュボードを別タブで開いた印（2026-10-29 ユーザー指示）。
+//   ★中身は【このアプリそのもの】を ?dash=1 で開くだけ。**別のページにはしない**。
+//     別ページにすると、データのやりとり（BLOCK-B）と本人確認をもう1組作ることになり、
+//     設定の道具（スタッフ管理・休業日・復旧・控え）も作り直しになる。
+const HUB_DASH_OPEN=(()=>{try{return new URLSearchParams(location.search).get('dash')==='1';}catch(e){return false;}})();
 const HUB_INVITE_ID=(()=>{try{return new URLSearchParams(location.search).get('inv')||'';}catch(e){return '';}})();
 const hubDropInvite=()=>{ if(!HUB_INVITE_ID)return; try{history.replaceState(null,'',location.pathname+location.hash);}catch(e){} };
 // ── 登録の引き継ぎ（?hand=…）──────────────────────────────────────
@@ -10192,7 +10248,11 @@ const VEH_STORES=[{id:'honten',label:'本店'},{id:'sanda',label:'三田店'}];
 //   黄＝期日の3か月前から（1か月点検は登録より前になるので出ない）
 //   オレンジ＝期日の1か月前から／赤＝期日を過ぎたら
 //   12か月点検は黄色を出さず、1か月前からオレンジ
-const VEH_ALERT_DEF={ y1:0, o1:30, y6:90, o6:30, y12:0, o12:30, yCar:90 };
+// ★rCar＝車検満了を【何日過ぎたら赤にするか】。0＝満了日になったらその日から赤。
+//   これを決めていなかったので vehExpiryState の `left<=-c.rCar` が常に false になり、
+//   **車検が切れていても黄色のまま**だった（2026-10-29・ダッシュボードの！の検査で発覚）。
+//   画面の説明には前から「赤＝期日を過ぎたら」と書いてあり、赤になるのが元々の決まり。
+const VEH_ALERT_DEF={ y1:0, o1:30, y6:90, o6:30, y12:0, o12:30, yCar:90, rCar:0 };
 const vehAlertCfg=(o)=>({...VEH_ALERT_DEF,...(o&&typeof o==='object'?o:{})});
 // スズキ車か（メーカー欄が空の時は車名から推測しない＝出さない）
 const vehIsSuzuki=v=>/スズキ|SUZUKI|suzuki/.test(String(v&&v.maker||''));
@@ -12879,7 +12939,8 @@ function AppInner() {
   // 週表示（v3.69・2026-10-21）。1日表示はそのまま、こちらは別の窓で開く
   const [weekOpen,setWeekOpen]=useState(false);
   // ★ダッシュボード（2026-10-29 整備からの依頼）。別ページではなく、この画面の全画面オーバーレイ。
-  const [dashOpen,setDashOpen]=useState(false);
+  //   ?dash=1 で開いた時は、最初からダッシュボードを出す（別タブで開いた時）。
+  const [dashOpen,setDashOpen]=useState(HUB_DASH_OPEN);
   // ★週の始まり（2026-10-29 ユーザー指示）。既定は【本日から】＝本日が一番左端。
   //   月曜はじまり（A3の紙と同じ並び）にも週表の中の1押しで戻せる。
   const [weekFromToday,setWeekFromToday]=useState(true);
@@ -12910,6 +12971,27 @@ function AppInner() {
   const [vehicleData,  setVehicleData]  = useShared(STOR+'vehicles', []);          // 車両管理（旧版。消さずに残す）
   // ★車両管理 v2（2026-10-05）。取り込みは node fb_import_vehicles.js
   const [vehicleV2,    setVehicleV2]    = useShared(STOR+'vehicles-v2', []);
+  // ★車両管理の知らせ（2026-10-29）。ナビから車両管理のボタンを外したので、
+  //   知らせはダッシュボードのボタンの「！」とダッシュボードの中のタイルで出す。
+  //   lv 3=期日ぎれ（赤）／2=もうすぐ（オレンジ）／1=そろそろ（黄）
+  const vehAlert=useMemo(()=>{
+    const list=Array.isArray(vehicleV2)?vehicleV2:[];
+    const cfg=vehAlertCfg((list.find(x=>x&&x.id==='__cfg__')||{}).cfg);
+    const n={red:0,orange:0,yellow:0};
+    let lv=0;
+    const bump=s=>{ if(s==='red'){n.red++;lv=Math.max(lv,3);} else if(s==='orange'){n.orange++;lv=Math.max(lv,2);} else if(s==='yellow'){n.yellow++;lv=Math.max(lv,1);} };
+    list.forEach(v=>{
+      if(!v||v.id==='__cfg__'||v.archived)return;
+      vehAlertKinds(v).forEach(k=>bump(vehInspState(v,k,cfg).s));
+      bump(vehExpiryState(v,cfg).s);
+    });
+    return {...n,level:lv};
+  },[vehicleV2]);
+  // ★ダッシュボードのボタンに「！」を出すかどうか（2026-10-29 ユーザー決定）。
+  //   出すのは【赤・オレンジ＝期日ぎれ／もうすぐ】だけ。黄（3か月以内）はまだ先なので出さない。
+  //   ★「車検済みチェックの未確認」は入れないこと。毎月150台あってほぼいつも残っており、
+  //     入れると消えない札になってしまう（2026-10-29 ユーザーと確認）。
+  const dashBang=vehAlert.level>=2;
   const [showLoanerSettings, setShowLoanerSettings] = useState(false);
   const [showTireEdit,       setShowTireEdit]        = useState(false);
   const [showLocationEdit,   setShowLocationEdit]    = useState(false);
@@ -15267,6 +15349,19 @@ function AppInner() {
   //   ※新しいタブをこちらから全画面にすることはブラウザの決まりでできないので、
   //     スケジュールを全画面で使っていても、リストのタブは全画面にはならない（承知の上での選択）。
   //     以前（v3.08〜v3.33）は大きさを揃えるために同じタブの中で開いていた。
+  // ★ダッシュボードを開く（2026-10-29 ユーザー指示）。
+  //   ふつうの大きさ → 別タブ（同じ名前のタブがあれば使い回す）
+  //   全画面のとき   → 同じタブの中で重ねる（顧客リストと同じ考え方。全画面が解けないように）
+  //   ポップアップを止められていたら、その場で重ねる＝開けないままにしない
+  const openDash=useCallback(()=>{
+    if(isFullscreen){ setDashOpen(true); return; }
+    let w=null;
+    try{ w=window.open(location.pathname+'?dash=1','hub-dashboard'); }catch(e){}
+    if(w){ try{ w.focus(); }catch(e){} } else { setDashOpen(true); }
+  },[isFullscreen]);
+  // 別タブで開いた時は、アドレスから印を外す（開き直すたびに出ないように）
+  useEffect(()=>{ if(!HUB_DASH_OPEN)return;
+    try{ history.replaceState(null,'',location.pathname+location.hash); }catch(e){} },[]);
   const openCustList=useCallback((find)=>{
     const q=(find&&find.name)?String(find.name):'';
     const file=(find&&find.file)?String(find.file):'';
@@ -15653,9 +15748,12 @@ function AppInner() {
           const userStore=STORES.find(s=>s.id===(currentUser?.store?.id||'honten'))||STORES[0];
           return(
           <div style={{maxWidth:1700,margin:'0 auto',display:'flex',flexDirection:'column',gap:4}}>
-            {/* 1行目：ロゴ左 ＋ スタッフ右 */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div style={{display:'flex',alignItems:'center',gap:7,fontSize:16,fontWeight:800,color:'#9a3412'}}>
+            {/* 1行目：ロゴ左 ＋ 【まん中にダッシュボード】＋ 店・名前・全画面・✕ 右
+                （2026-10-29 ユーザー指示。mock_header_v2.html で確認）
+                ★ダッシュボードは position:absolute で【画面のまん中】に置く。
+                  flex で真ん中に寄せると、左右の中身の長さで位置がずれる。 */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',position:'relative'}}>
+              <div style={{display:'flex',alignItems:'center',gap:7,fontSize:16,fontWeight:800,color:'#9a3412',minWidth:0,overflow:'hidden'}}>
                 <Car size={22}/> Hub a Nice day
                 <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:10,background:'#eff6ff',color:'#1d4ed8',border:'1px solid #bfdbfe',cursor:'default'}}>v{APP_VERSION}</span>
                 {/* GAS接続ステータスバッジ */}
@@ -15674,44 +15772,37 @@ function AppInner() {
                 <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'#FFF7ED',color:'#9A3412',border:'2px solid #EA580C',flexShrink:0}}>⚠ スケジュールシステム テスト版</span>
 
               </div>
-              <div style={{display:'flex',alignItems:'center',gap:5}}>
-                <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',background:userStore.bg,borderRadius:8,border:`2px solid ${userStore.color}33`}}>
+              {/* ★ダッシュボード：いつも画面のまん中（2026-10-29 ユーザー指示） */}
+              <button data-dashnav="1" onClick={openDash}
+                title={'ダッシュボードを開く（別タブ）'+(dashBang?String.fromCharCode(10)+'⚠ 車両管理に期日の近い点検があります':'')}
+                style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',zIndex:2,
+                  display:'inline-flex',alignItems:'center',gap:6,padding:'6px 20px',borderRadius:9,
+                  background:'white',color:'#9a3412',border:'2px solid white',fontSize:13.5,fontWeight:900,
+                  cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',boxShadow:'0 2px 10px rgba(0,0,0,.22)'}}>
+                🏠 ダッシュボード
+                <span style={{fontSize:10,opacity:.75,fontWeight:800}}>（別タブ）</span>
+                {dashBang&&(
+                  <span data-dashbang="1" style={{position:'absolute',top:-8,right:-8,width:19,height:19,
+                    borderRadius:'50%',background:'#facc15',color:'#111',border:'2px solid white',
+                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:900,
+                    lineHeight:1,boxShadow:'0 1px 4px rgba(0,0,0,.35)'}}>!</span>
+                )}
+              </button>
+              <div style={{display:'flex',alignItems:'center',gap:5,position:'relative',zIndex:3}}>
+                {/* ★店の切り替えはここへ（2026-10-29 ユーザー指示。ナビの段が空いたぶん表が広くなる） */}
+                {STORES.map(s=>(
+                  <button key={s.id} data-storebtn={s.id} onClick={()=>{setViewStore(s.id);setLoanerPinnedRes(null);setLoanerHoverRes(null);}}
+                    style={{padding:'6px 16px',borderRadius:8,border:`2px solid ${vsId===s.id?'#fff':'rgba(255,255,255,.5)'}`,background:vsId===s.id?'#fff':'rgba(255,255,255,.16)',color:vsId===s.id?s.color:'#fff',fontWeight:vsId===s.id?800:600,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
+                    {s.name}{vsId===s.id&&currentUser?.store?.id===s.id?' 🏠':''}
+                  </button>
+                ))}
+                <div data-acct="1" style={{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',background:userStore.bg,borderRadius:8,border:`2px solid ${userStore.color}33`}}>
                   <span style={{width:22,height:22,borderRadius:'50%',background:userStore.color,color:'white',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:11}}>{String(currentUser?.name||'').charAt(0)}</span>
                   <span style={{fontWeight:700,color:userStore.accent,fontSize:12}}>{currentUser?.name}</span>
                   {currentUser?.badge&&<BadgeIcon badge={currentUser.badge} size={18}/>}
-                  {canRestore(currentUser)&&(
-                  <button onClick={()=>document.dispatchEvent(new CustomEvent('openStaffSettings'))} title="スタッフ管理"
-                    style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center',padding:'1px',borderRadius:3}}
-                    onMouseEnter={e=>e.currentTarget.style.color='#c2410c'}
-                    onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
-                    <Users size={14}/>
-                  </button>
-                  )}
-                  {canRestore(currentUser)&&(
-                  <button onClick={()=>setShowHoliday(true)} title="休業日設定"
-                    style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center',padding:'1px',borderRadius:3}}
-                    onMouseEnter={e=>e.currentTarget.style.color='#c2410c'}
-                    onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
-                    <Settings size={14}/>
-                  </button>
-                  )}
-                  {/* 休業日の件数バッジは廃止（意味が伝わらないため・2026-09-11）。 */}
-                  {/* データ復旧（バックアップから戻す）— 指定された4名のみ表示 */}
-                  {canRestore(currentUser)&&(
-                    <button onClick={()=>setShowRestore(true)} title="データ復旧（バックアップから戻す）"
-                      style={{display:'flex',alignItems:'center',gap:3,padding:'2px 8px',background:'#eff4ff',border:'1px solid #bcd0f7',borderRadius:6,cursor:'pointer',fontWeight:700,fontSize:10,color:'#1d4ed8'}}
-                      onMouseEnter={e=>e.currentTarget.style.background='#dbe6fb'}
-                      onMouseLeave={e=>e.currentTarget.style.background='#eff4ff'}>
-                      🕒 復旧
-                    </button>
-                  )}
-                  <button onClick={()=>{setOfflineMsg("");setOfflineOpen(true);}} title="オフライン予定表の控えを保存（ネットが止まった時に紙で使う）"
-                    style={{display:"flex",alignItems:"center",gap:3,padding:"2px 8px",background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:10,color:"#047857"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#d1fae5"}
-                    onMouseLeave={e=>e.currentTarget.style.background="#ecfdf5"}>
-                    💾 控え
-                  </button>
-                  {/* 📋クリップボードコピーは廃止（戻せず一部データのみで紛らわしいため）。バックアップは自動保存＋🕒復旧に一本化。 */}
+                  {/* ★スタッフ管理・休業日設定・復旧・控え は【ダッシュボードの中】へ移した
+                      （2026-10-29 ユーザー指示。スケジュール画面をすっきりさせるため）。
+                      ここに残すのは「誰で入っているか」と ログアウト だけ。 */}
                   <button onClick={()=>{releaseLock(curLockKey);setAuthAutoOff(true);setCurrentUserPersist(null);setCurLockKey(null);setModalOpen(false);}} title="ログアウト" style={{background:'none',border:'none',cursor:'pointer',color:'#6b7280',display:'flex',alignItems:'center'}}><LogOut size={14}/></button>
                 </div>
                 {/* ★「全画面」は ✕ のすぐ左に置く（2026-10-25 ユーザー指示）。
@@ -15760,24 +15851,8 @@ function AppInner() {
                   });
                   const ExtMark=()=>(<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.8}}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>);
                   const today=new Date();today.setHours(0,0,0,0);
-                  // ★車両管理の知らせは「△に！」の印（数字はやめた・2026-10-05 ユーザー指示）。
-                  //   黄色のアラートがあれば黄／オレンジがあればオレンジ／赤があれば赤。3秒だけ動く。
-                  const vehCfg=vehAlertCfg(((Array.isArray(vehicleV2)?vehicleV2:[]).find(x=>x&&x.id==='__cfg__')||{}).cfg);
-                  const vehLevel=(()=>{
-                    let lv=0;
-                    (Array.isArray(vehicleV2)?vehicleV2:[]).forEach(v=>{
-                      if(!v||v.id==='__cfg__'||v.archived)return;
-                      vehAlertKinds(v).forEach(k=>{
-                        const st=vehInspState(v,k,vehCfg).s;
-                        if(st==='red')lv=Math.max(lv,3);
-                        else if(st==='orange')lv=Math.max(lv,2);
-                        else if(st==='yellow')lv=Math.max(lv,1);
-                      });
-                      const ex=vehExpiryState(v,vehCfg).s;
-                      if(ex==='red')lv=Math.max(lv,3); else if(ex==='yellow')lv=Math.max(lv,1);
-                    });
-                    return lv;
-                  })();
+                  // ★車両管理の知らせ（vehAlert）は上（App の中）で計算して、
+                  //   ダッシュボードのボタンの「！」で出すようにした（2026-10-29 ユーザー指示）。
                   return(<>
                     <button onClick={()=>setView('calendar')} {...hov(view==='calendar')}
                       style={navSty(view==='calendar',{background:'#FFFFFF',color:'#1A2550'})}>
@@ -15800,13 +15875,7 @@ function AppInner() {
                       style={navSty(view==='loaner',{background:'#FFFFFF',color:'#1A2550'})} {...hov(view==='loaner')}>
                       <Car size={13}/>代車管理
                     </button>
-                    {/* ★ダッシュボード（2026-10-29 整備からの依頼）。いまの中身は「車検 使用者の確認」。
-                        別タブではなく全画面で重ねる＝顧客名も予約もこの画面が持っているため */}
-                    <button onClick={()=>setDashOpen(true)} {...hov(false)} data-dashnav="1"
-                      title="車検証の使用者の確認（月ごと・週ごと）"
-                      style={navSty(false,{background:'#FFD18A',color:'#7C2D12'})}>
-                      🏠 ダッシュボード
-                    </button>
+                    {/* ★ダッシュボードはこの段から外し、1行目のまん中へ（2026-10-29 ユーザー指示） */}
                     <button onClick={()=>setShowFind(true)} {...hov(false)}
                       style={navSty(false,{background:'#E8492E',color:'#FFFFFF'})}>
                       <Search size={13}/>検索
@@ -15821,30 +15890,13 @@ function AppInner() {
                       style={navSty(false,{background:'#FFFFFF',color:'#1A2550'})}>
                       料金表<ExtMark/>
                     </a>
-                    <button onClick={()=>setView('vehicle')} {...hov(view==='vehicle')}
-                      style={navSty(view==='vehicle',{background:'#F8CACA',color:'#8B2E2E'})}>
-                      🔔 車両管理
-                      {vehLevel>0&&(
-                        <span title={vehLevel===3?'期日を過ぎた点検があります':vehLevel===2?'もうすぐ期日の点検があります':'そろそろ点検の時期です'}
-                          style={{position:'absolute',top:-9,right:4,fontSize:17,lineHeight:1,fontWeight:900,
-                            color:vehLevel===3?'#dc2626':vehLevel===2?'#f97316':'#eab308',
-                            textShadow:'0 0 2px rgba(255,255,255,.95),0 1px 2px rgba(0,0,0,.25)',
-                            animation:'vehMove .75s ease-in-out 4'}}>⚠</span>
-                      )}
-                    </button>
+                    {/* ★車両管理はダッシュボードの中へ移した（2026-10-29 ユーザー指示）。
+                        知らせはダッシュボードのボタンの「！」で出る。 */}
                   </>);
                 })()}
               </div>
-              <div style={{flexShrink:0,display:'flex',gap:6,alignItems:'center'}}>
-                {/* ★帯が店の色になったので（A案・2026-10-14）、選んでいる店は「白いピル＋店の色の文字」で反転させる。
-                    同じ色で塗ると帯に沈んで、どちらを見ているのか分からなくなる。 */}
-                {STORES.map(s=>(
-                  <button key={s.id} onClick={()=>{setViewStore(s.id);setLoanerPinnedRes(null);setLoanerHoverRes(null);}}
-                    style={{padding:'6px 16px',borderRadius:8,border:`2px solid ${vsId===s.id?'#fff':'rgba(255,255,255,.5)'}`,background:vsId===s.id?'#fff':'rgba(255,255,255,.16)',color:vsId===s.id?s.color:'#fff',fontWeight:vsId===s.id?800:600,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
-                    {s.name}{vsId===s.id&&currentUser?.store?.id===s.id?' 🏠':''}
-                  </button>
-                ))}
-              </div>
+              {/* ★店の切り替えは1行目へ移した（2026-10-29 ユーザー指示）。
+                  帯が店の色になっているので（A案・2026-10-14）、選んでいる店は白いピル＋店の色の文字で反転させる。 */}
             </div>
           </div>);
         })()}
@@ -17309,6 +17361,13 @@ function AppInner() {
         inspData={inspData}
         usrChk={usrChk}
         onSetChecked={setUserChecked}
+        vehAlert={vehAlert}
+        canAdmin={canRestore(currentUser)}
+        onOpenVehicle={()=>{setView('vehicle');setDashOpen(false);}}
+        onOpenStaff={()=>document.dispatchEvent(new CustomEvent('openStaffSettings'))}
+        onOpenHoliday={()=>setShowHoliday(true)}
+        onOpenRestore={()=>setShowRestore(true)}
+        onOpenOffline={()=>{setOfflineMsg('');setOfflineOpen(true);}}
         storeName={vsStore.name}
         headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setDashOpen(false);}}/>
