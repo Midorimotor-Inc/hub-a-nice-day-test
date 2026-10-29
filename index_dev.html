@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1792971166152';
+    window.__APP_BUILD='build-1793233895380';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.77.3';
+const APP_VERSION = '3.78.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8009,7 +8009,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       if(!form.work){alert('作業内容を選択してください');workRef.current?.focus();return;}
     }
     if(!confirmLoanerMismatch())return; // ズレたまま保存の最終確認でキャンセル→中断
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), store:mvStore, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
+    // ★新規の時だけ「いつ・誰が入れたか」を残す（2026-10-29 整備からの依頼）。
+    //   編集では上書きしない＝最初に入れた時刻が残る。
+    //   id は保存のたびに変わるので使えない（マッハの特例と同じ理由）。
+    const stampNew = isNew ? {at:Date.now(), by:(currentUser&&currentUser.name)||''} : {};
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew, store:mvStore, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
   };
   // 顧客リストからの仮予約/本予約ボタン用
   const handleSaveAs=(status)=>{
@@ -8022,7 +8026,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     // 本予約時のみ代車期間のズレを確認（仮予約は代車を確定しないためスキップ）
     if(status==='confirmed'&&!confirmLoanerMismatch())return;
     // 仮予約はモーダルを閉じない（_keepOpen フラグで制御）
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
+    const stampNew2 = isNew ? {at:Date.now(), by:(currentUser&&currentUser.name)||''} : {};
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew2, store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
   };
   const handleDelete=()=>{onDelete();};
   const handleStaffBlur=()=>{const r=resolveStaff(staffInput);setStaffInput(r);setForm(p=>({...p,staff:r}));};
@@ -15548,6 +15553,30 @@ function AppInner() {
                           <div style={{fontWeight:800,fontSize:15,marginBottom:3,color:isCl?CLOSED_FG:numCol,display:'flex',alignItems:'center',gap:3}}>
                             <span style={isToday?{flexShrink:0,...TODAY_NUM}:{flexShrink:0}}>{day}</span>
                             {isHol&&<span style={{fontSize:8,color:isCl?CLOSED_FG:'#dc2626',flexShrink:0}}>祝</span>}
+                            {/* ★7台目以降の知らせ（2026-10-29 ユーザー指示・A案＝日付のとなり）
+                                日のマスは 3×2 の【6コマ固定】で irows[6] 以降は画面に出ない。
+                                そのため「7台目が入っていること」自体が見えないので、ここで知らせる。
+                                黄色＝1件でも未承認／緑＝すべて承認済み（どちらも黒の！）。
+                                ★6コマの見た目は変えないこと（現場が見慣れているため）。 */}
+                            {!isCl&&(()=>{
+                              const over=irows.slice(6);
+                              if(!over.length)return null;
+                              const allOk=over.every(r=>!!r.approved);
+                              const lines=over.map((r,i)=>{
+                                const cc=COURSES.find(x=>x.id===Number(r.course));
+                                return (7+i)+'台目　'+(r.name||'')+'様（'+(cc?cc.name:'')+'）　'+(r.approved?'承認済み':'未承認');
+                              });
+                              const tip=day+'日　'+irows.length+'台'+String.fromCharCode(10)
+                                +'6コマに出ていない分が '+over.length+' 件あります'+String.fromCharCode(10)+lines.join(String.fromCharCode(10));
+                              return (
+                                <span data-calbang={allOk?'ok':'wait'} title={tip}
+                                  onClick={e=>e.stopPropagation()}
+                                  style={{flexShrink:0,width:17,height:17,borderRadius:'50%',display:'inline-flex',
+                                    alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#111',
+                                    background:allOk?'#22c55e':'#facc15',border:'2px solid #fff',
+                                    boxShadow:'0 1px 4px rgba(0,0,0,.35)',cursor:'help'}}>!</span>
+                              );
+                            })()}
                           </div>
                           {/* 休業日は6コマを描かない（営業日と見分けがつくように） */}
                           {!isCl&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:2,position:'relative'}}>
