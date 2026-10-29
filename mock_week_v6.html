@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：週間カレンダー 4つの変更</title>
+<!--
+  2026-10-29 週間カレンダーの変更のモック（見本）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  ①時間を畳める ②本日を左端に ③7台目の！バッジ ④担当者をなぞると予約した日時
+-->
+<style>
+  :root{ --ink:#1f2a37; --sub:#64748b; --line:#cbd5e1; --bg:#f1f5f9;
+         --band:#e6f6fb; --bandtm:#0e7490; --insp:#fff7ed; --inspline:#fed7aa;
+         --today:#c2410c; --todaybg:#ffedd5; --sp:#047857; --spcell:#f0fdf4; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:13px;
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif}
+  header{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:9px 14px;
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:800}
+  .tag{font-size:11px;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;font-weight:700}
+  .wrap{padding:12px 14px 40px}
+  .mocknote{margin:0 0 10px;background:#fff7ed;border:2px solid var(--inspline);border-radius:10px;
+        padding:9px 13px;font-size:12.5px;color:#9a3412;font-weight:700;line-height:1.7}
+  .bar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+       display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .bar .ttl{font-size:14px;font-weight:900;margin-right:6px}
+  .nav{display:flex;gap:4px}
+  .bar button{font:inherit;font-size:12.5px;font-weight:800;background:#f8fafc;border:1.5px solid var(--line);
+        border-radius:8px;padding:7px 13px;cursor:pointer;color:var(--ink)}
+  .bar button.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+  .bar button.fold{background:#f0fdf4;border-color:#86efac;color:#16a34a}
+  .bar button.fold.folded{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
+  .sp{flex:1}
+  .range{font-size:12.5px;font-weight:800;color:var(--sub)}
+
+  table{border-collapse:collapse;width:100%;background:#fff;table-layout:fixed}
+  th,td{border:1px solid var(--line);padding:3px 4px;vertical-align:top}
+  th{background:#f8fafc;font-size:12px;font-weight:800}
+  .tmcol{width:62px;text-align:center;font-size:11.5px;font-weight:800;color:var(--sub);background:#f8fafc}
+  tr.band td.tmcol{background:var(--band);color:var(--bandtm)}
+  tr.band td{background:var(--band)}
+  .daycell{height:26px}
+  .today{border-left:3px solid var(--today);border-right:3px solid var(--today)}
+  th.today{background:var(--todaybg)}
+  .dbadge{display:inline-block;font-size:12px;font-weight:900;padding:2px 8px;border-radius:9px;background:#e2e8f0;cursor:pointer}
+  th.today .dbadge{background:var(--today);color:#fff}
+  .cnt{display:inline-flex;align-items:center;margin-left:5px;padding:2px 7px;border-radius:9px;
+       border:1px solid var(--inspline);background:var(--insp);color:#9a3412;font-size:11px;font-weight:900}
+  tr.insp td{background:var(--insp);height:30px}
+  tr.insp td.tmcol{background:var(--insp);color:#9a3412}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+      color:#fff;font-size:11px;font-weight:900;margin:1px;cursor:pointer;position:relative}
+  .c1{background:#dc2626}.c2{background:#2563eb}.c3{background:#16a34a}
+  .bang{position:absolute;top:-6px;right:-6px;width:15px;height:15px;border-radius:50%;
+        display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;
+        color:#111;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .bang.wait{background:#facc15}
+  .bang.ok{background:#22c55e}
+  .ent{font-size:11.5px;line-height:1.35;padding:1px 2px}
+  .ent b{font-weight:800}
+  .staff{display:inline-block;font-size:10.5px;font-weight:900;color:#fff;background:#64748b;
+         border-radius:4px;padding:0 4px;margin-left:4px;cursor:help}
+  tr.staffrow td{background:#f8fafc;height:30px;font-size:11px}
+  .closed{background:#f1f5f9 !important;color:#94a3b8}
+
+  .tip{position:fixed;z-index:50;background:#fff;border:2px solid #38bdf8;border-radius:10px;
+       padding:9px 12px;font-size:12px;line-height:1.7;box-shadow:0 8px 24px rgba(15,23,42,.18);
+       max-width:300px;display:none}
+  .tip b{color:#0c4a6e}
+  .tip .none{color:#b91c1c;font-weight:800}
+
+  .legend{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;
+          font-size:12.5px;color:var(--sub);line-height:2}
+  .legend b{color:var(--ink)}
+  .k{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+     font-size:10px;font-weight:900;color:#111;border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.3);vertical-align:-3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📅 週間カレンダー</h1><span class="tag">本店</span>
+  <span class="tag">モック（見本）</span>
+</header>
+
+<div class="wrap">
+  <p class="mocknote">これは<b>見本（モック）</b>です。名前はすべて架空で、本物のデータにはつながっていません。
+    ①時間を畳む ②本日が左端 ③7台目の！バッジ ④担当者をなぞると予約した日時 — の4つを試せます。</p>
+
+  <div class="bar">
+    <span class="ttl" id="ttl"></span>
+    <div class="nav">
+      <button id="prev">‹ 前の週</button>
+      <button class="on" id="cur">今週</button>
+      <button id="next">次の週 ›</button>
+    </div>
+    <button class="fold" id="fold">▲ 畳む</button>
+    <span class="range" id="range"></span>
+    <span class="sp"></span>
+    <span class="range">※ 本日を<b>一番左</b>に置き、そこから7日ぶん</span>
+  </div>
+
+  <table id="tbl"></table>
+
+  <div class="legend">
+    <b>① 時間を畳む</b>　…　「▲ 畳む」を押すと、<b>1週間のどこにも予定が無い時間の行</b>を隠します。1日表示と同じ考え方です。<br>
+    <b>② 本日が左端</b>　…　日曜始まりをやめて、<b>今日から7日ぶん</b>を出します。オレンジの太枠が本日です。<br>
+    <b>③ 7台目の知らせ</b>　…　<span class="k" style="background:#facc15">!</span> <b>黄色＝承認されていない</b>（7台目以降）
+      <span class="k" style="background:#22c55e">!</span> <b>緑＝承認済み</b>。バッジの右上に出ます。<br>
+    <b>④ 予約を入れた日時</b>　…　予定の<b>担当者（グレーの札）をなぞる</b>と出ます。
+    <span style="color:#b91c1c;font-weight:800">いま入っている予約には記録が無いので「記録なし」と出ます。</span>これから入れる分から残ります。
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+(function(){
+  var SLOTS=['09:00','09:30','10:00','10:30','11:00','11:30','午前入庫','13:00','13:30','14:00','14:30',
+             '15:00','15:30','16:00','16:30','17:00','17:30'];
+  var WD='日月火水木金土';
+  var NAMES=['青木','井上','上田','遠藤','大西','加藤','木村','久保','小西','斉藤','柴田','清水','鈴木','高橋','田中','辻','永井','西村'];
+  var CARS=['ワゴンR','スペーシア','ハスラー','アルト','タント','ムーヴ','N-BOX','フィット','ノート'];
+  var WORK=['オイル交換','12ヶ月点検','タイヤ交換','ブレーキ点検','バッテリー交換','鈑金','法定点検'];
+  var STAFF=['岡','竹','幸','魚','舟','江'];
+  var seed=20261029;
+  function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+  function pick(a){ return a[Math.floor(rnd()*a.length)]; }
+  function p2(n){ return (n<10?'0':'')+n; }
+
+  var TODAY=new Date(2026,9,29);               // 架空の「今日」= 2026/10/29（木）
+  var offset=0, folded=false;
+  var data={};   // dk -> {insp:[], ent:{slot:[...]}, closed:bool}
+
+  function dkey(d){ return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+  function build(d){
+    var k=dkey(d); if(data[k])return data[k];
+    var o={insp:[],ent:{},closed:(d.getDay()===0)};
+    if(!o.closed){
+      var n=3+Math.floor(rnd()*6);             // 3〜8台（7台目の！が見本で必ず出るように）
+      for(var i=0;i<n;i++){
+        var c=rnd()<0.28?1:(rnd()<0.6?2:3);
+        o.insp.push({course:c,name:pick(NAMES),seq:i+1});
+      }
+      o.insp.sort(function(a,b){return a.course-b.course;});
+      o.insp.forEach(function(r,i){                  // 7台目以降は承認の対象
+        // 見本なので「承認済み（緑）」と「未承認（黄）」が両方見えるようにしてある。
+        // 8台入っている日は 7台目＝承認済み・8台目＝未承認。
+        if(i>=6){ r.over=true; r.approved=(i===6 && n>=8); }
+      });
+      var m=1+Math.floor(rnd()*5);
+      for(var j=0;j<m;j++){
+        var s=SLOTS[Math.floor(rnd()*SLOTS.length)];
+        (o.ent[s]=o.ent[s]||[]).push({
+          name:pick(NAMES), car:pick(CARS), work:pick(WORK), staff:pick(STAFF),
+          // ★「いつ予約を入れたか」。古い予約には記録が無い（＝null）
+          at: rnd()<0.45 ? null : new Date(d.getTime()-Math.floor(1+rnd()*25)*86400000-Math.floor(rnd()*8)*3600000)
+        });
+      }
+    }
+    data[k]=o; return o;
+  }
+
+  function days(){
+    var out=[];
+    for(var i=0;i<7;i++){
+      var d=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()+offset*7+i);
+      out.push(d);
+    }
+    return out;
+  }
+
+  function render(){
+    var ds=days();
+    document.getElementById('ttl').textContent=(ds[0].getMonth()+1)+'月'+ds[0].getDate()+'日 〜 '+(ds[6].getMonth()+1)+'月'+ds[6].getDate()+'日';
+    document.getElementById('range').textContent=(offset===0?'今週（本日から7日）':(offset>0?offset+'週あと':(-offset)+'週まえ'));
+    document.getElementById('cur').classList.toggle('on',offset===0);
+    var f=document.getElementById('fold');
+    f.textContent=folded?'▼ 開く':'▲ 畳む';
+    f.classList.toggle('folded',folded);
+
+    ds.forEach(build);
+    var isToday=function(d){ return d.getTime()===TODAY.getTime(); };
+
+    var h='<tr><th class="tmcol">時間</th>';
+    ds.forEach(function(d){
+      var k=dkey(d), o=data[k], tod=isToday(d);
+      h+='<th class="'+(tod?'today':'')+'">'
+       +'<span class="dbadge">'+(d.getMonth()+1)+'/'+d.getDate()+'（'+WD.charAt(d.getDay())+'）</span>'
+       +(o.closed?'':'<span class="cnt">'+o.insp.length+'台</span>')+'</th>';
+    });
+    h+='</tr>';
+
+    // 車検の行
+    h+='<tr class="insp"><td class="tmcol">車検</td>';
+    ds.forEach(function(d){
+      var o=data[dkey(d)], tod=isToday(d);
+      if(o.closed){ h+='<td class="closed '+(tod?'today':'')+'">休</td>'; return; }
+      var s='';
+      o.insp.forEach(function(r,i){
+        var cls=r.course===1?'c1':(r.course===2?'c2':'c3');
+        var lab=r.course===1?'マ':(r.course===2?'ク':'レ');
+        var bang='';
+        if(r.over){
+          bang='<span class="bang '+(r.approved?'ok':'wait')+'" title="'+(r.approved?'承認されています':'まだ承認されていません（7台目以降）')+'">!</span>';
+        }
+        s+='<span class="cb '+cls+'" title="'+r.name+'様">'+lab+bang+'</span>';
+      });
+      h+='<td class="'+(tod?'today':'')+'">'+s+'</td>';
+    });
+    h+='</tr>';
+
+    // 出勤
+    h+='<tr class="staffrow"><td class="tmcol">出勤</td>';
+    ds.forEach(function(d){
+      var o=data[dkey(d)], tod=isToday(d);
+      h+='<td class="'+(tod?'today':'')+(o.closed?' closed':'')+'">'+(o.closed?'休業日':'岡 竹 幸 魚 舟 江')+'</td>';
+    });
+    h+='</tr>';
+
+    // 時間の行（畳んでいる時は、1週間のどこにも予定が無い行を隠す）
+    SLOTS.forEach(function(s){
+      var any=ds.some(function(d){ var o=data[dkey(d)]; return !o.closed && (o.ent[s]||[]).length; });
+      if(folded && !any) return;
+      var band=/:00$/.test(s);
+      h+='<tr class="'+(band?'band':'')+'"><td class="tmcol">'+s+'</td>';
+      ds.forEach(function(d){
+        var o=data[dkey(d)], tod=isToday(d);
+        if(o.closed){ h+='<td class="daycell closed '+(tod?'today':'')+'"></td>'; return; }
+        var list=o.ent[s]||[], c='';
+        list.forEach(function(e,i){
+          var at=e.at? (e.at.getMonth()+1)+'/'+e.at.getDate()+' '+p2(e.at.getHours())+':'+p2(e.at.getMinutes()) : '';
+          c+='<div class="ent"><b>'+e.name+'</b> '+e.car
+            +'<span class="staff" data-at="'+at+'" data-nm="'+e.name+'">'+e.staff+'</span>'
+            +'<br><span style="color:#64748b">'+e.work+'</span></div>';
+        });
+        h+='<td class="daycell '+(tod?'today':'')+'">'+c+'</td>';
+      });
+      h+='</tr>';
+    });
+
+    var t=document.getElementById('tbl');
+    t.innerHTML=h;
+
+    // ④ 担当者をなぞると「いつ予約を入れたか」
+    var tip=document.getElementById('tip');
+    [].forEach.call(t.querySelectorAll('.staff'),function(el){
+      el.onmouseenter=function(ev){
+        var at=el.getAttribute('data-at'), nm=el.getAttribute('data-nm');
+        tip.innerHTML= at
+          ? '<b>'+nm+'様の予約</b><br>入れた日時　<b>'+at+'</b><br>入れた人　　竹内'
+          : '<b>'+nm+'様の予約</b><br><span class="none">予約を入れた日時の記録がありません</span><br>'
+            +'<span style="color:#64748b">この仕組みを入れる前の予約です</span>';
+        var r=el.getBoundingClientRect();
+        tip.style.display='block';
+        var top=r.bottom+6, left=Math.min(r.left, window.innerWidth-320);
+        if(top+tip.offsetHeight>window.innerHeight) top=r.top-tip.offsetHeight-6;
+        tip.style.top=top+'px'; tip.style.left=Math.max(6,left)+'px';
+      };
+      el.onmouseleave=function(){ tip.style.display='none'; };
+    });
+  }
+
+  document.getElementById('prev').onclick=function(){ offset--; render(); };
+  document.getElementById('next').onclick=function(){ offset++; render(); };
+  document.getElementById('cur').onclick=function(){ offset=0; render(); };
+  document.getElementById('fold').onclick=function(){ folded=!folded; render(); };
+  render();
+})();
+</script>
+</body>
+</html>
