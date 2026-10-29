@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：お名前と「様」のあいだ</title>
+<!--
+  2026-10-30 ユーザー指示のモック（見本）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  お名前と「様」のあいだを、詰める／半マス／一マス の3通りで見比べる
+-->
+<style>
+  :root{ --ink:#1f2a37; --sub:#64748b; --line:#e2e8f0; --bg:#f1f5f9;
+         --warn:#b45309; --warnbg:#fff7ed; --warnline:#fed7aa; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif}
+  .wrap{max-width:1420px;margin:0 auto;padding:16px 16px 70px}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{margin:0 0 16px;background:var(--warnbg);border:2px solid var(--warnline);border-radius:10px;
+        padding:10px 14px;font-size:13px;color:#9a3412;font-weight:700;line-height:1.75}
+  h2{font-size:15px;margin:28px 0 10px;color:#9a3412;display:flex;align-items:center;gap:9px}
+  h2 .n{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;
+        background:#9a3412;color:#fff;font-size:12px}
+  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+  .col{background:#fff;border:2px solid var(--line);border-radius:12px;overflow:hidden}
+  .col.pick{border-color:#16a34a;box-shadow:0 0 0 3px #bbf7d0}
+  .ch{padding:9px 13px;font-size:13.5px;font-weight:900;display:flex;align-items:center;gap:9px;
+      border-bottom:1px solid var(--line);background:#f8fafc}
+  .ch .tag{font-size:11px;font-weight:800;border-radius:20px;padding:3px 9px;background:#eef2ff;color:#3730a3;
+      border:1px solid #c7d2fe;white-space:nowrap}
+  .col.pick .ch{background:#f0fdf4}
+  .col.pick .ch .tag{background:#dcfce7;color:#166534;border-color:#86efac}
+  .cb{padding:10px 12px 14px}
+
+  /* 1日表示の表（本物の見た目に寄せる） */
+  table.sched{border-collapse:collapse;width:100%;font-size:13px}
+  table.sched th{background:#c2410c;color:#fff;font-size:11px;font-weight:800;padding:5px 7px;text-align:left;
+      border:1px solid #9a3412;white-space:nowrap}
+  table.sched td{border:1px solid #cbd5e1;padding:6px 8px;background:#e0f2fe}
+  table.sched td.no{width:26px;text-align:center;font-weight:700;color:#2563eb;background:#f0f9ff}
+  .nm{font-weight:700;color:#7c2d12;white-space:nowrap}
+  .st{display:inline-block;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:800;
+      background:#2563eb;color:#fff;margin-left:5px;vertical-align:middle}
+  .sub{font-size:11px;color:#64748b;margin-top:1px}
+
+  /* 予約カードの氏名欄 */
+  .fld{margin-top:4px}
+  .fl{font-size:11.5px;font-weight:800;color:#64748b;margin-bottom:4px}
+  .inp{position:relative}
+  .inp input{width:100%;font:inherit;font-size:14px;padding:9px 34px 9px 11px;border:1.5px solid #e5e7eb;
+      border-radius:8px;background:#fff;color:#1f2a37}
+  .inp .sm{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:700;
+      color:#64748b;pointer-events:none}
+
+  /* 狭い所：週表の予定と代車の帯 */
+  .week{border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;font-size:11.5px}
+  .week .wr{display:flex;align-items:center;gap:4px;padding:3px 5px;border-bottom:1px solid #eef2f6;
+      white-space:nowrap;overflow:hidden}
+  .week .wr:last-child{border-bottom:none}
+  .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;
+      line-height:15px;background:#0891b2}
+  .wn{font-weight:700;color:#1e293b;flex-shrink:0}
+  .wc{color:#475569;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .bar{margin-top:9px;display:flex;gap:0}
+  .bcell{width:44px;height:34px;border:1px solid #e5e7eb;background:#fff}
+  .bres{height:34px;background:#fde68a;border:1px solid #f59e0b;display:flex;align-items:center;
+      padding:0 4px;font-size:11px;font-weight:700;color:#7c2d12;overflow:hidden;white-space:nowrap}
+
+  .note{margin-top:20px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+        font-size:13px;color:var(--sub);line-height:1.95}
+  .note b{color:var(--ink)}
+  .pickbar{margin-top:18px;background:#fffbeb;border:2px solid #fcd34d;border-radius:12px;
+      padding:13px 16px;font-size:13.5px;color:#78350f;line-height:1.9;display:flex;align-items:center;
+      gap:12px;flex-wrap:wrap}
+  .pickbar b{font-size:14.5px}
+  .pickbar button{font:inherit;font-size:13px;font-weight:800;background:#fff;border:2px solid #fcd34d;
+      border-radius:20px;padding:8px 18px;cursor:pointer;color:#78350f}
+  .pickbar button.on{background:#16a34a;border-color:#16a34a;color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>お名前と「様」のあいだ</h1>
+<p class="lead">これは<b>見本（モック）</b>です。名前はすべて架空で、本物のデータにはつながっていません。
+  いまは<b>詰めて</b>出しています。<b>半マス</b>と<b>一マス</b>を並べたので、見比べて選んでください。<br>
+  ※ 日本語の名前はもともと姓と名のあいだが全角で空いているので、そこも一緒に見てください。</p>
+
+<h2><span class="n">1</span>1日表示（車検の表）</h2>
+<div class="cols" id="c1"></div>
+
+<h2><span class="n">2</span>予約カードの氏名欄</h2>
+<div class="cols" id="c2"></div>
+
+<h2><span class="n">3</span>狭い所（週間カレンダーの予定・代車の帯）</h2>
+<div class="cols" id="c3"></div>
+
+<div class="note">
+  <b>見るときのポイント</b><br>
+  ・<b>詰める</b>　…　いまの出し方。いちばん短く収まりますが、「一郎様」がひと続きに見えます。<br>
+  ・<b>半マス</b>　…　ほんの少し離れます。姓と名のあいだ（全角）より狭いので、名前のかたまりは崩れません。<br>
+  ・<b>一マス</b>　…　はっきり離れます。読みやすい代わりに、<b>狭い所では字が切れやすく</b>なります（3の欄で確かめてください）。<br>
+  ・法人の<b>「井上商事 御中」</b>は、どれを選んでも<b>そのまま</b>です（様は足しません）。<br>
+  ・★どれを選んでも<b>保存する名前は変わりません</b>（「様」は画面に出すときだけ付けています）。
+</div>
+
+<div class="pickbar">
+  <b>どれにしますか？</b>
+  <button data-p="0">A　詰める（いま）</button>
+  <button data-p="1">B　半マス</button>
+  <button data-p="2">C　一マス</button>
+  <span id="msg" style="font-weight:800"></span>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var GAPS=[
+    {id:'A',ttl:'A　詰める（いま）',tag:'いまの出し方',g:''},
+    {id:'B',ttl:'B　半マス',tag:'半角のスペース',g:' '},
+    {id:'C',ttl:'C　一マス',tag:'全角のスペース',g:'　'}
+  ];
+  // 架空の予約（姓と名のあいだは全角）
+  var ROWS=[
+    {n:'辻　歩',       car:'アルト',   no:'3503', st:'本店', staff:'岡田',  course:'ク'},
+    {n:'青木　一郎',   car:'ワゴンR',  no:'9495', st:'本店', staff:'竹内',  course:'マ'},
+    {n:'橋口　大志朗', car:'スペーシア',no:'8808', st:'三田店',staff:'幸田', course:'レ'},
+    {n:'井上商事 御中',car:'エブリイ', no:'1122', st:'本店', staff:'岡田',  course:'ク', keep:true},
+    {n:'みどりモータース',car:'ハスラー',no:'4455',st:'本店', staff:'魚住', course:'ク'}
+  ];
+  var WEEK=[
+    {w:'O',n:'大西　咲',    c:'オイル交換・タイヤの空気も見る'},
+    {w:'T',n:'橋口　大志朗',c:'タイヤ交換'},
+    {w:'P',n:'辻　歩',      c:'12ヶ月点検'}
+  ];
+  function nm(r,g){ return r.keep ? r.n : (r.n+g+'様'); }
+
+  function build(host,render){
+    host.innerHTML='';
+    GAPS.forEach(function(G,i){
+      var col=document.createElement('div');
+      col.className='col'+(i===pick?' pick':'');
+      col.setAttribute('data-col',i);
+      col.innerHTML='<div class="ch">'+G.ttl+'<span class="tag">'+G.tag+'</span></div>'+
+        '<div class="cb">'+render(G)+'</div>';
+      col.onclick=function(){ pick=i; draw(); };
+      host.appendChild(col);
+    });
+  }
+
+  function tbl(G){
+    var h='<table class="sched"><tr><th></th><th>氏名</th><th>車種・ナンバー</th><th>コース</th></tr>';
+    ROWS.forEach(function(r,i){
+      h+='<tr><td class="no">'+(i+1)+'</td>'+
+         '<td><div class="nm">'+nm(r,G.g)+'<span class="st">'+r.st+'</span></div>'+
+         '<div class="sub">'+r.staff+'</div></td>'+
+         '<td>'+r.car+'<div class="sub">ナンバー '+r.no+'</div></td>'+
+         '<td>'+r.course+'</td></tr>';
+    });
+    return h+'</table>';
+  }
+
+  function card(G){
+    var h='';
+    [ROWS[1],ROWS[2],ROWS[3]].forEach(function(r){
+      h+='<div class="fld"><div class="fl">来店者氏名 *</div><div class="inp">'+
+         '<input readonly value="'+r.n+'">'+
+         (r.keep?'':'<span class="sm">'+(G.g==='　'?'　様':(G.g===' '?' 様':'様'))+'</span>')+
+         '</div></div>';
+    });
+    h+='<div style="font-size:11.5px;color:#64748b;margin-top:9px;line-height:1.7">'+
+       '入力した字は「'+ROWS[1].n+'」のまま。<b>「様」は右はしに重ねて見せているだけ</b>です。</div>';
+    return h;
+  }
+
+  function narrow(G){
+    var h='<div style="font-size:11.5px;font-weight:800;color:#64748b;margin-bottom:5px">週間カレンダーの予定</div>';
+    h+='<div class="week">';
+    WEEK.forEach(function(e){
+      h+='<div class="wr"><span class="wk">'+e.w+'</span><span class="wn">'+(e.n+G.g+'様')+'</span>'+
+         '<span class="wc">'+e.c+'</span></div>';
+    });
+    h+='</div>';
+    h+='<div style="font-size:11.5px;font-weight:800;color:#64748b;margin:11px 0 5px">代車の帯（3日ぶん）</div>';
+    h+='<div class="bar"><div class="bres" style="width:132px">🚙 '+('橋口　大志朗'+G.g+'様')+'</div>'+
+       '<div class="bcell"></div><div class="bcell"></div></div>';
+    return h;
+  }
+
+  var pick=1;   // はじめは B（半マス）を選んだ状態で出す
+  function draw(){
+    build(document.getElementById('c1'),tbl);
+    build(document.getElementById('c2'),card);
+    build(document.getElementById('c3'),narrow);
+    [].forEach.call(document.querySelectorAll('.pickbar button'),function(b){
+      b.classList.toggle('on',Number(b.getAttribute('data-p'))===pick);
+      b.onclick=function(){ pick=Number(b.getAttribute('data-p')); draw(); };
+    });
+    document.getElementById('msg').textContent='いま選んでいるのは「'+GAPS[pick].ttl.replace(/\s+/g,' ')+'」です';
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
