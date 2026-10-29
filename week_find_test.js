@@ -143,6 +143,10 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-weeknav]'); if (b) b.click(); });
   await page.waitForTimeout(1200);
   t('週間カレンダーが開く', await page.evaluate(() => !!document.querySelector('[data-weekview]')));
+  // ★v3.79 から週の始まりは【本日から】が既定（2026-10-29 ユーザー指示）。
+  //   この検査は月曜はじまりの並び（月〜日）を見るものなので、「📅 月曜から」に切り替える。
+  await page.evaluate(() => { const b = document.querySelector('[data-wfrom]'); if (b && b.getAttribute('data-wfrom') === 'today') b.click(); });
+  await page.waitForTimeout(800);
   if (process.env.SHOT0) await page.screenshot({ path: process.env.SHOT0, fullPage: true });
 
   // ── ① ボタンの置き場所 ──

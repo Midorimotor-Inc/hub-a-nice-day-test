@@ -145,6 +145,14 @@ const seed = {
   await page.waitForTimeout(900);
   const open = await page.evaluate(() => !!document.querySelector('[data-weekview]'));
   t('★押すと週の表が開く', open);
+  // ★v3.79 から週の始まりは【本日から】が既定（2026-10-29 ユーザー指示「本日を一番左端に」）。
+  //   この検査は月曜はじまりの並び（10/19〜10/25）を見るものなので、
+  //   「📅 月曜から」に切り替えてから確かめる。切り替えそのものは week4_test.js で見る。
+  await page.evaluate(() => { const b = document.querySelector('[data-wfrom]'); if (b && b.getAttribute('data-wfrom') === 'today') b.click(); });
+  await page.waitForTimeout(700);
+  t('★既定は「本日から」で、押せば月曜はじまりに戻せる', await page.evaluate(() => {
+    const b = document.querySelector('[data-wfrom]'); return !!b && b.getAttribute('data-wfrom') === 'mon';
+  }));
   t('見出しに週の範囲が出る（10/19（月） 〜 10/25（日））', await page.evaluate(() => {
     const el = document.querySelector('[data-weekview]'); return !!el && /10\/19（月） 〜 10\/25（日）/.test(el.innerText);
   }));

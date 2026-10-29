@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793233895380';
+    window.__APP_BUILD='build-1793242919311';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.78.0';
+const APP_VERSION = '3.79.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3141,7 +3141,8 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
   'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
-  'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
+  'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops',
+  'usrchk'];   // ★車検証の使用者を確認した印（2026-10-29）
 const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
   'staff-v2','cars','schedRestrictions'];
 const fbSnapKeyList = async () => {
@@ -4266,6 +4267,21 @@ const StaffRegisterModal=memo(({isOpen,onClose,staffListH,staffListS,onSave})=>{
 //   ★この画面は読むだけ。保存はすべて今までの予約カード（BookingModal）を通る。
 // ════════════════════════════════════════════════════════════
 const WEEK_DOW = ['月','火','水','木','金','土','日'];
+// ★日曜=0 の並び。週の始まりを【本日】にすると曜日は添字で決まらないので、日付から引く
+//   （2026-10-29 ユーザー指示「本日を一番左端に」）。
+const WEEK_DOW_J = ['日','月','火','水','木','金','土'];
+const weekDowOf = (d) => WEEK_DOW_J[d.getDay()];
+// 曜日の色。日曜=赤／土曜=青（カレンダーと同じ）
+const weekDowCol = (d) => d.getDay()===0?'#ef4444':d.getDay()===6?'#2563eb':'#1b2129';
+// ★予約を入れた日時（v3.78.0 から記録）。それより前の予約には記録が無いので、そう書く。
+const WEEK_AT_NONE = '記録なし（この仕組みを入れる前の予約です）';
+const weekAtLabel = (r) => {
+  const t=r&&r.at; if(!t)return WEEK_AT_NONE;
+  const d=new Date(Number(t)); if(isNaN(d.getTime()))return WEEK_AT_NONE;
+  const p=n=>(n<10?'0':'')+n;
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes())
+    +(r.by?'　（入れた人 '+r.by+'）':'');
+};
 // ── 空き探し（v3.74・2026-10-25 ユーザー決定）──────────────────────
 //  ・マッハ車検は 10:00 と 14:00 が基本の枠。空いている方をオレンジで囲い「マッハ可」、
 //    すでに入っている方は赤い札で「マッハ車検」（入庫から1時間＝2枠）
@@ -4307,11 +4323,17 @@ const WEEK_TAKEN='#fecaca';  // 「マッハ予約済み」の札。ごく薄い
 const weekMinOf=(x)=>{const m=String(x||'').match(/^(\d+):(\d+)$/);return m?Number(m[1])*60+Number(m[2]):-1;};
 // 月曜はじまりの週頭
 const weekStartOf = (d) => { const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
+// ★週の始まりを選べるようにする（2026-10-29 ユーザー指示）。
+//   既定は【その日から7日ぶん】＝本日に開けば本日が一番左端に来て、これから1週間が全部見える。
+//   月曜はじまり（A3の紙と同じ並び）にも1押しで戻せる。
+const weekStartMode = (d, fromToday) => fromToday
+  ? new Date(d.getFullYear(),d.getMonth(),d.getDate())
+  : weekStartOf(d);
 // スタッフの1文字。**既定は名前の先頭1文字**。かぶる時・ご希望はスタッフ設定の「1文字」で手で決める。
 const staffIni = (s) => { const v=String((s&&s.ini)||'').trim(); return v?v.slice(0,2):(String((s&&s.name)||'').trim().slice(0,1)||'?'); };
 const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:i; };
 
-const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeName,headColor,
+const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFromToday,storeId,storeName,headColor,
     inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,inspLimits,
     onOpenInsp,onAddInsp,onAddMach,onOpenSched,onAddSched,onPickDay})=>{
   // ★フックは「早い return」より前に置くこと（React の決まり。後ろに置くと数が合わず画面が落ちる）
@@ -4322,6 +4344,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
   const [sbw,setSbw]=useState(0);
   // 内容の吹き出し（1日表示の NoteCell と同じ見た目で出す）
   const [tip,setTip]=useState(null);
+  // ★① 時間を畳む（2026-10-29 ユーザー指示・マイスケジュールと同じ考え方）。
+  //   1週間のどこにも予定が無い時間の行を隠す。車検・出勤・午前入庫の行は隠さない。
+  const [folded,setFolded]=useState(false);
   // 最大化（ブラウザの全画面）と空き探し
   const fsRef=useRef(null);
   const [isFs,setIsFs]=useState(false);
@@ -4573,7 +4598,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               <span title={(WORKS.find(w=>w.id===r.work)||{}).name||''}
                 style={{flexShrink:0,fontSize:9.5,fontWeight:900,color:'white',borderRadius:3,padding:'0 4px',
                   lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{r.work||'—'}</span>
-              <span style={{fontWeight:700,color:'#1e293b',flexShrink:0}}>{r.name}</span>
+              {/* ★④ なぞると「いつ・誰が予約を入れたか」（2026-10-29 ユーザー指示）。
+                  週表には担当者のバッジが無い（2026-10-23 に内容を出すため外した）ので、お名前をなぞる。 */}
+              <span data-wentnm="1"
+                onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
+                  setTip({head:'🕘 この予約を入れた日時',
+                    text:r.name+'様'+String.fromCharCode(10)+'入れた日時　'+weekAtLabel(r),
+                    left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
+                onMouseLeave={()=>setTip(null)}
+                style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{r.name}</span>
               {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
               {/* ★担当者バッジは外し、代わりに内容を入る幅だけ出す（2026-10-23 ユーザー指示）。
                   切れたら … 。全文はなぞると出る（1日表示と同じ考え方） */}
@@ -4604,7 +4637,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
             <b style={{fontSize:15,fontWeight:800,whiteSpace:'nowrap'}}>⏰ タイムスケジュール（週）</b>
             <span style={{fontSize:12.5,opacity:.95,whiteSpace:'nowrap'}}>{storeName}</span>
             <span style={{fontSize:13,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
-              {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+WEEK_DOW[0]+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+WEEK_DOW[6]+'）'}
+              {(days[0].getMonth()+1)+'/'+days[0].getDate()+'（'+weekDowOf(days[0])+'） 〜 '+(days[6].getMonth()+1)+'/'+days[6].getDate()+'（'+weekDowOf(days[6])+'）'}
             </span>
           </div>
           {/* ★中：週送り。真ん中に、大きく（2026-10-23 ユーザー指示）。
@@ -4631,6 +4664,18 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
           </div>
           {/* 右：⛶ 最大化／✕ */}
           <div style={{flex:1,display:'flex',justifyContent:'flex-end',gap:7,alignItems:'center'}}>
+            {/* ★① 時間を畳む（2026-10-29 ユーザー指示）。1週間のどこにも予定が無い時間の行を隠す */}
+            <button data-wfold={folded?'1':'0'} onClick={()=>setFolded(v=>!v)}
+              title={folded?'隠した時間の行をまた出す':'1週間のどこにも予定が無い時間の行を隠す'}
+              style={{background:folded?'white':'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'4px 11px',fontSize:13,fontWeight:900,color:folded?'#0e5a6b':'white',cursor:'pointer',
+                fontFamily:'inherit',whiteSpace:'nowrap'}}>{folded?'▼ 開く':'▲ 畳む'}</button>
+            {/* ★② 週の始まり（2026-10-29 ユーザー指示）。既定は本日から＝本日が一番左端 */}
+            <button data-wfrom={fromToday?'today':'mon'} onClick={()=>onFromToday&&onFromToday(!fromToday)}
+              title={fromToday?'月曜はじまり（A3の紙と同じ並び）に切り替える':'本日を一番左端にして、そこから7日ぶんを出す'}
+              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',
+                fontFamily:'inherit',whiteSpace:'nowrap'}}>{fromToday?'📍 本日から':'📅 月曜から'}</button>
             <button data-wfs="1" title={isFs?'元の大きさに戻す':'画面いっぱいに広げる'}
               onClick={()=>{try{ if(document.fullscreenElement){document.exitFullscreen&&document.exitFullscreen();}
                 else if(fsRef.current&&fsRef.current.requestFullscreen){fsRef.current.requestFullscreen();} }catch(e){}}}
@@ -4698,12 +4743,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
         <div ref={scRef} style={{flex:1,minHeight:0,overflow:'auto'}}>
           {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
               td の height:26 は最低の高さとして効く */}
-          <table style={{borderCollapse:'collapse',width:'100%',height:'100%',minWidth:980,tableLayout:'fixed'}}>
+          {/* ★畳んでいる時は高さを伸ばさない。余った高さを行に配ると、残った数行
+              （車検・出勤・09:00 など）が間延びして読みにくくなるため（2026-10-29）。 */}
+          <table style={{borderCollapse:'collapse',width:'100%',height:folded?undefined:'100%',minWidth:980,tableLayout:'fixed'}}>
             <thead>
               <tr>
                 <th style={{...TH,width:54,minWidth:54}}></th>
                 {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
-                  const dowCol=i===6?'#ef4444':i===5?'#2563eb':'#1b2129';
+                  const dowCol=weekDowCol(d);
                   const hDim=!!(sr&&sr.dayDim[dk]);
                   return <th key={dk} data-wtoday={dk===todayDk?'1':'0'} data-wdim={hDim?'1':'0'}
                     style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:'3px solid '+TODAY_LINE}:{}),...todayCol(dk),
@@ -4718,7 +4765,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                         background:dk===todayDk?'#0e7490':'white',
                         color:dk===todayDk?'white':dowCol,
                         fontSize:11.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
-                      {(d.getMonth()+1)+'/'+d.getDate()+'（'+WEEK_DOW[i]+'）'}
+                      {(d.getMonth()+1)+'/'+d.getDate()+'（'+weekDowOf(d)+'）'}
                     </button>
                     {/* ★日付の右隣に、その日の車検の合計台数（両店あわせて）。2026-10-26 ユーザー指示：合計だけでよい */}
                     {!cl&&<span data-wdaycnt={dk} title={'この日の車検　合計 '+inspOf(dk).length+'台（両店あわせて）'}
@@ -4754,11 +4801,27 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                         <div key={gi} data-wgrp={dk+'/'+gi} style={INS_COL}>
                           {g.items.map(({r,i})=>{const c=COURSES.find(x=>x.id===r.course);
                             const oth=!mine(r);   // 他店の予約（車検は両店あわせて出している）
-                            return <button key={i} data-wcb={dk+'/'+i} data-wcboth={oth?'1':'0'}
-                              title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')}
+                            // ★③ 7台目以降の知らせ（2026-10-29 ユーザー指示。カレンダーの日のマスと同じ印）。
+                            //   枠外かどうかを【位置で数えない】。BLOCK-C が付けた印だけで見る：
+                            //     pendingApproval＝枠外でまだ承認されていない（黄）
+                            //     approved       ＝枠外だが本店が手で承認した（緑）
+                            //   枠内に繰り上がると BLOCK-C が両方の印を消すので、印の有無だけで足りる。
+                            //   ★台数制限を掛けた日は6台より少ない所が枠外になる＝「7台目」は日によって違う。
+                            const bang=r.pendingApproval?'wait':(r.approved?'ok':'');
+                            return <button key={i} data-wcb={dk+'/'+i} data-wcboth={oth?'1':'0'} data-wbang={bang||'0'}
+                              title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')
+                                +(bang?String.fromCharCode(10)+(bang==='ok'?'⚠ 枠からあふれた分です（承認済み）':'⚠ 枠からあふれた分です（まだ承認されていません）'):'')
+                                +String.fromCharCode(10)+'予約を入れた日時　'+weekAtLabel(r)}
                               onClick={()=>onOpenInsp(dk,i)}
-                              style={{...CB,background:(c&&c.color)||'#64748b',
-                                ...(oth?{border:'1.5px solid white',boxShadow:'0 0 0 1.5px '+((c&&c.color)||'#64748b')}:{})}}>{(c&&c.initial)||'？'}</button>;})}
+                              style={{...CB,position:'relative',background:(c&&c.color)||'#64748b',
+                                ...(oth?{border:'1.5px solid white',boxShadow:'0 0 0 1.5px '+((c&&c.color)||'#64748b')}:{})}}>
+                              {(c&&c.initial)||'？'}
+                              {bang&&<span data-wbangdot={bang} style={{position:'absolute',top:-6,right:-6,width:14,height:14,
+                                borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+                                fontSize:10,fontWeight:900,color:'#111',border:'1.5px solid #fff',lineHeight:1,
+                                background:bang==='ok'?'#22c55e':'#facc15',
+                                boxShadow:'0 1px 3px rgba(0,0,0,.3)',pointerEvents:'none'}}>!</span>}
+                            </button>;})}
                         </div>
                       ))}
                       <div style={INS_COL}>
@@ -4793,7 +4856,20 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
                   </td>;})}
               </tr>
               {/* 時間枠：同じ枠に数件あれば積む。12:00 はやめて、その場所に午前入庫を置いた */}
-              {mainSlots.map(slot=>slotRow(slot))}
+              {/* ★① 畳んでいる時は「1週間のどこにも予定が無い時間の行」を隠す（2026-10-29 ユーザー指示）。
+                  ・午前入庫（時刻を持たない枠）は隠さない＝置き場所が分からなくなるため
+                  ・空き探しの印が付いた枠も隠さない＝探した結果が消えてしまうため */}
+              {(folded?mainSlots.filter(slot=>{
+                  if(isSpecialSlot(slot))return true;
+                  return days.some(d=>{const dk=dkOf(d);
+                    if(isClosed(d))return false;
+                    if(slotEntries(dk,slot).length)return true;
+                    const b=srCell(dk,slot); return !!(b&&b.blk);});
+                }):mainSlots).map(slot=>slotRow(slot))}
+              {folded&&!mainSlots.some(slot=>!isSpecialSlot(slot)&&days.some(d=>!isClosed(d)&&slotEntries(dkOf(d),slot).length))&&(
+                <tr data-wfoldnone="1"><td colSpan={8} style={{...TD,textAlign:'center',color:'#94a3b8',
+                  fontSize:12,fontWeight:700,padding:'10px 4px'}}>この1週間は、時間の決まった整備の予定が入っていません</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -4819,7 +4895,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
               border:'2px solid #0891b2',borderRadius:10,boxShadow:'0 12px 32px rgba(0,0,0,0.22)',
               padding:'10px 12px',pointerEvents:'none',whiteSpace:'normal',wordBreak:'break-word',
               boxSizing:'border-box',textAlign:'left'}}>
-              <div style={{fontSize:10.5,fontWeight:800,color:'#0e7490',marginBottom:5,letterSpacing:'.04em'}}>📝 内容（全文）</div>
+              <div style={{fontSize:10.5,fontWeight:800,color:'#0e7490',marginBottom:5,letterSpacing:'.04em'}}>{tip.head||'📝 内容（全文）'}</div>
               <div style={{fontSize:13,lineHeight:1.75,color:'#374151'}}>
                 {tip.text.split(String.fromCharCode(10)).map((x,i)=><div key={i}>{x}</div>)}
               </div>
@@ -4830,6 +4906,270 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,storeId,storeNa
     </div>
   );
 });
+
+// ════════════════════════════════════════════════════════════
+//  ダッシュボード（v3.79・2026-10-29 整備からの依頼）
+//   モック：mock_dashboard.html ／ mock_dashboard_shaken.html（2026-10-28 ユーザー確認ずみ）
+//
+//   ★【別のページにしない】＝この画面の中の全画面オーバーレイにしてある。
+//     理由：顧客名・車検の予約はこの画面がすでに持っている（insp と保管箱 insp-arch を
+//     合体した inspData）。別ページにすると**データ層（BLOCK-B）と本人認証をもう1組**
+//     作ることになり、予約消失の元を増やす。顧客リストのように別ページが要るものでもない。
+//
+//   いま入っているのは「車検　使用者の確認」ひとつ。決めごと（2026-10-28 ユーザー）：
+//     ・載せるのは【終わった車検だけ】＝車検日が本日まで。これからの予約は出さない
+//     ・月の区切りは【車検をした日】の月
+//     ・【週ごと】に分ける。月末にまとめてやらずに済む（毎月150台ほどあるため）
+//     ・チェックは「確認した」の1つだけ。誰がいつ押したかも残す
+//     ・来店者と名前が違う行はオレンジ／車検証の使用者が未入力の行は赤
+//   ★チェックは車検の予約そのものには書かない。別の控え（usrchk）に残す。
+//     予約の行を書き換えると、保管箱（insp-arch）に移った過去の予約まで触ることになり、
+//     予約を壊しかねないため（2026-10 の予約消失の反省）。
+// ════════════════════════════════════════════════════════════
+// 氏名を見比べる時は、空白（半角・全角）を外してから比べる。「佐藤 健太」と「佐藤　健太」は同じ人。
+const dashNorm = (s) => String(s||'').replace(/[\s　]/g,'');
+// その行を見分ける印。入庫済みチェック（arrivedKey）と同じ作り方にそろえる。
+const dashRowKey = (r,i) => String((r&&(r.seq||r.custId||r.name))||i);
+const dashWeekOf = (d) => Math.min(5,Math.ceil(d/7));
+const dashStamp = (o) => {
+  if(!o)return '';
+  const d=new Date(Number(o.at||0));
+  if(isNaN(d.getTime())||!o.at)return String(o.by||'');
+  return String(o.by||'')+'　'+(d.getMonth()+1)+'/'+d.getDate();
+};
+
+const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPickDay,storeName,headColor})=>{
+  // ★フックは「早い return」より前に置くこと（React の決まり）
+  const [mon,setMon]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
+  const [filt,setFilt]=useState('all');
+  useEffect(()=>{ if(isOpen){const n=new Date();setMon(new Date(n.getFullYear(),n.getMonth(),1));setFilt('all');} },[isOpen]);
+  // その月の「終わった車検」を集める
+  const rows=useMemo(()=>{
+    const y=mon.getFullYear(),m=mon.getMonth();
+    const last=new Date(y,m+1,0).getDate();
+    const n=new Date();
+    const todayNum=n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();
+    const out=[];
+    for(let d=1;d<=last;d++){
+      // ★これから先の車検は「終わっていない」ので出さない（当日の分までは出す）
+      if(y*10000+(m+1)*100+d>todayNum)break;
+      const dk=y+'-'+(m+1)+'-'+d;
+      (inspData[dk]||[]).forEach((r,i)=>{
+        if(!r||!r.name)return;
+        if(r.bookingStatus==='cancelled')return;
+        if(r.pendingApproval)return;                  // 承認待ち＝まだ受けていない
+        const nm=dashNorm(r.name),us=dashNorm(r.user);
+        out.push({dk,d,i,r,week:dashWeekOf(d),key:dashRowKey(r,i),
+          kind:!us?'empty':(us===nm?'same':'diff')});
+      });
+    }
+    return out;
+  },[inspData,mon]);
+  if(!isOpen)return null;
+
+  const chkOf=(x)=>((usrChk||{})[x.dk]||{})[x.key]||null;
+  const done=rows.filter(x=>!!chkOf(x)).length;
+  const ndiff=rows.filter(x=>x.kind==='diff'||x.kind==='empty').length;
+  const pct=rows.length?Math.round(done/rows.length*100):0;
+  const cnt={1:0,2:0,3:0};
+  rows.forEach(x=>{const c=Number(x.r.course);if(cnt[c]!=null)cnt[c]++;});
+  const nowM=new Date();
+  const isThisMonth=mon.getFullYear()===nowM.getFullYear()&&mon.getMonth()===nowM.getMonth();
+  const shown=rows.filter(x=>{
+    if(filt==='todo')return !chkOf(x);
+    if(filt==='done')return !!chkOf(x);
+    if(filt==='diff')return x.kind==='diff'||x.kind==='empty';
+    return true;
+  });
+
+  const TH={padding:'8px 10px',fontSize:11.5,fontWeight:800,color:'#64748b',background:'#f8fafc',
+    textAlign:'left',whiteSpace:'nowrap',borderBottom:'1px solid #e2e8f0'};
+  const TD={padding:'8px 10px',fontSize:13.5,borderBottom:'1px solid #eef2f6',verticalAlign:'middle'};
+  const PILL=(on)=>({padding:'7px 13px',borderRadius:20,border:'1.5px solid '+(on?'#1d4ed8':'#e2e8f0'),
+    background:on?'#1d4ed8':'white',color:on?'white':'#64748b',fontSize:12,fontWeight:800,
+    cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'});
+  const NAV={fontSize:13,fontWeight:800,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,
+    padding:'7px 11px',cursor:'pointer',color:'#1f2a37',fontFamily:'inherit'};
+  const STAT=(k,v,u,col)=>(
+    <div style={{display:'flex',flexDirection:'column',gap:2}}>
+      <div style={{fontSize:11.5,fontWeight:700,color:'#64748b'}}>{k}</div>
+      <div style={{fontSize:21,fontWeight:900,lineHeight:1,color:col||'#1f2a37'}}>{v}
+        <small style={{fontSize:12,fontWeight:700,color:'#64748b',marginLeft:3}}>{u}</small></div>
+    </div>);
+
+  return (
+    <div data-dash="1" style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:900,
+      display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:'#f1f5f9',borderRadius:12,width:'99vw',height:'98vh',display:'flex',
+          flexDirection:'column',overflow:'hidden',boxShadow:'0 30px 80px rgba(0,0,0,.45)'}}>
+        {/* 見出し */}
+        <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:12,padding:'8px 14px',
+          background:headColor||'linear-gradient(135deg,#1e3a8a,#1d4ed8)',color:'white'}}>
+          <b style={{fontSize:16,fontWeight:800,whiteSpace:'nowrap'}}>🏠 ダッシュボード</b>
+          <span style={{fontSize:11.5,background:'rgba(255,255,255,.22)',padding:'3px 9px',borderRadius:9,
+            fontWeight:700,whiteSpace:'nowrap'}}>車検　使用者の確認</span>
+          <span style={{fontSize:12.5,opacity:.95,whiteSpace:'nowrap'}}>{storeName}</span>
+          <span style={{flex:1}}/>
+          <button data-dashclose="1" onClick={onClose} title="閉じる"
+            style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+              padding:'5px 13px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕ 閉じる</button>
+        </div>
+
+        <div style={{flex:1,minHeight:0,overflow:'auto',padding:'12px 14px 40px'}}>
+          {/* 上の帯：月送り・進み具合・絞り込み */}
+          <div style={{background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'11px 13px',
+            display:'flex',alignItems:'center',gap:14,flexWrap:'wrap',marginBottom:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <button data-dashprev="1" style={NAV}
+                onClick={()=>setMon(p=>new Date(p.getFullYear(),p.getMonth()-1,1))}>‹ 前の月</button>
+              <span data-dashmon="1" style={{fontSize:18,fontWeight:900,padding:'0 8px',minWidth:150,textAlign:'center'}}>
+                {mon.getFullYear()}年{mon.getMonth()+1}月</span>
+              <button data-dashnext="1" disabled={isThisMonth} title={isThisMonth?'これから先の車検はまだ終わっていません':''}
+                style={{...NAV,opacity:isThisMonth?.4:1,cursor:isThisMonth?'default':'pointer'}}
+                onClick={()=>{if(!isThisMonth)setMon(p=>new Date(p.getFullYear(),p.getMonth()+1,1));}}>次の月 ›</button>
+            </div>
+            <div style={{flex:1,minWidth:240,display:'flex',flexDirection:'column',gap:5}}>
+              <div data-dashprog="1" style={{fontSize:13,fontWeight:700,color:'#64748b'}}>
+                確認ずみ <b style={{color:'#047857',fontSize:15}}>{done}</b> / {rows.length} 台
+                　（残り {rows.length-done} 台・{pct}%）</div>
+              <div style={{height:10,background:'#e2e8f0',borderRadius:6,overflow:'hidden'}}>
+                <div style={{height:'100%',width:pct+'%',background:'linear-gradient(90deg,#10b981,#047857)'}}/>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {[['all','すべて',rows.length],['todo','未確認だけ',rows.length-done],
+                ['done','チェック済み',done],['diff','名前が違うものだけ',ndiff]].map(([id,lab,n])=>(
+                <button key={id} data-dashfilt={id} onClick={()=>setFilt(id)} style={PILL(filt===id)}>
+                  {lab} <span style={{opacity:.85,fontWeight:900}}>{n}</span></button>
+              ))}
+            </div>
+          </div>
+
+          {/* その月の内訳 */}
+          <div style={{background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'12px 14px',
+            display:'flex',gap:26,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:900,whiteSpace:'nowrap'}}>{mon.getMonth()+1}月の終わった車検</div>
+            {STAT('合計',rows.length,'台')}
+            {STAT('マッハ',cnt[1],'台','#b91c1c')}
+            {STAT('クイック',cnt[2],'台','#1d4ed8')}
+            {STAT('レギュラー',cnt[3],'台','#d97706')}
+            {STAT('名前が違う・未入力',ndiff,'台','#9a3412')}
+            <span style={{flex:1}}/>
+            <div style={{fontSize:11.5,color:'#64748b',lineHeight:1.7,maxWidth:420}}>
+              これから足すもの … 顧客を探す／控えの状態／来店の目安アラート
+            </div>
+          </div>
+
+          {/* 週ごとのリスト */}
+          {!shown.length?(
+            <div style={{background:'white',border:'1px dashed #cbd5e1',borderRadius:12,padding:26,
+              textAlign:'center',color:'#64748b',fontSize:14,fontWeight:700}}>
+              {rows.length?'この条件に当てはまる車検はありません。':'この月に終わった車検はまだありません。'}
+            </div>
+          ):[1,2,3,4,5].map(w=>{
+            const ws=shown.filter(x=>x.week===w);
+            if(!ws.length)return null;
+            const all=rows.filter(x=>x.week===w);
+            const rest=all.filter(x=>!chkOf(x));
+            const last=new Date(mon.getFullYear(),mon.getMonth()+1,0).getDate();
+            return (
+              <div key={w} data-dashweek={w}>
+                <div style={{display:'flex',alignItems:'center',gap:10,margin:'16px 0 8px',flexWrap:'wrap'}}>
+                  <h3 style={{fontSize:15,margin:0,fontWeight:900,color:'#1e3a8a'}}>
+                    第{w}週（{(w-1)*7+1}日〜{Math.min(w*7,last)}日）</h3>
+                  <span style={{fontSize:12,fontWeight:700,color:'#64748b',background:'white',
+                    border:'1px solid #e2e8f0',borderRadius:16,padding:'4px 10px'}}>{all.length} 台</span>
+                  {rest.length===0
+                    ?<span data-dashwdone={w} style={{fontSize:12,fontWeight:800,color:'#047857',background:'#ecfdf5',
+                       border:'1px solid #a7f3d0',borderRadius:16,padding:'4px 10px'}}>✓ この週は確認ずみ</span>
+                    :<span data-dashwrest={w} style={{fontSize:12,fontWeight:800,color:'#b45309',background:'#fff7ed',
+                       border:'1px solid #fed7aa',borderRadius:16,padding:'4px 10px'}}>未確認 {rest.length} 台</span>}
+                  <span style={{flex:1,minWidth:20,borderTop:'2px dotted #cbd5e1'}}/>
+                  {rest.length>0&&(
+                    <button data-dashwall={w}
+                      onClick={()=>{ if(window.confirm('第'+w+'週の '+rest.length+' 台を、まとめて「確認した」にします。よろしいですか。'))
+                        onSetChecked(rest.map(x=>({dk:x.dk,key:x.key})),true); }}
+                      style={{...NAV,fontSize:12,background:'white'}}>この週をまとめて確認ずみにする</button>
+                  )}
+                </div>
+                <table style={{width:'100%',borderCollapse:'collapse',background:'white',
+                  border:'1px solid #e2e8f0',borderRadius:12,overflow:'hidden'}}>
+                  <thead><tr>
+                    <th style={{...TH,width:84}}>車検日</th>
+                    <th style={{...TH,width:'19%'}}>顧客名（来店者）</th>
+                    <th style={{...TH,width:'22%'}}>車検証の使用者</th>
+                    <th style={{...TH,width:'20%'}}>車種・ナンバー</th>
+                    <th style={{...TH,width:'9%'}}>担当</th>
+                    <th style={{...TH,width:118,textAlign:'center'}}>確認</th>
+                  </tr></thead>
+                  <tbody>
+                    {ws.map(x=>{
+                      const ck=chkOf(x);
+                      const bad=x.kind==='diff'||x.kind==='empty';
+                      const open=()=>{const p=x.dk.split('-').map(Number);onPickDay&&onPickDay(p[0],p[1]-1,p[2]);};
+                      return (
+                        <tr key={x.dk+'/'+x.i} data-dashrow={x.dk+'/'+x.key} data-dashkind={x.kind}
+                          data-dashchk={ck?'1':'0'}
+                          style={{background:bad?'#fff7ed':'white',opacity:ck?.58:1}}>
+                          <td style={{...TD,whiteSpace:'nowrap',fontWeight:700,color:'#64748b'}}>
+                            {mon.getMonth()+1}/{x.d}</td>
+                          <td style={{...TD,fontWeight:700,textDecoration:ck?'line-through':'none'}}>
+                            <span data-dashopen="1" onClick={open} title="この日のスケジュールを開く（予約カードから直せます）"
+                              style={{cursor:'pointer',borderBottom:'1px dotted #94a3b8'}}>{x.r.name}</span></td>
+                          <td style={TD}>
+                            {x.kind==='empty'?(
+                              <button data-dashempty="1" onClick={open}
+                                title="予約カードを開いて、車検証の使用者を入れる（同じなら「同じ」を押す）"
+                                style={{fontSize:12,fontWeight:700,color:'#b91c1c',background:'#fef2f2',
+                                  border:'1px solid #fecaca',borderRadius:9,padding:'4px 9px',cursor:'pointer',
+                                  fontFamily:'inherit'}}>未入力</button>
+                            ):(<>
+                              <span style={{fontWeight:x.kind==='diff'?800:400,color:x.kind==='diff'?'#9a3412':'#1f2a37'}}>
+                                {x.r.user}</span>
+                              {x.kind==='diff'
+                                ?<span data-dashdiff="1" style={{fontSize:11,fontWeight:800,color:'#9a3412',
+                                   background:'#ffedd5',border:'1px solid #fed7aa',borderRadius:9,padding:'2px 7px',
+                                   marginLeft:6,whiteSpace:'nowrap'}}>名前が違う</span>
+                                :<span style={{fontSize:11,fontWeight:700,color:'#64748b'}}> （同じ）</span>}
+                            </>)}
+                          </td>
+                          <td style={{...TD,color:'#64748b'}}>{x.r.carType||''}　{x.r.no||''}</td>
+                          <td style={{...TD,color:'#64748b',whiteSpace:'nowrap'}}>{x.r.staff||''}</td>
+                          <td style={{...TD,textAlign:'center'}}>
+                            <span data-dashmark={ck?'1':'0'} title={ck?('確認ずみ'+(dashStamp(ck)?'　'+dashStamp(ck):'')+'（押すと取り消し）'):'確認したら押す'}
+                              onClick={()=>onSetChecked([{dk:x.dk,key:x.key}],!ck)}
+                              style={{width:30,height:30,borderRadius:'50%',cursor:'pointer',
+                                border:'2px solid '+(ck?'#f59e0b':'#cbd5e1'),background:ck?'#fde68a':'white',
+                                color:ck?'#dc2626':'transparent',display:'inline-flex',alignItems:'center',
+                                justifyContent:'center',fontSize:17,fontWeight:900}}>✓</span>
+                            {ck&&dashStamp(ck)&&(
+                              <span style={{display:'block',fontSize:10.5,color:'#64748b',marginTop:3,
+                                whiteSpace:'nowrap'}}>{dashStamp(ck)}</span>)}
+                          </td>
+                        </tr>);
+                    })}
+                  </tbody>
+                </table>
+              </div>);
+          })}
+
+          <div style={{marginTop:16,background:'white',border:'1px solid #e2e8f0',borderRadius:12,
+            padding:'13px 15px',fontSize:13,color:'#64748b',lineHeight:1.9}}>
+            <b style={{color:'#1f2a37'}}>この画面の決まりごと</b><br/>
+            ・載るのは<b>終わった車検だけ</b>です（車検日が本日まで）。これからの予約は出ません。<br/>
+            ・月の区切りは<b>車検をした日</b>です。<br/>
+            ・<b>週ごとに分けて</b>あります。月末にまとめてやらず、1週終わったところで確認できます。<br/>
+            ・<b>名前が違う行はオレンジ</b>、<b>使用者が未入力の行は赤</b>で出ます。そこだけ見れば済みます。<br/>
+            ・氏名を押すとその日のスケジュールが開きます。<b>使用者は予約カードで入れてください</b>（同じなら「同じ」を押す）。<br/>
+            ・チェックは<b>「確認した」の印</b>です。誰がいつ押したかも残ります。
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 
 // ============================================
 //  スタッフ設定モーダル（編集・削除・番号変更）
@@ -12401,7 +12741,12 @@ function AppInner() {
   const [showStaffSettings,setShowStaffSettings]=useState(false);
   // 週表示（v3.69・2026-10-21）。1日表示はそのまま、こちらは別の窓で開く
   const [weekOpen,setWeekOpen]=useState(false);
-  const [weekStart,setWeekStart]=useState(()=>weekStartOf(new Date()));
+  // ★ダッシュボード（2026-10-29 整備からの依頼）。別ページではなく、この画面の全画面オーバーレイ。
+  const [dashOpen,setDashOpen]=useState(false);
+  // ★週の始まり（2026-10-29 ユーザー指示）。既定は【本日から】＝本日が一番左端。
+  //   月曜はじまり（A3の紙と同じ並び）にも週表の中の1押しで戻せる。
+  const [weekFromToday,setWeekFromToday]=useState(true);
+  const [weekStart,setWeekStart]=useState(()=>weekStartMode(new Date(),true));
   // 現在の表示店舗に応じたデータ・setter
   const schedData    = vsId==='honten'?schedDataH   :schedDataS;
   const setSchedData = vsId==='honten'?setSchedDataH:setSchedDataS;
@@ -12692,6 +13037,26 @@ function AppInner() {
   const [restrTip, setRestrTip] = useState('');                    // 入庫制限バッジのホバー説明（表示中のdk）
   const [restrTipRect2, setRestrTipRect2] = useState(null);        // そのバッジの位置（画面固定で出すため・2026-10-03）
   const [inspLimits, setInspLimits] = useShared(STOR+'inspLimits', {}); // 車検台数制限 {dk: number}
+  // ★車検証の使用者を確認した印（2026-10-29 整備からの依頼）。{日付: {行の印: {by,at}}}
+  //   ★車検の予約そのものには書かない。予約の行を書き換えると、保管箱（insp-arch）へ移った
+  //     過去の予約まで触ることになり、予約を壊しかねないため。印だけを別のキーに残す。
+  //   日付ごとに分けてあるので、時点復旧の「日を指定して戻す」もそのまま使える。
+  const [usrChk, setUsrChk] = useShared(STOR+'usrchk', {});
+  const setUserChecked = useCallback((items,on)=>{
+    if(!items||!items.length)return;
+    const by=(currentUser&&currentUser.name)||'';
+    const at=Date.now();
+    setUsrChk(prev=>{
+      const c={...(prev||{})};
+      items.forEach(({dk,key})=>{
+        if(!dk||!key)return;
+        const day={...(c[dk]||{})};
+        if(on)day[key]={by,at}; else delete day[key];
+        if(Object.keys(day).length)c[dk]=day; else delete c[dk];
+      });
+      return c;
+    });
+  },[setUsrChk,currentUser]);
   // 控えの1件を送り直す。サーバー最新値に「まだ無ければ」空き行へ足す（すでに入っていれば何もしない＝二重にならない）。
   const resendInspPending=useCallback(p=>new Promise(resolve=>{
     const row=p&&p.row?{...p.row}:null;
@@ -15283,7 +15648,7 @@ function AppInner() {
                     </button>
                     {/* 週間カレンダー（v3.69.2・2026-10-21 ユーザー指示：カレンダーの横に置く）。
                         スケジュールのヘッダーの「📅 週表示」と同じものを、どの画面からでも開ける */}
-                    <button onClick={()=>{setWeekStart(weekStartOf(selDate||new Date()));setWeekOpen(true);}} {...hov(false)}
+                    <button onClick={()=>{setWeekStart(weekStartMode(selDate||new Date(),weekFromToday));setWeekOpen(true);}} {...hov(false)}
                       data-weeknav="1" title="1週間をまとめて見る"
                       style={navSty(false,{background:'#A5E9F2',color:'#0B4A58'})}>
                       <Calendar size={13}/>週間カレンダー
@@ -15297,6 +15662,13 @@ function AppInner() {
                     <button onClick={()=>{if(selDate)setLoanerMonth(new Date(selDate.getFullYear(),selDate.getMonth(),1));setPickMode(false);setView('loaner');}}
                       style={navSty(view==='loaner',{background:'#FFFFFF',color:'#1A2550'})} {...hov(view==='loaner')}>
                       <Car size={13}/>代車管理
+                    </button>
+                    {/* ★ダッシュボード（2026-10-29 整備からの依頼）。いまの中身は「車検 使用者の確認」。
+                        別タブではなく全画面で重ねる＝顧客名も予約もこの画面が持っているため */}
+                    <button onClick={()=>setDashOpen(true)} {...hov(false)} data-dashnav="1"
+                      title="車検証の使用者の確認（月ごと・週ごと）"
+                      style={navSty(false,{background:'#FFD18A',color:'#7C2D12'})}>
+                      🏠 ダッシュボード
                     </button>
                     <button onClick={()=>setShowFind(true)} {...hov(false)}
                       style={navSty(false,{background:'#E8492E',color:'#FFFFFF'})}>
@@ -16225,7 +16597,7 @@ function AppInner() {
                   )}
                   <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                     {/* 週表示（v3.69・2026-10-21）：1週間を1枚で見る。空き探し・全体を掴むための画面 */}
-                    <button onClick={()=>{setWeekStart(weekStartOf(selDate));setWeekOpen(true);}} data-weekbtn="1" title="1週間をまとめて見る"
+                    <button onClick={()=>{setWeekStart(weekStartMode(selDate||new Date(),weekFromToday));setWeekOpen(true);}} data-weekbtn="1" title="1週間をまとめて見る"
                       style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#ecfeff',border:'2px solid #67e8f9',borderRadius:5,cursor:'pointer',fontSize:10,color:'#0e7490',fontWeight:700}}>
                       📅 週表示
                     </button>
@@ -16779,12 +17151,27 @@ function AppInner() {
         staffListH={dynStaffH} staffListS={dynStaffS}
         onSave={handleRegisterStaff}/>
 
+      {/* -- ダッシュボード（v3.79・2026-10-29）。読むのは予約、書くのは確認の印だけ -- */}
+      <DashboardModal
+        isOpen={dashOpen}
+        onClose={()=>setDashOpen(false)}
+        inspData={inspData}
+        usrChk={usrChk}
+        onSetChecked={setUserChecked}
+        storeName={vsStore.name}
+        headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
+        onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setDashOpen(false);}}/>
+
       {/* -- 週表示（v3.69・2026-10-21）。読むだけ。保存はすべて予約カードを通る -- */}
       <WeekScheduleModal
         isOpen={weekOpen}
         onClose={()=>setWeekOpen(false)}
         weekStart={weekStart}
-        onWeek={v=>setWeekStart(p=>v===0?weekStartOf(new Date()):new Date(p.getFullYear(),p.getMonth(),p.getDate()+v*7))}
+        onWeek={v=>setWeekStart(p=>v===0?weekStartMode(new Date(),weekFromToday):new Date(p.getFullYear(),p.getMonth(),p.getDate()+v*7))}
+        fromToday={weekFromToday}
+        onFromToday={v=>{setWeekFromToday(v);
+          // 本日から → 本日へ移る／月曜から → いま見ている週の月曜にそろえる
+          setWeekStart(p=>v?weekStartMode(new Date(),true):weekStartOf(p||new Date()));}}
         storeId={vsId} storeName={vsStore.name}
         headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         inspData={inspData} schedData={schedData}

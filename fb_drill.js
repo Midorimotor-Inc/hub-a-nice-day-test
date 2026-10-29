@@ -81,6 +81,7 @@ const SHAPES = [
   { base: 'honten-memo', shape: 'topday', name: '備考・メモ（本店）' },
   { base: 'sanda-memo', shape: 'topday', name: '備考・メモ（三田店）' },
   { base: 'custbk', shape: 'namedaykey', name: '顧客リスト発の仮予約' },
+  { base: 'usrchk', shape: 'topday', name: '車検証の使用者を確認した印' },
 ];
 
 const dayOfBranch = (shape, k) => {
@@ -93,6 +94,7 @@ const countBranch = (base, v) => {
   if (base === 'insp') return Array.isArray(v) ? v.filter(r => r && r.name).length : 0;
   if (/-sched$/.test(base)) return v ? Object.values(v).filter(r => r && r.name).length : 0;
   if (/-memo$/.test(base)) return Array.isArray(v) ? v.filter(m => m && m.content).length : 0;
+  if (base === 'usrchk') return v ? Object.keys(v).length : 0;   // 使用者を確認した印（2026-10-29）
   return 1;   // custbk は1件＝1件
 };
 
