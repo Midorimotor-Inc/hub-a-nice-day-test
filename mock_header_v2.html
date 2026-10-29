@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：スケジュール画面のヘッダーを片づける</title>
+<!--
+  2026-10-29 ユーザー指示のモック（見本）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  ① ダッシュボードのボタンを、バージョン・GAS接続済みの行へ。画面の【真ん中】に置く
+  ② ダッシュボードは別タブで開く
+  ③ 車両管理はダッシュボードの中へ（スケジュール画面からは外す）
+  ④ ダッシュボードの中に知らせがあれば、ボタンに【黄色の丸に黒の！】
+  ⑤ スタッフ管理・休業日設定・復旧・控え もダッシュボードの中へ
+  ⑥ 空いた所に 本店／三田店 を移す
+-->
+<style>
+  :root{
+    --head:#EA580C; --headline:#2563eb;
+    --ink:#1f2a37; --sub:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff;
+    --warn:#b45309; --warnbg:#fff7ed; --warnline:#fed7aa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;font-size:14px}
+  .wrap{max-width:1500px;margin:0 auto;padding:16px 16px 60px}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{margin:0 0 14px;background:var(--warnbg);border:2px solid var(--warnline);border-radius:10px;
+        padding:10px 14px;font-size:13px;color:#9a3412;font-weight:700;line-height:1.75}
+  h2{font-size:15px;margin:26px 0 8px;color:#9a3412;display:flex;align-items:center;gap:9px}
+  h2 .n{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;
+        background:#9a3412;color:#fff;font-size:12px}
+  .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px;font-size:13px;font-weight:700;color:var(--sub)}
+  .ctl button{font:inherit;font-size:12.5px;font-weight:800;background:#fff;border:1.5px solid var(--line);
+       border-radius:20px;padding:7px 14px;cursor:pointer;color:var(--sub)}
+  .ctl button.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+
+  /* ── ヘッダーの再現 ── */
+  .screen{border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;
+          box-shadow:0 6px 22px rgba(0,0,0,.10)}
+  .hd{background:var(--head);padding:9px 16px;border-bottom:3px solid var(--headline);color:#fff}
+  .hd.sanda{border-bottom-color:#dc2626}
+  .r1{display:flex;align-items:center;gap:8px;position:relative;min-height:34px}
+  .logo{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:800;color:#9a3412;white-space:nowrap}
+  .pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap}
+  .p-v{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+  .p-g{background:#d1fae5;color:#059669;border:1px solid #6ee7b7}
+  .p-t{background:#FFF7ED;color:#9A3412;border:2px solid #EA580C}
+  .spacer{flex:1}
+  .right{display:flex;align-items:center;gap:6px}
+  .acct{display:flex;align-items:center;gap:5px;padding:3px 10px;background:#eff6ff;border-radius:8px;
+        border:2px solid #2563eb33}
+  .acct.sanda{background:#fef2f2;border-color:#dc262633}
+  .av{width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:flex;align-items:center;
+      justify-content:center;font-weight:800;font-size:11px}
+  .acct.sanda .av{background:#dc2626}
+  .nm{font-weight:700;color:#1d4ed8;font-size:12px;white-space:nowrap}
+  .acct.sanda .nm{color:#b91c1c}
+  .ic{background:none;border:none;cursor:pointer;color:#6b7280;font-size:13px;padding:1px}
+  .mini{display:flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;cursor:pointer;
+        font-weight:700;font-size:10px;white-space:nowrap}
+  .m-r{background:#eff4ff;border:1px solid #bcd0f7;color:#1d4ed8}
+  .m-b{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857}
+  .fs{display:flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(255,255,255,.18);
+      border:2px solid rgba(255,255,255,.55);border-radius:8px;cursor:pointer;font-weight:700;font-size:11px;
+      color:#fff;white-space:nowrap}
+  .x{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+     background:#dc2626;border:2px solid rgba(255,255,255,.9);color:#fff;font-size:15px;font-weight:900;cursor:pointer}
+  .sep{width:1px;height:22px;background:rgba(255,255,255,.4);margin:0 3px}
+
+  /* 店の切り替え */
+  .stores{display:flex;gap:6px}
+  .st{padding:6px 16px;border-radius:8px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.16);
+      color:#fff;font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .st.on{background:#fff;border-color:#fff;font-weight:800}
+  .st.on.h{color:#2563eb} .st.on.s{color:#dc2626}
+
+  /* ナビ */
+  .r2{display:flex;align-items:center;gap:10px;padding-top:5px;padding-bottom:4px}
+  .nav{flex:1;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:nowrap}
+  .nb{box-sizing:border-box;width:118px;min-width:92px;padding:6px 12px;border-radius:7px;border:none;
+      display:flex;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:700;
+      white-space:nowrap;cursor:pointer;font-family:inherit;position:relative}
+  .nb.w{background:#fff;color:#1A2550}
+  .nb.sel{background:#FFD166;color:#7C2D12;font-weight:900;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+  .nb.cy{background:#A5E9F2;color:#0B4A58}
+  .nb.rd{background:#E8492E;color:#fff}
+  .nb.gr{background:#3CB371;color:#fff}
+  .nb.pk{background:#F8CACA;color:#8B2E2E}
+
+  /* ダッシュボードのボタン（真ん中・絶対中央） */
+  .dashbtn{position:absolute;left:50%;transform:translateX(-50%);
+      display:inline-flex;align-items:center;gap:6px;padding:6px 20px;border-radius:9px;
+      background:#fff;color:#9a3412;border:2px solid #fff;font-size:13.5px;font-weight:900;
+      cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.22)}
+  .dashbtn .bang{position:absolute;top:-8px;right:-8px;width:19px;height:19px;border-radius:50%;
+      background:#facc15;color:#111;border:2px solid #fff;display:none;
+      align-items:center;justify-content:center;font-size:12px;font-weight:900;
+      box-shadow:0 1px 4px rgba(0,0,0,.35)}
+  .dashbtn.alert .bang{display:flex}
+  .ext{font-size:10px;opacity:.75;font-weight:800}
+
+  /* 本文のダミー */
+  .body{padding:14px 16px;background:#f8fafc;color:#94a3b8;font-size:12.5px;font-weight:700;
+        border-top:1px solid #e2e8f0}
+
+  /* 変わった所の印 */
+  .mark{outline:3px dashed #16a34a;outline-offset:3px;border-radius:8px}
+  .gone{opacity:.35;text-decoration:line-through;outline:3px dashed #dc2626;outline-offset:3px;border-radius:8px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--sub);margin:8px 0 0}
+  .legend b.g{color:#16a34a} .legend b.r{color:#dc2626}
+
+  /* ダッシュボードの中身 */
+  .dash{border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#f1f5f9;
+        box-shadow:0 6px 22px rgba(0,0,0,.10)}
+  .dhd{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:9px 15px;display:flex;
+       align-items:center;gap:12px;font-size:15px;font-weight:800}
+  .dhd .tab{font-size:11px;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;font-weight:700}
+  .dbody{padding:14px 15px 20px}
+  .grp{font-size:13px;font-weight:900;color:#1e3a8a;margin:4px 0 9px;display:flex;align-items:center;gap:8px}
+  .grp hr{flex:1;border:none;border-top:2px dotted #cbd5e1}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:18px}
+  .tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;
+        flex-direction:column;gap:7px;min-height:112px}
+  .tile .top{display:flex;align-items:center;gap:9px}
+  .tile .ti{font-size:22px;line-height:1}
+  .tile h3{font-size:14.5px;margin:0;font-weight:900;flex:1}
+  .tile p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.65}
+  .bdg{font-size:11px;font-weight:900;border-radius:20px;padding:3px 9px;white-space:nowrap}
+  .b-r{background:#fef2f2;color:#b91c1c;border:1.5px solid #fecaca}
+  .b-w{background:#fff7ed;color:#b45309;border:1.5px solid #fed7aa}
+  .b-o{background:#ecfdf5;color:#047857;border:1.5px solid #a7f3d0}
+  .b-s{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0}
+  .tile.soon{opacity:.6}
+  .tile.moved{border-color:#86efac;background:#f7fef9}
+
+  .note{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+        font-size:13px;color:var(--sub);line-height:1.95}
+  .note b{color:var(--ink)}
+  .ask{margin-top:14px;background:#fffbeb;border:2px solid #fcd34d;border-radius:12px;padding:14px 16px;
+       font-size:13px;color:#78350f;line-height:1.95}
+  .ask b{color:#78350f}
+  .ask h3{margin:0 0 6px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>スケジュール画面のヘッダーを片づける</h1>
+<p class="lead">これは<b>見本（モック）</b>です。名前はすべて架空で、本物のデータにはつながっていません。
+  ボタンは押すと動きます（色が変わる・！が出る）。<b>テスト版はどちらの店でもオレンジ</b>が仕様なので、帯の色は変わりません（本番だけ青⇄赤になります）。</p>
+
+<div class="ctl">
+  <span>見え方を切り替える：</span>
+  <button id="b-alert" class="on">知らせ あり（！が出る）</button>
+  <button id="b-noalert">知らせ なし</button>
+  <span style="width:14px"></span>
+  <button id="b-honten" class="on">本店</button>
+  <button id="b-sanda">三田店</button>
+</div>
+
+<h2><span class="n">1</span>いま</h2>
+<div class="screen">
+  <div class="hd" id="hd-old">
+    <div class="r1">
+      <div class="logo">🚗 Hub a Nice day
+        <span class="pill p-v">v3.79.2</span>
+        <span class="pill p-g">● GAS接続済</span>
+        <span class="pill p-t">⚠ スケジュールシステム テスト版</span>
+      </div>
+      <span class="spacer"></span>
+      <div class="right">
+        <div class="acct gone" id="acct-old">
+          <span class="av">江</span><span class="nm">江川京志</span>
+          <span class="ic">👥</span><span class="ic">⚙</span>
+          <span class="mini m-r">🕒 復旧</span><span class="mini m-b">💾 控え</span>
+          <span class="ic">⎋</span>
+        </div>
+        <div class="fs">⛶ 全画面</div>
+        <span class="sep"></span>
+        <div class="x">✕</div>
+      </div>
+    </div>
+    <div class="r2">
+      <div class="nav">
+        <button class="nb w">📅 カレンダー</button>
+        <button class="nb cy">📅 週間カレンダー</button>
+        <button class="nb sel">🕐 スケジュール</button>
+        <button class="nb w">🚗 代車管理</button>
+        <button class="nb w gone" id="dash-old" style="background:#FFD18A;color:#7C2D12">🏠 ダッシュボード</button>
+        <button class="nb rd">🔍 検索</button>
+        <button class="nb gr">👥 顧客リスト</button>
+        <button class="nb w">料金表</button>
+        <button class="nb pk gone" id="veh-old">🔔 車両管理</button>
+      </div>
+      <div class="stores" id="st-old">
+        <button class="st on h gone">本店 🏠</button>
+        <button class="st gone">三田店</button>
+      </div>
+    </div>
+  </div>
+  <div class="body">（ここから下が、いつものスケジュールの表）</div>
+</div>
+<div class="legend"><span><b class="r">赤の点線</b>＝ここから動かすもの</span></div>
+
+<h2><span class="n">2</span>こうなります</h2>
+<div class="screen">
+  <div class="hd" id="hd-new">
+    <div class="r1">
+      <div class="logo">🚗 Hub a Nice day
+        <span class="pill p-v">v3.79.2</span>
+        <span class="pill p-g">● GAS接続済</span>
+        <span class="pill p-t">⚠ スケジュールシステム テスト版</span>
+      </div>
+      <span class="spacer"></span>
+      <!-- ★画面のまん中（左右の中身に関係なく、いつも真ん中） -->
+      <button class="dashbtn alert mark" id="dashbtn">🏠 ダッシュボード <span class="ext">（別タブ）</span>
+        <span class="bang">!</span></button>
+      <div class="right">
+        <div class="stores mark" id="st-new">
+          <button class="st on h" id="s-h">本店 🏠</button>
+          <button class="st" id="s-s">三田店</button>
+        </div>
+        <div class="acct" id="acct-new">
+          <span class="av">江</span><span class="nm">江川京志</span>
+          <span class="ic" title="ログアウト">⎋</span>
+        </div>
+        <div class="fs">⛶ 全画面</div>
+        <span class="sep"></span>
+        <div class="x">✕</div>
+      </div>
+    </div>
+    <div class="r2">
+      <div class="nav">
+        <button class="nb w">📅 カレンダー</button>
+        <button class="nb cy">📅 週間カレンダー</button>
+        <button class="nb sel">🕐 スケジュール</button>
+        <button class="nb w">🚗 代車管理</button>
+        <button class="nb rd">🔍 検索</button>
+        <button class="nb gr">👥 顧客リスト</button>
+        <button class="nb w">料金表</button>
+      </div>
+    </div>
+  </div>
+  <div class="body">（ここから下が、いつものスケジュールの表。上が2段とも短くなって、表が広くなります）</div>
+</div>
+<div class="legend">
+  <span><b class="g">緑の点線</b>＝新しく来たもの</span>
+  <span>ナビの段は <b>9個 → 7個</b>。アカウントの横の道具は <b>5個 → 1個（ログアウトだけ）</b></span>
+</div>
+
+<h2><span class="n">3</span>ダッシュボード（別タブで開く）</h2>
+<div class="dash">
+  <div class="dhd">🏠 ダッシュボード <span class="tab">別タブ</span>
+    <span style="flex:1"></span>
+    <span style="font-size:12px;font-weight:700;opacity:.95">みどりモータース　本店</span></div>
+  <div class="dbody">
+    <div class="grp">仕事の確認<hr></div>
+    <div class="tiles">
+      <div class="tile">
+        <div class="top"><span class="ti">✅</span><h3>車検済みチェック</h3><span class="bdg b-r">未確認 77</span></div>
+        <p>車検証の使用者と来店した人が同じか確かめます。<br>名前が違う・未入力 25台</p>
+      </div>
+      <div class="tile moved" id="t-veh">
+        <div class="top"><span class="ti">🔔</span><h3>車両管理</h3><span class="bdg b-w" id="veh-bdg">期限が近い 6台</span></div>
+        <p id="veh-txt">🔴 期限ぎれ 1台　🟠 1か月以内 2台　🟡 3か月以内 3台<br>
+          <b style="color:#b45309">ここに赤・オレンジがあると、ダッシュボードのボタンに ！ が付きます</b></p>
+      </div>
+      <div class="tile moved">
+        <div class="top"><span class="ti">💾</span><h3>控えの状態</h3><span class="bdg b-o">正常</span></div>
+        <p>今朝 8:00 に取れています（本番 71項目 1.8MB）。<br>Google ドライブへの写しもあり。</p>
+      </div>
+      <div class="tile soon">
+        <div class="top"><span class="ti">🔍</span><h3>顧客を探す</h3><span class="bdg b-s">これから</span></div>
+        <p>ブロードリーフが見られない時の控えとして。</p>
+      </div>
+      <div class="tile soon">
+        <div class="top"><span class="ti">🔔</span><h3>来店の目安アラート</h3><span class="bdg b-s">これから</span></div>
+        <p>前回から一定の期間が空いたお客様を知らせる、という案。</p>
+      </div>
+    </div>
+
+    <div class="grp">設定・道具（スケジュール画面から移したもの）<hr></div>
+    <div class="tiles">
+      <div class="tile moved"><div class="top"><span class="ti">👥</span><h3>スタッフ管理</h3></div>
+        <p>名前・番号・バッジ・週表示の1文字。</p></div>
+      <div class="tile moved"><div class="top"><span class="ti">⚙</span><h3>休業日の設定</h3></div>
+        <p>定休日・第2火曜・臨時の休み。</p></div>
+      <div class="tile moved"><div class="top"><span class="ti">🕒</span><h3>データ復旧</h3></div>
+        <p>時点保存から戻す。開けるのは決まった人だけ。</p></div>
+      <div class="tile moved"><div class="top"><span class="ti">💾</span><h3>オフライン予定表の控え</h3></div>
+        <p>ネットが止まった時に紙で使う控えを出す。</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>ここで決めたこと</b><br>
+  ・ダッシュボードのボタンは<b>バージョンの段</b>へ。<b>いつも画面のまん中</b>（左右の中身の長さに引きずられません）。<br>
+  ・押すと<b>別タブ</b>で開きます。<br>
+  ・<b>車両管理</b>はダッシュボードの中へ。スケジュール画面のナビからは外します。<br>
+  ・ダッシュボードの中に知らせがあれば、ボタンに<b>黄色の丸に黒の ！</b>。<br>
+  ・<b>スタッフ管理・休業日設定・復旧・控え</b>もダッシュボードの中へ。<br>
+  ・空いた所に<b>本店／三田店</b>を移します。
+</div>
+
+<div class="ask">
+  <h3>⚠ 決めていただきたいこと（3つ）</h3>
+  <b>① ログアウトと名前は、どこに置きますか</b><br>
+  　見本では<b>名前とログアウトだけ残して</b>あります（誰で入っているかは、ひと目で分かった方がよいため）。
+  　ログアウトもダッシュボードへ移すなら、そうします。<br><br>
+
+  <b>② 「別タブ」にすると、設定の道具は作り直しになります</b><br>
+  　スタッフ管理・休業日設定・復旧・控えは、<b>いまのスケジュール画面の中の仕組み</b>です。
+  　別タブの独立したページにすると、<b>データのやりとりと本人確認をもう1組</b>作ることになります
+  　（予約が消えた原因は、ここを二重にしたことでした）。<br>
+  　　<b>ア案</b>　顧客リストと同じにする … <b>全画面のときは同じタブの中／ふつうのときは別タブ</b>。
+  　　　いま顧客リストがこの動きなので、同じ仕組みを使い回せます。<br>
+  　　<b>イ案</b>　別タブはやめて<b>画面いっぱいに重ねる</b>（いまのダッシュボードと同じ）。いちばん安全で早い。<br>
+  　　<b>ウ案</b>　どうしても別タブ。<b>設定の道具だけはスケジュール画面に残す</b>。<br><br>
+
+  <b>③ ！ を出す条件</b><br>
+  　見本では<b>車両管理に赤・オレンジがある時</b>と<b>今朝の控えが取れていない時</b>にしています。<br>
+  　「車検済みチェックの未確認」は<b>毎月150台あって、ほぼいつも残っている</b>ので、
+  　これを入れると ！ が消えない札になってしまいます。入れない方がよいと思いますが、いかがでしょうか。
+</div>
+
+</div>
+
+<script>
+(function(){
+  var alertOn=true, store='honten';
+  function render(){
+    var db=document.getElementById('dashbtn');
+    db.classList.toggle('alert',alertOn);
+    document.getElementById('veh-bdg').textContent = alertOn?'期限が近い 6台':'異常なし';
+    document.getElementById('veh-bdg').className = 'bdg '+(alertOn?'b-w':'b-o');
+    document.getElementById('veh-txt').innerHTML = alertOn
+      ? '🔴 期限ぎれ 1台　🟠 1か月以内 2台　🟡 3か月以内 3台<br><b style="color:#b45309">ここに赤・オレンジがあると、ダッシュボードのボタンに ！ が付きます</b>'
+      : '期日の近い点検はありません。<br><b style="color:#047857">知らせが無いときは ！ は出ません。</b>';
+    document.getElementById('b-alert').classList.toggle('on',alertOn);
+    document.getElementById('b-noalert').classList.toggle('on',!alertOn);
+
+    var h=store==='honten';
+    document.getElementById('s-h').className='st'+(h?' on h':'');
+    document.getElementById('s-s').className='st'+(h?'':' on s');
+    document.getElementById('acct-new').className='acct'+(h?'':' sanda');
+    document.getElementById('b-honten').classList.toggle('on',h);
+    document.getElementById('b-sanda').classList.toggle('on',!h);
+  }
+  document.getElementById('b-alert').onclick=function(){alertOn=true;render();};
+  document.getElementById('b-noalert').onclick=function(){alertOn=false;render();};
+  document.getElementById('b-honten').onclick=function(){store='honten';render();};
+  document.getElementById('b-sanda').onclick=function(){store='sanda';render();};
+  document.getElementById('s-h').onclick=function(){store='honten';render();};
+  document.getElementById('s-s').onclick=function(){store='sanda';render();};
+  document.getElementById('dashbtn').onclick=function(){
+    document.querySelector('.dash').scrollIntoView({behavior:'smooth',block:'start'});
+  };
+  render();
+})();
+</script>
+</body>
+</html>
