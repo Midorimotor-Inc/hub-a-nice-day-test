@@ -5,7 +5,7 @@
 //   ④ 出勤と休みは1行の中で左右に分かれる（B案）。休み＝有給も含む
 //   ⑤ 日曜も出す／休業日は網掛けで ＋ を出さない
 //   ⑥ バッジ・空き枠・＋ から予約カードが開く
-//   ⑦ 週送り（前の週・今週・次の週）
+//   ⑦ 週送り（前の週・本日へ・次の週）
 //   ⑧ スタッフ設定の「1文字」（空なら名前の先頭1文字）
 //   実行: node week_view_test.js      （Firebase には繋がず、にせの firebase を使う）
 const path = require('path'), fs = require('fs'), http = require('http');
@@ -371,7 +371,8 @@ const seed = {
   const mid = lay.nav.length === 3 ? Math.round((lay.nav[0].cx + lay.nav[2].cx) / 2) : -1;
   t('★週送りが帯の真ん中にある', mid > 0 && Math.abs(mid - lay.navCx) <= 40, { mid, center: lay.navCx });
   t('★前より大きい（高さ30px以上・文字14px以上）', lay.nav.every(b => b.h >= 30 && b.fs >= 14), lay.nav);
-  t('3つとも出ている（前の週・今週・次の週）', lay.nav.map(b => b.txt).join(',').indexOf('今週') > 0, lay.nav);
+  // ★真ん中は v3.79.1 から「本日へ」（本日が左端だと「今週」では言葉が合わないため）
+  t('3つとも出ている（前の週・本日へ・次の週）', lay.nav.map(b => b.txt).join(',').indexOf('本日へ') > 0, lay.nav);
   t('★12:00 の枠はもう出さない', lay.t12 === null, lay.t12);
   t('★12:00 のあった所に「午前入庫」が入る（11:30 の次・13:00 の前）',
     !!lay.gozen && !!lay.t1130 && !!lay.t13 && lay.gozen.idx === lay.t1130.idx + 1 && lay.t13.idx === lay.gozen.idx + 1,
@@ -499,7 +500,7 @@ const seed = {
   t('★「‹ 前の週」で前の週（10/12 〜 10/18）になる', await page.evaluate(() => /10\/12（月） 〜 10\/18（日）/.test(document.querySelector('[data-weekview]').innerText)));
   await page.evaluate(() => { const b = document.querySelector('[data-wnav="0"]'); if (b) b.click(); });
   await page.waitForTimeout(600);
-  t('★「今週」で今日の週に戻る', await page.evaluate(() => /10\/19（月） 〜 10\/25（日）/.test(document.querySelector('[data-weekview]').innerText)));
+  t('★「本日へ」で今日の週に戻る', await page.evaluate(() => /10\/19（月） 〜 10\/25（日）/.test(document.querySelector('[data-weekview]').innerText)));
 
   // ── ⑦-2 日付のバッジを押すとその日のスケジュールへ（2026-10-23 ユーザー指示）──
   console.log('\n■ ⑦-2 日付を押すとその日のスケジュールへ移る');

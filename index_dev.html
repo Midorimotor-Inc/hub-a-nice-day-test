@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793242919311';
+    window.__APP_BUILD='build-1793246826727';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.79.0';
+const APP_VERSION = '3.79.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -934,6 +934,38 @@ const machPreexisting = (r, entry) => {
 
 // 納車時間の表示ラベル（入庫時間の「入庫時間未定」等とは文言を分ける）
 const deliverySlotLabel=(id)=>{const b=getBaseSlot(id);return b==='未定'?'納車時間未定':b;};
+
+// ── この予約の「受け付け」の記録（2026-10-29 ユーザー指示）──────────────
+//   rcvAt / rcvBy … 最初に受け付けた日時と、受け付けた人（v3.79.1 より前の予約には無い）
+//   moved         … 日にちを変えた記録（いつ・誰が・どの日からどの日へ）。直近5回ぶん
+//   ★予約カード（誰でも開く所）と週表のなぞり書きで、同じ言葉で出すこと。
+//   ★★【at を使わないこと】。整備の at は**マッハ車検の自動制限の特例判定**に使う別物で、
+//     保存のたびにアプリが入れ直す。日にちを変えると移り先の枠を見にいくので元の値が見つからず、
+//     受け付けの日時が勝手に「今」に置き換わる（2026-10-29 の検査で判明）。メモの at/by も別物。
+const hubAtText = (t) => {
+  const d=new Date(Number(t||0));
+  if(!t||isNaN(d.getTime()))return '';
+  const p=n=>(n<10?'0':'')+n;
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes());
+};
+const hubDkText = (dk) => { const p=String(dk||'').split('-');
+  return (p.length===3&&p.every(x=>x!==''))?(Number(p[1])+'/'+Number(p[2])):String(dk||''); };
+const HUB_AT_NONE = '記録なし（この仕組みを入れる前の予約です）';
+const hubEntryLines = (r) => {
+  const out=[];
+  out.push('受け付け　'+((r&&r.rcvAt)?(hubAtText(r.rcvAt)+(r.rcvBy?'　'+r.rcvBy:'')):HUB_AT_NONE));
+  const mv=(r&&Array.isArray(r.moved))?r.moved:[];
+  mv.slice(-3).forEach(m=>{ if(!m)return;
+    out.push('日にち変更　'+hubDkText(m.from)+' → '+hubDkText(m.to)
+      +(m.at?('　'+hubAtText(m.at)):'')+(m.by?('　'+m.by):'')); });
+  return out;
+};
+// 日にちを変えた記録を1つ足す（直近5回ぶんだけ残す）
+const hubPushMoved = (prev,from,to,by) => {
+  const base=Array.isArray(prev)?prev.slice():[];
+  base.push({from:String(from||''),to:String(to||''),at:Date.now(),by:String(by||'')});
+  return base.slice(-5);
+};
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
 // ホバー情報・編集パネル・顧客リスト等はフルネームのまま表示すること。
 // ★長い語を先に並べること（'医療法人社団' が '医療法人' より先、'一般財団法人' が '財団法人' より先）
@@ -4274,14 +4306,8 @@ const weekDowOf = (d) => WEEK_DOW_J[d.getDay()];
 // 曜日の色。日曜=赤／土曜=青（カレンダーと同じ）
 const weekDowCol = (d) => d.getDay()===0?'#ef4444':d.getDay()===6?'#2563eb':'#1b2129';
 // ★予約を入れた日時（v3.78.0 から記録）。それより前の予約には記録が無いので、そう書く。
-const WEEK_AT_NONE = '記録なし（この仕組みを入れる前の予約です）';
-const weekAtLabel = (r) => {
-  const t=r&&r.at; if(!t)return WEEK_AT_NONE;
-  const d=new Date(Number(t)); if(isNaN(d.getTime()))return WEEK_AT_NONE;
-  const p=n=>(n<10?'0':'')+n;
-  return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes())
-    +(r.by?'　（入れた人 '+r.by+'）':'');
-};
+//   ★言葉は予約カードと同じ（hubEntryLines）。別々に書くと食い違う。
+const weekAtLines = (r) => hubEntryLines(r).join(String.fromCharCode(10));
 // ── 空き探し（v3.74・2026-10-25 ユーザー決定）──────────────────────
 //  ・マッハ車検は 10:00 と 14:00 が基本の枠。空いている方をオレンジで囲い「マッハ可」、
 //    すでに入っている方は赤い札で「マッハ車検」（入庫から1時間＝2枠）
@@ -4602,8 +4628,8 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                   週表には担当者のバッジが無い（2026-10-23 に内容を出すため外した）ので、お名前をなぞる。 */}
               <span data-wentnm="1"
                 onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
-                  setTip({head:'🕘 この予約を入れた日時',
-                    text:r.name+'様'+String.fromCharCode(10)+'入れた日時　'+weekAtLabel(r),
+                  setTip({head:'🕘 この予約の受け付け',
+                    text:r.name+'様'+String.fromCharCode(10)+weekAtLines(r),
                     left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
                 onMouseLeave={()=>setTip(null)}
                 style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{r.name}</span>
@@ -4648,7 +4674,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               style={{visibility:'hidden',pointerEvents:'none',marginLeft:5,
                 border:'2px solid transparent',borderRadius:10,padding:'8px 20px',fontSize:15,fontWeight:800,
                 fontFamily:'inherit',whiteSpace:'nowrap'}}>🔍 空き検索</button>
-            {[['‹ 前の週',-1],['今週',0],['次の週 ›',1]].map(([t,v])=>(
+            {/* ★真ん中は「今週」ではなく【本日へ】（2026-10-29 ユーザー決定）。
+                本日が一番左端なので、右半分は来週になる＝「今週」では言葉が合わない。 */}
+            {[['‹ 前の週',-1],['本日へ',0],['次の週 ›',1]].map(([t,v])=>(
               <button key={t} onClick={()=>onWeek(v)} data-wnav={String(v)}
                 style={{background:v===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.22)',
                   border:'2px solid rgba(255,255,255,.75)',borderRadius:10,
@@ -4811,7 +4839,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                             return <button key={i} data-wcb={dk+'/'+i} data-wcboth={oth?'1':'0'} data-wbang={bang||'0'}
                               title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')
                                 +(bang?String.fromCharCode(10)+(bang==='ok'?'⚠ 枠からあふれた分です（承認済み）':'⚠ 枠からあふれた分です（まだ承認されていません）'):'')
-                                +String.fromCharCode(10)+'予約を入れた日時　'+weekAtLabel(r)}
+                                +String.fromCharCode(10)+weekAtLines(r)}
                               onClick={()=>onOpenInsp(dk,i)}
                               style={{...CB,position:'relative',background:(c&&c.color)||'#64748b',
                                 ...(oth?{border:'1.5px solid white',boxShadow:'0 0 0 1.5px '+((c&&c.color)||'#64748b')}:{})}}>
@@ -4869,6 +4897,29 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               {folded&&!mainSlots.some(slot=>!isSpecialSlot(slot)&&days.some(d=>!isClosed(d)&&slotEntries(dkOf(d),slot).length))&&(
                 <tr data-wfoldnone="1"><td colSpan={8} style={{...TD,textAlign:'center',color:'#94a3b8',
                   fontSize:12,fontWeight:700,padding:'10px 4px'}}>この1週間は、時間の決まった整備の予定が入っていません</td></tr>
+              )}
+              {/* ★畳んでいる時の「予定を足す」行（2026-10-29 ユーザー指示）。
+                  畳むと空いている枠（＋）も消えるので、足す入口が無くなってしまう。
+                  ここの ＋ は【時間を決めずに】予約カードを開く＝カードの中で時間を選ぶ
+                  （新規で timeSlot が空の時に出る、一般整備と同じ時間の選び方）。 */}
+              {folded&&(
+                <tr data-wfoldadd="1">
+                  <td style={{...TM,background:'#f0fdf4',color:'#047857',fontSize:10,lineHeight:1.15}}>予定を<br/>足す</td>
+                  {days.map(d=>{const dk=dkOf(d);
+                    if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,
+                      ...todayCol(dk),position:'relative'}}><PastOv dk={dk}/></td>;
+                    return <td key={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',
+                      ...todayCol(dk),position:'relative'}}>
+                      <PastOv dk={dk}/>
+                      <button data-wfoldplus={dk}
+                        title={(d.getMonth()+1)+'/'+d.getDate()+' に予定を入れる（時間は予約カードの中で選びます）'}
+                        onClick={()=>onAddSched(dk,'')}
+                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',gap:3,
+                          height:20,padding:'0 10px',borderRadius:6,background:'white',color:'#c2410c',
+                          border:'1.5px dashed #fb923c',fontSize:11,fontWeight:900,cursor:'pointer',
+                          fontFamily:'inherit',whiteSpace:'nowrap'}}>＋ 予定</button>
+                    </td>;})}
+                </tr>
               )}
             </tbody>
           </table>
@@ -4942,7 +4993,10 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
   // ★フックは「早い return」より前に置くこと（React の決まり）
   const [mon,setMon]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
   const [filt,setFilt]=useState('all');
-  useEffect(()=>{ if(isOpen){const n=new Date();setMon(new Date(n.getFullYear(),n.getMonth(),1));setFilt('all');} },[isOpen]);
+  // ★入口の画面（'home'）→ 押すと中身（いまは 'shaken'＝車検済みチェック）へ。
+  //   これから項目が増えるので、最初からダッシュボードを1枚かませておく（2026-10-29 ユーザー指示）。
+  const [page,setPage]=useState('home');
+  useEffect(()=>{ if(isOpen){const n=new Date();setMon(new Date(n.getFullYear(),n.getMonth(),1));setFilt('all');setPage('home');} },[isOpen]);
   // その月の「終わった車検」を集める
   const rows=useMemo(()=>{
     const y=mon.getFullYear(),m=mon.getMonth();
@@ -5007,8 +5061,16 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
         <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:12,padding:'8px 14px',
           background:headColor||'linear-gradient(135deg,#1e3a8a,#1d4ed8)',color:'white'}}>
           <b style={{fontSize:16,fontWeight:800,whiteSpace:'nowrap'}}>🏠 ダッシュボード</b>
-          <span style={{fontSize:11.5,background:'rgba(255,255,255,.22)',padding:'3px 9px',borderRadius:9,
-            fontWeight:700,whiteSpace:'nowrap'}}>車検　使用者の確認</span>
+          {page!=='home'&&(
+            <button data-dashback="1" onClick={()=>setPage('home')} title="ダッシュボードの入口に戻る"
+              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'5px 12px',fontSize:12.5,fontWeight:800,color:'white',cursor:'pointer',
+                fontFamily:'inherit',whiteSpace:'nowrap'}}>← ダッシュボードに戻る</button>
+          )}
+          {page==='shaken'&&(
+            <span style={{fontSize:11.5,background:'rgba(255,255,255,.22)',padding:'3px 9px',borderRadius:9,
+              fontWeight:700,whiteSpace:'nowrap'}}>車検済みチェック（使用者の確認）</span>
+          )}
           <span style={{fontSize:12.5,opacity:.95,whiteSpace:'nowrap'}}>{storeName}</span>
           <span style={{flex:1}}/>
           <button data-dashclose="1" onClick={onClose} title="閉じる"
@@ -5017,6 +5079,52 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
         </div>
 
         <div style={{flex:1,minHeight:0,overflow:'auto',padding:'12px 14px 40px'}}>
+          {page==='home'?(()=>{
+            // ★入口の画面。これから項目が増えるので、押して入る形にしてある。
+            const TILE={background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:18,
+              display:'flex',flexDirection:'column',gap:10,minHeight:150};
+            const BADGE=(bg,fg,bd)=>({fontSize:12,fontWeight:900,borderRadius:20,padding:'4px 11px',
+              whiteSpace:'nowrap',background:bg,color:fg,border:'1.5px solid '+bd});
+            const soon=(ic,ttl,txt)=>(
+              <div key={ttl} data-dashsoon={ttl} style={{...TILE,opacity:.6}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{fontSize:26,lineHeight:1}}>{ic}</span>
+                  <h3 style={{fontSize:16,margin:0,fontWeight:900,flex:1}}>{ttl}</h3>
+                  <span style={{fontSize:11,fontWeight:800,color:'#64748b',background:'#f1f5f9',
+                    border:'1px solid #e2e8f0',borderRadius:20,padding:'4px 10px'}}>これから</span>
+                </div>
+                <p style={{margin:0,fontSize:13,color:'#64748b',lineHeight:1.75}}>{txt}</p>
+              </div>);
+            return (
+              <div>
+                <div style={{fontSize:13,color:'#64748b',marginBottom:13,lineHeight:1.85}}>
+                  <b style={{color:'#1f2a37',fontSize:14}}>{nowM.getFullYear()}年{nowM.getMonth()+1}月{nowM.getDate()}日　{storeName}</b><br/>
+                  見たいものを押してください。<b>これから</b>と書いてあるものは、まだ中身がありません。
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(330px,1fr))',gap:14}}>
+                  <div data-dashtile="shaken" onClick={()=>setPage('shaken')} title="車検証の使用者の確認リストを開く"
+                    style={{...TILE,cursor:'pointer',borderColor:'#93b4e6'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span style={{fontSize:26,lineHeight:1}}>✅</span>
+                      <h3 style={{fontSize:16,margin:0,fontWeight:900,flex:1}}>車検済みチェック</h3>
+                      {rows.length-done>0
+                        ?<span style={BADGE('#fef2f2','#b91c1c','#fecaca')}>未確認 {rows.length-done}</span>
+                        :<span style={BADGE('#ecfdf5','#047857','#a7f3d0')}>✓ ぜんぶ確認ずみ</span>}
+                    </div>
+                    <div style={{fontSize:30,fontWeight:900,lineHeight:1}}>{rows.length}
+                      <small style={{fontSize:13,fontWeight:700,color:'#64748b',marginLeft:4}}>台／{mon.getMonth()+1}月</small></div>
+                    <div style={{height:9,background:'#e2e8f0',borderRadius:6,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:pct+'%',background:'linear-gradient(90deg,#10b981,#047857)'}}/></div>
+                    <p style={{margin:0,fontSize:13,color:'#64748b',lineHeight:1.75}}>
+                      車検証の使用者と、来店した人が同じか確かめます。<br/>
+                      <b>名前が違う・未入力 {ndiff}台</b>。週ごとに確認できます。</p>
+                  </div>
+                  {soon('🔍','顧客を探す','ブロードリーフが見られない時の控えとして。ここから一般整備の予約にも入れるようにします。')}
+                  {soon('💾','控えの状態','毎朝の控えが取れているか、Google ドライブに写しがあるかを出します。')}
+                  {soon('🔔','来店の目安アラート','前回から一定の期間が空いたお客様を知らせる、という案があります。まだ何も決まっていません。')}
+                </div>
+              </div>);
+          })():(<React.Fragment>
           {/* 上の帯：月送り・進み具合・絞り込み */}
           <div style={{background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'11px 13px',
             display:'flex',alignItems:'center',gap:14,flexWrap:'wrap',marginBottom:12}}>
@@ -5164,6 +5272,7 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
             ・氏名を押すとその日のスケジュールが開きます。<b>使用者は予約カードで入れてください</b>（同じなら「同じ」を押す）。<br/>
             ・チェックは<b>「確認した」の印</b>です。誰がいつ押したかも残ります。
           </div>
+          </React.Fragment>)}
         </div>
       </div>
     </div>
@@ -8338,6 +8447,14 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     return window.confirm(`⚠ ${_nm}の期間がスケジュールと一致していません。\n\nスケジュール（入庫日→納車日）：${_mmFmt(mm.schFrom)}〜${_mmFmt(mm.schTo)}（${_sd}日間）\n${_nm}の貸出期間　　　　　　：${_mmFmt(mm.loanFrom)}〜${_mmFmt(mm.loanTo)}（${_ld}日間）\n\nこのまま保存しますか？\n（合わせるには「変更」で期間を選び直し、不要なら外してください）`);
   };
 
+  // ★日にちを変えた時だけ moved に1行足す（新規は足さない＝最初から その日の予約なので）
+  const moveStamp=()=>{
+    if(isNew)return {};
+    const to=String(localTargetDkRef.current||modalDk||'');
+    const from=String(originalDkRef.current||'');
+    if(!from||!to||from===to)return {};
+    return {moved:hubPushMoved(form.moved,from,to,(currentUser&&currentUser.name)||'')};
+  };
   const handleSave=()=>{
     if(!form.name){alert('氏名を入力してください');nameRef.current?.focus();return;}
     if(!form.carType){alert('車種を入力してください');carRef.current?.focus();return;}
@@ -8352,8 +8469,12 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     // ★新規の時だけ「いつ・誰が入れたか」を残す（2026-10-29 整備からの依頼）。
     //   編集では上書きしない＝最初に入れた時刻が残る。
     //   id は保存のたびに変わるので使えない（マッハの特例と同じ理由）。
-    const stampNew = isNew ? {at:Date.now(), by:(currentUser&&currentUser.name)||''} : {};
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew, store:mvStore, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
+    //   ★at/by ではなく rcvAt/rcvBy。at は整備のマッハ特例に使う別物（上の注意書きを読むこと）。
+    const stampNew = isNew ? {rcvAt:Date.now(), rcvBy:(currentUser&&currentUser.name)||''} : {};
+    // ★日にちを変えた時は、その記録も残す（2026-10-29 ユーザー指示）。
+    //   どの日からどの日へ・いつ・誰が。予約カードで見られる。
+    const stampMove = moveStamp();
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew, ...stampMove, store:mvStore, _targetDk: localTargetDkRef.current||'', _originalDk: originalDkRef.current||''});
   };
   // 顧客リストからの仮予約/本予約ボタン用
   const handleSaveAs=(status)=>{
@@ -8366,8 +8487,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     // 本予約時のみ代車期間のズレを確認（仮予約は代車を確定しないためスキップ）
     if(status==='confirmed'&&!confirmLoanerMismatch())return;
     // 仮予約はモーダルを閉じない（_keepOpen フラグで制御）
-    const stampNew2 = isNew ? {at:Date.now(), by:(currentUser&&currentUser.name)||''} : {};
-    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew2, store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
+    const stampNew2 = isNew ? {rcvAt:Date.now(), rcvBy:(currentUser&&currentUser.name)||''} : {};
+    onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew2, ...moveStamp(), store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
   };
   const handleDelete=()=>{onDelete();};
   const handleStaffBlur=()=>{const r=resolveStaff(staffInput);setStaffInput(r);setForm(p=>({...p,staff:r}));};
@@ -8999,6 +9120,22 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               onKeyDown={e=>{if(e.key==='ArrowUp'&&e.target.selectionStart===0){e.preventDefault();goPrev('note');}}}              
               rows={3} lang="ja" placeholder="メモや特記事項（クイックバッジはマウスで選択）" style={{...INP,resize:'vertical',minHeight:65,...KB('note')}}/>
           </div>
+          {/* ★この予約の受け付け（2026-10-29 ユーザー指示）。新規の時は出さない。
+              入れた日時・入れた人と、日にちを変えた記録。1日表示の行（BLOCK-C）は触れないので、
+              「予約を開けば必ず見られる」ここに出す。週表ではお名前をなぞっても出る。 */}
+          {!isNew&&(
+            <div data-bkentry="1" style={{margin:'0 0 12px',padding:'8px 11px',background:'#f8fafc',
+              border:'1px solid #e5e7eb',borderRadius:8,fontSize:11.5,color:'#64748b',lineHeight:1.75}}>
+              {/* ★form ではなく initialData から出すこと。
+                  予約カードは「同じ予約を開き直した時はフォームを作り直さない」決まりがあり
+                  （代車ピッカーから戻った時に書きかけを消さないため）、日にちを変えた直後に
+                  開き直すと form が古いままで、日にち変更の行が出ない（2026-10-29 の検査で判明）。
+                  ここは読むだけの欄なので、いつでも今のデータを出してよい。 */}
+              {hubEntryLines(initialData||form).map((x,i)=>(
+                <div key={i} style={i===0?{fontWeight:700,color:'#475569'}:{color:'#9a3412'}}>{x}</div>
+              ))}
+            </div>
+          )}
           {/* ボタン */}
           <div style={{display:'flex',flexDirection:'column',gap:8,paddingBottom:28}}>
             {(!isInsp||!fromCustList)&&(

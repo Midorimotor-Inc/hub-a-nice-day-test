@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793242919311';
+  window.__APP_BUILD='build-1793246826727';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.79.0';
+const MOBILE_VERSION='3.79.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1275,6 +1275,36 @@ const removePendingStore=pid=>savePendingStore(loadPending().filter(p=>p.pid!==p
 // 全角数字→半角（PC の toHankakuNum と同じ）。ひらがなのまま ３３１０ と打っても 3310 になる。
 const toHankakuNum=(v)=>String(v==null?'':v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
 const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',user:'',staff:'',carType:'',no:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
+
+// ── この予約の「受け付け」の記録（2026-10-29 ユーザー指示。PC版と同じ形・同じ言葉）──
+//   rcvAt / rcvBy … 最初に受け付けた日時と、受け付けた人
+//   moved         … 日にちを変えた記録（いつ・誰が・どの日からどの日へ）。直近5回ぶん
+//   ★★【at を使わないこと】。整備の at は**マッハ車検の自動制限の特例判定**に使う別物で、
+//     保存のたびに入れ直す。メモの at/by もまた別物。名前を分けて二度と混ぜない。
+const hubAtText=(t)=>{
+  const d=new Date(Number(t||0));
+  if(!t||isNaN(d.getTime()))return '';
+  const p=n=>(n<10?'0':'')+n;
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes());
+};
+const hubDkText=(dk)=>{const p=String(dk||'').split('-');
+  return (p.length===3&&p.every(x=>x!==''))?(Number(p[1])+'/'+Number(p[2])):String(dk||''); };
+const HUB_AT_NONE='記録なし（この仕組みを入れる前の予約です）';
+const hubEntryLines=(r)=>{
+  const out=[];
+  out.push('受け付け　'+((r&&r.rcvAt)?(hubAtText(r.rcvAt)+(r.rcvBy?'　'+r.rcvBy:'')):HUB_AT_NONE));
+  const mv=(r&&Array.isArray(r.moved))?r.moved:[];
+  mv.slice(-3).forEach(m=>{ if(!m)return;
+    out.push('日にち変更　'+hubDkText(m.from)+' → '+hubDkText(m.to)
+      +(m.at?('　'+hubAtText(m.at)):'')+(m.by?('　'+m.by):'')); });
+  return out;
+};
+const hubPushMoved=(prev,from,to,by)=>{
+  const base=Array.isArray(prev)?prev.slice():[];
+  base.push({from:String(from||''),to:String(to||''),at:Date.now(),by:String(by||'')});
+  return base.slice(-5);
+};
+
 // dk("2026-7-9") ⇔ <input type=date>("2026-07-09") 変換
 const dkToInputDate=(dk)=>{if(!dk)return'';const p=String(dk).split('-');return p.length===3?`${p[0]}-${String(p[1]).padStart(2,'0')}-${String(p[2]).padStart(2,'0')}`:'';};
 const inputDateToDk=(v)=>{if(!v)return'';const p=v.split('-').map(Number);return p.length===3?`${p[0]}-${p[1]}-${p[2]}`:'';};
@@ -3707,6 +3737,15 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
               </div>
             )}
           </div>
+          {/* ★この予約の受け付け（2026-10-29 ユーザー指示）。PC版の予約カードと同じ中身。 */}
+          {!mode.isNew&&(
+            <div data-bkentry="1" style={{padding:'8px 11px',background:'#f8fafc',border:'1px solid #e5e7eb',
+              borderRadius:10,fontSize:11,color:'#64748b',lineHeight:1.8}}>
+              {hubEntryLines(initial||{}).map((x,i)=>(
+                <div key={i} style={i===0?{fontWeight:700,color:'#475569'}:{color:'#9a3412'}}>{x}</div>
+              ))}
+            </div>
+          )}
           {err&&<div style={{padding:'9px 12px',background:'#fef2f2',border:'1.5px solid #fca5a5',borderRadius:10,color:'#dc2626',fontSize:12,fontWeight:700}}>⚠ {err}</div>}
         </div>
         <div style={{padding:'10px 16px calc(14px + env(safe-area-inset-bottom,0px))',borderTop:'1px solid #f1f5f9',display:'flex',gap:8}}>
@@ -6567,12 +6606,17 @@ const App=()=>{
         // ★カードの「入庫店舗」で選んだ店を優先する（2026-10-02）。以前は元の行の店が勝っていて変えられなかった
         //   日を動かした時は、移り先で承認を見直す（元の承認／承認待ちは引き継がない。PC版と同じ）
         const moving=isMove?{bookingKey:bkFinal,approved:undefined,pendingApproval:undefined}:{};
-        // ★「いつ・誰が入れたか」（2026-10-29 整備からの依頼）。PC版と同じで、
-        //   いちど入った at は上書きしない＝最初に入れた時刻が残る。
-        //   id は保存のたびに変わるので使えない（マッハの特例と同じ理由）。
-        const _atIn=(prevRow&&prevRow.at!=null)?prevRow.at:Date.now();
-        const _byIn=(prevRow&&prevRow.by)||userName||'';
-        rows[idxPlace]={...entry,...moving,store:normStore(entry.store)||normStore(prevRow?.store)||vsId,seq,at:_atIn,by:_byIn,bookingStatus:'confirmed'};
+        // ★受け付けの記録（2026-10-29 整備からの依頼）。PC版と同じ形。
+        //   いちど入った rcvAt は上書きしない＝最初に受け付けた時刻が残る。
+        //   ★at ではなく rcvAt。at はマッハ特例に使う別物（上の注意書きを読むこと）。
+        //   ★受け付けた人は【サインインしている人】。userName はお客様の氏名なので使わない。
+        const _opName=(user&&user.name)||'';
+        const _srcRow=isMove?(((base&&base[req.dk])||[])[req.idx]||null):prevRow;
+        const _rcvAt=(entry.rcvAt!=null)?entry.rcvAt:((_srcRow&&_srcRow.rcvAt!=null)?_srcRow.rcvAt:Date.now());
+        const _rcvBy=entry.rcvBy||(_srcRow&&_srcRow.rcvBy)||_opName;
+        // 日にちを変えた時だけ、その記録を1つ足す
+        const _mv=(isMove&&tDk!==req.dk)?{moved:hubPushMoved(entry.moved,req.dk,tDk,_opName)}:{};
+        rows[idxPlace]={...entry,...moving,..._mv,store:normStore(entry.store)||normStore(prevRow?.store)||vsId,seq,rcvAt:_rcvAt,rcvBy:_rcvBy,bookingStatus:'confirmed'};
         if(isMove){delete rows[idxPlace].approved;delete rows[idxPlace].pendingApproval;}
         const dayLimit=inspLimits[tDk]??6;
         const wasPending=editingActive&&!!prevRow.pendingApproval;
@@ -6660,6 +6704,15 @@ const App=()=>{
       const bkFinal=`sched-${tDk}-${slotFinal}`;
       const bkOld=`sched-${req.dk}-${req.slot}`;
       const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName,isMove?bkOld:'');
+      // ★受け付けの記録（2026-10-29）。rcvAt は上書きしない。at はマッハ特例の別物なので触らない。
+      //   受け付けた人は【サインインしている人】（userName はお客様の氏名）。
+      {
+        const _opName=(user&&user.name)||'';
+        const _prevE0=(sd&&sd[req.dk])?sd[req.dk][req.slot]:null;
+        entry.rcvAt=(entry.rcvAt!=null)?entry.rcvAt:((_prevE0&&_prevE0.rcvAt!=null)?_prevE0.rcvAt:Date.now());
+        entry.rcvBy=entry.rcvBy||(_prevE0&&_prevE0.rcvBy)||_opName;
+        if(isMove&&tDk!==req.dk)entry.moved=hubPushMoved(entry.moved,req.dk,tDk,_opName);
+      }
       const placedId=Date.now();
       await writeShared(sdKey,sd,base=>{
         const out={...base};

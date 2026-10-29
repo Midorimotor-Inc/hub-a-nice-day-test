@@ -39,7 +39,7 @@ const seed = {
   // 整備：09:00 に1件（入れた日時の記録あり）／15:00 に1件（記録なし＝この仕組みより前の予約）
   [STOR + 'honten-sched']: {
     [WED]: {
-      '09:00': { name: '記録あり花子', work: 'O', content: 'オイル交換', staff: '江川京志', at: AT, by: '江川京志' },
+      '09:00': { name: '記録あり花子', work: 'O', content: 'オイル交換', staff: '江川京志', rcvAt: AT, rcvBy: '江川京志' },
       '15:00': { name: '記録なし太郎', work: 'T', content: 'タイヤ交換', staff: '江川京志' },
     },
   },
@@ -109,6 +109,9 @@ const seed = {
   t('★そこから7日ぶん出る（右端は 10/27（火））', hd[6] === '10/27（火）', hd);
   t('★見出しの文も本日から', await page.evaluate(() => /10\/21（水） 〜 10\/27（火）/.test(document.querySelector('[data-weekview]').innerText)));
   t('★曜日は日付から出す（並びがズレても合う）', hd.join('|') === '10/21（水）|10/22（木）|10/23（金）|10/24（土）|10/25（日）|10/26（月）|10/27（火）', hd);
+  t('★真ん中のボタンは「今週」ではなく「本日へ」', await page.evaluate(() => {
+    const b = document.querySelector('[data-wnav="0"]'); return !!b && b.innerText.trim() === '本日へ';
+  }), await page.evaluate(() => { const b = document.querySelector('[data-wnav="0"]'); return b ? b.innerText : null; }));
   t('★切り替えのボタンは「📍 本日から」', await page.evaluate(() => {
     const b = document.querySelector('[data-wfrom]'); return !!b && b.getAttribute('data-wfrom') === 'today' && /本日から/.test(b.innerText);
   }));
@@ -143,8 +146,8 @@ const seed = {
   t('★承認済みの分はそう出る', !!ok[0] && /承認済み/.test(ok[0].title), ok[0] && ok[0].title);
 
   console.log('\n■ ④ なぞると予約を入れた日時');
-  t('★車検のバッジのなぞり書きにも入れた日時が出る', bs.every(x => /予約を入れた日時/.test(x.title)), bs[0] && bs[0].title);
-  t('★記録が無い分は「記録なし」と出る', bs.some(x => /予約を入れた日時　記録なし/.test(x.title)), bs[0] && bs[0].title);
+  t('★車検のバッジのなぞり書きにも受け付けの記録が出る', bs.every(x => /受け付け　/.test(x.title)), bs[0] && bs[0].title);
+  t('★記録が無い分は「記録なし」と出る', bs.some(x => /受け付け　記録なし/.test(x.title)), bs[0] && bs[0].title);
   const nm = await page.evaluate(() => [...document.querySelectorAll('[data-wentnm]')].map(e => e.innerText.trim()));
   t('整備のお名前が2件出ている', nm.length === 2 && nm.indexOf('記録あり花子') >= 0 && nm.indexOf('記録なし太郎') >= 0, nm);
   // 記録ありをなぞる
@@ -153,10 +156,10 @@ const seed = {
   await page.waitForTimeout(400);
   let tip = await page.evaluate(() => { const e = document.querySelector('[data-wtip]'); return e ? e.innerText : ''; });
   t('★吹き出しが出る', !!tip, tip);
-  t('★見出しが「予約を入れた日時」', /予約を入れた日時/.test(tip), tip);
+  t('★見出しが「この予約の受け付け」', /この予約の受け付け/.test(tip), tip);
   t('★お名前が出る', /記録あり花子様/.test(tip), tip);
-  t('★入れた日時が出る（10/15 14:23）', /10\/15 14:23/.test(tip), tip);
-  t('★入れた人も出る', /入れた人 江川京志/.test(tip), tip);
+  t('★入れた日時が出る（10/15 14:23）', /受け付け　10\/15 14:23/.test(tip), tip);
+  t('★入れた人も出る', /10\/15 14:23　江川京志/.test(tip), tip);
   // 記録なしをなぞる
   await page.locator('[data-wentnm]').filter({ hasText: '記録なし' }).first().hover();
   await page.waitForTimeout(400);
@@ -179,6 +182,22 @@ const seed = {
   t('★午前入庫は隠さない（置き場所が分からなくなるため）', after.indexOf('午前入庫') >= 0, after);
   t('★行がちゃんと減っている', after.length < before.length, { before: before.length, after: after.length });
   t('★ボタンの名前が「▼ 開く」に変わる', await page.evaluate(() => /▼ 開く/.test(document.querySelector('[data-wfold]').innerText)));
+  // ★畳むと空いている枠（＋）も消えるので、下に「予定を足す」行を出す（2026-10-29 ユーザー指示）
+  const plus = await page.evaluate(() => [...document.querySelectorAll('[data-wfoldplus]')].map(b => ({
+    dk: b.getAttribute('data-wfoldplus'), txt: b.innerText.trim(), title: b.getAttribute('title') || '' })));
+  t('★畳むと下に「＋ 予定」の行が出る', plus.length === 7, plus.length);
+  t('★7日ぶん（休業日は除く）並ぶ', plus[0] && plus[0].dk === '2026-10-21', plus[0]);
+  t('★名前は「＋ 予定」', plus[0] && plus[0].txt === '＋ 予定', plus[0]);
+  t('★なぞると「時間は予約カードの中で選びます」と出る', plus[0] && /時間は予約カードの中で選びます/.test(plus[0].title), plus[0]);
+  // 押すと、時間を選ぶところのある新規の予約カードが開く（一般整備と同じ）
+  await page.evaluate(() => document.querySelector('[data-wfoldplus="2026-10-22"]').click());
+  await page.waitForTimeout(1000);
+  t('★押すと予約カードが開く', await page.evaluate(() => !!document.querySelector('.booking-modal-inner')));
+  t('★カードの中で時間を選べる（時間がまだ決まっていない新規）', await page.evaluate(() =>
+    /選ばないと保存できません/.test(document.querySelector('.booking-modal-inner').innerText)),
+    await page.evaluate(() => { const m = document.querySelector('.booking-modal-inner'); return m ? m.innerText.slice(0, 300) : ''; }));
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === 'キャンセル' && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(700);
   await page.evaluate(() => document.querySelector('[data-wfold]').click());
   await page.waitForTimeout(700);
   const back = await rows();

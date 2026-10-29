@@ -112,7 +112,20 @@ const seed = {
   await page.evaluate(() => document.querySelector('[data-dashnav]').click());
   await page.waitForTimeout(900);
   t('★押すとダッシュボードが開く', await page.evaluate(() => !!document.querySelector('[data-dash]')));
-  t('★見出しに「車検　使用者の確認」と出る', await page.evaluate(() => /車検　使用者の確認/.test(document.querySelector('[data-dash]').innerText)));
+  // ★v3.79.1 から、まず入口の画面が出る（これから項目が増えるため）
+  t('★まず入口の画面が出る（いきなりリストではない）', await page.evaluate(() =>
+    !!document.querySelector('[data-dashtile="shaken"]') && !document.querySelector('[data-dashrow]')));
+  t('★「車検済みチェック」のタイルがある', await page.evaluate(() =>
+    /車検済みチェック/.test(document.querySelector('[data-dashtile="shaken"]').innerText)));
+  t('★未確認の台数がタイルに出る', await page.evaluate(() =>
+    /未確認 10/.test(document.querySelector('[data-dashtile="shaken"]').innerText)),
+    await page.evaluate(() => document.querySelector('[data-dashtile="shaken"]').innerText.replace(/\n/g, ' / ')));
+  t('★「これから」のタイルが3つ並ぶ', await page.evaluate(() => document.querySelectorAll('[data-dashsoon]').length === 3));
+  await page.evaluate(() => document.querySelector('[data-dashtile="shaken"]').click());
+  await page.waitForTimeout(800);
+  t('★タイルを押すとチェックのリストが開く', await page.evaluate(() => !!document.querySelector('[data-dashrow]')));
+  t('★見出しに「車検済みチェック」と出る', await page.evaluate(() => /車検済みチェック/.test(document.querySelector('[data-dash]').innerText)));
+  t('★「← ダッシュボードに戻る」がある', await page.evaluate(() => !!document.querySelector('[data-dashback]')));
   t('★いま見ているのは今月（2026年10月）', await page.evaluate(() => {
     const e = document.querySelector('[data-dashmon]'); return !!e && e.innerText.trim() === '2026年10月';
   }), await page.evaluate(() => { const e = document.querySelector('[data-dashmon]'); return e ? e.innerText : null; }));
@@ -229,6 +242,17 @@ const seed = {
   await page.waitForTimeout(800);
   t('★10月に戻ると、付けた印はそのまま残っている', await page.evaluate(() =>
     [...document.querySelectorAll('[data-dashweek="1"] [data-dashrow]')].every(tr => tr.getAttribute('data-dashchk') === '1')));
+
+  console.log('\n■ ⑦-2 ダッシュボードに戻る');
+  await page.evaluate(() => document.querySelector('[data-dashback]').click());
+  await page.waitForTimeout(700);
+  t('★入口の画面に戻る', await page.evaluate(() =>
+    !!document.querySelector('[data-dashtile="shaken"]') && !document.querySelector('[data-dashrow]')));
+  t('★付けた印はタイルの数字に出る（未確認 7）', await page.evaluate(() =>
+    /未確認 7/.test(document.querySelector('[data-dashtile="shaken"]').innerText)),
+    await page.evaluate(() => document.querySelector('[data-dashtile="shaken"]').innerText.replace(/\n/g, ' / ')));
+  await page.evaluate(() => document.querySelector('[data-dashtile="shaken"]').click());
+  await page.waitForTimeout(700);
 
   console.log('\n■ ⑧ 氏名を押すとその日のスケジュールが開く');
   await page.evaluate(() => {
