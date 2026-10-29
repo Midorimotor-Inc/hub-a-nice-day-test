@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793263641084';
+    window.__APP_BUILD='build-1793264855323';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.81.2';
+const APP_VERSION = '3.82.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4483,6 +4483,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   const spName=(x)=>x==='未定'?'時間未定':x==='午前'?'午前入庫':x==='午後'?'午後入庫':x;
   // ★本日の列は太枠で囲む（2026-10-24 ユーザー指示・ア案）。色はカレンダーの「今日」と同じ
   const TODAY_LINE='#c2410c';
+  // ★見出しの右端の四角いボタン（⛶ と ✕ で共用。大きさを必ず揃える・2026-10-30 ユーザー指示）
+  const WHDR_SQ={width:32,height:26,padding:0,display:'inline-flex',alignItems:'center',justifyContent:'center',
+    background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+    fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',lineHeight:1,flexShrink:0};
   const todayCol=(dk)=>dk===todayDk?{borderLeft:'3px solid '+TODAY_LINE,borderRight:'3px solid '+TODAY_LINE}:{};
   // ★時刻を持たない枠の置き方（2026-10-23 ユーザー指示）
   //   ・12:00 の枠はやめる（ほとんど入らない）。**その場所に「午前」を置く**（午前の入庫＝お昼までに入る分）
@@ -4498,6 +4502,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
       if(WEEK_DROP.indexOf(x)>=0){o.push('午前');return;}   // 12:00 のあった所に午前を入れる
       o.push(x);});
     return o;})();
+  // ★畳んだ時に出す枠を決める（2026-10-30 ユーザー指示）。
+  //   「1週間のどこにも予定が入っていない枠」は隠す。**午前入庫・午後入庫・時間未定も同じ扱い**
+  //   （以前は時刻を持たない3つだけ必ず出していたが、空のまま場所を取るのでやめた）。
+  //   ・空き探しの印（blk）が付いた枠は隠さない＝探した結果が消えてしまうため
+  //   ・入れる場所は、畳んだ表のいちばん下の「＋ 予定」から（カードの中で時間を選べる）
+  const slotHasAny=(slot)=>days.some(d=>{const dk=dkOf(d);
+    if(isClosed(d))return false;
+    if(slotEntries(dk,slot).length)return true;
+    const b=srCell(dk,slot); return !!(b&&b.blk);});
   // ★18:00 はほとんど入らないので細く（12:00 は枠ごとやめた）
   const THIN=['18:00'];
   // ★探した結果。dayDim＝その日まるごと暗く／dayLab＝車検の欄に出す札／cell＝枠ごとの印
@@ -4721,15 +4734,14 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
                 padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',
                 fontFamily:'inherit',whiteSpace:'nowrap'}}>{fromToday?'📍 本日から':'📅 月曜から'}</button>
+            {/* ★最大化／戻すは【印だけ】。✕ とまったく同じ大きさ（2026-10-30 ユーザー指示）。
+                どちらの状態かは印そのものが変わる（広げる⇔縮める）。言葉は「なぞると出る説明」に残す。
+                ★字を戻さないこと。 */}
             <button data-wfs="1" title={isFs?'元の大きさに戻す':'画面いっぱいに広げる'}
               onClick={()=>{try{ if(document.fullscreenElement){document.exitFullscreen&&document.exitFullscreen();}
                 else if(fsRef.current&&fsRef.current.requestFullscreen){fsRef.current.requestFullscreen();} }catch(e){}}}
-              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
-              {isFs?'⛶ 戻す':'⛶ 最大化'}</button>
-            <button onClick={onClose} title="閉じる"
-              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-                padding:'4px 11px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+              style={{...WHDR_SQ}}>{isFs?<Shrink size={15}/>:<Expand size={15}/>}</button>
+            <button data-wclose="1" onClick={onClose} title="閉じる" style={{...WHDR_SQ}}>✕</button>
           </div>
         </div>
         {/* ★空き探しの帯（2026-10-25 ユーザー指示） */}
@@ -4904,16 +4916,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               {/* ★① 畳んでいる時は「1週間のどこにも予定が無い時間の行」を隠す（2026-10-29 ユーザー指示）。
                   ・午前入庫（時刻を持たない枠）は隠さない＝置き場所が分からなくなるため
                   ・空き探しの印が付いた枠も隠さない＝探した結果が消えてしまうため */}
-              {(folded?mainSlots.filter(slot=>{
-                  if(isSpecialSlot(slot))return true;
-                  return days.some(d=>{const dk=dkOf(d);
-                    if(isClosed(d))return false;
-                    if(slotEntries(dk,slot).length)return true;
-                    const b=srCell(dk,slot); return !!(b&&b.blk);});
-                }):mainSlots).map(slot=>slotRow(slot))}
-              {folded&&!mainSlots.some(slot=>!isSpecialSlot(slot)&&days.some(d=>!isClosed(d)&&slotEntries(dkOf(d),slot).length))&&(
+              {(folded?mainSlots.filter(slotHasAny):mainSlots).map(slot=>slotRow(slot))}
+              {folded&&!mainSlots.some(slotHasAny)&&!WEEK_PIN.some(slotHasAny)&&(
                 <tr data-wfoldnone="1"><td colSpan={8} style={{...TD,textAlign:'center',color:'#94a3b8',
-                  fontSize:12,fontWeight:700,padding:'10px 4px'}}>この1週間は、時間の決まった整備の予定が入っていません</td></tr>
+                  fontSize:12,fontWeight:700,padding:'10px 4px'}}>この1週間は、整備の予定が入っていません</td></tr>
               )}
               {/* ★畳んでいる時の「予定を足す」行（2026-10-29 ユーザー指示）。
                   畳むと空いている枠（＋）も消えるので、足す入口が無くなってしまう。
@@ -4944,13 +4950,21 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
         {/* ★「午後入庫」「入庫未定」は**スクロールする表の外**に据え置く（2026-10-23 ユーザー指示）。
             以前は sticky で貼り付けていたが、スクロールすると上の予定の字が重なって読めなくなった。
             表を分けてしまえば重なりようがない。**sticky に戻さないこと。** */}
-        <div data-wfoot="1" style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white',paddingRight:sbw}}>
-          <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
-            <tbody>
-              {WEEK_PIN.map((slot,ix)=>slotRow(slot,ix===WEEK_PIN.length-1))}
-            </tbody>
-          </table>
-        </div>
+        {(()=>{
+          // ★畳んでいる時は、空の「午後入庫」「時間未定」も隠す（2026-10-30 ユーザー指示）。
+          //   2つとも空なら、下の帯そのものを出さない（区切りの太線だけ残らないように）。
+          const pins=folded?WEEK_PIN.filter(slotHasAny):WEEK_PIN;
+          if(!pins.length)return null;
+          return (
+            <div data-wfoot="1" style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white',paddingRight:sbw}}>
+              <table style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
+                <tbody>
+                  {pins.map((slot,ix)=>slotRow(slot,ix===pins.length-1))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
         {/* ★いちばん下の説明書きは出さない（2026-10-23 ユーザー指示：表を最大限に広く使う）。
             色の意味・＋の働き・網掛けは、どれも「なぞると出る説明」で分かるようにしてある。 */}
         {tip&&(()=>{

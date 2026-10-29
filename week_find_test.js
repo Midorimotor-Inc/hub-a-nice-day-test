@@ -161,7 +161,10 @@ const seed = {
     const rt = [...s.parentElement.children].map(e => e.innerText.replace(/\s+/g, ''));
     const fr = f.getBoundingClientRect();
     return { nav, rt, find: nav.findIndex(x => /検索/.test(x)), next: nav.findIndex(x => /次の週/.test(x)),
-      fs: rt.findIndex(x => /最大化|戻す/.test(x)), x: rt.indexOf('✕'), ttl: s.getAttribute('title') || '',
+      fs: rt.indexOf(''), x: rt.indexOf('✕'), ttl: s.getAttribute('title') || '',
+      fsTxt: s.innerText.replace(/\s+/g, ''), fsSvg: !!s.querySelector('svg'),
+      fsBox: (r => ({ w: Math.round(r.width), h: Math.round(r.height) }))(s.getBoundingClientRect()),
+      xBox: (b => b ? (r => ({ w: Math.round(r.width), h: Math.round(r.height) }))(b.getBoundingClientRect()) : null)(document.querySelector('[data-wclose]')),
       mid: Math.round(fr.left + fr.width / 2), w: window.innerWidth, h: Math.round(fr.height) };
   });
   t('★「🔍 空き検索」のボタンがある', !!top && top.find >= 0, top);
@@ -171,12 +174,22 @@ const seed = {
   t('★★釣り合いの控えも同じ名前（週送りが真ん中に残る）', ghostLab === '🔍空き検索', ghostLab);
   const findBtn = await page.evaluate(() => { const b = document.querySelector('[data-wfind]'); return b ? getComputedStyle(b).backgroundColor : ''; });
   t('★検索ボタンは（押す前から）赤い', findBtn === 'rgb(232, 73, 46)', findBtn);
-  t('★「⛶ 最大化」のボタンがある', !!top && top.fs >= 0, top);
+  t('★最大化のボタンがある', await page.evaluate(() => !!document.querySelector('[data-wfs]')));
+  // ★v3.82.0（2026-10-30 ユーザー指示）：最大化／戻すは【印だけ】。✕ とまったく同じ大きさ
+  t('★★最大化のボタンに字は出さない', !!top && top.fsTxt === '', top);
+  t('★★印（広げる／縮める）が出ている', !!top && top.fsSvg, top);
+  t('★★✕ とまったく同じ大きさ', !!top && !!top.xBox && top.fsBox.w === top.xBox.w && top.fsBox.h === top.xBox.h,
+    top && { fs: top.fsBox, x: top.xBox });
   t('★★検索は週送りと同じまとまりにある', !!top && top.next >= 0, top);
   t('★★検索は「次の週」のすぐ右どなり', !!top && top.find === top.next + 1, top);
   t('★★検索は画面の真ん中寄り（右端ではない）', !!top && top.mid > top.w * 0.45 && top.mid < top.w * 0.85, top);
   t('★★検索のボタンは週送りと同じ大きさ（高さ35px以上）', !!top && top.h >= 35, top);
-  t('★右上は 最大化 → ✕ の順', !!top && top.fs >= 0 && top.x === top.fs + 1, top);
+  t('★右上は 最大化 → ✕ の順', await page.evaluate(() => {
+    const s = document.querySelector('[data-wfs]'), x = document.querySelector('[data-wclose]');
+    if (!s || !x) return false;
+    const kids = [...s.parentElement.children];
+    return kids.indexOf(x) === kids.indexOf(s) + 1;
+  }));
   t('最大化に案内が出る', !!top && /広げ|戻す/.test(top.ttl), top);
   t('押しても落ちない（全画面は端末まかせ）', await tap('[data-wfs]'));
   await page.waitForTimeout(300);

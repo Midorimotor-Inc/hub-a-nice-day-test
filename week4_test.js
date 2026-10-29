@@ -42,6 +42,9 @@ const seed = {
       '09:00': { name: '記録あり花子', work: 'O', content: 'オイル交換', staff: '江川京志', rcvAt: AT, rcvBy: '江川京志' },
       '15:00': { name: '記録なし太郎', work: 'T', content: 'タイヤ交換', staff: '江川京志' },
     },
+    // ★時刻を持たない枠の検査用（v3.82.0）。午後入庫にだけ予定を入れ、
+    //   午前入庫・時間未定は空のまま＝畳んだら隠れることを見る
+    [FRI]: { '午後': { name: '午後次郎', work: 'O', content: '点検', staff: '江川京志' } },
   },
   [STOR + 'sanda-sched']: {},
   [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'office', store: 'honten' }],
@@ -150,7 +153,8 @@ const seed = {
   t('★記録が無い分は「記録なし」と出る', bs.some(x => /受け付け　記録なし/.test(x.title)), bs[0] && bs[0].title);
   const nm = await page.evaluate(() => [...document.querySelectorAll('[data-wentnm]')].map(e => e.innerText.trim()));
   // ★v3.81.0 から、予約のお名前には「様」が付く（2026-10-30 ユーザー指示）
-  t('整備のお名前が2件出ている（様つき）', nm.length === 2 && nm.indexOf('記録あり花子 様') >= 0 && nm.indexOf('記録なし太郎 様') >= 0, nm);
+  // 3件目は午後入庫の「午後次郎」（畳みの検査用に金曜へ入れてある）
+  t('整備のお名前が3件出ている（様つき）', nm.length === 3 && nm.indexOf('記録あり花子 様') >= 0 && nm.indexOf('記録なし太郎 様') >= 0, nm);
   // 記録ありをなぞる
   // ★React は mouseover を見て onMouseEnter を呼ぶので、本物のマウス移動でなぞる
   await page.locator('[data-wentnm]').filter({ hasText: '記録あり' }).first().hover();
@@ -187,7 +191,15 @@ const seed = {
   t('★予定が無い時間の行は消える（10:00）', after.indexOf('10:00') < 0, after);
   t('★予定がある時間の行は残る（09:00・15:00）', after.indexOf('09:00') >= 0 && after.indexOf('15:00') >= 0, after);
   t('★車検と出勤の行は隠さない', after.indexOf('車検') >= 0 && after.indexOf('出勤') >= 0, after);
-  t('★午前入庫は隠さない（置き場所が分からなくなるため）', after.indexOf('午前入庫') >= 0, after);
+  // ★v3.82.0（2026-10-30 ユーザー指示）：午前入庫・午後入庫・時間未定も、
+  //   1週間のどこにも予定が無ければ畳んで隠す。入れる場所は下の「＋ 予定」から。
+  t('★★予定の無い「午前入庫」は隠す', after.indexOf('午前入庫') < 0, after);
+  t('★★予定の無い「時間未定」は隠す', after.indexOf('時間未定') < 0, after);
+  t('★★予定のある「午後入庫」は残す', after.indexOf('午後入庫') >= 0, after);
+  t('★広げれば3つとも出る', before.indexOf('午前入庫') >= 0 && before.indexOf('午後入庫') >= 0 && before.indexOf('時間未定') >= 0, before);
+  const foot = await page.evaluate(() => { const f = document.querySelector('[data-wfoot]');
+    return f ? [...f.querySelectorAll('tr')].map(r => r.children[0].innerText.trim()) : null; });
+  t('★下に据え置く帯も、予定のある「午後入庫」だけになる', JSON.stringify(foot) === JSON.stringify(['午後入庫']), foot);
   t('★行がちゃんと減っている', after.length < before.length, { before: before.length, after: after.length });
   t('★ボタンの名前が「▼ 開く」に変わる', await page.evaluate(() => /▼ 開く/.test(document.querySelector('[data-wfold]').innerText)));
   // ★畳むと空いている枠（＋）も消えるので、下に「予定を足す」行を出す（2026-10-29 ユーザー指示）

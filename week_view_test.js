@@ -529,6 +529,10 @@ const seed = {
   // 週表を開き直して続ける
   await page.evaluate(() => { const b = document.querySelector('[data-weekbtn]'); if (b) b.click(); });
   await page.waitForTimeout(900);
+  // ★開き直すと必ず「畳んだ状態」に戻る。畳んでいる時は空の 午後入庫・時間未定 も隠れるので、
+  //   据え置きの表を見る前に広げておく（v3.82.0・2026-10-30）。
+  await page.evaluate(() => { const b = document.querySelector('[data-wfold]'); if (b && b.getAttribute('data-wfold') === '1') b.click(); });
+  await page.waitForTimeout(700);
 
   // ── ⑦-2 本日より前の列をうっすら暗く（15%・2026-10-25 ユーザー決定）──
   console.log("\n■ ⑦-2 本日より前の列をうっすら暗く（15%）");
