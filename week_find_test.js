@@ -147,6 +147,9 @@ const seed = {
   //   この検査は月曜はじまりの並び（月〜日）を見るものなので、「📅 月曜から」に切り替える。
   await page.evaluate(() => { const b = document.querySelector('[data-wfrom]'); if (b && b.getAttribute('data-wfrom') === 'today') b.click(); });
   await page.waitForTimeout(800);
+  // ★v3.81.0 から、開いた時は畳んだ状態（2026-10-30 ユーザー指示）。空き探しは時間の行を見るので広げる。
+  await page.evaluate(() => { const b = document.querySelector('[data-wfold]'); if (b && b.getAttribute('data-wfold') === '1') b.click(); });
+  await page.waitForTimeout(800);
   if (process.env.SHOT0) await page.screenshot({ path: process.env.SHOT0, fullPage: true });
 
   // ── ① ボタンの置き場所 ──

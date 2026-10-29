@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793253938236';
+  window.__APP_BUILD='build-1793256287132';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.80.0';
+const MOBILE_VERSION='3.81.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -322,6 +322,13 @@ const deliverySlotLabel=(id)=>{const b=String(id).split('__')[0];return b==='未
 // 法人格（前置・後置）を落として固有名だけ返す。代車管理のセルのように幅が狭い場所だけで使う。
 // ★長い語を先に並べること（'医療法人社団' が '医療法人' より先、'一般財団法人' が '財団法人' より先）
 const CORP_TOKENS=['特定非営利活動法人','一般社団法人','一般財団法人','公益社団法人','公益財団法人','社会福祉法人','独立行政法人','医療法人社団','医療法人財団','農業協同組合','生活協同組合','有限責任事業組合','医療法人','学校法人','宗教法人','財団法人','社団法人','協同組合','株式会社','有限会社','合同会社','合資会社','合名会社','相互会社','ＮＰＯ法人','NPO法人'];
+// ── 予約のお客様のお名前は【必ず「様」を付けて出す】（2026-10-30 ユーザー指示。PC版と同じ）──
+//   ★★付けるのは【画面に出す時だけ】。保存する name には絶対に入れないこと。
+//     入れてしまうと、顧客リストとの突き合わせ・検索・控えのキー（氏名::日付）・
+//     代車の紐付け（res.user === row.name）が**全部ずれる**。
+const SAMA_RE=/(様|さま|サマ|御中|殿)[s　]*$/;
+const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+'様'); };
+
 const shortenCorpName=(name)=>{
   const orig=String(name==null?'':name).trim();
   let s=orig;
@@ -3027,7 +3034,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
                 return(
                   <div key={i} style={{padding:'9px 11px',marginBottom:5,borderRadius:10,background:isOther?'#f8fafc':'white',border:`1.5px solid ${isOther?'#e2e8f0':sc+'33'}`,borderLeft:`4px solid ${isOther?'#94a3b8':sc}`,opacity:isOther?0.75:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
-                      <span style={{fontWeight:800,fontSize:14}}>{r.name}</span>
+                      <span style={{fontWeight:800,fontSize:14}}>{sama(r.name)}</span>
                       {c&&<span style={{padding:'2px 7px',borderRadius:10,background:c.bg,color:c.color,fontSize:10,fontWeight:700}}>{c.name}</span>}
                       {isOther&&<span style={{fontSize:10,color:'#94a3b8',marginLeft:'auto'}}>{normStore(r.store)==='honten'?'本店':'三田店'}</span>}
                     </div>
@@ -3055,7 +3062,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
                         background:_arr?'#fde047':'transparent',border:_arr?'2px solid #dc2626':'2px solid #fed7aa',
                         color:'#dc2626',fontWeight:900,fontSize:13,lineHeight:1}}>{_arr?'✓':''}</span>
                     {r.time&&<span style={{fontSize:11,fontWeight:800,color:'#9a3412'}}>{r.time}</span>}
-                    <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
+                    <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                     {r.carType&&<span style={{fontSize:11,color:'#64748b'}}>🚗{r.carType}</span>}
                     <span style={{marginLeft:'auto',fontSize:10,fontWeight:800,color:'#9a3412',whiteSpace:'nowrap'}}>→ {wl[1]}/{wl[2]}車検 ›</span>
                   </div>
@@ -3071,7 +3078,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
                   <div key={i} style={{display:'flex',gap:8,padding:'7px 10px',marginBottom:4,background:'white',borderRadius:10,border:'1.5px solid #e0f2fe',borderLeft:'4px solid #0e7490'}}>
                     <span style={{fontWeight:700,fontSize:11,color:'#0e7490',width:40,flexShrink:0}}>{getBaseSlot(key)}</span>
                     <div>
-                      <span style={{fontWeight:700,fontSize:13}}>{r.name}</span>
+                      <span style={{fontWeight:700,fontSize:13}}>{sama(r.name)}</span>
                       {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                       {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
                       {r.content&&<div style={{fontSize:11,color:'#64748b',marginTop:1}}>{r.content}</div>}
@@ -3442,7 +3449,13 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
               ★整備のカードには出さない（車検証の話なので）。 */}
           <div>
             <label style={LBL}>{isInsp?'来店者氏名 *':'氏名 *'}</label>
-            <input value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="お客様名" style={INP}/>
+            {/* ★「様」は【見えるだけ】。入力した字（form.name）には入らない（2026-10-30 ユーザー指示）。 */}
+            <div style={{position:'relative'}}>
+              <input value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="お客様名" style={{...INP,paddingRight:32}}/>
+              {form.name&&!SAMA_RE.test(String(form.name).trim())&&(
+                <span data-namesama="1" style={{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',
+                  fontSize:14,fontWeight:700,color:'#64748b',pointerEvents:'none'}}>様</span>)}
+            </div>
           </div>
           {isInsp&&(
           <div>
@@ -3966,7 +3979,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                         color:_arr?'#dc2626':(isOther?'#64748b':sc),
                         background:_arr?'#fde047':'transparent',
                         border:_arr?'2px solid #dc2626':'2px solid transparent'}}>{_arr?'✓':(i+1)+'.'}</span>
-                    <span style={{fontWeight:800,fontSize:15,flex:1}}>{r.name}</span>
+                    <span style={{fontWeight:800,fontSize:15,flex:1}}>{sama(r.name)}</span>
                     {r.pendingApproval&&<span style={{padding:'2px 7px',borderRadius:10,background:'#fef3c7',color:'#b45309',fontSize:10,fontWeight:800}}>⏳ 承認待ち</span>}
                     {c&&<span style={{padding:'2px 8px',borderRadius:10,background:c.bg,color:c.color,fontSize:10,fontWeight:700}}>{c.name}</span>}
                     {isOther&&<span style={{fontSize:10,color:'#94a3b8',padding:'1px 5px',background:'#f1f5f9',borderRadius:6}}>{normStore(r.store)==='honten'?'本店':'三田店'}</span>}
@@ -4047,7 +4060,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                   <div key={wdk+'-'+ix} onClick={()=>onOpenEdit({type:'insp',dk:wdk,idx:ix,isNew:false})}
                     style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',padding:'6px 2px',borderTop:'1px dashed #fed7aa',cursor:'pointer'}}>
                     {r.time&&<span style={{fontSize:11,fontWeight:800,color:'#9a3412'}}>{r.time}</span>}
-                    <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
+                    <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                     {r.carType&&<span style={{fontSize:11,color:'#64748b'}}>🚗{r.carType}</span>}
                     {loaner&&<span style={{fontSize:11,color:'#0284c7'}}>{!r.rentalLabel&&getLoanerLocked(myLoanerRes,wdk,r.name,r.bookingKey||`insp-${wdk}-${ix}`)&&'🔒 '}{loaner}</span>}
                     <span style={{marginLeft:'auto',fontSize:10,fontWeight:800,color:'#9a3412',whiteSpace:'nowrap'}}>→ {wl[1]}/{wl[2]}車検 ›</span>
@@ -4092,7 +4105,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                   onClick={()=>d.kind==='insp'?onOpenEdit({type:'insp',dk:d.wdk,idx:d.ix,isNew:false}):onOpenEdit({type:'sched',dk:d.wdk,slot:d.sk,isNew:false})}
                   style={{marginBottom:4,padding:'3px 6px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:8,cursor:'pointer'}}>
                   <span style={{fontSize:10,fontWeight:900,color:'#fff',background:'#047857',borderRadius:5,padding:'1px 5px',marginRight:5}}>🏁 納車</span>
-                  <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
+                  <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                   {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                   {loaner&&<span style={{fontSize:10,color:'#0284c7',marginLeft:5}}>{!r.rentalLabel&&d.kind==='insp'&&getLoanerLocked(myLoanerRes,d.wdk,r.name,`insp-${d.wdk}-${d.ix}`)&&'🔒 '}{loaner}</span>}
                   <span style={{fontSize:10,fontWeight:800,color:'#047857',marginLeft:5,whiteSpace:'nowrap'}}>
@@ -4139,7 +4152,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                       return(
                         <div key={ki} onClick={()=>{if(otherView){alert('🏪 他の店のタイムスケジュールは閲覧のみです。\n直すには上の切り替えで自分の店に戻してください。\n（車検は他の店でも直せます）');return;}onOpenEdit({type:'sched',dk,slot:key,isNew:false});}}
                           style={{marginBottom:4,cursor:otherView?'default':'pointer',opacity:otherView?0.75:1}}>
-                          <span style={{fontWeight:800,fontSize:13}}>{r.name}</span>
+                          <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                           {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                           {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
                           {loanerTxt&&<span style={{marginLeft:5,fontSize:10,color:'#0284c7'}}>{loanerTxt}</span>}
@@ -5428,7 +5441,7 @@ const MobileRestoreModal=({user,onClose,inspData})=>{
                            {rows.map((r,i)=>{ const isConf=r.bookingStatus==='confirmed'&&!r.pendingApproval; const here=isHere(r); const just=!!added[rowSig(r)];
                              return <div key={i} style={{border:`1px solid ${here?'#eef2f8':'#e6c98a'}`,borderRadius:9,padding:'7px 10px',display:'flex',gap:9,alignItems:'flex-start',background:here?'white':'#fffaf0'}}>
                                <div style={{fontSize:13,fontWeight:800,color:'#173da8',width:42,flexShrink:0}}>{r.time||'—'}</div>
-                               <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:800}}>{r.name}</div>{r.carType&&<div style={{fontSize:11,color:'#64748b'}}>{r.carType}</div>}{r.loaner&&<div style={{fontSize:10.5,color:'#0e9d58',fontWeight:700,marginTop:1}}>🔑 {r.loaner}</div>}</div>
+                               <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:800}}>{sama(r.name)}</div>{r.carType&&<div style={{fontSize:11,color:'#64748b'}}>{r.carType}</div>}{r.loaner&&<div style={{fontSize:10.5,color:'#0e9d58',fontWeight:700,marginTop:1}}>🔑 {r.loaner}</div>}</div>
                                {here?(just?<span style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:999,alignSelf:'center',whiteSpace:'nowrap',background:'#e4f6ec',color:'#0e9d58'}}>✓足しました</span>:<span style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:999,alignSelf:'center',whiteSpace:'nowrap',background:isConf?'#e4f6ec':'#fbeed5',color:isConf?'#0e9d58':'#c9760a'}}>{isConf?'確定':r.pendingApproval?'承認待ち':'仮'}</span>):<button onClick={()=>doAddBack(drillDate,r)} style={{alignSelf:'center',flexShrink:0,fontSize:11,fontWeight:800,padding:'5px 12px',borderRadius:999,border:'none',background:'#1d4ed8',color:'white'}}>＋足す</button>}
                              </div>;
                            })}

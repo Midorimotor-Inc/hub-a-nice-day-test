@@ -91,10 +91,16 @@ const LF = d(0), LT = d(3);
   await clickText(page, 'このまま使う');
   await page.waitForTimeout(900);
 
-  head('① ヘッダーから控えを保存できる');
-  t('「💾 控え」のボタンがある', await page.evaluate(() => [...document.querySelectorAll('button')].some(b => b.innerText.indexOf('控え') >= 0 && b.offsetParent !== null)));
-  await clickText(page, '💾 控え');
-  await page.waitForTimeout(500);
+  head('① ダッシュボードから控えを保存できる');
+  // ★v3.80.0 で「💾 控え」はヘッダーからダッシュボードの中へ移した（2026-10-29 ユーザー指示）。
+  await page.evaluate(() => document.querySelector('[data-dashnav]') && null);
+  await page.goto(page.url().split('?')[0] + '?dash=1', { waitUntil: 'domcontentloaded' });
+  await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
+  await seeText(page, 'スケジュール', 25000); await clickText(page, 'このまま使う');
+  await page.waitForTimeout(2400);
+  t('ダッシュボードに「オフライン予定表の控え」がある', await page.evaluate(() => !!document.querySelector('[data-dashtool="offline"]')));
+  await page.evaluate(() => document.querySelector('[data-dashtool="offline"]').click());
+  await page.waitForTimeout(700);
   t('店を選ぶ画面が出る', await seeText(page, 'どの店の分を出しますか', 5000));
   t('店ごとに別ファイルになると書いてある', (await page.evaluate(() => document.body.innerText)).includes('店ごとに別のファイル'));
 

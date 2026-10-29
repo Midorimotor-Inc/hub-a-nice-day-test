@@ -70,8 +70,14 @@ const signedInInit = ([me, stor]) => {
   await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   t('ログインして予定が出る', await seeText(page, '前村', 20000));
   // 復旧画面
-  t('管理者に「復旧」ボタンが出る', await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.innerText.includes('復旧')), null, { timeout: 10000 }).then(() => true).catch(() => false));
-  await clickText(page, '復旧');
+  // ★v3.80.0 で「🕒 復旧」はヘッダーからダッシュボードの中へ移した（2026-10-29 ユーザー指示）。
+  await page.goto(page.url().split('?')[0] + '?dash=1', { waitUntil: 'domcontentloaded' });
+  await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
+  await seeText(page, 'スケジュール', 25000); await clickText(page, 'このまま使う');
+  await page.waitForTimeout(2400);
+  t('管理者に「データ復旧」が出る（ダッシュボードの中）', await page.evaluate(() => !!document.querySelector('[data-dashtool="restore"]')));
+  await page.evaluate(() => document.querySelector('[data-dashtool="restore"]').click());
+  await page.waitForTimeout(900);
   // ★kv を「まとめ読み（クエリ）」しないこと（2026-10-14）。
   //   ルールの kv はキー名を見る書き方なので Firestore はクエリを許可できず、
   //   時点保存だけが黙って失敗して 2026-09-30 から2週間作られていなかった。
@@ -148,9 +154,12 @@ const signedInInit = ([me, stor]) => {
   t('全復旧：車検が時点保存どおりに戻る（前村・瀬川）', inspAll.join() === '前村,瀬川', inspAll);
   // 保持ルール：古い auto は落ち、daily は残る
   await page.evaluate(k => { const idx = window.__fakeFb.get(k, 'snapidx'); idx.list.push({ file: 'old-auto', ts: Date.now() - 3 * 86400000, tsText: 'x', kind: 'auto', label: '', summary: null, ready: true }); idx.list.push({ file: 'old-daily', ts: Date.now() - 10 * 86400000, tsText: 'y', kind: 'daily', label: '', summary: null, ready: true }); window.__fakeFb.set(k, idx, 'snapidx'); }, STOR);
-  await page.goto(`http://localhost:${PORT}/index_dev.html`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://localhost:${PORT}/index_dev.html?dash=1`, { waitUntil: 'domcontentloaded' });
   await seeText(page, '前村', 20000);
-  await clickText(page, '復旧'); await seeText(page, '手動', 10000);
+  // ★v3.80.0 で「🕒 復旧」はヘッダーからダッシュボードの中へ移した（2026-10-29 ユーザー指示）
+  await page.waitForFunction(() => !!document.querySelector('[data-dashtool="restore"]'), null, { timeout: 15000 }).catch(() => {});
+  await page.evaluate(() => { const b = document.querySelector('[data-dashtool="restore"]'); if (b) b.click(); });
+  await seeText(page, '手動', 10000);
   await clickText(page, '今すぐ時点保存を作る'); await page.waitForTimeout(1500);
   const idx3 = await page.evaluate(k => window.__fakeFb.get(k, 'snapidx'), STOR);
   t('保持ルール：3日前の auto は一覧から落ち、10日前の daily は残る', !idx3.list.some(e => e.file === 'old-auto') && idx3.list.some(e => e.file === 'old-daily'), idx3.list.map(e => e.file));

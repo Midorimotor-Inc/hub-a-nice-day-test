@@ -153,6 +153,13 @@ const seed = {
   t('★既定は「本日から」で、押せば月曜はじまりに戻せる', await page.evaluate(() => {
     const b = document.querySelector('[data-wfrom]'); return !!b && b.getAttribute('data-wfrom') === 'mon';
   }));
+  // ★v3.81.0 から、開いた時は畳んだ状態（2026-10-30 ユーザー指示）。
+  //   この検査は空いている時間の行も見るので、広げてから確かめる。畳み方は week4_test.js で見る。
+  t('★開いた時は畳んだ状態になっている', await page.evaluate(() => {
+    const b = document.querySelector('[data-wfold]'); return !!b && b.getAttribute('data-wfold') === '1';
+  }));
+  await page.evaluate(() => { const b = document.querySelector('[data-wfold]'); if (b && b.getAttribute('data-wfold') === '1') b.click(); });
+  await page.waitForTimeout(700);
   t('見出しに週の範囲が出る（10/19（月） 〜 10/25（日））', await page.evaluate(() => {
     const el = document.querySelector('[data-weekview]'); return !!el && /10\/19（月） 〜 10\/25（日）/.test(el.innerText);
   }));

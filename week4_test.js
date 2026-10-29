@@ -149,7 +149,8 @@ const seed = {
   t('★車検のバッジのなぞり書きにも受け付けの記録が出る', bs.every(x => /受け付け　/.test(x.title)), bs[0] && bs[0].title);
   t('★記録が無い分は「記録なし」と出る', bs.some(x => /受け付け　記録なし/.test(x.title)), bs[0] && bs[0].title);
   const nm = await page.evaluate(() => [...document.querySelectorAll('[data-wentnm]')].map(e => e.innerText.trim()));
-  t('整備のお名前が2件出ている', nm.length === 2 && nm.indexOf('記録あり花子') >= 0 && nm.indexOf('記録なし太郎') >= 0, nm);
+  // ★v3.81.0 から、予約のお名前には「様」が付く（2026-10-30 ユーザー指示）
+  t('整備のお名前が2件出ている（様つき）', nm.length === 2 && nm.indexOf('記録あり花子様') >= 0 && nm.indexOf('記録なし太郎様') >= 0, nm);
   // 記録ありをなぞる
   // ★React は mouseover を見て onMouseEnter を呼ぶので、本物のマウス移動でなぞる
   await page.locator('[data-wentnm]').filter({ hasText: '記録あり' }).first().hover();
@@ -170,9 +171,16 @@ const seed = {
   console.log('\n■ ① 時間を畳める');
   const rows = () => page.evaluate(() => [...document.querySelectorAll('[data-weekview] tbody tr')]
     .map(tr => (tr.children[0] ? tr.children[0].innerText.trim() : '')).filter(Boolean));
+  // ★v3.81.0 から、開いた時はいつも【畳んだ状態】から（2026-10-30 ユーザー指示）
+  t('★★開いた時は畳んだ状態になっている', await page.evaluate(() =>
+    document.querySelector('[data-wfold]').getAttribute('data-wfold') === '1'));
+  t('★ボタンの名前は「▼ 開く」', await page.evaluate(() => /▼ 開く/.test(document.querySelector('[data-wfold]').innerText)));
+  // いちど広げて、空いている時間の行が戻ることを見る
+  await page.evaluate(() => document.querySelector('[data-wfold]').click());
+  await page.waitForTimeout(700);
   const before = await rows();
-  t('畳む前は空いている時間の行も出ている（10:00 がある）', before.indexOf('10:00') >= 0, before);
-  t('ボタンの名前は「▲ 畳む」', await page.evaluate(() => /▲ 畳む/.test(document.querySelector('[data-wfold]').innerText)));
+  t('広げると空いている時間の行も出る（10:00 がある）', before.indexOf('10:00') >= 0, before);
+  t('ボタンの名前は「▲ 畳む」に戻る', await page.evaluate(() => /▲ 畳む/.test(document.querySelector('[data-wfold]').innerText)));
   await page.evaluate(() => document.querySelector('[data-wfold]').click());
   await page.waitForTimeout(700);
   const after = await rows();

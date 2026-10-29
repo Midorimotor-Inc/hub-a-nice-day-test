@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793253938236';
+    window.__APP_BUILD='build-1793256287132';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.80.0';
+const APP_VERSION = '3.81.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -970,6 +970,14 @@ const hubPushMoved = (prev,from,to,by) => {
 // ホバー情報・編集パネル・顧客リスト等はフルネームのまま表示すること。
 // ★長い語を先に並べること（'医療法人社団' が '医療法人' より先、'一般財団法人' が '財団法人' より先）
 const CORP_TOKENS=['特定非営利活動法人','一般社団法人','一般財団法人','公益社団法人','公益財団法人','社会福祉法人','独立行政法人','医療法人社団','医療法人財団','農業協同組合','生活協同組合','有限責任事業組合','医療法人','学校法人','宗教法人','財団法人','社団法人','協同組合','株式会社','有限会社','合同会社','合資会社','合名会社','相互会社','ＮＰＯ法人','NPO法人'];
+// ── 予約のお客様のお名前は【必ず「様」を付けて出す】（2026-10-30 ユーザー指示）──────────
+//   ★★付けるのは【画面に出す時だけ】。保存する name には絶対に入れないこと。
+//     入れてしまうと、顧客リストとの突き合わせ・検索・控えのキー（氏名::日付）・
+//     代車の紐付け（res.user === row.name）が**全部ずれる**。
+//   すでに 様／さま／御中／殿 で終わっているものには足さない（二重敬称にしない）。
+const SAMA_RE=/(様|さま|サマ|御中|殿)[\s　]*$/;
+const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+'様'); };
+
 const shortenCorpName=(name)=>{
   const orig=String(name==null?'':name).trim();
   let s=orig;
@@ -4372,7 +4380,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   const [tip,setTip]=useState(null);
   // ★① 時間を畳む（2026-10-29 ユーザー指示・マイスケジュールと同じ考え方）。
   //   1週間のどこにも予定が無い時間の行を隠す。車検・出勤・午前入庫の行は隠さない。
-  const [folded,setFolded]=useState(false);
+  //   ★開いた時はいつも【畳んだ状態】から（2026-10-30 ユーザー指示）。
+  //     広げたまま閉じても、次に開く時はまた畳んである。
+  const [folded,setFolded]=useState(true);
+  useEffect(()=>{ if(isOpen)setFolded(true); },[isOpen]);
   // 最大化（ブラウザの全画面）と空き探し
   const fsRef=useRef(null);
   const [isFs,setIsFs]=useState(false);
@@ -4632,7 +4643,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                     text:r.name+'様'+String.fromCharCode(10)+weekAtLines(r),
                     left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
                 onMouseLeave={()=>setTip(null)}
-                style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{r.name}</span>
+                style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{sama(r.name)}</span>
               {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
               {/* ★担当者バッジは外し、代わりに内容を入る幅だけ出す（2026-10-23 ユーザー指示）。
                   切れたら … 。全文はなぞると出る（1日表示と同じ考え方） */}
@@ -5275,7 +5286,7 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                             {mon.getMonth()+1}/{x.d}</td>
                           <td style={{...TD,fontWeight:700,textDecoration:ck?'line-through':'none'}}>
                             <span data-dashopen="1" onClick={open} title="この日のスケジュールを開く（予約カードから直せます）"
-                              style={{cursor:'pointer',borderBottom:'1px dotted #94a3b8'}}>{x.r.name}</span></td>
+                              style={{cursor:'pointer',borderBottom:'1px dotted #94a3b8'}}>{sama(x.r.name)}</span></td>
                           <td style={TD}>
                             {x.kind==='empty'?(
                               <button data-dashempty="1" onClick={open}
@@ -6820,16 +6831,16 @@ const offSheetHtml = (d) => {
     + "<div class=meta>車検 " + day.insp.length + "台 ／ 整備 " + day.sched.length + "件 ／ 代車の貸出 " + day.loan.length + "台　|　この写しは " + offEsc(d.stamp) + " 時点</div>"
     + "<h3 class=r>🚗 車検（入庫予定）</h3>"
     + table(day.insp, [{ t: "入庫", w: 52, c: 1, v: r => r.time || "未定" }, { t: "済", w: 34, chk: 1 },
-        { t: "氏名", v: r => r.name }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
+        { t: "氏名", v: r => sama(r.name) }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
         { t: "コース", w: 78, c: 1, v: r => r.course }, { t: "電話", w: 110, tel: 1, v: r => r.phone },
         { t: "代車", w: 112, v: r => r.loaner }, { t: "担当", w: 60, c: 1, v: r => r.staff }, { t: "備考", v: r => r.note }])
     + "<h3>⏰ 整備（タイムスケジュール）</h3>"
     + table(day.sched, [{ t: "時間", w: 52, c: 1, v: r => r.time }, { t: "済", w: 34, chk: 1 },
-        { t: "氏名", v: r => r.name }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
+        { t: "氏名", v: r => sama(r.name) }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 60, c: 1, v: r => r.no },
         { t: "電話", w: 110, tel: 1, v: r => r.phone }, { t: "内容", v: r => r.content }, { t: "担当", w: 60, c: 1, v: r => r.staff }])
     + "<h3 class=g>🚙 代車・レンタカー（この日に貸している分）</h3>"
     + table(day.loan, [{ t: "車", w: 120, v: r => r.car }, { t: "ナンバー", w: 60, c: 1, v: r => r.num },
-        { t: "貸出先", v: r => r.user }, { t: "期間", w: 150, c: 1, v: r => r.span }, { t: "区分", w: 70, c: 1, v: r => r.kind }])
+        { t: "貸出先", v: r => sama(r.user) }, { t: "期間", w: 150, c: 1, v: r => r.span }, { t: "区分", w: 70, c: 1, v: r => r.kind }])
     + (day.free.length ? "<div style='margin-top:6px;font-size:12px;color:#475569'><b>空いている代車：</b>" + offEsc(day.free.join(" ／ ")) + "</div>" : "")
     + "<h3 class=a>📝 備考・スタッフ休日</h3>"
     + ((day.memo.length || day.off.length)
@@ -7023,7 +7034,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
             <Row key={'i'+h.dk+'-'+h.ix} onClick={()=>onGo({kind:'insp',dk:h.dk,ix:h.ix,store:(h.r.store==='sanda'||h.r.store==='三田店')?'sanda':'honten'})}>
               <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{dkLabel(h.dk)}</span>
               <Pill c={h.r.bookingStatus==='cancelled'?'#9ca3af':'#c2410c'}>{h.r.bookingStatus==='cancelled'?'取消':'車検'}</Pill>
-              <span style={{fontWeight:800}}>{mark(h.r.name)}</span>
+              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':'様'}</span>
               <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.r.store)}{h.r.time?' ・ '+h.r.time:''}{h.r.no?' ・ No.'+h.r.no:''}</span>
             </Row>
           ))}
@@ -7031,7 +7042,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
             <Row key={'s'+h.store+h.dk+'-'+h.sk} onClick={()=>onGo({kind:'sched',dk:h.dk,sk:h.sk,store:h.store})}>
               <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{dkLabel(h.dk)}</span>
               <Pill c="#0e7490">整備</Pill>
-              <span style={{fontWeight:800}}>{mark(h.r.name)}</span>
+              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':'様'}</span>
               <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.store)}{' ・ '+getBaseSlot(h.sk)}{h.r.work?' ・ '+h.r.work:''}</span>
             </Row>
           ))}
@@ -8749,9 +8760,16 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           <div style={{display:'flex',gap:10}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{...LBL,marginBottom:5,height:22,display:'flex',alignItems:'center'}}>来店者氏名 *</div>
-              <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
-                onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
-                onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name')}}/>
+              {/* ★「様」は【見えるだけ】。入力した字（form.name）には入らない（2026-10-30 ユーザー指示）。
+                  保存する名前に入れると、顧客リストとの突き合わせ・検索・代車の紐付けが全部ずれる。 */}
+              <div style={{position:'relative'}}>
+                <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+                  onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
+                  onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name'),paddingRight:30}}/>
+                {form.name&&!SAMA_RE.test(String(form.name).trim())&&(
+                  <span data-namesama="1" style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
+                    fontSize:13,fontWeight:700,color:'#64748b',pointerEvents:'none'}}>様</span>)}
+              </div>
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{...LBL,marginBottom:5,height:22,display:'flex',alignItems:'center',gap:8}}>
@@ -8767,9 +8785,14 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           ) : (
           <div>
             <label style={LBL}>氏名 *</label>
-            <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
-              onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
-              onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name')}}/>
+            <div style={{position:'relative'}}>
+              <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
+                onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
+                onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name'),paddingRight:30}}/>
+              {form.name&&!SAMA_RE.test(String(form.name).trim())&&(
+                <span data-namesama="1" style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
+                  fontSize:13,fontWeight:700,color:'#64748b',pointerEvents:'none'}}>様</span>)}
+            </div>
           </div>
           )}
           {/* 担当 */}
@@ -9308,25 +9331,25 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
       <td style={{...TD,cursor:blocked||isCancelled?'not-allowed':'pointer'}} onClick={()=>{if(!blocked&&!isCancelled)onOpenModal('insp',dk,idx,null,false);}}>
         {isOverLimit&&!isEmpty
          ?<div style={{padding:'3px 5px'}}>
-            {row.name&&<div style={{fontWeight:600,color:'#6b7280',opacity:0.7}}>{row.name}</div>}
+            {row.name&&<div style={{fontWeight:600,color:'#6b7280',opacity:0.7}}>{sama(row.name)}</div>}
             <div style={{fontSize:10,color:'#ef4444',fontWeight:700,display:'flex',alignItems:'center',gap:3}}>🚫 台数制限超過・予約不可</div>
           </div>
          :isCancelled?<div style={{padding:'3px 5px'}}>
-            <div style={{fontWeight:600,color:'#6b7280',textDecoration:'line-through'}}>{row.name}</div>
+            <div style={{fontWeight:600,color:'#6b7280',textDecoration:'line-through'}}>{sama(row.name)}</div>
             <div style={{fontSize:10,color:'#dc2626',fontWeight:700,display:'flex',alignItems:'center',gap:4}}>
               ✗ キャンセル済
-              <button onClick={e=>{e.stopPropagation();if(confirm(`「${row.name}」の予約を削除しますか？`))onOpenModal('insp',dk,idx,null,'delete');}}
+              <button onClick={e=>{e.stopPropagation();if(confirm(`「${sama(row.name)}」の予約を削除しますか？`))onOpenModal('insp',dk,idx,null,'delete');}}
                 style={{padding:'1px 6px',background:'#dc2626',color:'white',border:'none',borderRadius:4,fontSize:9,cursor:'pointer',fontWeight:700}}>
                 🗑
               </button>
             </div>
           </div>
-         :locked?<div style={{padding:'3px 5px'}}>{row.name&&<div style={{fontWeight:600}}>{row.name}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
+         :locked?<div style={{padding:'3px 5px'}}>{row.name&&<div style={{fontWeight:600}}>{sama(row.name)}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
          :limitBlocked?<div style={{color:'#dc2626',fontSize:11,padding:'5px 7px',fontWeight:800,display:'flex',alignItems:'center',gap:4}}><span style={{fontSize:12}}>🚫</span>予約不可（台数制限 {limitFull}台に達しています）</div>
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-                <span style={{fontWeight:700,color:pending?'#6b7280':'#7c2d12',whiteSpace:'nowrap'}}>{row.name}</span>
+                <span style={{fontWeight:700,color:pending?'#6b7280':'#7c2d12',whiteSpace:'nowrap'}}>{sama(row.name)}</span>
                 {row.store&&<span style={{padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:800,background:row.store==='honten'?'#2563eb':'#dc2626',color:'white',flexShrink:0,whiteSpace:'nowrap'}}>
                   {row.store==='honten'?'本店':'三田店'}
                 </span>}
@@ -9508,13 +9531,13 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
               : <span style={{fontWeight:600,color:'#38bdf8'}}>{isSpecialSlot(baseSlot)?specialSlotLabel(baseSlot):getBaseSlot(slot)}</span>)}
       </td>
       <td style={TD}>
-        {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{row.name}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
+        {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{sama(row.name)}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加
            {/* ★マッハ車検による自動の入庫制限（2026-10-05）。網掛けの中に名前だけ出す */}
            {machCov&&<span style={{marginLeft:4,fontSize:11,fontWeight:800,color:'#b91c1c',fontStyle:'normal',whiteSpace:'nowrap'}}>マッハ車検</span>}</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'nowrap'}}>
-                <span style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{row.name}</span>
+                <span style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{sama(row.name)}</span>
                 {/* ★店舗バッジは出さない（2026-10-17 ユーザー指示）。整備の予定は店ごとのデータなので、
                     見ている店と必ず同じ＝情報がない。食い違っている時だけ出す（押せない理由になるため）。 */}
                 {otherStore&&<span style={{padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:800,background:row.store==='honten'?'#2563eb':'#dc2626',color:'white',flexShrink:0,whiteSpace:'nowrap'}}>
@@ -11756,7 +11779,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                         {showName&&(
                           <div style={{position:'absolute',left:3,top:'50%',transform:'translateY(-50%)',width:nameSpan*44-6,fontSize:11,color:'white',fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'clip',textShadow:'-1px -1px 1px rgba(0,0,0,.85),1px -1px 1px rgba(0,0,0,.85),-1px 1px 1px rgba(0,0,0,.85),1px 1px 1px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)',zIndex:2,pointerEvents:'none'}}>
                             {/* ★限定（この車でないとダメ）の予約は鍵マーク付き。最適化で動かない印 */}
-                            {st.locked&&<span style={{marginRight:2}}>🔒</span>}{shortenCorpName(st.user)}
+                            {st.locked&&<span style={{marginRight:2}}>🔒</span>}{sama(shortenCorpName(st.user))}
                           </div>
                         )}
                       </td>
@@ -11785,12 +11808,12 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
             📅 {pinnedRes.res.fm+1}/{pinnedRes.res.fd}〜{pinnedRes.res.tm+1}/{pinnedRes.res.td}
             <span style={{marginLeft:8,fontWeight:800,color:'white',background:pinnedRes.res._rental?'#059669':'#c2410c',borderRadius:20,padding:'2px 10px',fontSize:12}}>{loanDays(pinnedRes.res)}日間</span>
           </div>
-          <div style={{fontSize:12,color:'#6b7280',marginBottom:12}}>👤 {pinnedRes.res.user}</div>
+          <div style={{fontSize:12,color:'#6b7280',marginBottom:12}}>👤 {sama(pinnedRes.res.user)}</div>
           <div style={{display:'flex',gap:8}}>
             <button onClick={()=>{openEdit(pinnedRes.car,pinnedRes.res);setPinnedRes(null);}}
               style={{flex:1,padding:'8px 0',background:'#c2410c',color:'white',border:'none',borderRadius:7,fontWeight:700,fontSize:12,cursor:'pointer'}}>✎ 編集</button>
             <button onClick={()=>{
-              if(window.confirm(`「${pinnedRes.car.name}」の予約（${pinnedRes.res.fm+1}/${pinnedRes.res.fd}〜${pinnedRes.res.tm+1}/${pinnedRes.res.td} ${pinnedRes.res.user}）を削除しますか？`)){
+              if(window.confirm(`「${pinnedRes.car.name}」の予約（${pinnedRes.res.fm+1}/${pinnedRes.res.fd}〜${pinnedRes.res.tm+1}/${pinnedRes.res.td} ${sama(pinnedRes.res.user)}）を削除しますか？`)){
                 if(pinnedRes.res._rental){
                   onDeleteRentalRes(pinnedRes.car.id,pinnedRes.res.id);
                 }else{
@@ -11876,7 +11899,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
               </span>
               <span style={{fontSize:16,fontWeight:700,color:'#334155'}}>📅 {hoverRes.res.fm+1}/{hoverRes.res.fd} 〜 {hoverRes.res.tm+1}/{hoverRes.res.td}</span>
               <span style={{fontSize:15,fontWeight:800,color:'white',background:hoverRes.res._rental?'#059669':'#c2410c',borderRadius:20,padding:'3px 12px'}}>{loanDays(hoverRes.res)}日間</span>
-              <span style={{fontSize:18,fontWeight:800,color:'#1e293b'}}>👤 {hoverRes.res.user}</span>
+              <span style={{fontSize:18,fontWeight:800,color:'#1e293b'}}>👤 {sama(hoverRes.res.user)}</span>
               <span style={{fontSize:11,color:'#94a3b8',fontWeight:600}}>クリックで編集・削除</span>
             </div>
           ):(
@@ -12463,7 +12486,7 @@ const RestoreModal = memo(({isOpen, onClose, currentUser, inspData})=>{
                            return <div key={i} style={{border:`1px solid ${here?'#eef2f8':'#e6c98a'}`,borderRadius:9,padding:'8px 11px',display:'flex',gap:10,alignItems:'flex-start',background:here?'white':'#fffaf0'}}>
                              <div style={{fontSize:14,fontWeight:800,color:'#173da8',width:46,flexShrink:0}}>{r.time||'—'}</div>
                              <div style={{flex:1,minWidth:0}}>
-                               <div style={{fontSize:13.5,fontWeight:800}}>{r.name}</div>
+                               <div style={{fontSize:13.5,fontWeight:800}}>{sama(r.name)}</div>
                                {r.carType&&<div style={{fontSize:12,color:'#64748b'}}>{r.carType}</div>}
                                {r.loaner&&<div style={{fontSize:11.5,color:'#0e9d58',fontWeight:700,marginTop:2}}>🔑 代車：{r.loaner}</div>}
                              </div>
@@ -15725,7 +15748,7 @@ function AppInner() {
               return(
                 <div key={p.pid} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 9px',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8}}>
                   <div style={{flex:1,minWidth:0,fontSize:12.5}}>
-                    <b>{when}</b>　{r.name}{r.time?'　'+r.time:''}
+                    <b>{when}</b>　{sama(r.name)}{r.time?'　'+r.time:''}
                     <span style={{marginLeft:6,fontSize:11,color:'#6b7280'}}>{r.store==='sanda'?'三田店':'本店'}{r.staff?'・'+r.staff:''}</span>
                   </div>
                   <button onClick={()=>resendInspPending(p)} style={{padding:'6px 10px',background:'#dc2626',color:'white',border:'none',borderRadius:7,fontWeight:800,fontSize:11.5,cursor:'pointer',flexShrink:0}}>送り直す</button>
@@ -16929,7 +16952,7 @@ function AppInner() {
                                   <td style={TD}>
                                     <div style={{lineHeight:1.25}}>
                                       <span style={{fontSize:10,fontWeight:800,color:'white',background:'#ea580c',borderRadius:20,padding:'1px 7px',whiteSpace:'nowrap'}}>🚗 事前入庫</span>
-                                      <div style={{fontWeight:800,color:'#7c2d12',marginTop:2}}>{r.name}</div>
+                                      <div style={{fontWeight:800,color:'#7c2d12',marginTop:2}}>{sama(r.name)}</div>
                                     </div>
                                   </td>
                                   <td style={TD}><span style={{fontWeight:700,color:'#374151',fontSize:13}}>{r.carType||'—'}</span></td>
@@ -16972,7 +16995,7 @@ function AppInner() {
                                     title={_arr?'納車済み（クリックで解除）':'納車が終わったらクリック'}
                                     style={{...TD,width:50,maxWidth:50,cursor:'pointer',textAlign:_arr?'center':undefined,background:_arr?'#fde047':undefined,paddingLeft:6,paddingRight:3,whiteSpace:isSpecialSlot(slot)?'normal':'nowrap',lineHeight:isSpecialSlot(slot)?1.12:undefined,color:'#065f46',fontWeight:700,fontSize:isSpecialSlot(slot)?10:11,borderLeft:'3px solid #059669'}}>
                                     {_arr?<span style={{fontWeight:900,color:'#dc2626',fontSize:15,lineHeight:1}}>✓</span>:(isSpecialSlot(slot)?specialSlotLabel(slot):slot)}</td>
-                                  <td style={{...TD,fontWeight:700,color:'#064e3b',whiteSpace:'nowrap'}}>{r.name}</td>
+                                  <td style={{...TD,fontWeight:700,color:'#064e3b',whiteSpace:'nowrap'}}>{sama(r.name)}</td>
                                   <td style={TD}><span style={{fontWeight:700,color:'#374151',fontSize:13}}>{r.carType||'—'}</span></td>
                                   <td style={TD}></td>
                                   {/* ★同上：限定のときだけ 🔒、それ以外はバッジなし */}
