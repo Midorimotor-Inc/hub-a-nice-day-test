@@ -91,17 +91,8 @@ const STORES=[
   {id:'sanda', name:'三田店',color:'#dc2626',bg:'#fef2f2'},
 ];
 const TIME_SLOTS=(()=>{const s=[];for(let h=9;h<=18;h++)for(let m=0;m<60;m+=30)s.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);return s;})();
-const ALL_STAFF=[
-  {uid:'h1',name:'見取大介',store:'honten'},{uid:'h2',name:'岡上秀一',store:'honten'},
-  {uid:'h3',name:'竹林直行',store:'honten'},{uid:'h4',name:'幸田かつのり',store:'honten'},
-  {uid:'h5',name:'魚住圭',store:'honten'},{uid:'h6',name:'舟田祥子',store:'honten'},
-  {uid:'h7',name:'江川京志',store:'honten'},{uid:'h8',name:'ダク',store:'honten'},
-  {uid:'h9',name:'カビン',store:'honten'},{uid:'s10',name:'藤原昭人',store:'sanda'},
-  {uid:'s11',name:'中井啓介',store:'sanda'},{uid:'s12',name:'宮原てるま',store:'sanda'},
-  {uid:'s13',name:'芦田',store:'sanda'},{uid:'s14',name:'長谷川',store:'sanda'},
-  {uid:'s15',name:'石井',store:'sanda'},{uid:'s16',name:'両澤ちよう',store:'sanda'},
-  {uid:'s17',name:'野呂遥奈',store:'sanda'},{uid:'s18',name:'河合',store:'sanda'},
-];
+// スタッフの名簿はこの画面では使わない（名簿は {store}-staff-v2 が本物）。
+// 退職者が残ったままの古い一覧がここに有ったので外した（2026-10-29）
 const LOANERS_H=[
   {id:1,name:'ワゴンR',num:'1234',store:'honten'},{id:2,name:'ムーヴ',num:'5678',store:'honten'},
   {id:3,name:'N-BOX',num:'9012',store:'honten'},{id:4,name:'タント',num:'3456',store:'honten'},

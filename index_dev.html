@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793257558850';
+    window.__APP_BUILD='build-1793263641084';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.81.1';
+const APP_VERSION = '3.81.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -281,12 +281,14 @@ const BadgeIcon = ({badge, size=16, style={}}) => {
 };
 
 // -- デフォルトスタッフ（初回起動時のシード） --
+//   ★ここは【Firestoreの名簿（{store}-staff-v2）が空のときだけ】使う種。
+//     普段の名簿はスタッフ設定で足す・直す・外す。mobile.html の DEFAULT_STAFF と同じ中身に保つ。
 const DEFAULT_STAFF_HONTEN = [
   {uid:'h0', name:'見取勇一',     myNumber:0,  badge:'president', store:'sanda'},
   {uid:'h1', name:'見取大介',     myNumber:1,  badge:'inspector', store:'honten'},
   {uid:'h2', name:'岡上秀一',     myNumber:2,  badge:'inspector', store:'honten'},
   {uid:'h3', name:'竹林直行',     myNumber:3,  badge:'inspector', store:'honten'},
-  {uid:'h4', name:'幸田かつのり', myNumber:4,  badge:'mechanic',  store:'honten'},
+  {uid:'h4', name:'幸田桂紀',     myNumber:4,  badge:'mechanic',  store:'honten'},
   {uid:'h5', name:'魚住圭',       myNumber:5,  badge:'mechanic',  store:'honten'},
   {uid:'h6', name:'舟田祥子',     myNumber:6,  badge:'office',    store:'honten'},
   {uid:'h7', name:'江川京志',     myNumber:7,   badge:'bodywork',  store:'honten'},
@@ -296,12 +298,12 @@ const DEFAULT_STAFF_HONTEN = [
 const DEFAULT_STAFF_SANDA = [
   {uid:'s10', name:'藤原昭人',   myNumber:10, badge:'sales',     store:'sanda'},
   {uid:'s11', name:'中井啓介',   myNumber:11, badge:'sales',     store:'sanda'},
-  {uid:'s13', name:'芦田',       myNumber:12, badge:'mechanic',  store:'sanda'},
-  {uid:'s14', name:'長谷川',     myNumber:13, badge:'mechanic',  store:'sanda'},
-  {uid:'s15', name:'石井',       myNumber:14, badge:'mechanic',  store:'sanda'},
+  {uid:'s13', name:'芦田昌則',   myNumber:12, badge:'mechanic',  store:'sanda'},
+  {uid:'s14', name:'長谷川昌彦', myNumber:13, badge:'mechanic',  store:'sanda'},
+  {uid:'s15', name:'石井光',     myNumber:14, badge:'mechanic',  store:'sanda'},
   {uid:'s16', name:'両澤ちよう', myNumber:15, badge:'sales',     store:'sanda'},
   {uid:'s17', name:'野呂遥奈',   myNumber:16, badge:'sales',     store:'sanda'},
-  {uid:'s18', name:'河合',       myNumber:17, badge:'assistant', store:'sanda'},
+  {uid:'s18', name:'河合よっちゃん',myNumber:17,badge:'assistant',store:'sanda'},
 ];
 // 旧来の定数（後方互換 + 静的参照が残る箇所のフォールバック）
 const STAFF_HONTEN = DEFAULT_STAFF_HONTEN.map(s=>({id:s.myNumber,...s}));

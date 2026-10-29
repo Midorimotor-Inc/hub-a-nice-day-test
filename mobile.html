@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793257558850';
+  window.__APP_BUILD='build-1793263641084';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.81.1';
+const MOBILE_VERSION='3.81.2';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -343,26 +343,64 @@ const shortenCorpName=(name)=>{
 };
 // タイムスケジュール／入庫時間の並び：午前 → 9:00〜12:00 → 未定(旧12:30の位置=昼間) → 午後 → 13:00〜18:00（PC版SCHED_SLOTSと同一）
 const SCHED_SLOTS=(()=>{const out=['午前'];for(const s of TIME_SLOTS){if(s==='12:30'){out.push('未定');continue;}if(s==='13:00')out.push('午後');out.push(s);}return out;})();
+// ★静的な名簿は【Firestoreの名簿が読めない時だけの保険】。本物の名簿は {store}-staff-v2
+//   （PCの「スタッフ設定」で足す・直す・外す）。ここに書いた名前は必ず古くなるので、
+//   画面に名前を出すときは staffOf() / staffPick() を通すこと（DEFAULT_STAFF を直接使わない）。
+//   中身は index_dev.html の DEFAULT_STAFF_HONTEN / DEFAULT_STAFF_SANDA と同じに保つ。
+//   2026-10-29 退職した宮原てるま を外した（PC版の名簿には前から居ない）
 const DEFAULT_STAFF=[
-  {uid:'h1',name:'見取大介',    myNumber:1, store:'honten'},
-  {uid:'h2',name:'岡上秀一',    myNumber:2, store:'honten'},
-  {uid:'h3',name:'竹林直行',    myNumber:3, store:'honten'},
-  {uid:'h4',name:'幸田かつのり',myNumber:4, store:'honten'},
-  {uid:'h5',name:'魚住圭',      myNumber:5, store:'honten'},
-  {uid:'h6',name:'舟田祥子',    myNumber:6, store:'honten'},
-  {uid:'h7',name:'江川京志',    myNumber:7, store:'honten'},
-  {uid:'h8',name:'ダク',        myNumber:8, store:'honten'},
-  {uid:'h9',name:'カビン',      myNumber:9, store:'honten'},
-  {uid:'s10',name:'藤原昭人',   myNumber:10,store:'sanda'},
-  {uid:'s11',name:'中井啓介',   myNumber:11,store:'sanda'},
-  {uid:'s12',name:'宮原てるま', myNumber:12,store:'sanda'},
-  {uid:'s13',name:'芦田',       myNumber:13,store:'sanda'},
-  {uid:'s14',name:'長谷川',     myNumber:14,store:'sanda'},
-  {uid:'s15',name:'石井',       myNumber:15,store:'sanda'},
-  {uid:'s16',name:'両澤ちよう', myNumber:16,store:'sanda'},
-  {uid:'s17',name:'野呂遥奈',   myNumber:17,store:'sanda'},
-  {uid:'s18',name:'河合',       myNumber:18,store:'sanda'},
+  {uid:'h0', name:'見取勇一',      myNumber:0, badge:'president', store:'sanda'},
+  {uid:'h1', name:'見取大介',      myNumber:1, badge:'inspector', store:'honten'},
+  {uid:'h2', name:'岡上秀一',      myNumber:2, badge:'inspector', store:'honten'},
+  {uid:'h3', name:'竹林直行',      myNumber:3, badge:'inspector', store:'honten'},
+  {uid:'h4', name:'幸田桂紀',      myNumber:4, badge:'mechanic',  store:'honten'},
+  {uid:'h5', name:'魚住圭',        myNumber:5, badge:'mechanic',  store:'honten'},
+  {uid:'h6', name:'舟田祥子',      myNumber:6, badge:'office',    store:'honten'},
+  {uid:'h7', name:'江川京志',      myNumber:7, badge:'bodywork',  store:'honten'},
+  {uid:'h8', name:'ダク',          myNumber:8, badge:'assistant', store:'honten'},
+  {uid:'h9', name:'カビン',        myNumber:9, badge:'assistant', store:'honten'},
+  {uid:'s10',name:'藤原昭人',      myNumber:10,badge:'sales',     store:'sanda'},
+  {uid:'s11',name:'中井啓介',      myNumber:11,badge:'sales',     store:'sanda'},
+  {uid:'s13',name:'芦田昌則',      myNumber:12,badge:'mechanic',  store:'sanda'},
+  {uid:'s14',name:'長谷川昌彦',    myNumber:13,badge:'mechanic',  store:'sanda'},
+  {uid:'s15',name:'石井光',        myNumber:14,badge:'mechanic',  store:'sanda'},
+  {uid:'s16',name:'両澤ちよう',    myNumber:15,badge:'sales',     store:'sanda'},
+  {uid:'s17',name:'野呂遥奈',      myNumber:16,badge:'sales',     store:'sanda'},
+  {uid:'s18',name:'河合よっちゃん',myNumber:17,badge:'assistant', store:'sanda'},
 ];
+// ── 名簿はPCと同じものを使う（2026-10-29）──────────────────────────────
+//   退職した人がスマホに残っていたのは、予約カードの担当者が静的名簿を見ていたため。
+//   ここから先は「Firestoreの名簿 → 最後に読めた名簿の控え → 静的名簿」の順で使う。
+//   控えを持つので、電波が無いときでも退職者が復活しない。
+const STAFF_CACHE_KEY=STOR+'staff-cache';
+let staffCacheMem=null, staffCacheRead=false;
+const staffCacheLoad=()=>{
+  if(staffCacheRead)return staffCacheMem;
+  staffCacheRead=true;
+  try{ const o=JSON.parse(localStorage.getItem(STAFF_CACHE_KEY)||'null');
+       staffCacheMem=(o&&(Array.isArray(o.h)||Array.isArray(o.s)))?o:null; }catch(e){ staffCacheMem=null; }
+  return staffCacheMem;
+};
+const staffCacheSave=(h,s)=>{
+  try{
+    const cur=staffCacheLoad()||{};
+    const next={h:(Array.isArray(h)&&h.length)?h:(cur.h||[]),
+                s:(Array.isArray(s)&&s.length)?s:(cur.s||[]),at:Date.now()};
+    staffCacheMem=next; staffCacheRead=true;
+    localStorage.setItem(STAFF_CACHE_KEY,JSON.stringify(next));
+  }catch(e){}
+};
+// その店の名簿（社長・番号0も含む生の並び）
+const staffOf=(store,h,s)=>{
+  const sid=store==='sanda'?'sanda':'honten';
+  const live=sid==='sanda'?s:h;
+  if(Array.isArray(live)&&live.length)return live;
+  const c=staffCacheLoad(); const cc=c?(sid==='sanda'?c.s:c.h):null;
+  if(Array.isArray(cc)&&cc.length)return cc;
+  return DEFAULT_STAFF.filter(x=>x.store===sid);
+};
+// 画面の「担当者」に出す人（社長・番号0は出さない）
+const staffPick=(store,h,s)=>staffOf(store,h,s).filter(x=>x&&x.name&&x.badge!=='president'&&x.myNumber!==0);
 // 静的代車リストは動的マスタ（{store}-cars）が読めない時のフォールバック専用。
 // 本番の実代車とは別物なので、ここから車名を逆引きしないこと。
 const LOANERS_H=[
@@ -1708,7 +1746,13 @@ const AuthAddScreen=({onDone,onCancel,staffH,staffS,viaHandoff})=>{
 const LoginScreen=({onLogin,onAddAuth})=>{
   const [err,setErr]=useState('');
   const [success,setSuccess]=useState(null);
-  const [staffList,setStaffList]=useState(DEFAULT_STAFF);
+  // 最初に出す名前も【控え】から（静的名簿だと退職者が一瞬出てしまう・2026-10-29）
+  const [staffList,setStaffList]=useState(()=>{
+    const c=staffCacheLoad();
+    if(c){ const all=[...(c.h||[]).map(x=>({...x,store:'honten'})),...(c.s||[]).map(x=>({...x,store:'sanda'}))].filter(x=>x&&x.name);
+           if(all.length)return all; }
+    return DEFAULT_STAFF;
+  });
   const [staffLoading,setStaffLoading]=useState(true);
   useEffect(()=>{
     (async()=>{
@@ -1724,6 +1768,7 @@ const LoginScreen=({onLogin,onAddAuth})=>{
             all=all.filter(st=>mine.has(st.name));
           }
         }
+        if(Array.isArray(h)||Array.isArray(s))staffCacheSave(h,s);   // 名簿の控え
         if(all.length>0)setStaffList(all);
       }catch(e){}
       setStaffLoading(false);
@@ -5993,6 +6038,7 @@ const App=()=>{
       if(isPlainObj(doS))setDayOffS(doS);
       if(Array.isArray(stH))setStaffH(stH);
       if(Array.isArray(stS))setStaffS(stS);
+      staffCacheSave(stH,stS);   // 名簿の控え（電波が無い時に退職者が復活しないよう）
       if(isPlainObj(plH))setPleaveH(plH);
       if(isPlainObj(plS))setPleaveS(plS);
       if(isPlainObj(mhol))setMonthlyHolidays(mhol);
@@ -7136,7 +7182,7 @@ const App=()=>{
         {tab==='sched'&&<ScheduleView onEditMemo={(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={toggleDayMemo} otherView={otherView} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
           loanerResH={loanerResH} loanerResS={loanerResS} loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId} initDate={schedInitDate} onOpenEdit={openEdit} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
           schedRestrictions={schedRestrictions}
-          staffList={((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(s=>s.store===vsId)).filter(s=>s.badge!=='president'&&s.myNumber!==0)}
+          staffList={staffPick(vsId,staffH,staffS)}
           dayOffData={vsId==='honten'?dayOffH:dayOffS}
           pleaveData={vsId==='honten'?pleaveH:pleaveS}
           closedDays={cDays} closedDates={cDates} overrideOpen={overrideOpen} inspLimits={inspLimits}/>}
@@ -7153,7 +7199,7 @@ const App=()=>{
           vsId={vsId} isClosedDk={isClosedDk} onNeedFile={needCfFile}
           onBook={bookFromCust} onTemp={tempFromCust} onReload={()=>loadCf(true)}/>}
         {tab==='off'&&<HolidayView user={user} vsId={myStore} viewStore={vsId} adminMode={canRestore(user)}
-          staffH={staffH.length?staffH:DEFAULT_STAFF.filter(s=>s.store==='honten')} staffS={staffS.length?staffS:DEFAULT_STAFF.filter(s=>s.store==='sanda')}
+          staffH={staffOf('honten',staffH,staffS)} staffS={staffOf('sanda',staffH,staffS)}
           dayOffH={dayOffH} dayOffS={dayOffS} pleaveH={pleaveH} pleaveS={pleaveS}
           closedDaysH={closedDaysH} closedDaysS={closedDaysS} closedDatesH={closedDatesH} closedDatesS={closedDatesS} overrideOpen={overrideOpen}
           monthlyHolidays={monthlyHolidays} onToggle={toggleDayOff}
@@ -7175,8 +7221,7 @@ const App=()=>{
         const items=(Array.isArray(memoItemsRaw)?memoItemsRaw:[]).map(si=>({...si,text:si.text||si.content||si.label||''})).filter(si=>si.text);
         // ★担当者：新規は自分、直す時は元の人（入っていなければ空＝ここで入れられる）
         const initBy=isNew?(user?.name||''):((cur&&cur.by)||'');
-        const staffNames=((vsId==='honten'?staffH:staffS).length>0?(vsId==='honten'?staffH:staffS):DEFAULT_STAFF.filter(x=>x.store===vsId))
-          .filter(x=>x.badge!=='president'&&x.myNumber!==0).map(x=>x.name);
+        const staffNames=staffPick(vsId,staffH,staffS).map(x=>x.name);
         return <MemoSheet dateLabel={lbl} isNew={isNew} items={items} initBy={initBy} staffNames={staffNames}
           initContent={cur?(cur.content||cur.text||''):''}
           onSave={(c,by)=>saveDayMemo(memoEdit.dk,memoEdit.idx,c,by)}
@@ -7189,7 +7234,7 @@ const App=()=>{
         initial={editMode.initial}
         vsId={vsId}
         currentUser={user}
-        staffList={DEFAULT_STAFF.filter(s=>s.store===vsId)}
+        staffList={staffPick(vsId,staffH,staffS)}
         loanerCars={vsId==='honten'?loanerCarsH:loanerCarsS}
         rentalCars={rentalCars.length?rentalCars:DEFAULT_RENTAL_CARS}
         loanerRes={vsId==='honten'?loanerResH:loanerResS}

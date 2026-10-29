@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793257558850';
+  window.__APP_BUILD='build-1793263641084';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -146,7 +146,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.81.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.81.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -519,17 +519,8 @@ const STORES=[
   {id:'sanda', name:'三田店',color:'#dc2626',bg:'#fef2f2'},
 ];
 const TIME_SLOTS=(()=>{const s=[];for(let h=9;h<=18;h++)for(let m=0;m<60;m+=30)s.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);return s;})();
-const ALL_STAFF=[
-  {uid:'h1',name:'見取大介',store:'honten'},{uid:'h2',name:'岡上秀一',store:'honten'},
-  {uid:'h3',name:'竹林直行',store:'honten'},{uid:'h4',name:'幸田かつのり',store:'honten'},
-  {uid:'h5',name:'魚住圭',store:'honten'},{uid:'h6',name:'舟田祥子',store:'honten'},
-  {uid:'h7',name:'江川京志',store:'honten'},{uid:'h8',name:'ダク',store:'honten'},
-  {uid:'h9',name:'カビン',store:'honten'},{uid:'s10',name:'藤原昭人',store:'sanda'},
-  {uid:'s11',name:'中井啓介',store:'sanda'},{uid:'s12',name:'宮原てるま',store:'sanda'},
-  {uid:'s13',name:'芦田',store:'sanda'},{uid:'s14',name:'長谷川',store:'sanda'},
-  {uid:'s15',name:'石井',store:'sanda'},{uid:'s16',name:'両澤ちよう',store:'sanda'},
-  {uid:'s17',name:'野呂遥奈',store:'sanda'},{uid:'s18',name:'河合',store:'sanda'},
-];
+// スタッフの名簿はこの画面では使わない（名簿は {store}-staff-v2 が本物）。
+// 退職者が残ったままの古い一覧がここに有ったので外した（2026-10-29）
 const LOANERS_H=[
   {id:1,name:'ワゴンR',num:'1234',store:'honten'},{id:2,name:'ムーヴ',num:'5678',store:'honten'},
   {id:3,name:'N-BOX',num:'9012',store:'honten'},{id:4,name:'タント',num:'3456',store:'honten'},

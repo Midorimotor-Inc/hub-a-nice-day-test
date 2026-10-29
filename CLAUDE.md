@@ -1389,6 +1389,28 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   `SHOT=<保存先.png> node mobile_delivery_test.js` で見た目も撮れる。
   ※**スマホの下タブは `button` ではなく `div`**。ラベルは「スケジュール」（「予定」ではない）。
 
+### 名簿（スタッフ）はPCの1か所だけが本物（v3.81.2・2026-10-29・現場からの報告）
+- **報告**：スマホの予約カードの「担当」に、退職した人が残っていた。PC版には前から出ていない。
+- **原因**：スマホの予約カード（EditModal）だけが `staffList={DEFAULT_STAFF.filter(...)}` と
+  **HTMLに直書きした静的名簿**を見ていた。Firestore の名簿（`{store}-staff-v2`）を読んでいなかったので、
+  PCで名簿から外しても、スマホのこの1か所だけ永遠に古いままだった。
+- **直し方**：名簿の出どころを `staffOf()` / `staffPick()` の2つに集約した（mobile.html）。
+  **順番は「Firestoreの名簿 → 最後に読めた名簿の控え → 静的名簿」**。
+  - `staffOf(store,staffH,staffS)` … その店の名簿（社長・番号0も含む生の並び）
+  - `staffPick(store,staffH,staffS)` … 画面の「担当」に出す人（`badge!=='president'` かつ `myNumber!==0`）
+  - 控えは `localStorage` の `{STOR}staff-cache`（`{h:[],s:[],at}`）。読めた時に `staffCacheSave()` で残す。
+    **電波が無いときに静的名簿へ落ちて退職者が復活しないための控え。**
+- **書き換えた場所**：タイムスケジュール／休日タブ／休日メモ／★予約カードの担当／ログイン画面の初期表示。
+- **決めごと**：
+  - **`DEFAULT_STAFF` を画面から直接使わないこと。** 必ず `staffOf()` / `staffPick()` を通す。
+  - 静的名簿（mobile.html の `DEFAULT_STAFF` と index_dev.html の `DEFAULT_STAFF_HONTEN`/`DEFAULT_STAFF_SANDA`）は
+    **Firestoreが空のときだけの種**。**2つのファイルで中身を同じに保つ**（2026-10-29 に今の名簿へ揃え、宮原てるまを外した）。
+  - 顧客リスト（customers.html / customers_dev.html）にあった使われていない `ALL_STAFF` は消した（退職者が残っていた）。
+- **退職した人が出たときの手当て**：① PCのスタッフ設定で名簿から外す →
+  ② `node fb_fix_staff_names.js --retire <苗字>`（下見）→ `--write` で休日・有給・休日メモからも消す。
+- 検査は `node mobile_staff_test.js`（15件・PORT 8387）。名簿に居ない人が「担当」に出ないこと、
+  名簿が読めない時に控えを使うことを見ている。
+
 ### 【記録】2026-10-14 に本番を v3.61.1 へ（port_to_main.js でまるごと移植）
 - それまで本番は v3.57.1。**各項の「本番にはまだ入れていない」は 2026-10-14 時点ですべて解消**（上の各項も書き換えた）。
 - **注意：`port_to_main.js` はまるごと移すので、「テスト版のみ」と書いた機能も次の移植で一緒に本番へ出る。**
