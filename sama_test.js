@@ -93,9 +93,9 @@ const seed = {
 
   console.log('\n■ ① 1日表示');
   const body = await page.evaluate(() => document.body.innerText);
-  t('★車検の行に「青木　一郎様」と出る', /青木　一郎様/.test(body), body.slice(0, 200));
-  t('★整備の行に「遠藤　咲様」と出る', /遠藤　咲様/.test(body));
-  t('★「青木　一郎」だけ（様なし）では出ていない', !/青木　一郎(?!様)/.test(body));
+  t('★車検の行に「青木　一郎 様」と出る', /青木　一郎 様/.test(body), body.slice(0, 200));
+  t('★整備の行に「遠藤　咲 様」と出る', /遠藤　咲 様/.test(body));
+  t('★「青木　一郎」だけ（様なし）では出ていない', !/青木　一郎(?! 様)/.test(body));
 
   console.log('\n■ ⑤ 二重敬称にしない');
   t('★「井上商事 御中」はそのまま（御中様にしない）', /井上商事 御中/.test(body) && !/御中様/.test(body), body.match(/井上商事[^\n]*/));
@@ -124,9 +124,9 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-weeknav]'); if (b) b.click(); });
   await page.waitForTimeout(1400);
   const wk = await page.evaluate(() => [...document.querySelectorAll('[data-wentnm]')].map(e => e.innerText.trim()));
-  t('★週表のお名前に様が付く', wk.indexOf('遠藤　咲様') >= 0, wk);
+  t('★週表のお名前に様が付く', wk.indexOf('遠藤　咲 様') >= 0, wk);
   const wkb = await page.evaluate(() => [...document.querySelectorAll('[data-wcb]')].map(b => b.getAttribute('title') || ''));
-  t('★車検のバッジのなぞり書きにも様', wkb.some(x => /青木　一郎様/.test(x)), wkb[0]);
+  t('★車検のバッジのなぞり書きにも様', wkb.some(x => /青木　一郎 様/.test(x)), wkb[0]);
   await page.evaluate(() => { const b = [...document.querySelectorAll('[data-weekview] button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); });
   await page.waitForTimeout(600);
   // 検索
@@ -134,7 +134,7 @@ const seed = {
   await page.waitForTimeout(700);
   await page.evaluate(() => { const i = document.querySelector('input[type=search], input[placeholder*="氏名"], input[placeholder*="検索"]'); if (i) { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(i, '青木'); i.dispatchEvent(new Event('input', { bubbles: true })); } });
   await page.waitForTimeout(1200);
-  t('★検索の結果にも様が付く', await page.evaluate(() => /青木　一郎様/.test(document.body.innerText)),
+  t('★検索の結果にも様が付く', await page.evaluate(() => /青木　一郎 様/.test(document.body.innerText)),
     await page.evaluate(() => document.body.innerText.slice(0, 300)));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(600);

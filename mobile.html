@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793256287132';
+  window.__APP_BUILD='build-1793257558850';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.81.0';
+const MOBILE_VERSION='3.81.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -327,7 +327,9 @@ const CORP_TOKENS=['特定非営利活動法人','一般社団法人','一般財
 //     入れてしまうと、顧客リストとの突き合わせ・検索・控えのキー（氏名::日付）・
 //     代車の紐付け（res.user === row.name）が**全部ずれる**。
 const SAMA_RE=/(様|さま|サマ|御中|殿)[s　]*$/;
-const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+'様'); };
+//   ★お名前と「様」のあいだは【半マス＝半角のスペース】（2026-10-30 ユーザー決定。PC版と同じ）。
+const SAMA_GAP=' ';
+const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+SAMA_GAP+'様'); };
 
 const shortenCorpName=(name)=>{
   const orig=String(name==null?'':name).trim();

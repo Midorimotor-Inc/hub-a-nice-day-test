@@ -150,7 +150,7 @@ const seed = {
   t('★記録が無い分は「記録なし」と出る', bs.some(x => /受け付け　記録なし/.test(x.title)), bs[0] && bs[0].title);
   const nm = await page.evaluate(() => [...document.querySelectorAll('[data-wentnm]')].map(e => e.innerText.trim()));
   // ★v3.81.0 から、予約のお名前には「様」が付く（2026-10-30 ユーザー指示）
-  t('整備のお名前が2件出ている（様つき）', nm.length === 2 && nm.indexOf('記録あり花子様') >= 0 && nm.indexOf('記録なし太郎様') >= 0, nm);
+  t('整備のお名前が2件出ている（様つき）', nm.length === 2 && nm.indexOf('記録あり花子 様') >= 0 && nm.indexOf('記録なし太郎 様') >= 0, nm);
   // 記録ありをなぞる
   // ★React は mouseover を見て onMouseEnter を呼ぶので、本物のマウス移動でなぞる
   await page.locator('[data-wentnm]').filter({ hasText: '記録あり' }).first().hover();
@@ -158,7 +158,7 @@ const seed = {
   let tip = await page.evaluate(() => { const e = document.querySelector('[data-wtip]'); return e ? e.innerText : ''; });
   t('★吹き出しが出る', !!tip, tip);
   t('★見出しが「この予約の受け付け」', /この予約の受け付け/.test(tip), tip);
-  t('★お名前が出る', /記録あり花子様/.test(tip), tip);
+  t('★お名前が出る', /記録あり花子 様/.test(tip), tip);
   t('★入れた日時が出る（10/15 14:23）', /受け付け　10\/15 14:23/.test(tip), tip);
   t('★入れた人も出る', /10\/15 14:23　江川京志/.test(tip), tip);
   // 記録なしをなぞる

@@ -103,6 +103,7 @@ const run = async (chromium, seed) => {
     const nr = nav ? nav.getBoundingClientRect() : null;
     return { txt: b.innerText.replace(/\n/g, ' '), mid: (r.left + r.right) / 2, half: window.innerWidth / 2,
       top: r.top, logoTop: lr ? lr.top : null, navTop: nr ? nr.top : null,
+      title: b.getAttribute('title') || '',
       bang: !!b.querySelector('[data-dashbang]'),
       bangBg: (() => { const s = b.querySelector('[data-dashbang]'); return s ? getComputedStyle(s).backgroundColor : ''; })() };
   });
@@ -110,7 +111,9 @@ const run = async (chromium, seed) => {
   t('★★画面のまん中にある', !!d && Math.abs(d.mid - d.half) <= 6, d);
   t('★バージョンと同じ段（1行目）にある', !!d && d.logoTop != null && Math.abs(d.top - d.logoTop) <= 20, d);
   t('★ナビの段より上にある', !!d && d.navTop != null && d.top < d.navTop, d);
-  t('★「別タブ」と書いてある', !!d && /別タブ/.test(d.txt), d);
+  // ★2026-10-30 ユーザー指示：ボタンの中の「（別タブ）」の字は出さない（なぞると説明が出る）
+  t('★「別タブ」の字は出さない', !!d && !/別タブ/.test(d.txt), d);
+  t('★なぞると「別タブ」と出る', !!d && /別タブ/.test(d.title || ''), d);
 
   console.log('\n■ ⑤ 車両管理の知らせ → 黄色の！');
   t('★★！が出ている（期日を過ぎた点検が1台ある）', !!d && d.bang, d);

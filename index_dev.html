@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793256287132';
+    window.__APP_BUILD='build-1793257558850';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.81.0';
+const APP_VERSION = '3.81.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -976,7 +976,11 @@ const CORP_TOKENS=['特定非営利活動法人','一般社団法人','一般財
 //     代車の紐付け（res.user === row.name）が**全部ずれる**。
 //   すでに 様／さま／御中／殿 で終わっているものには足さない（二重敬称にしない）。
 const SAMA_RE=/(様|さま|サマ|御中|殿)[\s　]*$/;
-const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+'様'); };
+//   ★お名前と「様」のあいだは【半マス＝半角のスペース】（2026-10-30 ユーザー決定・mock_sama_space.html）。
+//     詰めると「一郎様」がひと続きに見え、一マス（全角）だと姓と名の区切りと同じ幅になって
+//     「橋口　大志朗　様」が3つの言葉に見えてしまう。半マスがちょうどよい、と見比べて決めた。
+const SAMA_GAP=' ';
+const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+SAMA_GAP+'様'); };
 
 const shortenCorpName=(name)=>{
   const orig=String(name==null?'':name).trim();
@@ -4640,7 +4644,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               <span data-wentnm="1"
                 onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
                   setTip({head:'🕘 この予約の受け付け',
-                    text:r.name+'様'+String.fromCharCode(10)+weekAtLines(r),
+                    text:sama(r.name)+String.fromCharCode(10)+weekAtLines(r),
                     left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
                 onMouseLeave={()=>setTip(null)}
                 style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{sama(r.name)}</span>
@@ -4848,7 +4852,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                             //   ★台数制限を掛けた日は6台より少ない所が枠外になる＝「7台目」は日によって違う。
                             const bang=r.pendingApproval?'wait':(r.approved?'ok':'');
                             return <button key={i} data-wcb={dk+'/'+i} data-wcboth={oth?'1':'0'} data-wbang={bang||'0'}
-                              title={(r.time||'時間未定')+'　'+r.name+'様　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')
+                              title={(r.time||'時間未定')+'　'+sama(r.name)+'　'+((c&&c.name)||'コース未設定')+(oth?'　／　'+(r.store==='sanda'?'三田店':'本店')+'入庫':'')
                                 +(bang?String.fromCharCode(10)+(bang==='ok'?'⚠ 枠からあふれた分です（承認済み）':'⚠ 枠からあふれた分です（まだ承認されていません）'):'')
                                 +String.fromCharCode(10)+weekAtLines(r)}
                               onClick={()=>onOpenInsp(dk,i)}
@@ -7034,7 +7038,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
             <Row key={'i'+h.dk+'-'+h.ix} onClick={()=>onGo({kind:'insp',dk:h.dk,ix:h.ix,store:(h.r.store==='sanda'||h.r.store==='三田店')?'sanda':'honten'})}>
               <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{dkLabel(h.dk)}</span>
               <Pill c={h.r.bookingStatus==='cancelled'?'#9ca3af':'#c2410c'}>{h.r.bookingStatus==='cancelled'?'取消':'車検'}</Pill>
-              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':'様'}</span>
+              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':SAMA_GAP+'様'}</span>
               <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.r.store)}{h.r.time?' ・ '+h.r.time:''}{h.r.no?' ・ No.'+h.r.no:''}</span>
             </Row>
           ))}
@@ -7042,7 +7046,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
             <Row key={'s'+h.store+h.dk+'-'+h.sk} onClick={()=>onGo({kind:'sched',dk:h.dk,sk:h.sk,store:h.store})}>
               <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{dkLabel(h.dk)}</span>
               <Pill c="#0e7490">整備</Pill>
-              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':'様'}</span>
+              <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':SAMA_GAP+'様'}</span>
               <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.store)}{' ・ '+getBaseSlot(h.sk)}{h.r.work?' ・ '+h.r.work:''}</span>
             </Row>
           ))}
@@ -15802,8 +15806,8 @@ function AppInner() {
                   display:'inline-flex',alignItems:'center',gap:6,padding:'6px 20px',borderRadius:9,
                   background:'white',color:'#9a3412',border:'2px solid white',fontSize:13.5,fontWeight:900,
                   cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',boxShadow:'0 2px 10px rgba(0,0,0,.22)'}}>
+                {/* ★「（別タブ）」の字は出さない（2026-10-30 ユーザー指示）。なぞると説明が出る */}
                 🏠 ダッシュボード
-                <span style={{fontSize:10,opacity:.75,fontWeight:800}}>（別タブ）</span>
                 {dashBang&&(
                   <span data-dashbang="1" style={{position:'absolute',top:-8,right:-8,width:19,height:19,
                     borderRadius:'50%',background:'#facc15',color:'#111',border:'2px solid white',
@@ -15831,16 +15835,17 @@ function AppInner() {
                 {/* ★「全画面」は ✕ のすぐ左に置く（2026-10-25 ユーザー指示）。
                     画面を広げる操作と閉じる操作を右端にまとめる */}
                 <div style={{position:'relative',display:'flex',alignItems:'center'}}>
+                  {/* ★字は出さず、となりの ✕ と同じ形の印だけにする（2026-10-30 ユーザー指示）。
+                      何のボタンかは、なぞると出る説明（title）で分かる。 */}
                   <button data-fs-toggle="1" onClick={toggleFullscreen} title={isFullscreen?'全画面を終了して元のウインドウに戻す':'全画面表示（ブラウザのタブ・お気に入りバーを隠して大きく表示）'}
-                    style={{display:'flex',alignItems:'center',gap:4,padding:isFullscreen?'6px 12px':'5px 10px',
+                    style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
                       background:isFullscreen?'white':'rgba(255,255,255,0.18)',
                       border:isFullscreen?'2px solid white':'2px solid rgba(255,255,255,0.55)',
-                      borderRadius:8,cursor:'pointer',fontWeight:isFullscreen?900:700,fontSize:isFullscreen?12:11,
-                      color:isFullscreen?'#c2410c':'white',whiteSpace:'nowrap',
+                      color:isFullscreen?'#c2410c':'white',cursor:'pointer',lineHeight:1,
                       animation:fsHint?'hubFsNudge .7s ease-in-out 2':'none'}}
                     onMouseEnter={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.32)';}}
                     onMouseLeave={e=>{if(!isFullscreen)e.currentTarget.style.background='rgba(255,255,255,0.18)';}}>
-                    {isFullscreen?<Shrink size={14}/>:<Expand size={14}/>}{isFullscreen?'元に戻す':'全画面'}
+                    {isFullscreen?<Shrink size={16}/>:<Expand size={16}/>}
                   </button>
                   <style>{'@keyframes hubFsNudge{0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 0 rgba(255,255,255,.9)}20%{transform:translateY(3px) scale(1.06);box-shadow:0 0 0 6px rgba(255,255,255,.45)}40%{transform:translateY(-2px) scale(1.06)}60%{transform:translateY(2px) scale(1.04);box-shadow:0 0 0 10px rgba(255,255,255,0)}}'}</style>
                 </div>
@@ -16154,7 +16159,7 @@ function AppInner() {
                               const appr=irows.filter(r=>r.approved&&!r.pendingApproval);    // あふれたが承認済みの分
                               if(!hidden.length&&!pend.length)return null;
                               const nmOf=r=>{const cc=COURSES.find(x=>x.id===Number(r.course));
-                                return (r.name||'')+'様（'+(cc?cc.name:'コース未設定')+'）';};
+                                return sama(r.name)+'（'+(cc?cc.name:'コース未設定')+'）';};
                               // ★【位置】と【承認】の両方に当てはまる人は1行にまとめる（同じ名前を2回出さない）
                               const lines=[day+'日　'+irows.length+'台'];
                               irows.forEach((r,i)=>{
