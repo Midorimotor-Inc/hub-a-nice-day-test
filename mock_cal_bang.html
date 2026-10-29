@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>モック：車検カレンダー 7台目の知らせ</title>
+<!--
+  2026-10-29 車検カレンダーの「7台目の！」のモック（見本）
+  ・外から何も読み込まない1枚のHTML（CDNなし）。名前はすべて架空
+  ・本物のデータには一切つながっていません
+  ・いまのカレンダーは1日あたり3×2の【6コマ固定】。7台目以降は画面にまったく出ない。
+    そこで「7台目がある」ことと「承認されているか」を！で知らせる。
+-->
+<style>
+  :root{ --ink:#1f2a37; --sub:#64748b; --line:#e5e7eb; --bg:#f1f5f9; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:13px;
+       font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif}
+  header{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:9px 14px;
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:800}
+  .tag{font-size:11px;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;font-weight:700}
+  .wrap{padding:12px 14px 40px;max-width:1180px;margin:0 auto}
+  .mocknote{margin:0 0 10px;background:#fff7ed;border:2px solid #fed7aa;border-radius:10px;
+        padding:9px 13px;font-size:12.5px;color:#9a3412;font-weight:700;line-height:1.7}
+  .bar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+       display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .bar .ttl{font-size:15px;font-weight:900}
+  .bar button{font:inherit;font-size:12.5px;font-weight:800;background:#f8fafc;border:1.5px solid #cbd5e1;
+        border-radius:8px;padding:7px 13px;cursor:pointer;color:var(--ink)}
+  .bar button.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+  .sp{flex:1}
+
+  .cal{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);background:#f8fafc}
+  .dow div{padding:6px;text-align:center;font-size:12px;font-weight:800;color:var(--sub);border-left:1px solid var(--line)}
+  .dow div:first-child{border-left:none;color:#dc2626}
+  .dow div:last-child{color:#1d4ed8}
+  .week{display:grid;grid-template-columns:repeat(7,1fr)}
+  .cell{min-height:112px;padding:5px;border-top:1px solid var(--line);border-left:1px solid var(--line);
+        position:relative;cursor:pointer;background:#fff}
+  .cell:first-child{border-left:none}
+  .cell:hover{background:#f0f0ff}
+  .cell.cl{background:#f8fafc;color:#94a3b8;cursor:not-allowed}
+  .cell.cl:hover{background:#f8fafc}
+  .dnum{font-weight:800;font-size:15px;margin-bottom:3px;display:flex;align-items:center;gap:4px}
+  .dnum .sun{color:#dc2626}.dnum .sat{color:#1d4ed8}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;position:relative}
+  .slot{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;
+        font-weight:900;font-size:14px;border:1.5px solid var(--line);background:#f3f4f6;color:#ddd;position:relative}
+  .slot.ma{background:#fee2e2cc;color:#dc2626;border-color:#dc262666}
+  .slot.qu{background:#dbeafecc;color:#2563eb;border-color:#2563eb66}
+  .slot.re{background:#dcfce7cc;color:#16a34a;border-color:#16a34a66}
+  .st{position:absolute;bottom:-2px;left:-2px;width:11px;height:11px;border-radius:2px;color:#fff;
+      font-size:6px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1}
+  .st.h{background:#2563eb}.st.s{background:#dc2626}
+
+  /* 7台目の知らせ */
+  .bang{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+        font-size:11px;font-weight:900;color:#111;border:2px solid #fff;
+        box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:help;flex-shrink:0}
+  .bang.wait{background:#facc15}
+  .bang.ok{background:#22c55e}
+  .bang.pos-b{position:absolute;top:-6px;right:-6px;z-index:6}
+
+  .tip{position:fixed;z-index:60;background:#fff;border:2px solid #38bdf8;border-radius:10px;
+       padding:9px 12px;font-size:12px;line-height:1.75;box-shadow:0 8px 24px rgba(15,23,42,.18);
+       max-width:320px;display:none}
+  .tip b{color:#0c4a6e}
+  .tip .w{color:#a16207;font-weight:800}
+  .tip .o{color:#15803d;font-weight:800}
+
+  .legend{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 15px;
+          font-size:12.5px;color:var(--sub);line-height:2}
+  .legend b{color:var(--ink)}
+  .k{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;
+     font-size:11px;font-weight:900;color:#111;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);vertical-align:-4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📅 車検カレンダー</h1><span class="tag">本店</span><span class="tag">モック（見本）</span>
+</header>
+
+<div class="wrap">
+  <p class="mocknote">これは<b>見本（モック）</b>です。名前はすべて架空で、本物のデータにはつながっていません。<br>
+    いまのカレンダーは1日あたり<b>3×2の6コマ固定</b>で、<b>7台目以降は画面に出ません</b>。
+    そこを「！」で知らせます。<b>！をなぞると中身が出ます。</b></p>
+
+  <div class="bar">
+    <span class="ttl">2026年10月</span>
+    <span class="sp"></span>
+    <span style="font-size:12.5px;font-weight:800;color:#64748b">！の置き場所</span>
+    <button class="on" data-pos="a">A案　日付のとなり</button>
+    <button data-pos="b">B案　6コマの右上</button>
+  </div>
+
+  <div class="cal">
+    <div class="dow"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div>
+    <div id="weeks"></div>
+  </div>
+
+  <div class="legend">
+    <b>！の意味</b><br>
+    <span class="k" style="background:#facc15">!</span>　<b>黄色</b>　…　7台目以降に<b>まだ承認されていない</b>予約がある<br>
+    <span class="k" style="background:#22c55e">!</span>　<b>緑</b>　…　7台目以降はあるが、<b>すべて承認済み</b><br><br>
+    <b>！が出ない日</b>　…　6台までの日（いまと同じ見た目）。<br>
+    <b>なぞると</b>　…　隠れている7台目以降が、氏名・コース・承認の状態つきで出ます。
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+(function(){
+  var COURSE=[{k:'ma',l:'マ',n:'マッハ車検'},{k:'qu',l:'ク',n:'クイック車検'},{k:'re',l:'レ',n:'レギュラー車検'}];
+  var NAMES=['青木','井上','上田','遠藤','大西','加藤','木村','久保','小西','斉藤','柴田','清水','鈴木','高橋','田中','辻','永井','西村','野口','橋本'];
+  var seed=20261029;
+  function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+  function pick(a){ return a[Math.floor(rnd()*a.length)]; }
+
+  var Y=2026,M=9;                     // 2026年10月
+  var first=new Date(Y,M,1), last=new Date(Y,M+1,0).getDate();
+  var pos='a', days={};
+
+  for(var d=1;d<=last;d++){
+    var dt=new Date(Y,M,d), dow=dt.getDay();
+    var cl=(dow===0);                  // 日曜は休業日あつかい（見本）
+    var rows=[];
+    if(!cl){
+      // 見本なので、何日かは必ず8台にして「承認済み（緑）」も見えるようにしてある
+      var n=(d%9===6)?8:(2+Math.floor(rnd()*6));   // 2〜7台／9日ごとに8台
+      for(var i=0;i<n;i++){
+        var c=COURSE[Math.floor(rnd()*3)];
+        rows.push({c:c,name:pick(NAMES),store:(rnd()<0.75?'h':'s')});
+      }
+      rows.sort(function(a,b){return COURSE.indexOf(a.c)-COURSE.indexOf(b.c);});
+      // 7台目以降＝承認の対象。見本なので承認済みと未承認が両方出るようにしてある
+      // 色の決まり：7台目以降に1件でも未承認があれば黄、すべて承認済みなら緑。
+      // 見本では 8台の日＝すべて承認済み（緑）／7台の日＝未承認（黄）にしてある。
+      rows.forEach(function(r,i){ if(i>=6){ r.over=true; r.ok=(n>=8); } });
+    }
+    days[d]={cl:cl,rows:rows};
+  }
+
+  function bangFor(o){
+    var over=o.rows.filter(function(r){return r.over;});
+    if(!over.length)return null;
+    var wait=over.filter(function(r){return !r.ok;});
+    return { cls: wait.length?'wait':'ok', over:over, wait:wait.length };
+  }
+
+  function render(){
+    var host=document.getElementById('weeks');
+    host.innerHTML='';
+    var cells=[], lead=first.getDay();
+    for(var i=0;i<lead;i++)cells.push(null);
+    for(var d=1;d<=last;d++)cells.push(d);
+    while(cells.length%7)cells.push(null);
+
+    for(var w=0;w<cells.length/7;w++){
+      var row=document.createElement('div'); row.className='week';
+      for(var j=0;j<7;j++){
+        var d=cells[w*7+j], cell=document.createElement('div');
+        cell.className='cell'+(d&&days[d].cl?' cl':'');
+        if(!d){ cell.style.background='#fafafa'; cell.style.cursor='default'; row.appendChild(cell); continue; }
+        var o=days[d], b=bangFor(o);
+        var dow=new Date(Y,M,d).getDay();
+        var h='<div class="dnum"><span class="'+(dow===0?'sun':(dow===6?'sat':''))+'">'+d+'</span>';
+        if(b&&pos==='a')h+='<span class="bang '+b.cls+'" data-d="'+d+'">!</span>';
+        h+='</div>';
+        if(!o.cl){
+          h+='<div class="grid">';
+          for(var s=0;s<6;s++){
+            var r=o.rows[s];
+            h+='<div class="slot '+(r?r.c.k:'')+'">'+(r?r.c.l:'')
+              +(r?'<span class="st '+(r.store==='h'?'h':'s')+'">'+(r.store==='h'?'本':'三')+'</span>':'')+'</div>';
+          }
+          if(b&&pos==='b')h+='<span class="bang '+b.cls+' pos-b" data-d="'+d+'">!</span>';
+          h+='</div>';
+        }
+        cell.innerHTML=h;
+        row.appendChild(cell);
+      }
+      host.appendChild(row);
+    }
+
+    var tip=document.getElementById('tip');
+    [].forEach.call(host.querySelectorAll('.bang'),function(el){
+      el.onmouseenter=function(){
+        var d=Number(el.getAttribute('data-d')), o=days[d], b=bangFor(o);
+        var s='<b>'+(M+1)+'月'+d+'日　'+o.rows.length+'台</b><br>'
+            +'<span style="color:#64748b">6コマに出ていない分が '+b.over.length+' 件あります</span><br>';
+        b.over.forEach(function(r,i){
+          s+='　'+(7+i)+'台目　'+r.name+'様（'+r.c.n+'）　'
+           + (r.ok?'<span class="o">承認済み</span>':'<span class="w">未承認</span>')+'<br>';
+        });
+        tip.innerHTML=s;
+        var rc=el.getBoundingClientRect();
+        tip.style.display='block';
+        var top=rc.bottom+6, left=Math.min(rc.left, window.innerWidth-340);
+        if(top+tip.offsetHeight>window.innerHeight) top=rc.top-tip.offsetHeight-6;
+        tip.style.top=Math.max(6,top)+'px'; tip.style.left=Math.max(6,left)+'px';
+      };
+      el.onmouseleave=function(){ tip.style.display='none'; };
+    });
+  }
+
+  [].forEach.call(document.querySelectorAll('[data-pos]'),function(b){
+    b.onclick=function(){
+      pos=b.getAttribute('data-pos');
+      [].forEach.call(document.querySelectorAll('[data-pos]'),function(x){x.classList.toggle('on',x===b);});
+      render();
+    };
+  });
+  render();
+})();
+</script>
+</body>
+</html>
