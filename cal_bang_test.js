@@ -1,9 +1,11 @@
 // 車検カレンダーの「7台目の！」の検査（2026-10-29 ユーザー指示・A案）
-//   ① 6台までの日には「！」を出さない（いままでと同じ見た目）
-//   ② 7台目以降に未承認があれば 黄色の！
-//   ③ 7台目以降がすべて承認済みなら 緑の！
-//   ④ なぞると、隠れている分が氏名・コース・承認の状態つきで出る
+//   ① 6台までで承認待ちも無い日には「！」を出さない（いままでと同じ見た目）
+//   ② まだ承認されていない予約があれば 黄色の！
+//   ③ 承認が済んでいれば 緑の！
+//   ④ なぞると、6コマに出ていない分と、承認の状態が出る
 //   ⑤ 6コマの見た目は変えていない（1日あたり6つのまま）
+//   ⑥ ★【位置】と【承認】を混ぜない（2026-10-29 ユーザー報告の 10/11 の件）
+//      あふれたかどうかは seq（予約を入れた順）で決まる＝並んでいる順とは違う。
 //   実行: node cal_bang_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -34,13 +36,22 @@ const now = new Date(), Y = now.getFullYear(), M = now.getMonth();
 // 同じ月の中に 6台の日／7台(未承認あり)の日／8台(すべて承認済み)の日 を作る
 const dk = d => `${Y}-${M + 1}-${d}`;
 const row = (n, course, extra) => Object.assign({ name: n, carType: 'アルト', no: '3503', course, store: 'honten', time: '09:00', bookingStatus: 'confirmed' }, extra || {});
-const six = Array.from({ length: 6 }, (_, i) => row('六' + (i + 1), 2));
-const seven = six.concat([row('七番', 3, { pendingApproval: true })]);
-const eight = six.concat([row('八番A', 3, { approved: true }), row('八番B', 3, { approved: true })]);
+const six = Array.from({ length: 6 }, (_, i) => row('六' + (i + 1), 2, { seq: 100 + i }));
+const seven = six.concat([row('七番', 3, { seq: 200, pendingApproval: true })]);
+const eight = six.concat([row('八番A', 3, { seq: 201, approved: true }), row('八番B', 3, { seq: 202, approved: true })]);
+// ★2026-10-29 ユーザー報告の 10/11 を写したもの。
+//   並び（配列）では 7番目＝小畠様だが、seq（予約を入れた順）では 小畠様は5番目＝枠の中。
+//   あふれているのは みどりB様で、すでに承認済み。だから【緑】でなければならない。
+const real1011 = [
+  row('木庭', 2, { seq: 10 }), row('福島', 1, { seq: 11 }), row('橋口', 2, { seq: 12 }),
+  row('田中', 1, { seq: 13 }),
+  row('みどりA', 2, { seq: 100 }), row('みどりB', 2, { seq: 101, approved: true }),
+  row('小畠', 2, { seq: 14 }),
+];
 
 (async () => {
   const seed = {
-    [STOR + 'insp']: { [dk(6)]: six, [dk(8)]: seven, [dk(10)]: eight },
+    [STOR + 'insp']: { [dk(6)]: six, [dk(8)]: seven, [dk(10)]: eight, [dk(11)]: real1011 },
     [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'office', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [], [STOR + 'sanda-cdow-v2']: [], [STOR + 'sanda-cdate']: [],
@@ -90,15 +101,15 @@ const eight = six.concat([row('八番A', 3, { approved: true }), row('八番B', 
     return g.length ? g[0].children.length : 0;
   });
 
-  console.log('\n■ ① 6台までの日には出さない');
+  console.log('\n■ ① 6台まで・承認待ちも無い日には出さない');
   t('6台の日（' + 6 + '日）に「！」が無い', !cells[6], cells[6]);
 
-  console.log('\n■ ② 7台目に未承認があれば黄色');
+  console.log('\n■ ② まだ承認されていない予約があれば黄色');
   t('7台の日（8日）に「！」がある', !!cells[8], Object.keys(cells));
   t('★黄色（未承認）になっている', !!cells[8] && cells[8].kind === 'wait', cells[8] && cells[8].kind);
   t('★色が黄色', !!cells[8] && /250, 204, 21/.test(cells[8].bg), cells[8] && cells[8].bg);
 
-  console.log('\n■ ③ すべて承認済みなら緑');
+  console.log('\n■ ③ 承認が済んでいれば緑');
   t('8台の日（10日）に「！」がある', !!cells[10], cells[10]);
   t('★緑（承認済み）になっている', !!cells[10] && cells[10].kind === 'ok', cells[10] && cells[10].kind);
   t('★色が緑', !!cells[10] && /34, 197, 94/.test(cells[10].bg), cells[10] && cells[10].bg);
@@ -106,11 +117,22 @@ const eight = six.concat([row('八番A', 3, { approved: true }), row('八番B', 
   console.log('\n■ ④ なぞると中身が出る');
   const tp = (cells[8] && cells[8].title) || '';
   t('★台数が出る', /7台/.test(tp), tp);
-  t('★隠れている件数が出る', /出ていない分が 1 件/.test(tp), tp);
-  t('★7台目の氏名が出る', /7台目/.test(tp) && /七番/.test(tp), tp);
-  t('★承認の状態が出る', /未承認/.test(tp), tp);
+  t('★6コマに出ていないことが出る', /6コマに出ていません/.test(tp), tp);
+  t('★その人の氏名が出る', /七番様/.test(tp), tp);
+  t('★承認の状態が出る', /まだ承認されていません/.test(tp), tp);
   const tp2 = (cells[10] && cells[10].title) || '';
-  t('★承認済みの日は「承認済み」と出る', /承認済み/.test(tp2) && !/未承認/.test(tp2), tp2);
+  t('★承認が済んだ日は「承認済み」と出る', /枠からあふれた分（承認済み）/.test(tp2) && !/まだ承認されていません/.test(tp2), tp2);
+  t('★「承認は済んでいます」と締める', /承認は済んでいます/.test(tp2), tp2);
+
+  console.log('\n■ ⑥ ★位置と承認を混ぜない（2026-10-29 ユーザー報告の 10/11）');
+  t('11日に「！」が出る（7台入っている）', !!cells[11], Object.keys(cells));
+  t('★★緑になる（あふれた分は承認済み）', !!cells[11] && cells[11].kind === 'ok', cells[11]);
+  t('★★色が緑', !!cells[11] && /34, 197, 94/.test(cells[11].bg), cells[11] && cells[11].bg);
+  const tp3 = (cells[11] && cells[11].title) || '';
+  t('★6コマに出ていないのは 小畠様', /小畠様（クイック車検）　6コマに出ていません/.test(tp3), tp3);
+  t('★あふれて承認されたのは みどりB様', /みどりB様（クイック車検）　枠からあふれた分（承認済み）/.test(tp3), tp3);
+  t('★同じ名前を2回出さない（小畠様は1回だけ）', (tp3.match(/小畠様/g)||[]).length === 1, tp3);
+  t('★「まだ承認されていません」とは出さない', !/まだ承認されていません/.test(tp3), tp3);
 
   console.log('\n■ ⑤ 6コマの見た目は変えていない');
   t('★1日あたりのコマは6つのまま', slots === 6, slots);

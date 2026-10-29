@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793246826727';
+    window.__APP_BUILD='build-1793251750500';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.79.1';
+const APP_VERSION = '3.79.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -16062,27 +16062,41 @@ function AppInner() {
                           <div style={{fontWeight:800,fontSize:15,marginBottom:3,color:isCl?CLOSED_FG:numCol,display:'flex',alignItems:'center',gap:3}}>
                             <span style={isToday?{flexShrink:0,...TODAY_NUM}:{flexShrink:0}}>{day}</span>
                             {isHol&&<span style={{fontSize:8,color:isCl?CLOSED_FG:'#dc2626',flexShrink:0}}>祝</span>}
-                            {/* ★7台目以降の知らせ（2026-10-29 ユーザー指示・A案＝日付のとなり）
-                                日のマスは 3×2 の【6コマ固定】で irows[6] 以降は画面に出ない。
-                                そのため「7台目が入っていること」自体が見えないので、ここで知らせる。
-                                黄色＝1件でも未承認／緑＝すべて承認済み（どちらも黒の！）。
+                            {/* ★日のマスの「！」（2026-10-29 ユーザー指示・A案＝日付のとなり）
+                                日のマスは 3×2 の【6コマ固定】なので、入っていても見えない予約がある。
+                                ★★【位置】と【承認】は別のもの。混ぜないこと。
+                                  ・位置 … 画面に出ないのは irows[6] 以降（並んでいる順＝配列の順）
+                                  ・承認 … 枠からあふれたかどうかは **seq（予約を入れた順）** で BLOCK-C が決める。
+                                          配列の順とは違うので、irows[6] が承認の対象とは限らない。
+                                  2026-10-29 に混ぜてしまい、10/11 が誤って黄色になった：
+                                  7台目（＝あふれた分）は みどりモータース様で承認済み、
+                                  6コマに出ていなかったのは 小畠様＝ふつうの確定予約だった。
+                                黄色＝まだ承認されていない予約がある／緑＝承認は済んでいる（どちらも黒の！）。
                                 ★6コマの見た目は変えないこと（現場が見慣れているため）。 */}
                             {!isCl&&(()=>{
-                              const over=irows.slice(6);
-                              if(!over.length)return null;
-                              const allOk=over.every(r=>!!r.approved);
-                              const lines=over.map((r,i)=>{
-                                const cc=COURSES.find(x=>x.id===Number(r.course));
-                                return (7+i)+'台目　'+(r.name||'')+'様（'+(cc?cc.name:'')+'）　'+(r.approved?'承認済み':'未承認');
+                              const hidden=irows.slice(6);                                   // 6コマに出ていない分（位置）
+                              const pend=irows.filter(r=>r.pendingApproval);                 // まだ承認されていない分（承認）
+                              const appr=irows.filter(r=>r.approved&&!r.pendingApproval);    // あふれたが承認済みの分
+                              if(!hidden.length&&!pend.length)return null;
+                              const nmOf=r=>{const cc=COURSES.find(x=>x.id===Number(r.course));
+                                return (r.name||'')+'様（'+(cc?cc.name:'コース未設定')+'）';};
+                              // ★【位置】と【承認】の両方に当てはまる人は1行にまとめる（同じ名前を2回出さない）
+                              const lines=[day+'日　'+irows.length+'台'];
+                              irows.forEach((r,i)=>{
+                                const tags=[];
+                                if(i>=6)tags.push('6コマに出ていません');
+                                if(r.pendingApproval)tags.push('⚠ まだ承認されていません');
+                                else if(r.approved)tags.push('枠からあふれた分（承認済み）');
+                                if(tags.length)lines.push('　'+nmOf(r)+'　'+tags.join('／'));
                               });
-                              const tip=day+'日　'+irows.length+'台'+String.fromCharCode(10)
-                                +'6コマに出ていない分が '+over.length+' 件あります'+String.fromCharCode(10)+lines.join(String.fromCharCode(10));
+                              lines.push(pend.length?'承認をお願いします':(appr.length?'承認は済んでいます':'承認が要る予約はありません'));
+                              const wait=pend.length>0;
                               return (
-                                <span data-calbang={allOk?'ok':'wait'} title={tip}
+                                <span data-calbang={wait?'wait':'ok'} title={lines.join(String.fromCharCode(10))}
                                   onClick={e=>e.stopPropagation()}
                                   style={{flexShrink:0,width:17,height:17,borderRadius:'50%',display:'inline-flex',
                                     alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#111',
-                                    background:allOk?'#22c55e':'#facc15',border:'2px solid #fff',
+                                    background:wait?'#facc15':'#22c55e',border:'2px solid #fff',
                                     boxShadow:'0 1px 4px rgba(0,0,0,.35)',cursor:'help'}}>!</span>
                               );
                             })()}
