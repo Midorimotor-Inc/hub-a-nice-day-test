@@ -56,12 +56,15 @@ async function annotated(kicker, title, sub, file, items, opt) {
   const meta = META[file] || { vw: 1500, vh: 950, boxes: {} };
   const d = dim[file] || { w: meta.vw * 2, h: meta.vh * 2 };
   const colW = opt.layout === 'below' ? 0 : (opt.colW == null ? 3.7 : opt.colW);
-  const bx = 0.55, by = 1.28, bw = 12.2 - (colW ? colW + 0.35 : 0), bh = opt.layout === 'below' ? (opt.imgH || 3.3) : 5.95;
+  // ★写真の上に番号を置くための余白をあける（2026-10-30 ユーザー指示）。
+  //   番号を枠の横に出すと、となりのボタンに重なって読めなかった。
+  const head = 0.4;
+  const bx = 0.55, by = 1.28, bw = 12.2 - (colW ? colW + 0.35 : 0), bh = opt.layout === 'below' ? (opt.imgH || 3.3) : 5.95 - head;
   // 写真の切り出し（crop: {x,y,w,h} CSS px）に対応
   const crop = opt.crop || { x: 0, y: 0, w: meta.vw, h: meta.vh };
   const r = Math.min(bw / crop.w, bh / crop.h);            // 1 CSS px = r インチ
   const iw = crop.w * r, ih = crop.h * r;
-  const ix = bx, iy = by + (opt.top ? 0 : (bh - ih) / 2);
+  const ix = bx, iy = by + (opt.top ? head : (bh - ih) / 2);
   const scaleX = d.w / meta.vw, scaleY = d.h / meta.vh;    // 写真は 2倍解像度
   // 切り出しは sharp で実ファイルを作る（pptxgenjs の crop 指定は環境で解釈が揺れるため）
   let imgPath = path.join(SHOTS, file);
@@ -83,21 +86,53 @@ async function annotated(kicker, title, sub, file, items, opt) {
   // 撮影環境の描画不良（日付入力の表示崩れなど）を隠す：白で塗って文字を載せる
   (opt.mask || []).forEach(m => { const bx0 = meta.boxes[m.k]; if (!inside(bx0)) return; const mx = ix + (bx0.x - crop.x + 2) * r, my = iy + (bx0.y - crop.y + 2) * r, mw = (bx0.w - 4) * r, mh = (bx0.h - 4) * r; s.addShape(pres.ShapeType.rect, { x: mx, y: my, w: mw, h: mh, fill: { color: WHITE }, line: { color: WHITE, width: 0 } }); if (m.text) T(s, m.text, { x: mx + 0.12, y: my, w: mw - 0.2, h: mh, fontSize: Math.max(9, Math.min(14, mh * 40)), color: INK, valign: 'middle' }); });
   const frame = (it) => ({ fx: ix + (it.box.x - crop.x - pad) * r, fy: iy + (it.box.y - crop.y - pad) * r, fw: (it.box.w + pad * 2) * r, fh: (it.box.h + pad * 2) * r });
+  const frames = list.map(frame);
+  // ★番号は【枠の真上】に出す（2026-10-30 ユーザー指示）。
+  //   それまでは枠の左の外に出していたので、ボタンが横に並んでいる所では
+  //   となりのボタンの上に数字が乗って読めなかった。
+  //   真上が他の赤枠とぶつかる時だけ「真下」→「左の外」の順でずらす。
+  //   どこもぶつかる時は真上（＝必ず枠の外。中の文字は隠さない）。
+  const ND = 0.3;
+  const spots = [];
+  const hitBox = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const numSpot = (f, i) => {
+    // 横長の行は真ん中ではなく左の端の上（真ん中だと表のまん中に浮いて、どの行か分からない）
+    const cx = f.fw > 3 ? f.fx + 0.05 : f.fx + f.fw / 2 - ND / 2;
+    const cands = [
+      { x: cx, y: f.fy - ND - 0.04 },
+      { x: f.fx - 0.36, y: f.fy + Math.min(f.fh / 2, 0.22) - 0.15 },
+      { x: cx, y: f.fy + f.fh + 0.04 },
+    ];
+    const where = ['上', '左', '下'];
+    for (let w = 0; w < cands.length; w++) {
+      const c = cands[w];
+      if (c.x < 0.14 || c.x + ND > 13.19 || c.y < 1.18 || c.y + ND > H - 0.1) continue;
+      const r0 = { x: c.x, y: c.y, w: ND, h: ND };
+      if (frames.some((g, j) => j !== i && hitBox(r0, { x: g.fx, y: g.fy, w: g.fw, h: g.fh }))) continue;
+      spots.push((i + 1) + where[w]);
+      return c;
+    }
+    // ★どこもぶつかる＝写真が小さすぎるか、項目が近すぎる。番号が枠に重なるので知らせる
+    spots.push((i + 1) + '★重なり');
+    return { x: Math.min(Math.max(0.14, cx), 13.19 - ND), y: Math.max(1.18, f.fy - ND - 0.04) };
+  };
   const drawFrame = (it, i) => {
-    const f = frame(it);
+    const f = frames[i];
     s.addShape(pres.ShapeType.rect, { x: f.fx, y: f.fy, w: f.fw, h: f.fh, fill: { type: 'none' }, line: { color: RED, width: 2.25 } });
-    // 番号は枠の左外（中の文字を隠さない）。左端に寄りすぎる時は枠の上外
-    const bxx = f.fx - 0.36 >= 0.15 ? f.fx - 0.36 : f.fx, byy = f.fx - 0.36 >= 0.15 ? f.fy + Math.min(f.fh / 2, 0.22) - 0.15 : f.fy - 0.34;
-    numCircle(s, i + 1, bxx, byy, 0.3);
+    const sp = numSpot(f, i);
+    numCircle(s, i + 1, sp.x, sp.y, ND);
     return f;
   };
   if (opt.layout === 'below') {
     // 写真を上いっぱいに、説明はその下に2〜3列
     const cols = n <= 6 ? Math.max(n, 1) : Math.ceil(n / 2), rows = Math.ceil(n / cols);   // 1行に並べて線の交差を避ける
-    const gy = iy + ih + 0.4, cw = (12.2 - (cols - 1) * 0.2) / cols, rh = Math.min(1.6, (H - 0.35 - gy) / rows);
+    const gy = iy + ih + 0.4, rh = Math.min(1.6, (H - 0.35 - gy) / rows);
+    // 項目が1〜2個の時は札を画面いっぱいに広げず、真ん中にまとめる
+    const cw = n <= 2 ? Math.min(5.4, (12.2 - (cols - 1) * 0.2) / cols) : (12.2 - (cols - 1) * 0.2) / cols;
+    const gx = n <= 2 ? (W - (cols * cw + (cols - 1) * 0.25)) / 2 : 0.55;
     list.forEach((it, i) => {
       const f = drawFrame(it, i);
-      const cx = 0.55 + (i % cols) * (cw + 0.25), cy = gy + Math.floor(i / cols) * rh;
+      const cx = gx + (i % cols) * (cw + 0.25), cy = gy + Math.floor(i / cols) * rh;
       s.addShape(pres.ShapeType.roundRect, { x: cx, y: cy, w: cw, h: rh - 0.12, rectRadius: 0.05, fill: { color: SOFT }, line: { color: LINE, width: 0.75 } });
       numCircle(s, i + 1, cx + 0.1, cy + 0.1, 0.32);
       T(s, it.t, { x: cx + 0.5, y: cy + 0.08, w: cw - 0.6, h: 0.3, fontSize: cols >= 5 ? 11 : 12.5, bold: true, color: INK });
@@ -107,7 +142,7 @@ async function annotated(kicker, title, sub, file, items, opt) {
     });
   } else {
     const cx = ix + iw + 0.35, cW = Math.max(2.8, 12.75 - cx), cTop = by;
-    const rowH = Math.min(1.15, bh / Math.max(n, 1));
+    const rowH = Math.min(n <= 2 ? 1.7 : 1.15, bh / Math.max(n, 1));
     list.forEach((it, i) => {
       const f = drawFrame(it, i);
       const cy = cTop + i * rowH;
@@ -119,6 +154,7 @@ async function annotated(kicker, title, sub, file, items, opt) {
       leader(s, f.fx + f.fw, f.fy + Math.min(f.fh / 2, 0.25), cx, cy + 0.28);
     });
   }
+  if (spots.length) console.log('      番号 ' + spots.join(' / ') + (spots.some(x => x.indexOf('★') >= 0) ? '　← 要確認' : ''));
   if (opt.note) s.addNotes(opt.note);
   return s;
 }
@@ -196,25 +232,15 @@ function slideToc4() {
 
   await annotated(A, '① 週間カレンダーの開き方', 'スケジュール画面のいちばん上、ナビの「週間カレンダー」を押します', 'w1-open-sched.png', [
     { k: 'navWeek', t: '週間カレンダー', d: 'ここを押すと、1週間ぶんの表が画面いっぱいに開きます' },
-    { k: 'navCal', t: 'カレンダー', d: '月ごとのカレンダー。日を押すとその日の1日表示へ。カレンダー画面の中にも「週間カレンダー」のボタンがあります' },
-    { k: 'navSched', t: 'スケジュール', d: 'いつもの1日表示。週間カレンダーを ✕ で閉じると、ここへ戻ります' },
   ], { crop: { x: 0, y: 0, w: 1500, h: 110 }, top: true, layout: 'below', imgH: 1.1,
        note: '週間カレンダーは「開きっぱなし」にはなりません。✕ か Esc で閉じると元の画面に戻ります。' });
 
   await annotated(A, '② 画面の見方（上の帯）', '開いた直後は「畳んだ状態」＝予定がある時間だけが出ます', 'w2-week-folded.png', [
-    { k: 'title', t: '見出し', d: '店の名前と、いま出している1週間の日付' },
-    { k: 'navGroup', t: '‹ 前の週　本日へ　次の週 ›', d: '週を送ります。「本日へ」で今日の週に戻ります' },
-    { k: 'find', t: '🔍 空き検索', d: '空いている所を探します（第3部）' },
     { k: 'fold', t: '▲ 畳む ／ ▼ 開く', d: '予定が無い時間の行を隠す・また出す' },
     { k: 'from', t: '📍 本日から ／ 📅 月曜から', d: '週の始まりを切り替えます。既定は「本日から」＝今日が一番左' },
-    { k: 'fs', t: '画面いっぱい', d: '押すと表だけを画面いっぱいに広げます。もう一度押すと戻ります' },
-    { k: 'close', t: '✕ 閉じる', d: '元の画面に戻ります' },
   ], { crop: { x: 0, y: 0, w: 1500, h: 100 }, top: true, layout: 'below', imgH: 1.0 });
 
   await annotated(A, '③ 表の見方', '左端に「車検」「出勤」「時刻」、上に1週間ぶんの日が並びます', 'w2-week-folded.png', [
-    { k: 'dayBtn', t: '日付のボタン', d: '押すと、その日の1日表示（スケジュール）が開きます' },
-    { k: 'dayCnt', t: '○台', d: 'その日の車検の合計台数（本店・三田店あわせて）' },
-    { k: 'today', t: '本日の列', d: '太いオレンジの枠で囲まれているのが今日です' },
     { k: 'inspRow', t: '「車検」の行', d: 'その日の車検。マ＝マッハ／ク＝クイック／レ＝レギュラー。右端の ＋ で新しく受けられます' },
     { k: 'staffRow', t: '「出勤」の行', d: '左が出勤している人、右（うすい字）が休みの人。頭文字で出ます' },
     { k: 'ent', t: '整備の予定', d: '時間ごとの予定。お名前をなぞると「いつ予約を入れたか」が出ます' },
@@ -244,16 +270,12 @@ function slideToc4() {
 
   await annotated(B, '⑥ 車検を入れる（カード）', '＊の付いた項目は必ず入れてください。Enter で次の項目へ移れます', 'w4-insp-card.png', [
     { k: 'head', t: 'カードの見出し', d: '日にちと時間。「クリックで日付変更」で別の日へ移せます' },
-    { k: 'name', t: '来店者氏名 ＊', d: '来店する方のお名前。右の「車検証の使用者」は、車検証の名前が違う時だけ入れます' },
-    { k: 'staff', t: '担当', d: '押すとその店のスタッフが一覧で出ます。番号を打って Enter でも入ります' },
-    { k: 'course', t: 'コース ＊', d: 'マッハ／クイック／レギュラー' },
-    { k: 'time', t: '入庫時間 ＊', d: '押すと時間が全部ならびます。「午前入庫」「午後入庫」「入庫時間未定」も選べます' },
+    { k: 'name', t: '★ここが変わりました　来店者氏名 ＊ ／ 車検証の使用者', d: '氏名の欄を左右に分け、右に「車検証の使用者」を入れられるようにしました。当日ご来店された方に確かめる項目です。車検証の名前と来店者が違っていれば、右の「車検証の使用者」にその名前を入れてください（同じ時は「同じ」を押すと入ります）。陸運局へ出す時に、車検証の使用者と来店された方の名前が違うと不都合があるためです。' },
   ], { crop: { x: 0, y: 0, w: 560, h: 760 }, top: true, colW: 4.6 });
 
   await annotated(B, '⑦ 一般（整備）を入れる', '時間のマスをクリックすると、その日・その時間で予約カードが開きます', 'w3-week-open.png', [
     { k: 'addCell', t: '空いているマス', d: 'クリックで一般（整備）の予約カードが開きます。日と時間は、押したマスのものが最初から入ります' },
-    { k: 'ent', t: 'すでに入っている予定', d: '押すとその予定を開いて直せます' },
-  ], { crop: { x: 0, y: 150, w: 1500, h: 300 }, top: true, colW: 4.3 });
+  ], { crop: { x: 0, y: 150, w: 1500, h: 300 }, top: true, colW: 3.2 });
 
   await annotated(B, '⑧ 時間がまだ決まっていない時', '畳んだ表のいちばん下「＋ 予定」から入れます', 'w2-week-folded.png', [
     { k: 'foldPlusRow', t: '「予定を足す」の行', d: '畳んでいても、開いていても、いつも表のいちばん下にあります' },
@@ -261,7 +283,6 @@ function slideToc4() {
   ], { crop: { x: 0, y: 265, w: 1500, h: 48 }, top: true, layout: 'below', imgH: 0.75 });
 
   await annotated(B, '⑧ 時間はカードの中で選ぶ', '「時間帯」を押すと、選べる時間が全部ならびます（スクロールしません）', 'w5b-sched-slot.png', [
-    { k: 'slot', t: '時間帯 ＊', d: 'ここを選ばないと保存できません（欄が黄色く光ります）' },
     { k: 'am', t: '午前入庫 ／ 午後入庫', d: '「午前に来る」「午後に来る」だけ決まっている時に使います' },
     { k: 'undec', t: '入庫時間未定', d: '時間がまったく決まっていない時。あとから直せます' },
   ], { crop: { x: 0, y: 60, w: 560, h: 360 }, top: true, colW: 4.6 });
@@ -286,12 +307,8 @@ function slideToc4() {
   ], { crop: { x: 0, y: 55, w: 1010, h: 62 }, top: true, layout: 'below', imgH: 1.0 });
 
   await annotated(C, '⑩ 車検の空き検索（結果の見方）', '空いている日が明るく残り、空いていない日は暗くなります', 'w7-find-insp-run.png', [
-    { k: 'res', t: '「○日に空きがあります」', d: 'この1週間で何日空いているか' },
-    { k: 'inspCell', t: '明るいオレンジの囲い', d: 'この日は空いています。囲いの中の ＋ からそのまま予約できます' },
     { k: 'lab', t: '空いている枠の案内', d: 'マッハなら「10:00・14:00 空き」のように、どの枠が空いているかが出ます' },
-    { k: 'dim', t: '暗い日', d: 'もう受けられない日。台数制限の「最大0台」や、上限に達した日です' },
-    { k: 'clr', t: 'やめる', d: '色を消します。条件を変えてもう一度探せます' },
-  ], { crop: { x: 0, y: 55, w: 1500, h: 440 }, top: true, colW: 4.3,
+  ], { crop: { x: 0, y: 55, w: 1500, h: 440 }, top: true, colW: 3.2,
        note: 'マッハ車検は、整備の表の中に「マッハ可」の緑の札が出ます。札の隣の ＋ を押すと、その日・その時間でマッハ車検として受けられます。' });
 
   await annotated(C, '⑪ 一般（整備）の空き検索（条件）', '整備は「作業にかかる時間」で探します', 'w8-find-sched-bar.png', [
@@ -301,10 +318,8 @@ function slideToc4() {
   ], { crop: { x: 0, y: 55, w: 820, h: 62 }, top: true, layout: 'below', imgH: 1.0 });
 
   await annotated(C, '⑪ 一般の空き検索（結果の見方）', '「続けて取れるひとかたまり」を丸ごと囲います。1時間ずつには刻みません', 'w9-find-sched-run.png', [
-    { k: 'res', t: '「○時間以上とれる空きが ○か所」', d: 'この1週間で、条件に合う空きが何か所あるか' },
     { k: 'blk', t: '明るい囲い', d: '続けて空いているひとかたまり。この中のどこから始めるかは、使う人が決めます' },
-    { k: 'clr', t: 'やめる', d: '色を消します' },
-  ], { crop: { x: 0, y: 55, w: 1500, h: 530 }, top: true, colW: 4.3,
+  ], { crop: { x: 0, y: 55, w: 1500, h: 530 }, top: true, colW: 3.2,
        note: '囲いに入っていない枠は暗くなります。選んだ所要時間より短い続きは取れないので、暗いままです。' });
 
   slideText(C, '⑫ 覚えておくと便利なこと', '空き検索まわりの決まりごと', [
