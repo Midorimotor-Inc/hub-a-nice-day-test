@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>予約カードのポップ／受け付けの記録（見本）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;font-family:"Yu Gothic UI","Hiragino Sans","Noto Sans JP",sans-serif;color:#0f172a}
+  .wrap{max-width:1420px;margin:0 auto;padding:18px}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:15.5px;margin:0 0 6px;color:#0e7490}
+  .lead{font-size:13px;color:#475569;line-height:1.85;margin:0 0 16px}
+  .panel{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;margin-bottom:18px;
+    box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .two{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1;min-width:380px}
+  .tag{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:800;margin-bottom:8px}
+  .tagA{background:#ecfeff;color:#0e5a6b;border:2px solid #67e8f9}
+  .tagB{background:#fef3c7;color:#92400e;border:2px solid #fcd34d}
+  .say{font-size:12.5px;color:#475569;line-height:1.85;margin:8px 0 0}
+  .pick{margin-top:12px;padding:10px 12px;border-radius:9px;background:#ecfeff;border:2px solid #67e8f9;
+    font-size:13px;font-weight:700;color:#0e5a6b}
+  /* ── 予約カードの写し ── */
+  .card{width:100%;max-width:520px;background:white;border:1px solid #cbd5e1;border-radius:10px;overflow:visible;
+    box-shadow:0 6px 20px rgba(0,0,0,.08)}
+  .cardh{background:linear-gradient(135deg,#0e7490,#0891b2);color:white;padding:12px 16px;font-weight:800;font-size:15px;
+    border-radius:9px 9px 0 0}
+  .cardb{padding:14px 16px;display:flex;flex-direction:column;gap:12px;position:relative}
+  label.f{display:block;font-size:11.5px;font-weight:800;color:#475569;margin-bottom:4px}
+  .inp{width:100%;padding:10px 12px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white}
+  .selbox{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+  .selbox.on{border-color:#0891b2}
+  .caret{font-size:10px;color:#6b7280}
+  .muted{color:#9ca3af}
+  /* 旧：スクロールする一覧 */
+  .oldlist{border:2px solid #0891b2;border-radius:8px;margin-top:4px;max-height:160px;overflow-y:auto;background:white;
+    box-shadow:0 4px 12px rgba(0,0,0,.15)}
+  .oldlist div{padding:8px 12px;font-size:13px;cursor:pointer;border-left:3px solid transparent}
+  .oldlist div:hover{background:#f0f9ff}
+  .oldlist div.sel{background:#e0f2fe;font-weight:700;border-left-color:#0891b2}
+  /* 新：全部見えるポップ（グリッド） */
+  .pop{border:2px solid #0891b2;border-radius:10px;background:white;box-shadow:0 10px 28px rgba(0,0,0,.2);padding:9px}
+  .pop .ttl{font-size:11px;font-weight:800;color:#0e7490;margin:0 0 7px;letter-spacing:.04em;display:flex;
+    justify-content:space-between;align-items:center}
+  .pop .ttl button{border:none;background:#f1f5f9;border-radius:50%;width:22px;height:22px;cursor:pointer;
+    font-size:12px;color:#64748b}
+  .grid{display:grid;gap:6px}
+  .it{display:flex;align-items:center;gap:7px;padding:9px 10px;border:2px solid #e5e7eb;border-radius:9px;
+    background:white;font-size:13.5px;font-weight:700;color:#334155;cursor:pointer;text-align:left;line-height:1.25}
+  .it:hover{border-color:#67e8f9;background:#f0fdff}
+  .it.sel{border-color:#0891b2;background:#ecfeff;color:#0e5a6b}
+  .code{flex-shrink:0;min-width:30px;height:22px;display:inline-flex;align-items:center;justify-content:center;
+    border-radius:5px;background:#94a3b8;color:white;font-size:11px;font-weight:900}
+  .it.sel .code{background:#0891b2}
+  /* B案：カードの上に浮かぶ */
+  .stage{position:relative;background:#e2e8f0;border-radius:10px;padding:14px;min-height:430px}
+  .veil{position:absolute;inset:0;background:rgba(15,23,42,.35);border-radius:10px;display:flex;
+    align-items:center;justify-content:center;z-index:5}
+  .veil .pop{max-width:430px;width:92%}
+  /* ── 1日表示の写し ── */
+  table.day{border-collapse:collapse;width:100%;background:white}
+  table.day th{background:#f1f5f9;border:1px solid #d7dde5;font-size:11px;font-weight:800;padding:6px 7px;text-align:left}
+  table.day td{border:1px solid #d7dde5;font-size:13px;padding:5px 7px;vertical-align:middle}
+  .nmhover{font-weight:700;color:#7c2d12;cursor:help;border-bottom:1px dotted #cbd5e1}
+  .nmhover.sc{color:#1e293b}
+  .tip{position:fixed;z-index:9999;width:330px;background:white;border:2px solid #0891b2;border-radius:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.22);padding:10px 12px;pointer-events:none;display:none}
+  .tip .h{font-size:10.5px;font-weight:800;color:#0e7490;margin-bottom:5px;letter-spacing:.04em}
+  .tip .b{font-size:13px;line-height:1.75;color:#374151}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-weight:700;font-size:11px}
+  .wk{font-size:9.5px;font-weight:900;color:white;border-radius:3px;padding:1px 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>予約カードのポップ／1日表示の「受け付けの記録」（見本）</h1>
+  <p class="lead">
+    ① 作業内容などの選ぶ欄を、<strong>項目が全部見えるポップ</strong>にします。2つの出し方を見比べてください。<br>
+    ② 1日表示（スケジュール）で<strong>お客様のお名前をなぞる</strong>と、いつ誰が受け付けたかが出ます。実際になぞれます。
+  </p>
+
+  <!-- ══════════ ① ポップ ══════════ -->
+  <div class="panel">
+    <h2>① 選ぶ欄のポップ　<span style="font-size:12px;color:#64748b;font-weight:400">— 作業内容は13項目。いまは細長い一覧をスクロールして選んでいます</span></h2>
+    <div class="two">
+
+      <div class="col">
+        <span class="tag" style="background:#fee2e2;color:#991b1b;border:2px solid #fca5a5">いま（スクロールする一覧）</span>
+        <div class="card">
+          <div class="cardh">📋 一般予約カード</div>
+          <div class="cardb">
+            <div>
+              <label class="f">作業内容</label>
+              <div class="inp selbox on" onclick="togOld()"><span id="oldv">鈑金塗装</span><span class="caret" id="oldc">▼</span></div>
+              <div class="oldlist" id="oldlist"></div>
+            </div>
+            <div><label class="f">車種</label><input class="inp" value="ワゴンR"></div>
+            <div><label class="f">内容</label><input class="inp" value="右フェンダー鈑金"></div>
+          </div>
+        </div>
+        <p class="say">細長い窓の中をスクロールするので、<b>13項目のうち4つ分しか見えません</b>。<br>
+          下のほう（商談・保険・試乗・納車・その他）は、毎回スクロールしないと出てきません。</p>
+      </div>
+
+      <div class="col">
+        <span class="tag tagA">A案　欄のすぐ下に、全部まとめて出す</span>
+        <div class="card">
+          <div class="cardh">📋 一般予約カード</div>
+          <div class="cardb">
+            <div style="position:relative">
+              <label class="f">作業内容</label>
+              <div class="inp selbox on" onclick="togA()"><span id="av">鈑金塗装</span><span class="caret" id="ac">▼</span></div>
+              <div id="apop" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:5px;z-index:9">
+                <div class="pop">
+                  <div class="ttl"><span>👤 作業内容（13）</span><button onclick="event.stopPropagation();togA()">✕</button></div>
+                  <div class="grid" id="agrid" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+                </div>
+              </div>
+            </div>
+            <div><label class="f">車種</label><input class="inp" value="ワゴンR"></div>
+            <div><label class="f">内容</label><input class="inp" value="右フェンダー鈑金"></div>
+          </div>
+        </div>
+        <p class="say"><b>13項目ぜんぶが一度に見えます。</b>スクロールはしません。<br>
+          欄のすぐ下なので、いまの操作となじみます（下の欄は一時的に隠れます）。</p>
+      </div>
+
+      <div class="col">
+        <span class="tag tagB">B案　カードの真ん中に大きく浮かぶ</span>
+        <div class="stage">
+          <div class="card" style="max-width:100%">
+            <div class="cardh">📋 一般予約カード</div>
+            <div class="cardb">
+              <div><label class="f">作業内容</label>
+                <div class="inp selbox on"><span id="bv">鈑金塗装</span><span class="caret">▼</span></div></div>
+              <div><label class="f">車種</label><input class="inp" value="ワゴンR"></div>
+              <div><label class="f">内容</label><input class="inp" value="右フェンダー鈑金"></div>
+            </div>
+          </div>
+          <div class="veil" id="bveil">
+            <div class="pop">
+              <div class="ttl"><span>👤 作業内容（13）　押すと決まります</span><button onclick="document.getElementById('bveil').style.display='none'">✕</button></div>
+              <div class="grid" id="bgrid" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+            </div>
+          </div>
+        </div>
+        <p class="say">スマホ版と同じ考え方で、<b>どこに欄があっても必ず同じ場所・同じ大きさ</b>で出ます。<br>
+          そのぶん、下の欄が暗くなって一瞬だけ見えなくなります。
+          <button onclick="document.getElementById('bveil').style.display='flex'"
+            style="margin-left:6px;padding:4px 10px;border-radius:7px;border:2px solid #0891b2;background:white;color:#0e7490;font-weight:800;cursor:pointer">もう一度出す</button></p>
+      </div>
+    </div>
+    <div class="pick">「A案」か「B案」でお知らせください。どちらを選んでも、<b>時間・入庫時間・納車時間・指示書／見積も同じ出し方にそろえます</b>（21項目の時間は4列で全部見えます）。</div>
+  </div>
+
+  <!-- ══════════ 時間のポップ（列の数） ══════════ -->
+  <div class="panel">
+    <h2>時間を選ぶポップ（21項目）はこう出ます</h2>
+    <p class="say" style="margin:0 0 10px">いまは細長い一覧で、18:00 まで出すのに何度もスクロールが要ります。4列にすると全部一度に見えます。</p>
+    <div class="pop" style="max-width:480px">
+      <div class="ttl"><span>🕘 入庫時間（21）</span><button>✕</button></div>
+      <div class="grid" id="tgrid" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ ② 受け付けの記録 ══════════ -->
+  <div class="panel">
+    <h2>② 1日表示でもお名前をなぞると「受け付けの記録」が出る</h2>
+    <p class="say" style="margin:0 0 10px">
+      いまは週間カレンダーでしか出ません。<strong>1日表示の車検・整備のどちらにも</strong>付けます。
+      下の<b>お名前の上にマウスを置いてみてください</b>。
+    </p>
+
+    <div style="font-size:12.5px;font-weight:800;color:#9a3412;margin:12px 0 5px">🚗 車検</div>
+    <table class="day">
+      <tr><th style="width:42px">No.</th><th style="width:210px">氏名／担当</th><th style="width:130px">車種</th><th style="width:140px">コース</th><th>入庫</th></tr>
+      <tr><td>1</td>
+        <td><span class="nmhover" data-tip="受け付け　10/15 14:23　江川京志">青木　一郎 様</span><div style="font-size:12px;color:#374151">岡上秀一</div></td>
+        <td>アルト<div style="font-size:12px;font-weight:800">ナンバー 3503</div></td>
+        <td><span class="badge" style="background:#fee2e2;color:#991b1b">マッハ車検</span></td><td>09:00</td></tr>
+      <tr style="background:#f8f7ff"><td>2</td>
+        <td><span class="nmhover" data-tip="受け付け　10/02 09:41　舟田祥子&#10;日にち変更　10/21 → 11/3　10/18 16:05　江川京志">橋口　大志朗 様</span><div style="font-size:12px;color:#374151">竹林直行</div></td>
+        <td>タント<div style="font-size:12px;font-weight:800">ナンバー 1234</div></td>
+        <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">クイック車検</span></td><td>10:00</td></tr>
+      <tr><td>3</td>
+        <td><span class="nmhover" data-tip="受け付け　記録なし（この仕組みを入れる前の予約です）">井上商事 御中</span><div style="font-size:12px;color:#374151">魚住圭</div></td>
+        <td>エブリイ</td>
+        <td><span class="badge" style="background:#ffedd5;color:#9a3412">レギュラー車検</span></td><td>13:00</td></tr>
+    </table>
+
+    <div style="font-size:12.5px;font-weight:800;color:#0e7490;margin:16px 0 5px">⏰ 整備（タイムスケジュール）</div>
+    <table class="day">
+      <tr><th style="width:62px">時間</th><th style="width:210px">氏名／担当</th><th style="width:130px">車種</th><th style="width:150px">作業内容</th><th>内容</th></tr>
+      <tr><td style="font-weight:800;color:#0891b2">09:00</td>
+        <td><span class="nmhover sc" data-tip="受け付け　10/28 11:02　江川京志">遠藤　咲 様</span><div style="font-size:12px;color:#374151">幸田桂紀</div></td>
+        <td>ワゴンR</td><td><span class="wk" style="background:#0891b2">Q</span> クイック整備・修理</td><td>オイル交換</td></tr>
+      <tr style="background:#f8f7ff"><td style="font-weight:800;color:#0891b2">10:00</td>
+        <td><span class="nmhover sc" data-tip="受け付け　10/20 15:30　舟田祥子&#10;日にち変更　10/24 → 10/30　10/26 09:12　舟田祥子">山本　健一 様</span><div style="font-size:12px;color:#374151">江川京志</div></td>
+        <td>ハスラー</td><td><span class="wk" style="background:#7c3aed">B</span> 鈑金塗装</td><td>右フェンダー鈑金</td></tr>
+      <tr><td style="font-weight:800;color:#0891b2">11:00</td>
+        <td><span class="nmhover sc" data-tip="受け付け　記録なし（この仕組みを入れる前の予約です）">北川　正 様</span><div style="font-size:12px;color:#374151">—</div></td>
+        <td>スペーシア</td><td><span class="wk" style="background:#4f46e5">⑫</span> 12ヶ月点検</td><td></td></tr>
+    </table>
+    <p class="say">※ 2026-10-29 より前に入れた予約には記録が残っていないので「記録なし」と出ます（これから入る分には必ず残ります）。</p>
+  </div>
+</div>
+
+<div class="tip" id="tip"><div class="h">🕘 この予約の受け付け</div><div class="b" id="tipb"></div></div>
+
+<script>
+(function(){
+  var WORKS=[['Q','クイック整備・修理'],['⑫','12ヶ月点検'],['M12','メンパ12ヶ月点検'],['M6','メンパ6ヶ月点検'],
+    ['N1','新車1ヶ月点検'],['N6','新車6ヶ月点検'],['B','鈑金塗装'],['R','リコール'],['商','商談'],
+    ['保','保険'],['試','試乗'],['納','納車'],['他','その他']];
+  var TIMES=['午前入庫','09:00','09:30','10:00','10:30','11:00','11:30','12:00','入庫時間未定','午後入庫',
+    '13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+  var cur='B';
+
+  function fill(id,sel,onpick){
+    var g=document.getElementById(id); if(!g)return;
+    g.innerHTML=WORKS.map(function(w){
+      return '<button class="it'+(w[0]===sel?' sel':'')+'" data-v="'+w[0]+'">'+
+             '<span class="code">'+w[0]+'</span><span>'+w[1]+'</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(g.querySelectorAll('.it'),function(b){
+      b.addEventListener('click',function(e){e.stopPropagation();onpick(b.getAttribute('data-v'));});
+    });
+  }
+  function nameOf(v){for(var i=0;i<WORKS.length;i++)if(WORKS[i][0]===v)return WORKS[i][1];return '';}
+
+  // 旧
+  var oldOpen=true;
+  var ol=document.getElementById('oldlist');
+  ol.innerHTML=WORKS.map(function(w){
+    return '<div class="'+(w[0]==='B'?'sel':'')+'">'+w[0]+' '+w[1]+'</div>';}).join('');
+  window.togOld=function(){oldOpen=!oldOpen;ol.style.display=oldOpen?'block':'none';
+    document.getElementById('oldc').textContent=oldOpen?'▲':'▼';};
+  document.getElementById('oldc').textContent='▲';
+
+  // A案
+  var aOpen=false;
+  window.togA=function(){aOpen=!aOpen;document.getElementById('apop').style.display=aOpen?'block':'none';
+    document.getElementById('ac').textContent=aOpen?'▲':'▼';};
+  fill('agrid',cur,function(v){document.getElementById('av').textContent=nameOf(v);fill('agrid',v,arguments.callee);togA();});
+  // B案
+  fill('bgrid',cur,function(v){document.getElementById('bv').textContent=nameOf(v);
+    fill('bgrid',v,arguments.callee);document.getElementById('bveil').style.display='none';});
+  // 時間
+  var tg=document.getElementById('tgrid');
+  tg.innerHTML=TIMES.map(function(t){
+    var sp=(t.indexOf('入庫')>=0);
+    return '<button class="it'+(t==='10:00'?' sel':'')+'" style="justify-content:center;'+
+      (sp?'color:#047857;border-color:#a7f3d0;':'')+'">'+t+'</button>';}).join('');
+
+  // 吹き出し
+  var tip=document.getElementById('tip'), tipb=document.getElementById('tipb');
+  Array.prototype.forEach.call(document.querySelectorAll('.nmhover'),function(el){
+    el.addEventListener('mouseenter',function(){
+      var txt=el.getAttribute('data-tip')||'';
+      tipb.innerHTML=el.textContent+'<br>'+txt.split('\n').join('<br>');
+      var b=el.getBoundingClientRect();
+      var left=Math.max(8,Math.min(b.left,window.innerWidth-338));
+      tip.style.display='block';
+      var below=b.bottom+4, fits=below+120<=window.innerHeight-8;
+      tip.style.left=left+'px';
+      if(fits){tip.style.top=below+'px';tip.style.bottom='auto';}
+      else{tip.style.bottom=(window.innerHeight-b.top+4)+'px';tip.style.top='auto';}
+    });
+    el.addEventListener('mouseleave',function(){tip.style.display='none';});
+  });
+})();
+</script>
+</body>
+</html>

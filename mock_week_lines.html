@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>週間カレンダー 罫線と本日の枠（見本）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;font-family:"Yu Gothic UI","Hiragino Sans","Noto Sans JP",sans-serif;color:#0f172a}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px}
+  h1{font-size:19px;margin:0 0 4px}
+  .lead{font-size:13px;color:#475569;line-height:1.8;margin:0 0 16px}
+  .panel{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px;margin-bottom:16px;
+    box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .row{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+  .grp{min-width:220px}
+  .grp h3{font-size:12.5px;margin:0 0 8px;color:#0e7490;letter-spacing:.04em}
+  label.opt{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;cursor:pointer;font-size:13px}
+  label.opt:hover{background:#f1f5f9}
+  label.opt input{width:16px;height:16px;cursor:pointer}
+  .sw{width:46px;height:14px;border-radius:3px;flex-shrink:0}
+  .nowbox{font-size:12px;color:#475569;margin-top:10px;line-height:1.9}
+  .nowbox b{color:#0f172a}
+  code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:0 5px;font-size:12px}
+  /* ── 週表（本物と同じ作りを小さく写したもの）── */
+  .wv{border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:white}
+  .wvhead{background:linear-gradient(135deg,#0e7490,#0891b2);color:white;padding:9px 14px;font-weight:800;font-size:14px}
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  th,td{border:1px solid var(--line);padding:2px 4px;font-size:11.5px;height:27px;vertical-align:middle}
+  th{background:#f1f5f9;font-size:11px;font-weight:800;white-space:nowrap;padding:5px 4px}
+  td.tm,th.tm{width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center}
+  .band td{background:#e6f6fb}
+  .band td.tm{background:#cfeef7;color:#0e5a6b}
+  .sp td.tm{background:#047857;color:white}
+  .sp td{background:#f0fdf4}
+  tr.staff td{border-bottom:4px double #334155}
+  td.insp{background:#fff7ed}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+    color:white;font-size:11px;font-weight:900;margin:1px}
+  .plus{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+    background:white;color:#c2410c;border:1.5px dashed #fb923c;font-size:12px;font-weight:900;margin:1px}
+  .sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+    border-radius:4px;background:#475569;color:white;font-size:10px;font-weight:900;margin:1px}
+  .sbo{background:white;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+  .ent{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .wk{flex-shrink:0;font-size:9.5px;font-weight:900;color:white;border-radius:3px;padding:0 4px;line-height:15px}
+  .nm{font-weight:700;color:#1e293b;flex-shrink:0}
+  .ct{font-size:10.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis}
+  .closed{background:#f1f5f9 !important;box-shadow:inset 0 0 0 999px rgba(148,163,184,.14)}
+  /* 本日の列 */
+  .td0{border-left:var(--tw) solid var(--tc) !important;border-right:var(--tw) solid var(--tc) !important}
+  th.td0{border-top:var(--tw) solid var(--tc) !important;background:#ffedd5 !important}
+  tr:last-child td.td0{border-bottom:var(--tw) solid var(--tc) !important}
+  .daypill{display:inline-block;padding:2px 8px;border-radius:20px;background:#0e7490;color:white;font-size:11px;font-weight:800}
+  .daypill.sun{background:#fee2e2;color:#b91c1c}
+  .daypill.sat{background:#dbeafe;color:#1d4ed8}
+  .cnt{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:20px;border:1.5px solid #cbd5e1;
+    font-size:10px;font-weight:800;color:#475569;background:white}
+  .foot{border-top:3px solid #94a3b8}
+  .note{font-size:12.5px;color:#475569;line-height:1.9;margin-top:10px}
+  .pick{margin-top:12px;padding:10px 12px;border-radius:9px;background:#ecfeff;border:2px solid #67e8f9;
+    font-size:13px;font-weight:700;color:#0e5a6b}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週間カレンダー　日割りの縦線と「本日」の枠（見本）</h1>
+  <p class="lead">
+    左の選びで切り替わります。<strong>上の表がそのまま変わります</strong>ので、見比べてから決めてください。<br>
+    いまの本物は <b>線＝いちばん薄い</b>／<b>本日＝3px・濃いオレンジ</b> です。
+  </p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="grp">
+        <h3>① 日割りの縦線（表全体の罫線）</h3>
+        <label class="opt"><input type="radio" name="ln" value="#d7dde5"><span class="sw" style="background:#d7dde5"></span>いまの色（うすい）</label>
+        <label class="opt"><input type="radio" name="ln" value="#94a3b8"><span class="sw" style="background:#94a3b8"></span>ふつうのグレー</label>
+        <label class="opt"><input type="radio" name="ln" value="#64748b" checked><span class="sw" style="background:#64748b"></span>ダークグレー（おすすめ）</label>
+        <label class="opt"><input type="radio" name="ln" value="#475569"><span class="sw" style="background:#475569"></span>もっと濃いグレー</label>
+        <label class="opt"><input type="radio" name="ln" value="#334155"><span class="sw" style="background:#334155"></span>いちばん濃い（黒に近い）</label>
+      </div>
+      <div class="grp">
+        <h3>② 本日の枠の太さ</h3>
+        <label class="opt"><input type="radio" name="tw" value="3px">3px（いまの太さ）</label>
+        <label class="opt"><input type="radio" name="tw" value="4px">4px</label>
+        <label class="opt"><input type="radio" name="tw" value="5px" checked>5px（おすすめ）</label>
+        <label class="opt"><input type="radio" name="tw" value="6px">6px</label>
+      </div>
+      <div class="grp">
+        <h3>③ 本日の枠の色</h3>
+        <label class="opt"><input type="radio" name="tc" value="#c2410c"><span class="sw" style="background:#c2410c"></span>いまの色（濃いオレンジ）</label>
+        <label class="opt"><input type="radio" name="tc" value="#ea580c"><span class="sw" style="background:#ea580c"></span>すこし明るい</label>
+        <label class="opt"><input type="radio" name="tc" value="#f97316" checked><span class="sw" style="background:#f97316"></span>明るいオレンジ（おすすめ）</label>
+        <label class="opt"><input type="radio" name="tc" value="#fb923c"><span class="sw" style="background:#fb923c"></span>もっと明るい</label>
+        <label class="opt"><input type="radio" name="tc" value="#ffa94d"><span class="sw" style="background:#ffa94d"></span>いちばん明るい</label>
+      </div>
+      <div class="grp" style="flex:1;min-width:260px">
+        <h3>いま出ている組み合わせ</h3>
+        <div class="nowbox">
+          線：<b id="o1">—</b><br>
+          本日の枠：<b id="o2">—</b>　色：<b id="o3">—</b>
+        </div>
+        <div class="pick">決まったら「線は○／太さは○／色は○」とだけ伝えてください。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wv" id="wv">
+    <div class="wvhead">⏰ タイムスケジュール（週）　本店　10/30（木）〜 11/5（水）</div>
+    <table id="tb"></table>
+    <div class="foot"><table id="tb2"></table></div>
+  </div>
+
+  <p class="note">
+    ※ 線を濃くすると、ひと目で「どの日の列か」が追いやすくなります。そのぶん本日の枠が埋もれるので、
+    太さと明るさで浮かせています。<br>
+    ※ この見本は本物の週表と同じ作り（30分ごとの水色の帯・緑の「午前入庫」・出勤の二重線・休業日の灰色）で描いてあります。
+  </p>
+</div>
+
+<script>
+(function(){
+  var DAYS=[
+    {d:'10/30（木）',cnt:3,closed:false,today:false,dow:''},
+    {d:'10/31（金）',cnt:2,closed:false,today:false,dow:''},
+    {d:'11/1（土）', cnt:4,closed:false,today:false,dow:'sat'},
+    {d:'11/2（日）', cnt:0,closed:true, today:false,dow:'sun'},
+    {d:'11/3（月）', cnt:5,closed:false,today:true, dow:''},
+    {d:'11/4（火）', cnt:1,closed:false,today:false,dow:''},
+    {d:'11/5（水）', cnt:2,closed:false,today:false,dow:''}
+  ];
+  var INSP=[
+    [['マ','#dc2626'],['ク','#2563eb'],['レ','#ea580c']],
+    [['ク','#2563eb'],['レ','#ea580c']],
+    [['マ','#dc2626'],['マ','#dc2626'],['ク','#2563eb'],['レ','#ea580c']],
+    [],
+    [['マ','#dc2626'],['ク','#2563eb'],['ク','#2563eb'],['レ','#ea580c'],['レ','#ea580c']],
+    [['ク','#2563eb']],
+    [['レ','#ea580c'],['レ','#ea580c']]
+  ];
+  var ON=['見','岡','竹','幸','魚','舟','江'], OFF=['ダ','カ'];
+  var SCHED={
+    '09:00':{0:[['O','#0891b2','遠藤　咲 様','オイル交換']],4:[['T','#0891b2','西村　肇 様','タイヤ交換']]},
+    '09:30':{},
+    '10:00':{2:[['B','#7c3aed','山本　健一 様','右フェンダー鈑金']]},
+    '10:30':{},
+    '11:00':{4:[['⑫','#4f46e5','北川　正 様','12ヶ月点検']],6:[['Q','#0891b2','大山　茜 様','']]},
+    '11:30':{},
+    '午前':{1:[['納','#16a34a','井上商事 御中','納車']]},
+    '13:00':{},
+    '13:30':{0:[['保','#d97706','橋口　大志朗 様','保険の更新']]},
+    '14:00':{},
+    '14:30':{},
+    '15:00':{4:[['Q','#0891b2','青木　一郎 様','ワイパー交換']]}
+  };
+  var FOOT={'午後':{1:[['O','#0891b2','北川　正 様','12ヶ月点検']]}};
+  var ORDER=['09:00','09:30','10:00','10:30','11:00','11:30','午前','13:00','13:30','14:00','14:30','15:00'];
+
+  function cell(day,i,inner,cls){
+    var c=[]; if(day.today)c.push('td0'); if(day.closed)c.push('closed'); if(cls)c.push(cls);
+    return '<td class="'+c.join(' ')+'">'+(day.closed?'':inner)+'</td>';
+  }
+  function entHtml(list){
+    if(!list)return '';
+    return list.map(function(e){
+      return '<div class="ent"><span class="wk" style="background:'+e[1]+'">'+e[0]+'</span>'+
+             '<span class="nm">'+e[2]+'</span><span class="ct">'+e[3]+'</span></div>';
+    }).join('');
+  }
+  function build(){
+    var h='<tr><th class="tm"></th>';
+    DAYS.forEach(function(d){
+      h+='<th class="'+(d.today?'td0':'')+'"><span class="daypill '+d.dow+'">'+d.d+'</span>'+
+         (d.closed?'':'<span class="cnt">'+d.cnt+'台</span>')+'</th>';
+    });
+    h+='</tr>';
+    // 車検
+    h+='<tr><td class="tm">車検</td>';
+    DAYS.forEach(function(d,i){
+      var b=INSP[i].map(function(x){return '<span class="cb" style="background:'+x[1]+'">'+x[0]+'</span>';}).join('');
+      h+=cell(d,i,b+'<span class="plus">＋</span>','insp');
+    });
+    h+='</tr>';
+    // 出勤
+    h+='<tr class="staff"><td class="tm">出勤</td>';
+    DAYS.forEach(function(d,i){
+      var s=ON.map(function(x){return '<span class="sb">'+x+'</span>';}).join('')+
+            '<span style="display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle"></span>'+
+            OFF.map(function(x){return '<span class="sb sbo">'+x+'</span>';}).join('');
+      h+=cell(d,i,'<div style="text-align:center;line-height:1">'+s+'</div>');
+    });
+    h+='</tr>';
+    ORDER.forEach(function(slot){
+      var sp=(slot==='午前'), band=(!sp&&slot.slice(-2)==='00');
+      h+='<tr class="'+(sp?'sp':(band?'band':''))+'"><td class="tm">'+(sp?'午前入庫':slot)+'</td>';
+      DAYS.forEach(function(d,i){
+        h+=cell(d,i,entHtml((SCHED[slot]||{})[i]));
+      });
+      h+='</tr>';
+    });
+    document.getElementById('tb').innerHTML=h;
+    var f='<tr class="sp"><td class="tm">午後入庫</td>';
+    DAYS.forEach(function(d,i){ f+=cell(d,i,entHtml((FOOT['午後']||{})[i])); });
+    f+='</tr>';
+    document.getElementById('tb2').innerHTML=f;
+  }
+  function val(n){var e=document.querySelector('input[name="'+n+'"]:checked');return e?e.value:'';}
+  var NAMES={'#d7dde5':'いまの色（うすい）','#94a3b8':'ふつうのグレー','#64748b':'ダークグレー',
+             '#475569':'もっと濃いグレー','#334155':'いちばん濃い',
+             '#c2410c':'いまの色','#ea580c':'すこし明るい','#f97316':'明るいオレンジ',
+             '#fb923c':'もっと明るい','#ffa94d':'いちばん明るい'};
+  function apply(){
+    var r=document.documentElement.style;
+    r.setProperty('--line',val('ln'));
+    r.setProperty('--tw',val('tw'));
+    r.setProperty('--tc',val('tc'));
+    document.getElementById('o1').textContent=NAMES[val('ln')]+'（'+val('ln')+'）';
+    document.getElementById('o2').textContent=val('tw');
+    document.getElementById('o3').textContent=NAMES[val('tc')]+'（'+val('tc')+'）';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input[type=radio]'),function(e){
+    e.addEventListener('change',apply);
+  });
+  build(); apply();
+})();
+</script>
+</body>
+</html>
