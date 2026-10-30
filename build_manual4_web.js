@@ -9,8 +9,14 @@ const deck = JSON.parse(fs.readFileSync(path.join(DIR, 'deck.json'), 'utf8'));
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const pct = v => (v * 100).toFixed(3) + '%';
 
-const HEAD = `<title>週間カレンダーの使い方</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+// ★ふつうのウェブサイト（GitHub Pages）にそのまま置くので、入れ物（doctype・文字コード・
+//   画面の幅の指定）まで自分で書く。これが無いとブラウザが古い流儀で描いて見た目が崩れる。
+const HEAD = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>週間カレンダーの使い方</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
 <style>
 /* 並べ方：上に細い操作の帯、その下に1ページぶん。写真は白い台に乗せ、赤枠は写真の上に割合で重ねる */
@@ -38,6 +44,7 @@ const HEAD = `<title>週間カレンダーの使い方</title>
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);line-height:1.7;margin:0}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--navy)}
 h1,h2,h3{font-family:var(--f-disp);text-wrap:balance;margin:0}
@@ -193,6 +200,8 @@ const names = deck.slides.map(s => s.kind === 'section' ? '第' + s.no + '部　
 const N = deck.slides.length;
 
 const html = HEAD + `
+</head>
+<body>
 <header class="bar"><div class="wrap">
   <div class="nm">週間カレンダーの使い方<small>Hub a Nice Day　緑モータース</small></div>
   <div class="sp"></div>
@@ -261,6 +270,8 @@ ${body}
   show(fromHash());
 })();
 </` + `script>
+</body>
+</html>
 `;
 
 fs.writeFileSync(path.join(DIR, 'index.html'), html);

@@ -1588,3 +1588,19 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - **DEVへ push する前に `node stamp_build.js` を実行して `__APP_BUILD` を更新する**（3ファイル一括）。これが古いままだと開きっぱなしの画面に更新の帯が出ない。v2.27からはバージョン番号の違いでも帯が出るが、番号の上げ忘れと二重に守るため両方やる。
 - 日本語コミットメッセージで可。
 - GASコードをチャットからコピーさせると全角文字が化けて構文エラーになることがある。控えの `.gs` ファイルをメモ帳で開かせてコピーさせると確実。
+
+
+### 説明書（取扱説明書）の作り方＝赤枠方式／URL版も同じ素材から作る
+- 道具は2段構え。**文章を書く所は1か所だけ**にしてあるので、PPTX と URL版の中身はずれない。
+  ① `node capture_manualN_shots.js` … DEV の Firestore を**読み取り専用**で集め、**お客様の氏名・電話・住所を架空のものに置き換えて**
+     にせの firebase に入れ、`index_main.html`（本番の見た目）を立ち上げて撮る。
+     ボタンの位置（CSS px）を `manualN_shots/index.json` に残す＝これが赤枠の座標になる。
+  ② `node build_manualN_pptx.js` … 写真の上に**赤枠と番号**を描き、説明の札と線で結ぶ。出力は `C:/Users/A/Documents/Hub取扱説明書/`。
+- **④（週間カレンダー）だけ URL版もある**：`build_manual4_pptx.js` が同時に `manual4_web/deck.json` と `manual4_web/img/` を書き出し、
+  `node build_manual4_web.js` がそれを読んで `manual4_web/index.html`（1枚もののHTML・22ページ）を作る。
+  **ページを足したり文章を直したりする時は `build_manual4_pptx.js` の中だけを直すこと。** URL版は作り直すだけで付いてくる。
+- ★**公開先はテスト版サイト**（`https://midorimotor-inc.github.io/hub-a-nice-day-test/manual4_web/`）。
+  スタッフ全体メールに貼る＝**ログイン無しで開ける所でないといけない**（2026-10-30 ユーザー判断）。
+  Claude の Artifact のリンクは相手にもアカウントが要るので、メールに貼る用途では使わない。
+- 画面の見た目を変えたら、**写真を撮り直す（① から）**。撮るのは本番（`index_main.html`）なので、**先に本番へ移植しておくこと**。
+- **休業日の見え方を知らせるページは入れない**（2026-10-30 ユーザー指示。休日に関する案内は省く）。
