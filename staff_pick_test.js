@@ -216,7 +216,7 @@ const seed = {
     return { names: [...g.querySelectorAll('[data-staffid]')].map(e => e.innerText.trim()), none: !!g.getAttribute('data-staffnone') };
   });
   t('★押すと一覧が出る', !!cp && !cp.none, cp);
-  t('★ログインしている人の店（本店）のスタッフが出る',
+  t('★予約カードの店（本店）のスタッフが出る',
     !!cp && cp.names.some(x => /本店あたらし/.test(x)) && !cp.names.some(x => /三田さん/.test(x)), cp && cp.names);
   t('★社長（番号0）は出さない', !!cp && !cp.names.some(x => /見取勇一/.test(x)), cp && cp.names);
   await cpage.evaluate(() => { const e = document.querySelector('[data-staffid="本店ふたり"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
@@ -224,6 +224,60 @@ const seed = {
   t('★選ぶと欄に入る', await cpage.evaluate(() => { const i = document.querySelector('input[placeholder="担当者名"]'); return i ? i.value : null; }).then(v => v === '本店ふたり'),
     await cpage.evaluate(() => { const i = document.querySelector('input[placeholder="担当者名"]'); return i ? i.value : null; }));
   t('★選ぶと一覧は閉じる', await cpage.evaluate(() => !document.querySelector('[data-staffpk]')));
+
+  // ── ⑧ 店を切り替えると、担当の一覧もその店の人に変わる（2026-10-30 ユーザー指示）──
+  //   本店の人が【三田店入庫】の予約を受けることがあり、その時は三田店の担当を入れたい。
+  //   それまでは「ログインしている人の店」で固定だったので、三田店の人が出せなかった。
+  console.log(String.fromCharCode(10) + '■ ⑧ ★予約カードで店を変えると、担当の一覧もその店になる');
+  await cpage.evaluate(() => { const b = document.querySelector('[data-bmstore="sanda"]'); if (b) b.click(); });
+  await cpage.waitForTimeout(500);
+  t('三田店のボタンが押せた', await cpage.evaluate(() => !!document.querySelector('[data-bmstore="sanda"]')));
+  await cpage.evaluate(() => { const i = document.querySelector('input[placeholder="担当者名"]'); if (i) { i.focus(); i.click(); } });
+  await cpage.waitForTimeout(500);
+  const cs = await cpage.evaluate(() => {
+    const g = document.querySelector('[data-staffpk]');
+    if (!g) return null;
+    return [...g.querySelectorAll('[data-staffid]')].map(e => e.innerText.trim());
+  });
+  t('★三田店のスタッフが出る', !!cs && cs.some(x => /三田さんいち/.test(x)) && cs.some(x => /三田さんに/.test(x)), cs);
+  t('★本店のスタッフは出さない', !!cs && !cs.some(x => /本店あたらし|本店ふたり/.test(x)), cs);
+  await cpage.evaluate(() => { const e = document.querySelector('[data-staffid="三田さんいち"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await cpage.waitForTimeout(400);
+  t('★三田店の人を選べる', await cpage.evaluate(() => { const i = document.querySelector('input[placeholder="担当者名"]'); return i ? i.value : null; }).then(v => v === '三田さんいち'));
+  // 本店に戻すと本店の人に戻る
+  await cpage.evaluate(() => { const b = document.querySelector('[data-bmstore="honten"]'); if (b) b.click(); });
+  await cpage.waitForTimeout(400);
+  await cpage.evaluate(() => { const i = document.querySelector('input[placeholder="担当者名"]'); if (i) { i.focus(); i.click(); } });
+  await cpage.waitForTimeout(500);
+  const ch = await cpage.evaluate(() => {
+    const g = document.querySelector('[data-staffpk]');
+    return g ? [...g.querySelectorAll('[data-staffid]')].map(e => e.innerText.trim()) : null;
+  });
+  t('★本店に戻すと本店のスタッフに戻る', !!ch && ch.some(x => /本店あたらし/.test(x)) && !ch.some(x => /三田さん/.test(x)), ch);
+
+  // ── ⑨ 時間は全部が一度に見える（巻物をやめた・2026-10-30 ユーザー指示）──
+  console.log(String.fromCharCode(10) + '■ ⑨ ★入庫時間は全部が一度に出る（ドラム式をやめた）');
+  await cpage.evaluate(() => { const e = document.querySelector('[data-bmfield="time"]'); if (e) e.click(); });
+  await cpage.waitForTimeout(400);
+  const tp = await cpage.evaluate(() => {
+    const p = document.querySelector('[data-timepop]');
+    if (!p) return null;
+    const cs = getComputedStyle(p), opts = [...p.querySelectorAll('[data-timeopt]')];
+    const last = opts[opts.length - 1];
+    const pr = p.getBoundingClientRect(), lr = last.getBoundingClientRect();
+    return { n: opts.length, cols: cs.gridTemplateColumns.split(' ').length,
+      scroll: p.scrollHeight - p.clientHeight, overflowY: cs.overflowY,
+      firstT: opts[0].innerText.trim(), lastT: last.innerText.trim(),
+      lastInside: lr.bottom <= pr.bottom + 1 };
+  });
+  t('時間のポップが開く', !!tp, tp);
+  t('★09:00〜18:00 の19個が全部ある', !!tp && tp.n === 19 && tp.firstT === '09:00' && tp.lastT === '18:00', tp);
+  t('★4列に並べてある', !!tp && tp.cols === 4, tp && tp.cols);
+  t('★★スクロールしなくてよい（巻物になっていない）', !!tp && tp.scroll <= 1, tp && tp.scroll);
+  t('★いちばん最後の時間も枠の中に出ている', !!tp && tp.lastInside, tp);
+  await cpage.evaluate(() => { const e = document.querySelector('[data-timeopt="18:00"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await cpage.waitForTimeout(400);
+  t('★押すと入る', await cpage.evaluate(() => (document.querySelector('[data-bmfield="time"]')||{}).innerText||'').then(v => /18:00/.test(v)));
   t('顧客リスト：JSエラーなし', cerrs.length === 0, cerrs.slice(0, 3));
 
   await ctx.close(); await browser.close(); server.close();

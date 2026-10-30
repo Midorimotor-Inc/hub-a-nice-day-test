@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793345653167';
+    window.__APP_BUILD='build-1793347355023';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.85.2';
+const APP_VERSION = '3.86.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -424,6 +424,7 @@ const CALBANG      = 26;        // 車検カレンダーの「！」の直径（
 const CALBANG_YEL  = '#fff200'; // まだ承認されていない時の黄色（蛍光）
 const CALBANG_GRN  = '#22c55e'; // 承認は済んでいる時の緑
 const DASHBANG     = 23;        // ダッシュボードのボタンに出る「！」の直径（px）
+const WBANG        = 16;        // 週間カレンダーの車検バッジに出る「！」の直径（px）
 // 休業日セルの中央に置くラベル（topOffset=日付表示の下から始める）
 const ClosedMark = ({small,topOffset=26})=>(
   <div style={{position:'absolute',left:6,right:6,top:topOffset,bottom:6,display:'flex',alignItems:'center',
@@ -4943,11 +4944,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                               style={{...CB,position:'relative',background:(c&&c.color)||'#64748b',
                                 ...(oth?{border:'1.5px solid white',boxShadow:'0 0 0 1.5px '+((c&&c.color)||'#64748b')}:{})}}>
                               {(c&&c.initial)||'？'}
-                              {bang&&<span data-wbangdot={bang} style={{position:'absolute',top:-6,right:-6,width:14,height:14,
+                              {/* ★白ふちは付けない（2026-10-30 ユーザー指示）。色は車検カレンダーの「！」と同じ。
+                                  ふちを外したぶん、コースの色の上で沈まないよう 14→16px にして影を濃くした。 */}
+                              {bang&&<span data-wbangdot={bang} style={{position:'absolute',top:-7,right:-7,width:WBANG,height:WBANG,
                                 borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
-                                fontSize:10,fontWeight:900,color:'#111',border:'1.5px solid #fff',lineHeight:1,
-                                background:bang==='ok'?'#22c55e':'#facc15',
-                                boxShadow:'0 1px 3px rgba(0,0,0,.3)',pointerEvents:'none'}}>!</span>}
+                                fontSize:Math.round(WBANG*0.72),fontWeight:900,color:'#111',lineHeight:1,paddingBottom:1,
+                                background:bang==='ok'?CALBANG_GRN:CALBANG_YEL,
+                                boxShadow:'0 1px 4px rgba(0,0,0,.5)',pointerEvents:'none'}}>!</span>}
                             </button>;})}
                         </div>
                       ))}
@@ -11585,6 +11588,99 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       :{boxShadow:'inset 0 0 0 3px #dc2626',background:'#fee2e2'};
   };
 
+  // ★★ 帯の端をつかんで横に伸ばす＝貸出期間を変える（2026-10-30 ユーザー要望）★★
+  //   それまでは【代車管理の編集モーダルを開く】か【予約カードで一度消して取り直す】しかなかった。
+  //   ・右の端＝返却日。★すでに貸し出しが始まっていても変えられる（延長・早め返却は日常的に起きる）
+  //   ・左の端＝貸出日。★まだ始まっていない予約だけ（もう渡した車の貸出日は動かせない）
+  //   ・ほかの予約と重なる所までは伸ばせない。赤く出して、離しても何もしない。
+  //   ・1日より短くはできない（返却日は貸出日以降）。
+  //   ★入れ替え（上下＝車を変える mvDrag）とは別のもの。つかむ所を分けてあるので混ざらない。
+  const [rsDrag,setRsDrag]=useState(null);   // {kind,carId,res,side:'start'|'end',num}
+  const rsJust=useRef(false);                // 伸ばした直後の click（＝中身を出す）を無視する
+  const RS_W=8;                              // つかむ所の幅（px）
+  const rsShift=(n,k)=>{const y=Math.floor(n/10000),m=Math.floor(n/100)%100-1,d=n%100;
+    const dt=new Date(y,m,d+k);return toNum(dt.getFullYear(),dt.getMonth(),dt.getDate());};
+  // この端をつかんでよいか（だめな時は理由を返す）
+  const rsWhyNot=(r,side)=>{
+    if(!r)return '予約が見つかりません';
+    if(side==='end')return '';                                   // 返却日はいつでも変えられる
+    if(resStartNum(r)<=_todayNum)return 'もう貸し出しが始まっているので、貸出日は動かせません。'+String.fromCharCode(10)+'（返却日なら右の端をつかんで変えられます）';
+    return '';
+  };
+  // いまの引っぱり先で、ほかの予約と重なっていないか
+  const rsOk=(d)=>{
+    if(!d)return false;
+    const r=d.res;
+    const s0=d.side==='start'?d.num:toNum(r.fy,r.fm,r.fd);
+    const e0=d.side==='end'  ?d.num:toNum(r.ty,r.tm,r.td);
+    if(s0>e0)return false;
+    const obj=d.kind==='rental'?(rentalRes||{}):(loanerRes||{});
+    const list=Object.values((obj[d.carId]||obj[String(d.carId)]||{}));
+    return !list.some(x=>x&&x.id!==r.id&&!(toNum(x.ty,x.tm,x.td)<s0||toNum(x.fy,x.fm,x.fd)>e0));
+  };
+  const rsDown=(kind,carId,res,side,e)=>{
+    if(pickMode||!res)return;
+    e.preventDefault(); e.stopPropagation();                      // ★入れ替えドラッグに渡さない
+    const why=rsWhyNot(res,side);
+    if(why){alert(why);return;}
+    setRsDrag({kind,carId,res,side,num:side==='start'?toNum(res.fy,res.fm,res.fd):toNum(res.ty,res.tm,res.td)});
+  };
+  // 引っぱっている間、マウスが乗った日を仮の端にする
+  const rsOverCell=(kind,carId,dateObj)=>{
+    if(!rsDrag||rsDrag.kind!==kind||rsDrag.carId!==carId)return;
+    const n=toNum(dateObj.year,dateObj.month,dateObj.day);
+    const r=rsDrag.res;
+    // 1日より短くはしない
+    const lim=rsDrag.side==='start'?Math.min(n,toNum(r.ty,r.tm,r.td)):Math.max(n,toNum(r.fy,r.fm,r.fd));
+    if(lim===rsDrag.num)return;
+    setRsDrag(p=>p?{...p,num:lim}:p);
+  };
+  useEffect(()=>{
+    if(!rsDrag)return;
+    const up=()=>{
+      const d=rsDrag;
+      setRsDrag(null);
+      rsJust.current=true; setTimeout(()=>{rsJust.current=false;},250);
+      const r=d.res;
+      const was=d.side==='start'?toNum(r.fy,r.fm,r.fd):toNum(r.ty,r.tm,r.td);
+      if(d.num===was)return;                                      // 動いていない
+      if(!rsOk(d)){
+        alert('そこまでは伸ばせません。ほかの予約と重なります。'+String.fromCharCode(10)+'（別の車に移すなら、帯を上下にドラッグしてください）');
+        return;
+      }
+      const y=Math.floor(d.num/10000),m=Math.floor(d.num/100)%100-1,dd=d.num%100;
+      const patch=d.side==='start'?{fy:y,fm:m,fd:dd}:{ty:y,tm:m,td:dd};
+      if(d.kind==='rental')onReplaceRentalRes&&onReplaceRentalRes(d.carId,r.id,patch);
+      else onReplaceRes&&onReplaceRes(d.carId,r.id,patch);
+    };
+    window.addEventListener('mouseup',up);
+    return()=>window.removeEventListener('mouseup',up);
+  },[rsDrag,loanerRes,rentalRes]);
+  // 引っぱっている間の見た目：足す分は緑（重なるなら赤）、減らす分は薄く
+  const rsCellStyle=(kind,carId,dateObj)=>{
+    if(!rsDrag||rsDrag.kind!==kind||rsDrag.carId!==carId)return null;
+    const r=rsDrag.res, n=toNum(dateObj.year,dateObj.month,dateObj.day);
+    const s0=rsDrag.side==='start'?rsDrag.num:toNum(r.fy,r.fm,r.fd);
+    const e0=rsDrag.side==='end'  ?rsDrag.num:toNum(r.ty,r.tm,r.td);
+    const inNew=n>=s0&&n<=e0;
+    const inOld=n>=toNum(r.fy,r.fm,r.fd)&&n<=toNum(r.ty,r.tm,r.td);
+    const ok=rsOk(rsDrag);
+    if(inNew&&!inOld)return {boxShadow:'inset 0 0 0 3px '+(ok?'#22c55e':'#dc2626'),background:ok?'#dcfce7':'#fee2e2'};
+    if(inOld&&!inNew)return {opacity:.3};
+    return null;
+  };
+  // 帯の端につける「つかむ所」。左右にだけ出す
+  const RsGrip=({kind,carId,res,side})=>(
+    <div data-rsgrip={side} data-rsres={res.id} title={side==='end'?'右へ引っぱると返却日がのびます（左へ引っぱると縮みます）':'左右に引っぱると貸出日が変わります'}
+      onMouseDown={e=>rsDown(kind,carId,res,side,e)}
+      style={{position:'absolute',top:0,bottom:0,width:RS_W,zIndex:5,cursor:'ew-resize',
+        ...(side==='end'?{right:0}:{left:0}),
+        display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <span style={{width:3,height:16,borderRadius:2,background:'rgba(255,255,255,.95)',
+        boxShadow:'0 0 3px rgba(0,0,0,.6)',pointerEvents:'none'}}/>
+    </div>
+  );
+
   // -- pickModeのドラッグ操作 --
   const handleMD=(cid,dateObj,e)=>{
     if(!pickMode)return;
@@ -11595,6 +11691,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   };
   // ★ドラッグ中はマウスの位置を見て端で自動スクロール（2026-10-02）
   const handleDragMove=(e)=>{
+    // ★端をつかんで伸ばしている最中も、表の端で自動で横に送る（表は約90日分ある）
+    if(rsDrag&&rsDrag.kind==='loaner'){edgeAutoScroll(gridRef.current,e.clientX);return;}
     if(!pickMode||!isDragging.current)return;
     edgeAutoScroll(gridRef.current,e.clientX);
   };
@@ -11843,7 +11941,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                 // 月が変わるタイミング
                 const isMonthStart=i===0||(dateRange[i-1]&&dateRange[i-1].month!==month);
                 // ★最適化は廃止したので「基準日」も無い（2026-10-07 ユーザー指示）
-                return <th key={i}
+                return <th key={i} data-ldaynum={toNum(year,month,day)}
                   style={{width:44,minWidth:44,maxWidth:44,textAlign:'center',padding:'3px 0',border:'1px solid #e5e7eb',fontSize:9,background:h2?'#fef08a':isMonthStart?'#ddd6fe':'#fff7ed',color:dow===0||isHol?'#dc2626':dow===6?'#1d4ed8':'#374151',fontWeight:h2?800:600,boxSizing:'border-box',position:'relative'}}>
                   {isMonthStart&&<div style={{fontSize:7,fontWeight:800,color:'#c2410c'}}>{month+1}月</div>}
                   <div>{day}</div><div style={{fontSize:7}}>{DOW[dow]}</div>
@@ -11909,7 +12007,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                         onMouseEnter={()=>{
                           if(!isBlocked)handleME(car.id,dateObj);
                           mvOver('loaner',car.id);                 // ★入れ替え中はこの行を移り先にする
-                          if(!pickMode&&isObj&&!mvDrag)setHoverRes({car,res:st});
+                          rsOverCell('loaner',car.id,dateObj);     // ★端をつかんで伸ばしている最中
+                          if(!pickMode&&isObj&&!mvDrag&&!rsDrag)setHoverRes({car,res:st});
                         }}
                         onMouseLeave={()=>{
                           if(!pickMode&&isObj)setHoverRes(null);
@@ -11918,7 +12017,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           if(!pickMode&&isObj){
                             e.preventDefault();
                             e.stopPropagation();
-                            if(mvJust.current)return;               // ★入れ替えた直後は中身を出さない
+                            if(mvJust.current||rsJust.current)return; // ★入れ替え・伸ばした直後は中身を出さない
                             setPinnedRes({car,res:st});
                             setHoverRes(null);
                           }
@@ -11936,8 +12035,12 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           position:'relative',
                           boxSizing:'border-box',
                           opacity:(mvDrag&&mvDrag.kind==='loaner'&&mvDrag.res&&isObj&&st.id===mvDrag.res.id&&car.id===mvDrag.fromCar)?.35:1,
-                          ...(mvCellStyle('loaner',car.id,dateObj)||{})
+                          ...(mvCellStyle('loaner',car.id,dateObj)||{}),
+                          ...(rsCellStyle('loaner',car.id,dateObj)||{})
                         }}>
+                        {/* ★帯の端の「つかむ所」。ここを横に引っぱると貸出期間が変わる（2026-10-30 ユーザー要望） */}
+                        {!pickMode&&isObj&&isStart&&<RsGrip kind="loaner" carId={car.id} res={st} side="start"/>}
+                        {!pickMode&&isObj&&isEnd&&<RsGrip kind="loaner" carId={car.id} res={st} side="end"/>}
                         {/* ★たった今登録した予約の目印。開始位置にだけ出す */}
                         {isJust&&showName&&(<div className="hub-just-chip">たった今</div>)}
                         {/* 貸出日数分のセルを1枠として名前を表示（開始日 or 月またぎ・前が別予約の再開始位置から。尻切れ可） */}
@@ -12219,7 +12322,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
           if(e>=s)setRDrag(p=>({...p,end:dateObj}));
         };
         // ★レンタカーもドラッグ中に端で自動スクロール（2026-10-02）
-        const rHandleDragMove=(ev)=>{ if(rDragging.current)edgeAutoScroll(rentalScrollRef.current,ev.clientX); };
+        const rHandleDragMove=(ev)=>{ if(rDragging.current||(rsDrag&&rsDrag.kind==='rental'))edgeAutoScroll(rentalScrollRef.current,ev.clientX); };
         const rHandleMU=()=>{
           stopAutoScroll();
           if(!rDragging.current||!rDrag)return;
@@ -12300,6 +12403,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           const isConf=st==='confirm';
                           const h2=selDate&&year===selDate.getFullYear()&&month===selDate.getMonth()&&day===selDate.getDate();
                           const isStart=isObj&&st.fd===day&&st.fm===month&&st.fy===year;
+                          const isEnd=isObj&&st.td===day&&st.tm===month&&st.ty===year;
                           const bg=isDrag?'#bef264':isConf?'#93c5fd':isObj?(_rentalColors[st.id]||resColorOf(st)):h2?'#fef08a':'white';
                           const isFree=pickMode&&!isObj&&!isDrag&&!isConf;
                           const isBlocked=pickMode&&isObj;
@@ -12309,10 +12413,10 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           return (
                             <td key={i}
                               onMouseDown={e=>{e.preventDefault();if(!isBlocked)rHandleMD(car.id,dateObj);if(isObj)mvDown('rental',car.id,st,e);}}
-                              onMouseEnter={()=>{rHandleME(car.id,dateObj);mvOver('rental',car.id);if(!pickMode&&isObj&&!mvDrag)setHoverRes({car,res:{...st,_rental:true}});}}
+                              onMouseEnter={()=>{rHandleME(car.id,dateObj);mvOver('rental',car.id);rsOverCell('rental',car.id,dateObj);if(!pickMode&&isObj&&!mvDrag&&!rsDrag)setHoverRes({car,res:{...st,_rental:true}});}}
                               onMouseLeave={()=>{if(!pickMode&&isObj)setHoverRes(null);}}
                               onClick={e=>{
-                                if(!pickMode&&isObj){e.preventDefault();e.stopPropagation();if(mvJust.current)return;setPinnedRes({car,res:{...st,_rental:true}});}
+                                if(!pickMode&&isObj){e.preventDefault();e.stopPropagation();if(mvJust.current||rsJust.current)return;setPinnedRes({car,res:{...st,_rental:true}});}
                               }}
                               style={{
                                 width:44,minWidth:44,maxWidth:44,height:40,
@@ -12322,7 +12426,11 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                                 cursor:isBlocked?'not-allowed':isFree?'crosshair':(!pickMode&&isObj?(mvDrag?'grabbing':'grab'):'default'),
                                 padding:0,overflow:(isObj&&isStart)?'visible':'hidden',position:'relative',boxSizing:'border-box',
                                 opacity:(mvDrag&&mvDrag.kind==='rental'&&mvDrag.res&&isObj&&st.id===mvDrag.res.id&&car.id===mvDrag.fromCar)?.35:1,
-                                ...(mvCellStyle('rental',car.id,dateObj)||{})}}>
+                                ...(mvCellStyle('rental',car.id,dateObj)||{}),
+                                ...(rsCellStyle('rental',car.id,dateObj)||{})}}>
+                              {/* ★帯の端の「つかむ所」。横に引っぱると貸出期間が変わる（2026-10-30 ユーザー要望） */}
+                              {!pickMode&&isObj&&isStart&&<RsGrip kind="rental" carId={car.id} res={st} side="start"/>}
+                              {!pickMode&&isObj&&isEnd&&<RsGrip kind="rental" carId={car.id} res={st} side="end"/>}
                               {isObj&&isStart&&(
                                 <div style={{position:'absolute',left:3,top:'50%',transform:'translateY(-50%)',width:rNameSpan*44-6,fontSize:11,color:'white',fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'clip',textShadow:'-1px -1px 1px rgba(0,0,0,.85),1px -1px 1px rgba(0,0,0,.85),-1px 1px 1px rgba(0,0,0,.85),1px 1px 1px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)',zIndex:2,pointerEvents:'none'}}>
                                   {shortenCorpName(st.user)}

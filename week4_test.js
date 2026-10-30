@@ -140,7 +140,7 @@ const seed = {
   t('車検のバッジが出ている（7台＋8台＝15台）', bs.length === 15, bs.length);
   const wait = bs.filter(x => x.bang === 'wait'), ok = bs.filter(x => x.bang === 'ok');
   t('★まだ承認されていない分が1件だけ', wait.length === 1, wait);
-  t('★その印は黄色（250,204,21）', !!wait[0] && /250, 204, 21/.test(wait[0].dot), wait[0]);
+  t('★その印は黄色（255, 242, 0）', !!wait[0] && /255, 242, 0/.test(wait[0].dot), wait[0]);
   t('★承認済みの分が2件', ok.length === 2, ok);
   t('★その印は緑（34,197,94）', !!ok[0] && /34, 197, 94/.test(ok[0].dot), ok[0]);
   t('★6台までの分には印を付けない', bs.filter(x => x.bang === '0').length === 12, bs.filter(x => x.bang === '0').length);
