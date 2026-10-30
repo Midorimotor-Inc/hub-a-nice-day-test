@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793334888851';
+    window.__APP_BUILD='build-1793342559580';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.85.0';
+const APP_VERSION = '3.85.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -5355,8 +5355,8 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                                 :<span style={{fontSize:11,fontWeight:700,color:'#64748b'}}> （同じ）</span>}
                             </>)}
                           </td>
-                          <td style={{...TD,color:'#64748b'}}>{x.r.carType||''}　{x.r.no||''}</td>
-                          <td style={{...TD,color:'#64748b',whiteSpace:'nowrap'}}>{x.r.staff||''}</td>
+                          <td style={TD}>{x.r.carType||''}　{x.r.no||''}</td>
+                          <td style={{...TD,whiteSpace:'nowrap'}}>{x.r.staff||''}</td>
                           <td style={{...TD,textAlign:'center'}}>
                             <span data-dashmark={ck?'1':'0'} title={ck?('確認ずみ'+(dashStamp(ck)?'　'+dashStamp(ck):'')+'（押すと取り消し）'):'確認したら押す'}
                               onClick={()=>onSetChecked([{dk:x.dk,key:x.key}],!ck)}

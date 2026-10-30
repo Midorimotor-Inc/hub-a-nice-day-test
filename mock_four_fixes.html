@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>4点の直し（モック）</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px 20px 80px;background:#f1f5f9;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#1b2735}
+ h1{font-size:19px;margin:0 0 6px}
+ .lead{font-size:13px;color:#475569;line-height:1.7;margin:0 0 14px}
+ .nav{position:sticky;top:0;z-index:60;background:#f1f5f9;padding:8px 0 10px;margin-bottom:6px;border-bottom:1px solid #cbd5e1}
+ .nav button{font-family:inherit;font-size:13px;font-weight:800;padding:7px 13px;margin-right:6px;border-radius:9px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .card{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:16px 18px 20px;margin-bottom:18px;
+   box-shadow:0 2px 8px rgba(0,0,0,.06)}
+ .card h2{font-size:16px;margin:0 0 4px;color:#0f172a}
+ .card .note{font-size:12.5px;color:#64748b;line-height:1.7;margin:0 0 14px}
+ .warn{color:#b91c1c;font-weight:800}
+ .ok{color:#047857;font-weight:800}
+ .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+ .opt{border:2px solid #e2e8f0;border-radius:10px;padding:10px 12px 12px;background:#fafcff}
+ .opt.now{background:#f8fafc;border-style:dashed}
+ .opt h3{font-size:13px;margin:0 0 8px;color:#334155}
+ .seg{display:inline-flex;border:2px solid #cbd5e1;border-radius:9px;overflow:hidden;margin:0 14px 10px 0;vertical-align:middle}
+ .seg button{font-family:inherit;font-size:12.5px;font-weight:800;padding:7px 13px;border:none;background:white;color:#475569;cursor:pointer}
+ .seg button.on{background:#1d4ed8;color:white}
+ .lbl{font-size:12px;font-weight:800;color:#334155;margin-right:6px}
+ .cal{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:white}
+ .pre{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:8px 11px;display:inline-block}
+</style></head><body>
+
+<h1>4点の直し（モック）</h1>
+<p class="lead">
+ ご指示の4点を形にしました。<b>①〜④それぞれ、どの案にするか教えてください</b>。<br>
+ ここはまだ下書きで、本体（テスト版）にはまだ入れていません。
+</p>
+
+<div class="nav">
+ <button onclick="document.getElementById('s1').scrollIntoView({behavior:'smooth'})">① 代車の日付</button>
+ <button onclick="document.getElementById('s2').scrollIntoView({behavior:'smooth'})">② 検索の案内</button>
+ <button onclick="document.getElementById('s3').scrollIntoView({behavior:'smooth'})">③ ！マーク</button>
+ <button onclick="document.getElementById('s4').scrollIntoView({behavior:'smooth'})">④ 休業日の灰色</button>
+</div>
+
+<!-- ───────────── ① ───────────── -->
+<div class="card" id="s1">
+ <h2>① 代車管理の予約を編集する時の日付カレンダー</h2>
+ <p class="note">
+  いまは<span class="warn">編集の箱の中に開く</span>ので、箱からはみ出した分が切られて、スクロールしないと全体が見えません。<br>
+  直し方は2つセットです。<br>
+  　<b>ⓐ カレンダーを「画面に対して」開く</b>（箱の外に出る＝<span class="ok">もう切られない</span>）。これはどの案でも必ず入れます。<br>
+  　<b>ⓑ 大きさ</b>を下の3つから選んでください。数字のマスが大きいほど押しやすくなります。
+ </p>
+ <div class="row" id="calsizes"></div>
+</div>
+
+<!-- ───────────── ② ───────────── -->
+<div class="card" id="s2">
+ <h2>② 🔍 検索の入力欄の案内（プレースホルダー）</h2>
+ <p class="note">
+  いまは「例：セリエ / ハイエース / 1386 / 090」と、<span class="warn">たまたまの中身</span>が並んでいて、
+  何で探せるのかが分かりません。<b>何で探せるか</b>を書く形に変えます。
+ </p>
+ <div id="phs"></div>
+ <p class="note" style="margin-top:12px">
+  ※ 探せる中身は今までどおりです（お名前・車種・ナンバー4桁・電話番号・住所・備考）。言葉を変えるだけで、動きは変わりません。<br>
+  ※ スマホ（mobile.html）の検索にも同じ言葉を入れます。
+ </p>
+</div>
+
+<!-- ───────────── ③ ───────────── -->
+<div class="card" id="s3">
+ <h2>③ 車検カレンダーの「！」マーク</h2>
+ <p class="note">
+  いまは<b>日付のとなり</b>に小さく出ています。これを<b>6枠の真ん中の真上</b>へ移し、大きく・白いふちをなくします。<br>
+  <b>黄＝まだ承認されていない</b>／<b>緑＝承認は済んでいる</b>、という意味は今までどおりです。<br>
+  下のボタンで<b>大きさ</b>と<b>黄色の鮮やかさ</b>を切り替えて、見比べてください。
+ </p>
+ <div>
+  <span class="lbl">大きさ</span><span class="seg" id="segSize"></span>
+  <span class="lbl">黄色</span><span class="seg" id="segYel"></span>
+  <span class="lbl">置き方</span><span class="seg" id="segPos"></span>
+ </div>
+ <div class="row" style="margin-top:6px">
+  <div class="opt now" style="flex:0 0 auto">
+   <h3>いま（日付のとなり・17px・白ふち）</h3>
+   <div class="cal" id="calNow" style="width:720px"></div>
+  </div>
+ </div>
+ <div class="row" style="margin-top:14px">
+  <div class="opt" style="flex:0 0 auto;border-color:#1d4ed8">
+   <h3>直したあと（6枠の真ん中の真上）</h3>
+   <div class="cal" id="calNew" style="width:720px"></div>
+  </div>
+ </div>
+ <p class="note" style="margin-top:14px">
+  ダッシュボードのボタンに出る「！」も同じ黄色・同じ大きさにそろえます（白いふちは、濃い青の帯の上なので<b>残します</b>。無いと帯に沈みます）。
+ </p>
+ <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);padding:14px 18px;border-radius:10px;display:inline-block">
+  <span id="dashNow"></span><span style="display:inline-block;width:26px"></span><span id="dashNew"></span>
+ </div>
+ <p class="note" style="margin-top:10px">
+  ※ 週間カレンダーの車検バッジにも同じ「！」が付いています（今回のご指示には入っていません）。
+  <b>そろえますか？ そのままにしますか？</b> も教えてください。
+ </p>
+</div>
+
+<!-- ───────────── ④ ───────────── -->
+<div class="card" id="s4">
+ <h2>④ 顧客リストから開いた予約カードのカレンダー　休業日の色</h2>
+ <p class="note">
+  いまは<span class="warn">灰色の斜めしま</span>なので、休業日なのか薄く表示されているだけなのか分かりません。
+  週間カレンダーと同じ<b>赤</b>（地 #fecaca ／ 字 #991b1b）にそろえます。
+ </p>
+ <div class="row">
+  <div class="opt now"><h3>いま（灰色のしま）</h3><div class="cal" id="custNow" style="width:470px"></div></div>
+  <div class="opt" style="border-color:#1d4ed8"><h3>直したあと（赤）</h3><div class="cal" id="custNew" style="width:470px"></div></div>
+ </div>
+</div>
+
+<script>
+// ══════════ 共通 ══════════
+var COURSES={1:{l:'マ',bg:'#fee2e2',c:'#E8492E'},2:{l:'ク',bg:'#dbeafe',c:'#2563eb'},3:{l:'レ',bg:'#d1fae5',c:'#059669'}};
+var CLOSED_BG='#fecaca', CLOSED_FG='#991b1b', CLOSED_BAR='inset 4px 0 0 #b91c1c';
+function el(h){var d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild;}
+
+// ══════════ ① 日付カレンダーの大きさ ══════════
+var CALS=[
+ {id:'now', ttl:'いま（幅238・マス 6px）', w:238, cell:6, fs:12, head:13, now:true},
+ {id:'mid', ttl:'中（幅300・マス 10px）',   w:300, cell:10, fs:14, head:14},
+ {id:'big', ttl:'大（幅360・マス 14px）',   w:360, cell:14, fs:16, head:15}
+];
+function datePop(o){
+  var h='<div style="background:white;border-radius:10px;border:2px solid #1d4ed8;padding:12px;width:'+o.w+'px;box-shadow:0 8px 30px rgba(0,0,0,.25)">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<span style="font-size:17px;padding:2px 9px;color:#334155">‹</span>'
+    +'<span style="font-weight:700;font-size:'+o.head+'px;color:#1f2937">2026年11月</span>'
+    +'<span style="font-size:17px;padding:2px 9px;color:#334155">›</span></div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px">';
+  ['日','月','火','水','木','金','土'].forEach(function(d,i){
+    h+='<div style="text-align:center;font-size:'+(o.fs-2)+'px;font-weight:700;padding:2px 0;color:'+(i===0?'#ef4444':i===6?'#2563eb':'#9ca3af')+'">'+d+'</div>';});
+  h+='</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  for(var i=0;i<6;i++)h+='<div></div>';
+  for(var d=1;d<=30;d++){
+    var on=(d===12);
+    h+='<div style="padding:'+o.cell+'px 0;border-radius:6px;font-size:'+o.fs+'px;text-align:center;'
+      +'border:'+(on?'2px solid #1d4ed8':'1px solid #e5e7eb')+';background:'+(on?'#1d4ed8':'white')+';'
+      +'color:'+(on?'white':'#374151')+';font-weight:'+(on?800:500)+'">'+d+'</div>';}
+  h+='</div><div style="margin-top:8px;padding:5px;background:#f3f4f6;border-radius:6px;text-align:center;font-size:11px;color:#6b7280">閉じる</div>';
+  return h+'</div>';
+}
+document.getElementById('calsizes').innerHTML=CALS.map(function(o){
+  return '<div class="opt'+(o.now?' now':'')+'" style="flex:0 0 auto'+(o.now?'':';border-color:#1d4ed8')+'">'
+    +'<h3>'+o.ttl+'</h3>'+datePop(o)
+    +'<div style="font-size:11.5px;color:#64748b;margin-top:8px">高さ 約'+(o.w===238?300:o.w===300?360:425)+'px</div></div>';
+}).join('');
+
+// ══════════ ② プレースホルダー ══════════
+var PHS=[
+ {id:'now', t:'例：セリエ / ハイエース / 1386 / 090', note:'いま。たまたまの中身が並んでいて、何で探せるのか分からない', now:true},
+ {id:'A',   t:'名前 / 車種 / ナンバー4桁 / 電話番号', note:'A案　ご指示どおり。短くて読みやすい'},
+ {id:'B',   t:'名前・車種・ナンバー4桁・電話番号で探せます', note:'B案　「探せます」まで書く。少し長い'},
+ {id:'C',   t:'お名前　車種　ナンバー4桁　電話番号', note:'C案　区切りを空白に。いちばん静か'}
+];
+document.getElementById('phs').innerHTML=PHS.map(function(o){
+  return '<div class="opt'+(o.now?' now':'')+'" style="margin-bottom:10px'+(o.now?'':';border-color:#1d4ed8')+'">'
+   +'<h3>'+(o.now?'':'　')+o.note+'</h3>'
+   +'<div style="display:flex;align-items:center;gap:8px;border:2px solid #cbd5e1;border-radius:10px;padding:9px 13px;background:white;max-width:620px">'
+   +'<span style="font-size:15px">🔍</span>'
+   +'<span style="font-size:14.5px;color:#9ca3af;font-family:inherit">'+o.t+'</span></div></div>';
+}).join('');
+
+// ══════════ ③ ！マーク ══════════
+var SIZES=[{id:17,t:'いま 17'},{id:22,t:'22'},{id:26,t:'26（おすすめ）'},{id:30,t:'30'}];
+var YELS=[{id:'#facc15',t:'いま'},{id:'#fde047',t:'明るい'},{id:'#ffe600',t:'蛍光（おすすめ）'},{id:'#fff200',t:'もっと蛍光'}];
+var POSS=[{id:'over',t:'6枠に少し重ねる（おすすめ）'},{id:'above',t:'6枠のすぐ上（重ねない）'}];
+var cur={size:26,yel:'#ffe600',pos:'over'};
+
+function seg(hostId,arr,key){
+  var host=document.getElementById(hostId);
+  host.innerHTML=arr.map(function(o){return '<button data-v="'+o.id+'">'+o.t+'</button>';}).join('');
+  function paint(){[].forEach.call(host.children,function(b){b.classList.toggle('on',String(b.getAttribute('data-v'))===String(cur[key]));});}
+  host.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+    var v=b.getAttribute('data-v'); cur[key]=(key==='size')?Number(v):v; paint(); draw();});
+  paint();
+}
+
+// 1週間ぶんの作りものデータ
+var WEEK=[
+ {d:9,  rows:[1,1,2,2,3], wait:false, bang:null},
+ {d:10, rows:[2,2,2], wait:false, bang:null},
+ {d:11, rows:[1,1,2,2,2,3,3], wait:false, bang:'ok'},    // 7台・承認ずみ
+ {d:12, rows:[1,2,2,3,3,3,3,3], wait:true,  bang:'wait'},// 8台・未承認あり
+ {d:13, rows:[2], wait:false, bang:null},
+ {d:14, rows:[1,1,2], wait:false, bang:null},
+ {d:15, rows:[], closed:true}
+];
+function slot6(rows){
+  var h='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;position:relative">';
+  for(var i=0;i<6;i++){
+    var c=COURSES[rows[i]];
+    h+='<div style="aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;'
+      +'font-weight:900;font-size:14px;background:'+(c?c.bg:'#f3f4f6')+';color:'+(c?c.c:'#ddd')+';'
+      +'border:1.5px solid '+(c?c.c+'66':'#e5e7eb')+'">'+(c?c.l:'')+'</div>';}
+  return h;
+}
+function bangNow(kind){
+  if(!kind)return '';
+  return '<span style="flex-shrink:0;width:17px;height:17px;border-radius:50%;display:inline-flex;align-items:center;'
+   +'justify-content:center;font-size:11px;font-weight:900;color:#111;background:'+(kind==='wait'?'#facc15':'#22c55e')+';'
+   +'border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)">!</span>';
+}
+function bangNew(kind){
+  if(!kind)return '';
+  var s=cur.size, yel=cur.yel;
+  var top=(cur.pos==='over')?(-Math.round(s*0.34)):(-s-3);
+  return '<span style="position:absolute;left:50%;top:'+top+'px;transform:translateX(-50%);z-index:6;'
+   +'width:'+s+'px;height:'+s+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+   +'font-size:'+Math.round(s*0.78)+'px;font-weight:900;color:#111;line-height:1;padding-bottom:'+Math.max(1,Math.round(s*0.06))+'px;'
+   +'background:'+(kind==='wait'?yel:'#22c55e')+';box-shadow:0 2px 6px rgba(0,0,0,.4)">!</span>';
+}
+function dayCell(x,mode){
+  if(x.closed){
+    return '<div style="min-height:105px;padding:5px;border-left:1px solid #e5e7eb;background:'+CLOSED_BG+';box-shadow:'+CLOSED_BAR+';position:relative">'
+      +'<div style="font-weight:800;font-size:15px;margin-bottom:3px;color:'+CLOSED_FG+'">'+x.d+'</div>'
+      +'<div style="position:absolute;left:6px;right:6px;top:26px;bottom:6px;display:flex;align-items:center;justify-content:center;'
+      +'font-size:18px;font-weight:900;color:'+CLOSED_FG+';letter-spacing:2px">休業日</div></div>';
+  }
+  var h='<div style="min-height:105px;padding:5px;border-left:1px solid #e5e7eb;background:white;position:relative">';
+  h+='<div style="font-weight:800;font-size:15px;margin-bottom:3px;color:#111;display:flex;align-items:center;gap:3px">'
+    +'<span>'+x.d+'</span>'+(mode==='now'?bangNow(x.bang):'')+'</div>';
+  h+=slot6(x.rows)+(mode==='new'?bangNew(x.bang):'')+'</div></div>';
+  return h;
+}
+function dashBadge(mode){
+  var s=(mode==='now')?19:cur.size, yel=(mode==='now')?'#facc15':cur.yel;
+  return '<span style="position:relative;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:7px;'
+   +'background:#FFD166;color:#7C2D12;font-size:12px;font-weight:900">🏠 ダッシュボード'
+   +'<span style="position:absolute;top:'+(-Math.round(s*0.42))+'px;right:'+(-Math.round(s*0.42))+'px;width:'+s+'px;height:'+s+'px;'
+   +'border-radius:50%;background:'+yel+';color:#111;border:2px solid white;display:flex;align-items:center;justify-content:center;'
+   +'font-size:'+Math.round(s*0.66)+'px;font-weight:900;line-height:1;padding-bottom:'+Math.max(1,Math.round(s*0.06))+'px;'
+   +'box-shadow:0 1px 4px rgba(0,0,0,.35)">!</span></span>';
+}
+function draw(){
+  document.getElementById('calNow').innerHTML=WEEK.map(function(x){return dayCell(x,'now');}).join('');
+  document.getElementById('calNew').innerHTML=WEEK.map(function(x){return dayCell(x,'new');}).join('');
+  document.getElementById('dashNow').innerHTML=dashBadge('now');
+  document.getElementById('dashNew').innerHTML=dashBadge('new');
+}
+seg('segSize',SIZES,'size'); seg('segYel',YELS,'yel'); seg('segPos',POSS,'pos');
+draw();
+
+// ══════════ ④ 顧客リストの予約カードのカレンダー ══════════
+var CW=[{d:16,n:3},{d:17,n:5},{d:18,n:0,cl:true},{d:19,n:2},{d:20,n:6},{d:21,n:1},{d:22,n:0,cl:true}];
+function custCell(x,red){
+  var bg = x.cl ? (red?CLOSED_BG:'repeating-linear-gradient(45deg,#f9fafb,#f9fafb 3px,#f3f4f6 3px,#f3f4f6 6px)') : 'white';
+  var fg = x.cl ? (red?CLOSED_FG:'#9ca3af') : '#111';
+  var h='<div style="min-height:66px;padding:3px 2px;border-top:1px solid #f3f4f6;border-left:1px solid #f3f4f6;'
+   +'background:'+bg+';'+(x.cl&&red?'box-shadow:'+CLOSED_BAR+';':'')+'position:relative">';
+  h+='<div style="text-align:center;font-weight:700;font-size:11px;color:'+fg+';line-height:1.3">'+x.d+'</div>';
+  if(!x.cl){
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;padding:2px">';
+    for(var i=0;i<6;i++){
+      var on=i<x.n, c=COURSES[(i%3)+1];
+      h+='<div style="height:14px;border-radius:2px;background:'+(on?c.bg:'#f3f4f6')+';border:'+(on?'none':'1px solid #e5e7eb')+';'
+        +'display:flex;align-items:center;justify-content:center">'+(on?'<span style="font-size:7px;font-weight:900;color:'+c.c+'">'+c.l+'</span>':'')+'</div>';}
+    h+='</div>';
+  } else {
+    h+='<div style="text-align:center;font-size:'+(red?11:9)+'px;font-weight:'+(red?900:400)+';color:'+fg+';margin-top:'+(red?6:2)+'px;letter-spacing:'+(red?1:0)+'px">'+(red?'休業日':'休')+'</div>';
+  }
+  return h+'</div>';
+}
+document.getElementById('custNow').innerHTML=CW.map(function(x){return custCell(x,false);}).join('');
+document.getElementById('custNew').innerHTML=CW.map(function(x){return custCell(x,true);}).join('');
+</script>
+</body></html>

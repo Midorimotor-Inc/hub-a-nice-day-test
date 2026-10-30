@@ -168,6 +168,16 @@ const seed = {
   });
   t('★マスの線は週間カレンダーと同じ濃さ（#64748b）', !!grid && grid.top === 'rgb(100, 116, 139)' && grid.left === 'rgb(100, 116, 139)', grid);
   t('★左右にも線が引いてある（ちゃんとマスになっている）', !!grid && grid.left === grid.right && parseFloat(grid.w) >= 1, grid);
+  // 車種・ナンバー／担当 が薄い灰色だと読みにくい（2026-10-30 ユーザー指示）。顧客名と同じ黒さにそろえた。
+  const ink = await page.evaluate(() => {
+    const tr = document.querySelector('[data-dashrow]'); if (!tr) return null;
+    const td = tr.querySelectorAll('td');
+    const c = i => getComputedStyle(td[i]).color;
+    return { name: c(1), car: c(3), staff: c(4) };
+  });
+  t('★車種・ナンバーは顧客名と同じ黒さ', !!ink && ink.car === ink.name, ink);
+  t('★担当も顧客名と同じ黒さ', !!ink && ink.staff === ink.name, ink);
+  t('★その黒さは薄い灰色（#64748b）ではない', !!ink && ink.car !== 'rgb(100, 116, 139)', ink);
   t('★いま見ているのは今月（2026年10月）', await page.evaluate(() => {
     const e = document.querySelector('[data-dashmon]'); return !!e && e.innerText.trim() === '2026年10月';
   }), await page.evaluate(() => { const e = document.querySelector('[data-dashmon]'); return e ? e.innerText : null; }));
