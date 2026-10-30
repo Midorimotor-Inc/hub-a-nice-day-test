@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>週間カレンダー：休業日の見せ方（モック）</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px 20px 60px;background:#f1f5f9;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#1b2735}
+ h1{font-size:19px;margin:0 0 6px}
+ .lead{font-size:13px;color:#475569;line-height:1.7;margin:0 0 14px}
+ .nav{position:sticky;top:0;z-index:50;background:#f1f5f9;padding:8px 0 10px;margin-bottom:6px;border-bottom:1px solid #cbd5e1}
+ .nav button{font-family:inherit;font-size:13px;font-weight:800;padding:7px 14px;margin-right:6px;border-radius:9px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .nav button.on{background:#E8492E;border-color:#E8492E;color:white}
+ .card{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px 18px;margin-bottom:18px;
+   box-shadow:0 2px 8px rgba(0,0,0,.06)}
+ .card h2{font-size:16px;margin:0 0 4px}
+ .card .note{font-size:12px;color:#64748b;line-height:1.6;margin:0 0 12px}
+ .warn{color:#b91c1c;font-weight:800}
+ .wrap{overflow:auto}
+ table{border-collapse:collapse;width:100%;min-width:980px;table-layout:fixed}
+ .swatch{display:inline-block;width:14px;height:14px;border:1px solid #94a3b8;border-radius:3px;vertical-align:-2px;margin-right:4px}
+</style></head><body>
+
+<h1>週間カレンダー：休業日の見せ方</h1>
+<p class="lead">
+ ご指示は2つです。<b>① 車検の欄に大きく「休業日」と出す</b>／<b>② 休業日の列を上から下まで赤系にする</b>。<br>
+ 赤の濃さを4案ならべました。<b>どれがよいか番号で教えてください</b>（いちばん上は今の見た目＝オレンジです）。<br>
+ ※ 金曜の列にわざと<b>入庫制限</b>（うすい赤の斜めしま）を入れてあります。<b>休業日と見間違えないか</b>も一緒に見てください。
+</p>
+
+<div class="nav" id="nav"></div>
+<div id="out"></div>
+
+<script>
+// ── 本物の週表と同じ値 ─────────────────────────────
+var WLINE='#64748b', BAND_BG='#e6f6fb', BAND_TM='#cfeef7';
+var SP_TM_BG='#047857', SP_CELL='#f0fdf4';
+var STAFF_UNDER='4px double #334155';
+var TODAY_LINE='#fb923c', TODAY_W='5px';
+var RESTR_BASE='#fff5f5';
+var ZB_W=2.5, ZB_P=ZB_W*2*Math.sqrt(2);
+var ZB_IMG='repeating-linear-gradient(45deg,rgba(220,38,38,.16) 0,rgba(220,38,38,.16) '+ZB_W+'px,transparent '+ZB_W+'px,transparent '+(ZB_W*2)+'px)';
+
+// ── 休業日の案 ───────────────────────────────────
+var PLANS=[
+ {id:'now', name:'いま（オレンジ）', bg:'#ffedd5', bar:'#f97316', fg:'#b45309',
+  note:'今の本番の色（うすいオレンジ＋左に細いオレンジの線）。比べやすいよう、この案にも「休業日」の札を出しています（本物の今の画面には出ていません）。'},
+ {id:'A', name:'A案　うすい赤', bg:'#fee2e2', bar:'#dc2626', fg:'#b91c1c',
+  note:'いちばん静かな赤。ただし<span class="warn">車検の台数制限（いっぱいの日）とまったく同じ色</span>です。'},
+ {id:'B', name:'B案　中くらいの赤', bg:'#fecaca', bar:'#b91c1c', fg:'#991b1b',
+  note:'ひと目で「ここは休み」と分かる濃さ。入庫制限（うすい赤のしま）とも見分けが付きます。'},
+ {id:'C', name:'C案　しっかり赤', bg:'#fca5a5', bar:'#7f1d1d', fg:'#7f1d1d',
+  note:'いちばん強い。遠くからでも分かりますが、表の中でかなり目立ちます。'},
+ {id:'D', name:'D案　「休業日」の札だけ濃い赤（白抜き）＋列はうすい赤', bg:'#fee2e2', bar:'#dc2626', fg:'#b91c1c',
+  insBg:'#dc2626', insFg:'#ffffff',
+  note:'札だけを濃い赤＋白文字にして、列そのものはうすく保つ案。'}
+];
+
+// ── 1週間ぶんの作りものデータ（水曜定休・日曜休みのつもり） ──
+var DAYS=[
+ {d:'10/27（月）', cl:false, today:true,  ins:[['マ','#E8492E'],['マ','#E8492E'],['ク','#2563eb']], on:'見岡竹幸魚', off:'舟'},
+ {d:'10/28（火）', cl:false, today:false, ins:[['ク','#2563eb'],['レ','#059669']], on:'見岡竹幸', off:'魚舟'},
+ {d:'10/29（水）', cl:true,  today:false, ins:[], on:'', off:''},
+ {d:'10/30（木）', cl:false, today:false, ins:[['マ','#E8492E'],['ク','#2563eb'],['ク','#2563eb'],['レ','#059669']], on:'見岡竹幸魚舟', off:''},
+ {d:'10/31（金）', cl:false, today:false, ins:[['ク','#2563eb']], on:'見岡竹', off:'幸魚舟', restr:true},
+ {d:'11/1（土）',  cl:false, today:false, ins:[['マ','#E8492E'],['マ','#E8492E']], on:'見岡幸魚', off:'竹舟'},
+ {d:'11/2（日）',  cl:true,  today:false, ins:[], on:'', off:''}
+];
+var SLOTS=[{t:'09:00',h:true},{t:'09:30',h:false},{t:'10:00',h:true},{t:'午前入庫',sp:true}];
+var FOOT=[{t:'午後入庫',sp:true},{t:'時間未定',sp:true}];
+var ENT={'10/30（木）':{'09:00':'車検整備　オイル交換'},'10/27（月）':{'10:00':'12ヶ月点検'}};
+
+function esc(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function tdSty(extra){return 'border:1px solid '+WLINE+';padding:1px 3px;font-size:11.5px;vertical-align:middle;height:26px;'+(extra||'');}
+function tmSty(extra){return 'border:1px solid '+WLINE+';width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap;'+(extra||'');}
+function todayCol(day){return day.today?('border-left:'+TODAY_W+' solid '+TODAY_LINE+';border-right:'+TODAY_W+' solid '+TODAY_LINE+';'):'';}
+function clCell(p,day,extra){
+  return '<td style="'+tdSty('background:'+p.bg+';box-shadow:inset 4px 0 0 '+p.bar+';'+todayCol(day)+(extra||''))+'"></td>';
+}
+
+function build(p){
+  var h='';
+  h+='<div class="wrap"><table><thead><tr><th style="'+tmSty('background:#f1f5f9;padding:5px 4px;')+'"></th>';
+  DAYS.forEach(function(day){
+    var bg=day.cl?p.bg:(day.today?'#ffedd5':'#f1f5f9');
+    var bar=day.cl?('box-shadow:inset 4px 0 0 '+p.bar+';'):'';
+    h+='<th style="border:1px solid '+WLINE+';padding:5px 4px;font-size:11px;font-weight:800;white-space:nowrap;'
+      +'background:'+bg+';'+bar+todayCol(day)+(day.today?('border-top:'+TODAY_W+' solid '+TODAY_LINE+';'):'')+'">'
+      +'<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 11px;border-radius:14px;'
+      +'border:1.5px solid '+(day.today?'#0e7490':(day.cl?p.bar:'#cbd5e1'))+';background:'+(day.today?'#0e7490':'white')+';'
+      +'color:'+(day.today?'white':(day.cl?p.fg:'#374151'))+';font-size:11.5px;font-weight:800;">'+day.d+'</span>'
+      +(day.cl?'':'<span style="margin-left:5px;display:inline-flex;padding:2px 7px;border-radius:9px;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;font-size:11px;font-weight:900;">'+day.ins.length+'台</span>')
+      +'</th>';
+  });
+  h+='</tr></thead><tbody>';
+
+  // ── 車検の行（ここに大きく「休業日」） ──
+  h+='<tr><td style="'+tmSty('background:#fff7ed;color:#9a3412;')+'">車検</td>';
+  DAYS.forEach(function(day){
+    if(day.cl){
+      var ibg=p.insBg||'', ifg=p.insFg||p.fg;
+      h+='<td style="'+tdSty('background:'+p.bg+';box-shadow:inset 4px 0 0 '+p.bar+';'+todayCol(day)+'padding:3px;')+'">'
+        +'<div style="display:flex;align-items:center;justify-content:center;height:40px;'
+        +(ibg?('background:'+ibg+';border-radius:6px;'):'')
+        +'font-size:17px;font-weight:900;letter-spacing:4px;color:'+ifg+';">休業日</div></td>';
+      return;
+    }
+    var cells='';
+    day.ins.forEach(function(b){
+      cells+='<span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;'
+        +'border-radius:5px;color:white;font-size:11px;font-weight:900;background:'+b[1]+';margin:1px;">'+b[0]+'</span>';
+    });
+    cells+='<span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;'
+      +'border-radius:5px;color:#c2410c;font-size:12px;font-weight:900;background:white;border:1.5px dashed #fb923c;margin:1px;">＋</span>';
+    h+='<td style="'+tdSty('background:#fff7ed;padding:3px;text-align:center;'+todayCol(day))+'">'+cells+'</td>';
+  });
+  h+='</tr>';
+
+  // ── 出勤の行 ──
+  h+='<tr><td style="'+tmSty('color:#475569;border-bottom:'+STAFF_UNDER+';')+'">出勤</td>';
+  DAYS.forEach(function(day){
+    if(day.cl){h+=clCell(p,day,'border-bottom:'+STAFF_UNDER+';');return;}
+    var s='';
+    day.on.split('').forEach(function(c){s+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;border-radius:4px;background:#475569;color:white;font-size:10px;font-weight:900;margin:1px;">'+c+'</span>';});
+    if(day.off){s+='<span style="display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle;"></span>';
+      day.off.split('').forEach(function(c){s+='<span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;border-radius:4px;background:white;color:#e6ebf1;border:1px solid #f1f5f9;font-size:10px;font-weight:700;margin:1px;">'+c+'</span>';});}
+    h+='<td style="'+tdSty('background:#f8fafc;text-align:center;padding:3px;line-height:1;border-bottom:'+STAFF_UNDER+';'+todayCol(day))+'">'+s+'</td>';
+  });
+  h+='</tr>';
+
+  // ── 時間の行 ──
+  function slotRow(sl){
+    var r='<tr><td style="'+tmSty(sl.sp?('background:'+SP_TM_BG+';color:white;'):(sl.h?('background:'+BAND_TM+';color:#0e5a6b;'):''))+'">'+sl.t+'</td>';
+    DAYS.forEach(function(day){
+      if(day.cl){r+=clCell(p,day,'');return;}
+      var ent=(ENT[day.d]||{})[sl.t];
+      var bg=sl.sp?SP_CELL:(sl.h?BAND_BG:'white');
+      var zb='';
+      if(day.restr&&!sl.sp){bg=RESTR_BASE;zb='background-image:'+ZB_IMG+';background-size:'+ZB_P+'px '+ZB_P+'px;';}
+      r+='<td style="'+tdSty('background:'+bg+';'+zb+todayCol(day))+'">'
+        +(ent?'<span style="display:inline-block;padding:1px 4px;border-radius:4px;background:#0891b2;color:white;font-size:10.5px;font-weight:800;">'+esc(ent)+'</span>'
+             :'<span style="color:'+(day.restr&&!sl.sp?'#fca5a5':'#cbd5e1')+';font-size:11px;">＋</span>')
+        +'</td>';
+    });
+    return r+'</tr>';
+  }
+  SLOTS.forEach(function(sl){h+=slotRow(sl);});
+  h+='</tbody></table>';
+  h+='<table style="border-top:3px solid #334155;"><tbody>';
+  FOOT.forEach(function(sl){h+=slotRow(sl);});
+  h+='</tbody></table></div>';
+  return h;
+}
+
+var nav='', out='';
+PLANS.forEach(function(p,i){
+  nav+='<button data-go="'+p.id+'">'+(i===0?'いま':p.id+'案')+'</button>';
+  out+='<div class="card" id="c-'+p.id+'"><h2>'+p.name+'</h2>'
+    +'<p class="note">'+p.note+'<br>'
+    +'<span class="swatch" style="background:'+p.bg+'"></span>地 '+p.bg
+    +'　<span class="swatch" style="background:'+p.bar+'"></span>左の線 '+p.bar
+    +'　<span class="swatch" style="background:'+(p.insBg||p.bg)+'"></span>「休業日」の字 '+(p.insFg||p.fg)+'</p>'
+    +build(p)+'</div>';
+});
+document.getElementById('nav').innerHTML=nav;
+document.getElementById('out').innerHTML=out;
+document.getElementById('nav').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b)return;
+  [].forEach.call(document.querySelectorAll('#nav button'),function(x){x.classList.remove('on');});
+  b.classList.add('on');
+  var el=document.getElementById('c-'+b.getAttribute('data-go'));
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+});
+</script>
+</body></html>

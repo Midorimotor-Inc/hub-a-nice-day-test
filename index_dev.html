@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793326813894';
+    window.__APP_BUILD='build-1793334888851';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.84.0';
+const APP_VERSION = '3.85.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -401,12 +401,19 @@ const HubCloseHelp=({onClose})=>(
 //   定休日・第2火曜・手動の休業日は「色分けせず同じ見た目」にする（2026-07-30 ユーザー決定・A案）。
 //   従来は極薄の斜線（#f9fafb/#f3f4f6）で、しかも空の6コマが営業日と同じに描かれるため
 //   「まだ予約を入れられる日」に見えていた。ベタ塗りで沈め、コマを消し、中央に「休業日」と出す。
-//   配色はスタッフ休日（オレンジ #f97316 系）に揃える（2026-08-01 ユーザー決定）。
-//   スタッフ休日セル（背景 #fff7ed＋オレンジ枠）より一段濃い背景にして、休業日と休日を見分けられるようにしている。
-const CLOSED_BG    = '#ffedd5'; // 休業日セルの背景（ライトオレンジのベタ塗り）
-const CLOSED_FG    = '#b45309'; // 休業日セルの日付・文字色
-const CLOSED_BAR   = 'inset 4px 0 0 #f97316'; // 左端の縦バー＝隣の営業日との区切り（オレンジ）
+//   ★配色は【赤】（2026-10-30 ユーザー決定）。mock_week_closed.html に5案ならべて
+//     「B案の地＋D案の札」を選んだ。あわせて【Hub ぜんぶの休業日】をこの赤にそろえる。
+//     それまではスタッフ休日（#fff7ed のオレンジ）と地続きに見えて、
+//     「店が休み」なのか「誰かが休み」なのかが見分けにくかった。
+//   ★入庫制限（#fff5f5＋赤の斜めしま）・車検の台数制限いっぱい（#fee2e2）とは色をずらしてある。
+//     この3つは同じ赤系なので、濃さを変える時は必ず並べて見比べること。
+const CLOSED_BG    = '#fecaca'; // 休業日セルの背景（赤のベタ塗り）
+const CLOSED_FG    = '#991b1b'; // 休業日セルの日付・文字色
+const CLOSED_BAR   = 'inset 4px 0 0 #b91c1c'; // 左端の縦バー＝隣の営業日との区切り（濃い赤）
 const CLOSED_LABEL = '休業日';
+// 「休業日」を札（濃い赤に白抜き）で出す時の色。週間カレンダーの車検の欄で使う
+const CLOSED_TAG_BG = '#dc2626';
+const CLOSED_TAG_FG = '#ffffff';
 // 休業日セルの中央に置くラベル（topOffset=日付表示の下から始める）
 const ClosedMark = ({small,topOffset=26})=>(
   <div style={{position:'absolute',left:6,right:6,top:topOffset,bottom:6,display:'flex',alignItems:'center',
@@ -4489,6 +4496,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   //   （2026-10-30 ユーザー決定。太さ4種・明るさ5種を見比べて決めた）
   const TODAY_LINE='#fb923c';
   const TODAY_W='5px';
+  // ★休業日の札（車検の欄）。高さは車検のバッジ2段（19px×2＋すき間）に合わせてある
+  const CLOSED_TAG={display:'flex',alignItems:'center',justifyContent:'center',minHeight:38,
+    background:CLOSED_TAG_BG,borderRadius:6,color:CLOSED_TAG_FG,fontSize:17,fontWeight:900,letterSpacing:4};
   // ★見出しの右端の四角いボタン（⛶ と ✕ で共用。大きさを必ず揃える・2026-10-30 ユーザー指示）
   const WHDR_SQ={width:32,height:26,padding:0,display:'inline-flex',alignItems:'center',justifyContent:'center',
     background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
@@ -4815,8 +4825,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                 {days.map((d,i)=>{const dk=dkOf(d),cl=isClosed(d);
                   const dowCol=weekDowCol(d);
                   const hDim=!!(sr&&sr.dayDim[dk]);
-                  return <th key={dk} data-wtoday={dk===todayDk?'1':'0'} data-wdim={hDim?'1':'0'}
-                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:TODAY_W+' solid '+TODAY_LINE}:{}),...todayCol(dk),
+                  // ★休業日は【見出しから下まで】赤（2026-10-30 ユーザー指示）。本日の枠より後に置いて、休業日が勝つようにする
+                  return <th key={dk} data-wtoday={dk===todayDk?'1':'0'} data-wdim={hDim?'1':'0'} data-wclhead={cl?'1':'0'}
+                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:TODAY_W+' solid '+TODAY_LINE}:{}),
+                      ...(cl?{background:CLOSED_BG,boxShadow:CLOSED_BAR}:{}),...todayCol(dk),
                       position:'relative'}}>
                     <PastOv dk={dk}/>
                     {hDim&&<DimOv/>}
@@ -4824,9 +4836,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                     <button data-wday={dk} title={(d.getMonth()+1)+'/'+d.getDate()+' のスケジュールを開く'}
                       onClick={()=>onPickDay&&onPickDay(d.getFullYear(),d.getMonth(),d.getDate())}
                       style={{display:'inline-flex',alignItems:'center',gap:3,padding:'3px 11px',borderRadius:14,
-                        border:'1.5px solid '+(dk===todayDk?'#0e7490':'#cbd5e1'),
+                        border:'1.5px solid '+(dk===todayDk?'#0e7490':cl?'#b91c1c':'#cbd5e1'),
                         background:dk===todayDk?'#0e7490':'white',
-                        color:dk===todayDk?'white':dowCol,
+                        color:dk===todayDk?'white':cl?CLOSED_FG:dowCol,
                         fontSize:11.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
                       {(d.getMonth()+1)+'/'+d.getDate()+'（'+weekDowOf(d)+'）'}
                     </button>
@@ -4835,7 +4847,6 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                       style={{marginLeft:5,display:'inline-flex',alignItems:'center',padding:'2px 7px',borderRadius:9,
                         border:'1px solid #fed7aa',background:'#fff7ed',color:'#9a3412',
                         fontSize:11,fontWeight:900,whiteSpace:'nowrap',verticalAlign:'middle'}}>{inspOf(dk).length}台</span>}
-                    {cl&&<div style={{fontWeight:700,color:CLOSED_FG,fontSize:10}}>{CLOSED_LABEL}</div>}
                   </th>;})}
               </tr>
             </thead>
@@ -4845,8 +4856,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                 <td style={{...TM,background:'#fff7ed',color:'#9a3412'}}>車検</td>
                 {days.map(d=>{const dk=dkOf(d);
                   const iDim=!!(sr&&(sr.dayDim[dk]||find.kind==='sched'));
-                  if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),
-                    position:'relative'}}><PastOv dk={dk}/>{iDim&&<DimOv/>}</td>;
+                  // ★休業日は【車検の欄に大きく出す】（2026-10-30 ユーザー指示）。
+                  //   列ぜんぶが赤（CLOSED_BG）なだけでは「休みなのか空いているのか」が
+                  //   ひと目で分からなかった。札は濃い赤に白抜き（mock_week_closed.html の D案）。
+                  if(isClosed(d))return <td key={dk} data-wclosed={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),
+                    padding:'3px',position:'relative'}}><PastOv dk={dk}/>{iDim&&<DimOv/>}
+                    <div style={CLOSED_TAG}>{CLOSED_LABEL}</div></td>;
                   // ★台数制限（2026-10-23 ユーザー指示）。制限をかけた日は「最大N台」を出し、
                   //   **その台数に達したら**（＝もう受けられない）欄ぜんぶを赤い網掛けにする。
                   const lim=(inspLimits||{})[dk];
@@ -5074,9 +5089,13 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
     return true;
   });
 
-  const TH={padding:'8px 10px',fontSize:11.5,fontWeight:800,color:'#64748b',background:'#f8fafc',
-    textAlign:'left',whiteSpace:'nowrap',borderBottom:'1px solid #e2e8f0'};
-  const TD={padding:'8px 10px',fontSize:13.5,borderBottom:'1px solid #eef2f6',verticalAlign:'middle'};
+  // ★マスの線は【週間カレンダーと同じ濃さ】（2026-10-30 ユーザー指示）。
+  //   うすい線（#e2e8f0／#eef2f6）だと、どの行のどの欄を見ているのか目で追えなかった。
+  //   下だけでなく左右にも引く＝ちゃんと「マス」にする。線はこの1つで決めること。
+  const DLINE='#64748b';
+  const TH={padding:'8px 10px',fontSize:11.5,fontWeight:800,color:'#475569',background:'#f1f5f9',
+    textAlign:'left',whiteSpace:'nowrap',border:'1px solid '+DLINE};
+  const TD={padding:'8px 10px',fontSize:13.5,border:'1px solid '+DLINE,verticalAlign:'middle'};
   const PILL=(on)=>({padding:'7px 13px',borderRadius:20,border:'1.5px solid '+(on?'#1d4ed8':'#e2e8f0'),
     background:on?'#1d4ed8':'white',color:on?'white':'#64748b',fontSize:12,fontWeight:800,
     cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'});
@@ -5099,21 +5118,27 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
         <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:12,padding:'8px 14px',
           background:headColor||'linear-gradient(135deg,#1e3a8a,#1d4ed8)',color:'white'}}>
           <b style={{fontSize:16,fontWeight:800,whiteSpace:'nowrap'}}>🏠 ダッシュボード</b>
-          {page!=='home'&&(
-            <button data-dashback="1" onClick={()=>setPage('home')} title="ダッシュボードの入口に戻る"
-              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-                padding:'5px 12px',fontSize:12.5,fontWeight:800,color:'white',cursor:'pointer',
-                fontFamily:'inherit',whiteSpace:'nowrap'}}>← ダッシュボードに戻る</button>
-          )}
           {page==='shaken'&&(
             <span style={{fontSize:11.5,background:'rgba(255,255,255,.22)',padding:'3px 9px',borderRadius:9,
               fontWeight:700,whiteSpace:'nowrap'}}>車検済みチェック（使用者の確認）</span>
           )}
           <span style={{fontSize:12.5,opacity:.95,whiteSpace:'nowrap'}}>{storeName}</span>
           <span style={{flex:1}}/>
+          {/* ★「ダッシュボードに戻る」は【閉じるの左どなり】（2026-10-30 ユーザー指示）。
+              広げる・戻る・閉じるを右端にまとめる＝週間カレンダーの ⛶／✕ と同じ考え方。 */}
+          {page!=='home'&&(
+            <button data-dashback="1" onClick={()=>setPage('home')} title="ダッシュボードの入口に戻る"
+              style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
+                padding:'5px 12px',fontSize:12.5,fontWeight:800,color:'white',cursor:'pointer',
+                fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0}}>← ダッシュボードに戻る</button>
+          )}
+          {/* ★閉じるは【✕ だけの赤いボタン】（2026-10-30 ユーザー指示）。字は出さない。
+              何のボタンかは、なぞると出る説明（title）で分かる。 */}
           <button data-dashclose="1" onClick={onClose} title="閉じる"
-            style={{background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
-              padding:'5px 13px',fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit'}}>✕ 閉じる</button>
+            style={{width:32,height:26,padding:0,display:'inline-flex',alignItems:'center',justifyContent:'center',
+              background:'#dc2626',border:'1px solid rgba(255,255,255,.9)',borderRadius:7,
+              fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',lineHeight:1,
+              flexShrink:0}}>✕</button>
         </div>
 
         <div style={{flex:1,minHeight:0,overflow:'auto',padding:'12px 14px 40px'}}>
@@ -5290,7 +5315,7 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                   )}
                 </div>
                 <table style={{width:'100%',borderCollapse:'collapse',background:'white',
-                  border:'1px solid #e2e8f0',borderRadius:12,overflow:'hidden'}}>
+                  border:'1px solid '+DLINE}}>
                   <thead><tr>
                     <th style={{...TH,width:84}}>車検日</th>
                     <th style={{...TH,width:'19%'}}>顧客名（来店者）</th>

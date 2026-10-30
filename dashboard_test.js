@@ -144,6 +144,30 @@ const seed = {
   t('★タイルを押すとチェックのリストが開く', await page.evaluate(() => !!document.querySelector('[data-dashrow]')));
   t('★見出しに「車検済みチェック」と出る', await page.evaluate(() => /車検済みチェック/.test(document.querySelector('[data-dash]').innerText)));
   t('★「← ダッシュボードに戻る」がある', await page.evaluate(() => !!document.querySelector('[data-dashback]')));
+
+  // ── 見出しのボタンの並びと、マスの線（2026-10-30 ユーザー指示）──
+  // SHOT=<保存先.png> を付けると、この時点の見た目を撮る（マスの線・見出しのボタン用）
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
+  const hdr = await page.evaluate(() => {
+    const bk = document.querySelector('[data-dashback]'), cl = document.querySelector('[data-dashclose]');
+    if (!bk || !cl) return null;
+    const b = bk.getBoundingClientRect(), c = cl.getBoundingClientRect(), cs = getComputedStyle(cl);
+    return { gap: c.left - b.right, sameRow: Math.abs(b.top - c.top) < 6,
+      txt: cl.innerText.trim(), bg: cs.backgroundColor, w: Math.round(c.width), h: Math.round(c.height),
+      backRight: b.right, closeRight: c.right };
+  });
+  t('★「戻る」は「閉じる」のすぐ左どなり', !!hdr && hdr.sameRow && hdr.gap >= 0 && hdr.gap < 30, hdr);
+  t('★閉じるは ✕ だけ（字を出さない）', !!hdr && hdr.txt === '✕', hdr);
+  t('★閉じるは赤いボタン', !!hdr && hdr.bg === 'rgb(220, 38, 38)', hdr);
+  t('★閉じるは週間カレンダーと同じ 32×26', !!hdr && hdr.w === 32 && hdr.h === 26, hdr);
+  const grid = await page.evaluate(() => {
+    const td = document.querySelector('[data-dashrow] td'); if (!td) return null;
+    const cs = getComputedStyle(td);
+    return { top: cs.borderTopColor, left: cs.borderLeftColor, right: cs.borderRightColor, bottom: cs.borderBottomColor,
+      w: cs.borderLeftWidth };
+  });
+  t('★マスの線は週間カレンダーと同じ濃さ（#64748b）', !!grid && grid.top === 'rgb(100, 116, 139)' && grid.left === 'rgb(100, 116, 139)', grid);
+  t('★左右にも線が引いてある（ちゃんとマスになっている）', !!grid && grid.left === grid.right && parseFloat(grid.w) >= 1, grid);
   t('★いま見ているのは今月（2026年10月）', await page.evaluate(() => {
     const e = document.querySelector('[data-dashmon]'); return !!e && e.innerText.trim() === '2026年10月';
   }), await page.evaluate(() => { const e = document.querySelector('[data-dashmon]'); return e ? e.innerText : null; }));

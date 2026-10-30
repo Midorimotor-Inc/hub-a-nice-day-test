@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793326813894';
+  window.__APP_BUILD='build-1793334888851';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.84.0';
+const MOBILE_VERSION='3.85.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -432,8 +432,9 @@ const getDefaultCapabilities=(badge)=>{
   return {insp_front:true,sched_front:true,insp_work:true,sched_work:true,insp_check:false};
 };
 // 休業日の見た目（PC版 index と共通・A案）。定休日・第2火曜・手動休業日は色分けせず同じ表示にする。
-// 配色はスタッフ休日（オレンジ #f97316 系）に揃える（2026-08-01 ユーザー決定・PC版と同値）。
-const CLOSED_BG='#ffedd5', CLOSED_FG='#b45309', CLOSED_BAR='inset 4px 0 0 #f97316', CLOSED_LABEL='休業日';
+// ★配色は【赤】（2026-10-30 ユーザー決定・PC版と同値）。オレンジだとスタッフ休日と地続きに見えた。
+const CLOSED_BG='#fecaca', CLOSED_FG='#991b1b', CLOSED_BAR='inset 4px 0 0 #b91c1c', CLOSED_LABEL='休業日';
+const CLOSED_TAG_BG='#dc2626', CLOSED_TAG_FG='#ffffff';
 // 休業日判定（PC版 AppInner の isClosed と同一）: 店舗別の定休曜日(cdow) → 店舗別の個別休業日(cdate)
 // → 第2火曜（両店共通・override-openで通常営業に戻せる）。日付文字列はゼロ詰め（PC版の保存形式）。
 const calIsClosed=(date,cDays=[],cDates=[],ovOpen=[])=>{

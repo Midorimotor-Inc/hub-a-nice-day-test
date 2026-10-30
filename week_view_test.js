@@ -471,13 +471,27 @@ const seed = {
 
   // ── ⑤ 休業日 ──
   console.log('\n■ ⑤ 休業日の列');
+  // ★休業日は【車検の欄に大きく】出す（2026-10-30 ユーザー指示）。見出しには出さない（二度出しになるため）
   const closed = await page.evaluate(d => {
     const el = document.querySelector('[data-weekview]');
     const ths = [...el.querySelectorAll('th')];
     const th = ths.find(x => /10\/22（木）/.test(x.innerText));
-    return { label: th ? th.innerText.replace(/\s+/g, '') : '', ins: !!document.querySelector('[data-wins="' + d + '"]'), add: !!document.querySelector('[data-wadd^="' + d + '/"]') };
+    const cl = document.querySelector('[data-wclosed="' + d + '"]');
+    const tag = cl ? cl.querySelector('div') : null;
+    const cs = tag ? getComputedStyle(tag) : null;
+    return { label: th ? th.innerText.replace(/\s+/g, '') : '',
+      cell: cl ? cl.innerText.replace(/\s+/g, '') : '',
+      size: cs ? parseFloat(cs.fontSize) : 0, bg: cs ? cs.backgroundColor : '', fg: cs ? cs.color : '',
+      cellBg: cl ? getComputedStyle(cl).backgroundColor : '',
+      ins: !!document.querySelector('[data-wins="' + d + '"]'), add: !!document.querySelector('[data-wadd^="' + d + '/"]') };
   }, dk(22));
-  t('★休業日は見出しに「休業日」と出る', /休業日/.test(closed.label), closed);
+  // SHOT=<保存先.png> を付けると、この時点の見た目を撮る（休業日の赤の濃さを目で確かめる用）
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
+  t('★休業日は【車検の欄】に「休業日」と出る', /休業日/.test(closed.cell), closed);
+  t('★その字は大きい（15px以上）', closed.size >= 15, closed);
+  t('★札は濃い赤に白抜き', closed.bg === 'rgb(220, 38, 38)' && closed.fg === 'rgb(255, 255, 255)', closed);
+  t('★列の地は赤（#fecaca）', closed.cellBg === 'rgb(254, 202, 202)', closed);
+  t('★見出しには「休業日」を出さない（二度出しにしない）', !/休業日/.test(closed.label), closed);
   t('★休業日には車検の合計台数を出さない', await page.evaluate(d => !document.querySelector('[data-wdaycnt="' + d + '"]'), dk(22)));
   t('★休業日の列には車検の ＋ を出さない', !closed.ins, closed);
   t('★休業日の列には空き枠の ＋ を出さない', !closed.add, closed);
@@ -587,11 +601,10 @@ const seed = {
   t('★★三田店で開いても車検は両店ぶん出る（火曜は5台）', sanda.n === 5, sanda);
   t('★スタッフも三田店の人', sanda.staff, sanda);
   const wedSanda = await page.evaluate(d => {
-    const el = document.querySelector('[data-weekview]');
-    const th = [...el.querySelectorAll('th')].find(x => /10\/21（水）/.test(x.innerText));
-    return { label: th ? th.innerText.replace(/\s+/g, '') : '', add: !!document.querySelector('[data-wadd^="' + d + '/"]') };
+    const cl = document.querySelector('[data-wclosed="' + d + '"]');
+    return { cell: cl ? cl.innerText.replace(/\s+/g, '') : '', add: !!document.querySelector('[data-wadd^="' + d + '/"]') };
   }, WED);
-  t('★三田店は水曜が定休日（網掛け・＋なし）', /休業日/.test(wedSanda.label) && !wedSanda.add, wedSanda);
+  t('★三田店は水曜が定休日（車検の欄に「休業日」・＋なし）', /休業日/.test(wedSanda.cell) && !wedSanda.add, wedSanda);
 
   // ── ⑨ スタッフ設定の「1文字」 ──
   console.log('\n■ ⑨ スタッフ設定の「1文字」');
