@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793323501259';
+  window.__APP_BUILD='build-1793326813894';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -146,7 +146,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.83.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.84.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1884,7 +1884,7 @@ const MiniDatePicker=({value,onChange,open,onClose,baseDk,accent})=>{
   );
 };
 
-const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerListS,onSave,onClose,currentUser,closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,inspLimits})=>{
+const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerListS,staffListH,staffListS,onSave,onClose,currentUser,closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,inspLimits})=>{
   const normStore=s=>{if(!s)return'honten';if(s==='三田店'||s==='sanda')return'sanda';return'honten';};
   const defaultStaff=customer.staff||currentUser?.name||'';
   // デフォルト店舗: 顧客の店舗 > ログインユーザーの店舗 > 本店
@@ -1921,6 +1921,10 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
     deliveryDate:_existingInspRow?.deliveryDate||'',  // 納車日
     deliveryTime:_existingInspRow?.deliveryTime||'',  // 納車時間
   });
+  const [showStaffPk,setShowStaffPk]=useState(false);
+  // 担当のポップに出す人＝【ログインしている人の店】のスタッフ（社長・番号0は出さない。PC版と同じ決まり）
+  const staffPkList=((userStore==='sanda'?staffListS:staffListH)||[])
+    .filter(x=>x&&x.name&&x.badge!=='president'&&x.myNumber!==0);
   const [showPreEntryCal,setShowPreEntryCal]=useState(false);
   const [showDelivCal,setShowDelivCal]=useState(false);
   const [showDelivTime,setShowDelivTime]=useState(false);
@@ -2187,10 +2191,42 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
                 </div>
               )}
             </div>
+            {/* ★「担当」を押すと、スタッフの一覧がポップで出る（2026-10-30 ユーザー指示）。
+                予約を受けた本人が入力できず、ほかのスタッフが代わりに入れる時に使う。
+                ・出すのは【ログインしている人の店】のスタッフ。お客様の入庫店ではない
+                  （担当＝この予約を受け付けた人＝いま画面の前にいる人、という意味のため）。
+                ・名簿は {store}-staff-v2 だけを見る。ここに名前を直書きしないこと。
+                ・打ち込みは今までどおりできる（名簿が読めていない時もそのまま打てる）。 */}
             <div>
-              <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>担当</label>
+              <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>
+                担当 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>押すと一覧</span>
+              </label>
               <input value={form.staff} onChange={upd('staff')} placeholder="担当者名"
+                onClick={()=>setShowStaffPk(true)}
+                onBlur={()=>setTimeout(()=>setShowStaffPk(false),150)}
+                onKeyDown={e=>{if(e.key==='Escape'&&showStaffPk){e.preventDefault();setShowStaffPk(false);}}}
                 style={{width:'100%',padding:'8px 10px',border:'1.5px solid #e5e7eb',borderRadius:8,fontSize:13,boxSizing:'border-box'}}/>
+              {showStaffPk&&(staffPkList.length
+                ?<div data-staffpk="1" style={{border:'2px solid #0284c7',borderRadius:8,marginTop:4,background:'white',
+                    boxShadow:'0 6px 18px rgba(0,0,0,.18)',padding:6,display:'grid',gap:4,
+                    gridTemplateColumns:'repeat(3,minmax(0,1fr))'}}>
+                    {staffPkList.map(sf=>(
+                      <div key={sf.uid||sf.name} data-staffid={sf.name}
+                        onMouseDown={e=>{e.preventDefault();upd('staff')(sf.name);setShowStaffPk(false);}}
+                        style={{padding:'8px 6px',cursor:'pointer',fontSize:12.5,textAlign:'center',whiteSpace:'nowrap',
+                          borderRadius:6,boxSizing:'border-box',
+                          border:'1px solid '+(form.staff===sf.name?'#0284c7':'#e5e7eb'),
+                          background:form.staff===sf.name?'#e0f2fe':'white',
+                          fontWeight:form.staff===sf.name?800:500,
+                          color:form.staff===sf.name?'#0284c7':'#374151'}}>
+                        {sf.myNumber!=null&&sf.myNumber!==''?sf.myNumber+'. ':''}{sf.name}
+                      </div>
+                    ))}
+                  </div>
+                :<div data-staffpk="1" data-staffnone="1" style={{border:'2px solid #0284c7',borderRadius:8,marginTop:4,
+                    background:'white',padding:'10px 12px',fontSize:12,color:'#6b7280',textAlign:'center'}}>
+                    名簿がまだ読めていません（打ち込んでください）
+                  </div>)}
             </div>
             <div>
               <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>車検コース</label>
@@ -2636,6 +2672,10 @@ const App=()=>{
   const [loanerResS,setLoanerResS]=useState({});
   const [loanerListH,setLoanerListH]=useState([]);
   const [loanerListS,setLoanerListS]=useState([]);
+  // ★スタッフの名簿（{store}-staff-v2 が本物）。予約カードの「担当」のポップに出す。
+  //   ここに名前を直書きしないこと。退職者が残る（2026-10-29 にスマホで起きた不具合と同じ）。
+  const [staffListH,setStaffListH]=useState([]);
+  const [staffListS,setStaffListS]=useState([]);
   const [bookingModal,setBookingModal]=useState(null);
   // ★予約モーダルを開く瞬間にスケジュール(insp)を再取得して、カレンダーの予約済み枠が
   //   常に最新で表示されるようにする（起動直後やinsp読込失敗時に枠が空表示になる不具合の対策）。
@@ -2675,7 +2715,7 @@ const App=()=>{
       // GASから最新データをバックグラウンドで取得
       setBgSyncing(true);
       try{
-        const [insp,lh,ls,fileIndex,llh,lls,cdh,cdate,ov,ilim,cdhS,cdateS]=await Promise.all([
+        const [insp,lh,ls,fileIndex,llh,lls,cdh,cdate,ov,ilim,cdhS,cdateS,sfH,sfS]=await Promise.all([
           sGet(STOR+'insp'),
           sGet(storKey('lres','honten')),
           sGet(storKey('lres','sanda')),
@@ -2688,6 +2728,8 @@ const App=()=>{
           sGet(STOR+'insp-limits'),
           sGet(storKey('cdow-v2','sanda')),
           sGet(storKey('cdate','sanda')),
+          sGet(STOR+'honten-staff-v2'),
+          sGet(STOR+'sanda-staff-v2'),
         ]);
         // 書き込み後5秒以内はGASからの上書きをしない（ローカル更新を保護）
         if(insp&&(Date.now()-inspWriteRef.current)>8000)setInspData(insp);
@@ -2695,6 +2737,8 @@ const App=()=>{
         if(ls)setLoanerResS(ls);
         if(Array.isArray(llh)&&llh.length>0)setLoanerListH(llh);
         if(Array.isArray(lls)&&lls.length>0)setLoanerListS(lls);
+        if(Array.isArray(sfH)&&sfH.length>0)setStaffListH(sfH);
+        if(Array.isArray(sfS)&&sfS.length>0)setStaffListS(sfS);
         if(Array.isArray(cdh))setClosedDaysH(cdh);
         if(Array.isArray(cdate))setClosedDatesH(cdate);
         if(Array.isArray(cdhS))setClosedDaysS(cdhS);
@@ -4151,6 +4195,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           loanerResS={loanerResS}
           loanerListH={loanerListH}
           loanerListS={loanerListS}
+          staffListH={staffListH}
+          staffListS={staffListS}
           currentUser={currentUser}
           onSave={handleBookingSave}
           onClose={()=>setBookingModal(null)}

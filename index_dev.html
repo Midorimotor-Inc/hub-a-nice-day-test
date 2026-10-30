@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793323501259';
+    window.__APP_BUILD='build-1793326813894';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.83.0';
+const APP_VERSION = '3.84.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8232,7 +8232,7 @@ const withDeliveryNote = (entry, dk, isInsp) => {
   e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
   return e;
 };
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
   const [form,setForm]=useState(initialData);
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
   //   三田店で予約したお客様が本店入庫に変わる、といった時に使う（めったに使わない）。
@@ -8597,7 +8597,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     onSave({...withDeliveryNote(form, localTargetDkRef.current||modalDk, isInsp), ...stampNew2, ...moveStamp(), store:mvStore, bookingStatus:status, _keepOpen: status==='provisional'});
   };
   const handleDelete=()=>{onDelete();};
-  const handleStaffBlur=()=>{const r=resolveStaff(staffInput);setStaffInput(r);setForm(p=>({...p,staff:r}));};
+  // ★担当の名簿は【Firestoreの名簿（{store}-staff-v2）】だけを見ること。
+  //   静的な STAFF を使うと、名簿から外した人がいつまでも出る（2026-10-29 にスマホで起きた不具合と同じ）。
+  //   staffHere … 表示中の店の人（ポップに出す）／staffAll … 両店ぶん（番号→名前に直す時だけ）
+  const staffPkList=(staffHere||[]).filter(x=>x&&x.name);
+  const handleStaffBlur=()=>{const r=resolveStaff(staffInput,staffAll);setStaffInput(r);setForm(p=>({...p,staff:r}));};
   const ke=(e,ref)=>{if(e.key==='Enter'){e.preventDefault();ref?.current?.focus();}};
   
   // 十字キーによるカーソル移動
@@ -8835,25 +8839,46 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           )}
           {/* 担当 */}
           <div>
-            <label style={LBL}>担当 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>番号を打って Enter で名前に変わります・ダブルクリックで一覧</span></label>
+            {/* ★欄を押すと、その店のスタッフがポップで出る（2026-10-30 ユーザー指示）。
+                予約を受けた本人が入力できず、ほかのスタッフが代わりに入れる時に使う。
+                ・出すのは【表示中の店】の人だけ（本店の画面なら本店／三田店の画面なら三田店）。
+                ・打ち込みは今までどおり。番号→Enter で名前に変わるのも残す。
+                ・キーボードで送られてきた時（Tab・↓）には開かない。開くのは【押した時】だけ。
+                  focus で開くと、キーボードで流している最中に欄の下が伸びて画面が動く。 */}
+            <label style={LBL}>担当 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>押すと一覧・番号を打って Enter でも名前に変わります</span></label>
             <input ref={staffRef} value={staffInput} onChange={e=>setStaffInput(e.target.value)}
               onFocus={()=>setKbField('staff')}
-              onBlur={()=>{handleStaffBlur();setKbField('');}}
-              onDoubleClick={()=>setShowStaff(p=>!p)}
+              onBlur={()=>{handleStaffBlur();setKbField('');setTimeout(()=>setShowStaff(false),150);}}
+              onClick={()=>setShowStaff(true)}
               onKeyDown={e=>{
+                if(e.key==='Escape'&&showStaff){e.preventDefault();setShowStaff(false);return;}
                 if(e.key==='Enter'||e.key==='ArrowDown'){
                   e.preventDefault();
-                  const r=resolveStaff(staffInput);
+                  const r=resolveStaff(staffInput,staffAll);
                   // 番号を打った1回目の Enter は、その場で担当者名に変えるだけ（欄から出ない）
-                  if(e.key==='Enter'&&r&&r!==staffInput){ setStaffInput(r); setForm(p=>({...p,staff:r})); return; }
-                  handleStaffBlur(); goNext('staff');
+                  if(e.key==='Enter'&&r&&r!==staffInput){ setStaffInput(r); setForm(p=>({...p,staff:r})); setShowStaff(false); return; }
+                  setShowStaff(false); handleStaffBlur(); goNext('staff');
                 }
-                else if(e.key==='ArrowUp'){e.preventDefault();handleStaffBlur();goPrev('staff');}
+                else if(e.key==='ArrowUp'){e.preventDefault();setShowStaff(false);handleStaffBlur();goPrev('staff');}
               }}
               autoComplete="off" placeholder="担当者名 or 番号" style={{...INP,...KB('staff')}}/>
-            {showStaff&&<div style={{display:'flex',gap:4,marginTop:5,flexWrap:'wrap'}}>
-              {STAFF.map(s=><button key={s.id} onClick={()=>{setStaffInput(s.name);setForm(p=>({...p,staff:s.name}));setShowStaff(false);carRef.current?.focus();}} style={{padding:'2px 8px',fontSize:11,borderRadius:4,border:'1px solid #e5e7eb',cursor:'pointer',background:form.staff===s.name?'#c2410c':'white',color:form.staff===s.name?'white':'#374151'}}>{s.id}.{s.name}</button>)}
-            </div>}
+            {showStaff&&(staffPkList.length
+              ?<div data-popgrid="staff" style={POPBOX('#0891b2',3)}>
+                  {staffPkList.map(sf=>(
+                    <div key={sf.uid||sf.name} data-staffid={sf.name}
+                      onMouseDown={e=>{e.preventDefault();setStaffInput(sf.name);setForm(p=>({...p,staff:sf.name}));setShowStaff(false);
+                        // ★次の欄へ移るのは【一拍おいてから】。その場で focus すると、
+                        //   担当の欄の blur が先に走り、まだ書き換わっていない古い名前に戻る（実測）。
+                        setTimeout(()=>{try{carRef.current&&carRef.current.focus();}catch(x){}},0);}}
+                      style={POPIT(form.staff===sf.name,'#0891b2','#e0f2fe')}>
+                      {sf.myNumber!=null&&sf.myNumber!==''?sf.myNumber+'. ':''}{sf.name}
+                    </div>
+                  ))}
+                </div>
+              :<div data-popgrid="staff" data-staffnone="1" style={{...POPBOX('#0891b2',1),padding:'10px 12px',
+                  fontSize:12,color:'#6b7280',textAlign:'center'}}>
+                  この店の名簿がまだ読めていません（打ち込んでください）
+                </div>)}
           </div>
           {/* 車種＋ナンバー4桁（2026-09-30 ユーザー指示）。
               ナンバーは顧客リストの「No.」列そのもの。リスト・検索から予約した人は自動で入る。 */}
@@ -17339,6 +17364,8 @@ function AppInner() {
         onOpenSetItemEdit={()=>setShowSetItemEdit(true)}
         allCars={currentLoaners}
         fromCustList={fromCustList}
+        staffHere={currentStaffList}
+        staffAll={allDynStaff}
         inspData={inspData}
         closedDays={closedDays}
         closedDates={closedDates}
