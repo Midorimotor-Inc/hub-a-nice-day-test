@@ -114,7 +114,8 @@ async function loadProdStore() {
   await page.goto(`http://127.0.0.1:${PORT}/index_main.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(15000);
   await checkPage(page, '起動直後');
-  for (const view of ['カレンダー', 'スケジュール', '代車管理', '車両管理', '検索']) {
+  // ★車両管理はナビから外れ、ダッシュボードのタイルになった（2026-10-29）。この下で別に開く。
+  for (const view of ['カレンダー', 'スケジュール', '代車管理', '検索']) {
     try {
       // 代車管理など特殊ビューに遷移した後もナビを確実に押せるよう evaluate でクリック
       const ok = await page.evaluate((v) => {
@@ -127,6 +128,50 @@ async function loadProdStore() {
       console.log(`  ✔ ${view}`);
     } catch (e) { problems.push(`${view}: 画面を開けない (${String(e).slice(0, 60)})`); }
   }
+  // ── ダッシュボードと車両管理 ──
+  //   ★車両管理はナビから外れ、ダッシュボードのタイルになった（2026-10-29）。
+  //     ダッシュボードのナビは【別タブ】を開く作りなので、この検査では ?dash=1 を
+  //     別ページとして開く（同じことが起きる。開いた瞬間からダッシュボードが出る）。
+  try {
+    const dash = await context.newPage();
+    dash.on('pageerror', e => problems.push('JSエラー(ダッシュボード): ' + String(e).slice(0, 140)));
+    await dash.goto(`http://127.0.0.1:${PORT}/index_main.html?dash=1`, { waitUntil: 'domcontentloaded' });
+    await dash.waitForTimeout(15000);
+    const opened = await dash.evaluate(() => !!document.querySelector('[data-dash]'));
+    if (!opened) throw new Error('ダッシュボードが開かない');
+    await checkPage(dash, 'ダッシュボード');
+    console.log('  ✔ ダッシュボード');
+    const tileOk = await dash.evaluate(() => {
+      const el = document.querySelector('[data-dashtile="vehicle"]');
+      if (el) { el.scrollIntoView(); el.click(); return true; } return false;
+    });
+    if (!tileOk) throw new Error('車両管理のタイルが見つからない');
+    await dash.waitForTimeout(4000);
+    await checkPage(dash, '車両管理');
+    console.log('  ✔ 車両管理');
+    await dash.close();
+  } catch (e) { problems.push('車両管理: 画面を開けない (' + String(e).slice(0, 60) + ')'); }
+
+  // ── 週間カレンダー（v3.8x の目玉。ナビから開く全画面の表）──
+  try {
+    await page.keyboard.press('Escape');            // 検索などのオーバーレイを閉じる
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('週間カレンダー') && el.offsetParent !== null);
+      if (b) b.click();
+    });
+    await page.waitForTimeout(3500);
+    const wk = await page.evaluate(() => ({
+      open: !!document.querySelector('[data-wfold]') || !!document.querySelector('[data-wclose]'),
+      days: document.querySelectorAll('[data-wadd]').length,
+    }));
+    if (!wk.open) throw new Error('週の表が出ない');
+    await checkPage(page, '週間カレンダー');
+    console.log('  ✔ 週間カレンダー');
+    await page.evaluate(() => { const b = document.querySelector('[data-wclose]'); if (b) b.click(); });
+    await page.waitForTimeout(1200);
+  } catch (e) { problems.push('週間カレンダー: 画面を開けない (' + String(e).slice(0, 60) + ')'); }
+
   // 三田店ビューも一巡（店舗切替はスケジュール画面に戻ってから）
   try {
     await page.keyboard.press('Escape'); // 空き枠検索等のオーバーレイを閉じる
