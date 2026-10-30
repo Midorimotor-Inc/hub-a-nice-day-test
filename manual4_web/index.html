@@ -1,0 +1,214 @@
+<title>週間カレンダーの使い方</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* 並べ方：上に細い操作の帯、その下に1ページぶん。写真は白い台に乗せ、赤枠は写真の上に割合で重ねる */
+:root{
+  --navy:#12233f; --navy-2:#1e3a66; --blue:#1d4ed8; --blue-l:#e8effc;
+  --orange:#ea580c; --orange-l:#fdede2; --green:#15803d; --green-l:#e6f3ea;
+  --mark:#e11d48; --ink:#1b2735; --muted:#5b6b7c; --line:#d8e0ea;
+  --paper:#ffffff; --soft:#f4f7fb; --bg:#eef2f8; --shadow:0 2px 10px rgba(18,35,63,.14);
+  --f-disp:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  --f-body:'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --navy:#0b1628; --navy-2:#1a2e52; --blue:#7aa6ff; --blue-l:#17233c;
+  --orange:#fb8a4c; --orange-l:#33210f; --green:#5dc98a; --green-l:#13291c;
+  --mark:#ff6b8a; --ink:#e7edf6; --muted:#9fb0c4; --line:#2b3a52;
+  --paper:#141d2c; --soft:#192233; --bg:#0d1420; --shadow:0 2px 12px rgba(0,0,0,.5);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --navy:#0b1628; --navy-2:#1a2e52; --blue:#7aa6ff; --blue-l:#17233c;
+  --orange:#fb8a4c; --orange-l:#33210f; --green:#5dc98a; --green-l:#13291c;
+  --mark:#ff6b8a; --ink:#e7edf6; --muted:#9fb0c4; --line:#2b3a52;
+  --paper:#141d2c; --soft:#192233; --bg:#0d1420; --shadow:0 2px 12px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);line-height:1.7;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--navy)}
+h1,h2,h3{font-family:var(--f-disp);text-wrap:balance;margin:0}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1180px;margin:0 auto}
+
+/* 上の帯 */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--navy);color:#fff;box-shadow:var(--shadow)}
+.bar .wrap{display:flex;align-items:center;gap:8px;padding-block:9px;min-height:54px}
+.bar .nm{font-family:var(--f-disp);font-weight:700;font-size:15px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .nm small{display:block;font-weight:500;font-size:11px;color:#9fc2ff;letter-spacing:.3px}
+.bar .sp{flex:1;min-width:8px}
+.btn{font-family:var(--f-body);font-size:13px;font-weight:700;color:#fff;background:var(--navy-2);border:1px solid #37558c;border-radius:9px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#2a4679}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:focus-visible,li>button:focus-visible{outline:3px solid #ffb27a;outline-offset:2px}
+.cnt{font-variant-numeric:tabular-nums;font-size:13px;color:#c6d4e8;min-width:58px;text-align:center}
+
+/* 1ページぶん */
+main{padding-block:18px 28px}
+.sl{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.sl>.pad{padding:clamp(16px,2.4vw,24px)}
+.kick{display:inline-block;font-size:11.5px;font-weight:700;color:#fff;border-radius:999px;padding:3px 12px;letter-spacing:.5px}
+.ttl{font-size:clamp(20px,3.2vw,29px);font-weight:900;margin-top:8px}
+.sub{color:var(--muted);font-size:13.5px;margin-top:6px}
+.shotwrap{display:grid;gap:16px;margin-top:16px}
+.shotwrap.side{grid-template-columns:minmax(0,1.22fr) minmax(250px,.78fr);align-items:start}
+@media (max-width:780px){.shotwrap.side{grid-template-columns:1fr}}
+.shot{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 14px 14px;min-width:0}
+.shot .in{position:relative;width:100%}
+.shot img{display:block;width:100%;max-width:100%;border-radius:3px}
+.fr{position:absolute;border:3px solid var(--mark);border-radius:3px;pointer-events:none}
+.bg{position:absolute;width:25px;height:25px;border-radius:50%;background:var(--mark);color:#fff;font-family:var(--f-disp);font-weight:900;font-size:13.5px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.4);pointer-events:none}
+.mask{position:absolute;background:#fff;color:#1b2735;font-size:12px;display:flex;align-items:center;padding-left:6px;overflow:hidden}
+.cards{display:grid;gap:10px;min-width:0}
+.shotwrap:not(.side) .cards{grid-template-columns:repeat(auto-fit,minmax(252px,1fr))}
+.card{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.card h3{font-size:14.5px;font-weight:700;display:flex;align-items:flex-start;gap:8px}
+.card h3 i{flex:0 0 auto;width:23px;height:23px;border-radius:50%;background:var(--mark);color:#fff;font-style:normal;font-size:12.5px;font-weight:900;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.card p{margin:6px 0 0;font-size:12.8px;color:var(--muted);white-space:pre-line}
+.note{margin-top:14px;background:var(--blue-l);border-left:4px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 13px;font-size:12.8px}
+
+/* 文字だけのページ */
+.blocks{display:grid;gap:12px;margin-top:16px;grid-template-columns:repeat(auto-fit,minmax(288px,1fr))}
+.blk{background:var(--soft);border:1px solid var(--line);border-left-width:4px;border-left-color:var(--blue);border-radius:0 10px 10px 0;padding:13px 15px;min-width:0}
+.blk.warn{background:var(--orange-l);border-left-color:var(--orange)}
+.blk.ok{background:var(--green-l);border-left-color:var(--green)}
+.blk h3{font-size:15px;font-weight:700;display:flex;align-items:flex-start;gap:9px}
+.blk h3 i{flex:0 0 auto;width:25px;height:25px;border-radius:50%;background:var(--blue);color:#fff;font-style:normal;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.blk.warn h3 i{background:var(--orange)}
+.blk.ok h3 i{background:var(--green)}
+.blk p{margin:7px 0 0;font-size:13px;white-space:pre-line}
+
+/* 表紙・中表紙 */
+.dark{background:var(--navy);border-color:var(--navy);color:#fff}
+.dark>.pad{padding:clamp(22px,5vw,52px)}
+.dark .eyebrow{font-size:12.5px;font-weight:700;color:#f2a97c;letter-spacing:3px;margin:0}
+.dark h2{font-size:clamp(25px,4.8vw,39px);font-weight:900;margin-top:8px}
+.dark .lead{color:#c6d4e8;font-size:14px;margin-top:10px}
+.chips{display:grid;gap:9px;margin-top:22px;grid-template-columns:repeat(auto-fit,minmax(255px,1fr))}
+.chip{background:var(--navy-2);border:1px solid #2f5590;border-radius:9px;padding:10px 14px;font-size:13px}
+.cover h1{font-size:clamp(27px,5.6vw,43px);font-weight:900}
+.cover h2{color:#9fc2ff;margin-top:4px}
+.cover .tag{display:inline-block;margin-top:18px;background:var(--navy-2);border:1px solid #2f5590;border-radius:999px;padding:6px 16px;font-size:12.5px;color:#c6d4e8}
+.cover .foot2{margin-top:26px;font-size:11.5px;color:#90a4bf}
+.toc{display:grid;gap:12px;margin-top:16px;grid-template-columns:repeat(auto-fit,minmax(268px,1fr))}
+.toccol{border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.toccol h3{font-size:18px;font-weight:900;margin-bottom:9px}
+.toccol ol{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.toccol li{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--ink)}
+.toccol li b{flex:0 0 auto;width:22px;height:22px;border-radius:50%;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+
+/* 下の送りボタン */
+.foot{display:flex;gap:10px;align-items:center;margin-top:16px}
+.foot .btn{background:var(--blue);border-color:var(--blue);font-size:14px;padding:11px 14px}
+.foot .btn:hover{filter:brightness(1.08)}
+.foot .mid{flex:1;text-align:center;font-size:12.5px;color:var(--muted);min-width:0}
+
+/* 目次 */
+#idx{position:fixed;inset:0;z-index:20;background:rgba(10,18,32,.6);display:flex;justify-content:flex-end}
+#idx .panel{background:var(--paper);width:min(430px,92vw);height:100%;overflow-y:auto;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+#idx h2{font-size:17px;font-weight:900;margin-bottom:10px}
+#idx ol{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+#idx li button{all:unset;display:flex;gap:10px;align-items:baseline;cursor:pointer;width:100%;padding:9px 10px;border-radius:9px;font-size:13.5px;color:var(--ink)}
+#idx li button:hover{background:var(--soft)}
+#idx li button[aria-current="true"]{background:var(--blue-l);font-weight:700}
+#idx li button span{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;min-width:26px}
+@media (prefers-reduced-motion:no-preference){.sl{animation:slin .22s ease both}@keyframes slin{from{opacity:0;transform:translateY(6px)}}}
+</style>
+<header class="bar"><div class="wrap">
+  <div class="nm">週間カレンダーの使い方<small>Hub a Nice Day　緑モータース</small></div>
+  <div class="sp"></div>
+  <button class="btn" id="prev" aria-label="前のページ">‹</button>
+  <span class="cnt" id="cnt" aria-live="polite"></span>
+  <button class="btn" id="next" aria-label="次のページ">›</button>
+  <button class="btn" id="open">☰ 目次</button>
+</div></header>
+<main><div class="wrap">
+  <section class="sl dark" id="s1"><div class="pad cover"><h1>Hub a Nice Day</h1><h2>週間カレンダーの使い方</h2><p class="lead">1週間ぶんの車検と整備を、1枚で見る・入れる・空きを探す</p><span class="tag">本店・三田店 共通</span><p class="foot2">緑モータース　2026年10月版（v3.86.0）　／　お客様のお名前・電話・住所は架空のものに置き換えてあります</p></div></section>
+  <section class="sl" id="s2" hidden><div class="pad"><h2 class="ttl">この説明書でわかること</h2><p class="sub">週間カレンダーは「見る」だけでなく、そのまま「予約を入れる」「空きを探す」ところまでできます</p><div class="toc"><div class="toccol" style="border-color:var(--blue);background:var(--blue-l)"><h3 style="color:var(--blue)">見る・開く</h3><ol><li><b style="background:var(--blue)">1</b>週間カレンダーの開き方</li><li><b style="background:var(--blue)">2</b>画面の見方（上の帯のボタン）</li><li><b style="background:var(--blue)">3</b>畳む／開く（▲▼）</li><li><b style="background:var(--blue)">4</b>日付を押して、その日の1日表示へ</li></ol></div><div class="toccol" style="border-color:var(--green);background:var(--green-l)"><h3 style="color:var(--green)">予約を入れる</h3><ol><li><b style="background:var(--green)">1</b>車検を入れる（車検の行の ＋）</li><li><b style="background:var(--green)">2</b>一般（整備）を入れる（時間のマス）</li><li><b style="background:var(--green)">3</b>時間が決まっていない時（＋ 予定）</li></ol></div><div class="toccol" style="border-color:var(--orange);background:var(--orange-l)"><h3 style="color:var(--orange)">空きを探す</h3><ol><li><b style="background:var(--orange)">1</b>🔍 空き検索の開き方</li><li><b style="background:var(--orange)">2</b>車検の空き検索（コースで探す）</li><li><b style="background:var(--orange)">3</b>一般の空き検索（かかる時間で探す）</li><li><b style="background:var(--orange)">4</b>やめる／週を送る</li></ol></div></div></div></section>
+  <section class="sl dark" id="s3" hidden><div class="pad"><p class="eyebrow">第 1 部</p><h2>見る・開く</h2><p class="lead">1週間ぶんを1枚で見られるようにしました</p><div class="chips"><div class="chip">週間カレンダーの開き方</div><div class="chip">画面の見方（上の帯のボタン）</div><div class="chip">畳む／開く</div><div class="chip">日付を押して、その日の1日表示へ</div></div></div></section>
+  <section class="sl" id="s4" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">① 週間カレンダーの開き方</h2><p class="sub">スケジュール画面のいちばん上、ナビの「週間カレンダー」を押します</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:13.6364"><img src="img/w1-open-sched-0_0_1500_110.png" alt="① 週間カレンダーの開き方（画面写真）"><div class="fr" style="left:29.267%;top:40.909%;width:7.867%;height:25.455%"></div><div class="bg" style="left:33.200%;top:40.909%;transform:translate(-50%,-118%)">1</div></div></div><div class="cards"><div class="card"><h3><i>1</i>週間カレンダー</h3><p>ここを押すと、1週間ぶんの表が画面いっぱいに開きます</p></div></div></div><div class="note">週間カレンダーは「開きっぱなし」にはなりません。✕ か Esc で閉じると元の画面に戻ります。</div></div></section>
+  <section class="sl" id="s5" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">② 画面の見方（上の帯）</h2><p class="sub">開いた直後は「畳んだ状態」＝予定がある時間だけが出ます</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:15.0000"><img src="img/w2-week-folded-0_0_1500_100.png" alt="② 画面の見方（上の帯）（画面写真）"><div class="fr" style="left:83.059%;top:19.625%;width:4.105%;height:27.000%"></div><div class="bg" style="left:85.112%;top:19.625%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:87.631%;top:19.625%;width:6.119%;height:27.000%"></div><div class="bg" style="left:90.691%;top:19.625%;transform:translate(-50%,-118%)">2</div></div></div><div class="cards"><div class="card"><h3><i>1</i>▲ 畳む ／ ▼ 開く</h3><p>予定が無い時間の行を隠す・また出す</p></div><div class="card"><h3><i>2</i>📍 本日から ／ 📅 月曜から</h3><p>週の始まりを切り替えます。既定は「本日から」＝今日が一番左</p></div></div></div></div></section>
+  <section class="sl" id="s6" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">③ 表の見方</h2><p class="sub">左端に「車検」「出勤」「時刻」、上に1週間ぶんの日が並びます</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:5.8824"><img src="img/w2-week-folded-0_55_1500_255.png" alt="③ 表の見方（画面写真）"><div class="fr" style="left:0.283%;top:16.906%;width:99.433%;height:19.216%"></div><div class="bg" style="left:0.283%;top:16.906%;transform:translate(2px,-118%)">1</div><div class="fr" style="left:0.283%;top:36.121%;width:99.433%;height:10.784%"></div><div class="bg" style="left:0.283%;top:36.121%;transform:translate(2px,-118%)">2</div><div class="fr" style="left:4.250%;top:49.357%;width:12.956%;height:5.882%"></div><div class="bg" style="left:10.728%;top:49.357%;transform:translate(-50%,-118%)">3</div></div></div><div class="cards"><div class="card"><h3><i>1</i>「車検」の行</h3><p>その日の車検。マ＝マッハ／ク＝クイック／レ＝レギュラー。右端の ＋ で新しく受けられます</p></div><div class="card"><h3><i>2</i>「出勤」の行</h3><p>左が出勤している人、右（うすい字）が休みの人。頭文字で出ます</p></div><div class="card"><h3><i>3</i>整備の予定</h3><p>時間ごとの予定。お名前をなぞると「いつ予約を入れたか」が出ます</p></div></div></div></div></section>
+  <section class="sl" id="s7" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">④ 畳む／開く の考え方</h2><p class="sub">「▲ 畳む」が既定です。1週間のどこにも予定が無い時間は、行ごと隠します</p><div class="blocks"><div class="blk"><h3><i>1</i>▲ 畳む（開いた直後はこちら）</h3><p>1週間のどこにも予定が入っていない時間の行を隠します。
+「午前入庫」「午後入庫」「入庫時間未定」も、空なら隠れます。
+→ 画面が短くなり、予定だけがひと目で分かります。</p></div><div class="blk"><h3><i>2</i>▼ 開く</h3><p>9:00〜18:00 の 30分きざみの行を全部出します。
+「この時間が空いているか」を確かめたい時はこちら。</p></div><div class="blk ok"><h3><i>3</i>予定を入れる場所が無くなる心配は要りません</h3><p>畳んでいても、表のいちばん下に「＋ 予定」の行がいつも出ています。
+そこから、時間を決めずに予約カードを開けます（時間はカードの中で選びます）。</p></div></div><div class="note">空き検索をした時に見つかった枠は、畳んでいても隠れません（探した結果が消えないように）。</div></div></section>
+  <section class="sl" id="s8" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">⑤「▼ 開く」で全部の時間を出す</h2><p class="sub">時間の行が 9:00〜18:00 まで並びます</p><div class="shotwrap side"><div class="shot"><div class="in" style="aspect-ratio:1.5789"><img src="img/w3-week-open-0_0_1500_950.png" alt="⑤「▼ 開く」で全部の時間を出す（画面写真）"><div class="fr" style="left:82.868%;top:2.066%;width:4.297%;height:2.842%"></div><div class="bg" style="left:85.016%;top:2.066%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:86.021%;top:26.137%;width:13.696%;height:4.010%"></div><div class="bg" style="left:92.869%;top:26.137%;transform:translate(-50%,-118%)">2</div><div class="fr" style="left:0.250%;top:93.145%;width:99.500%;height:6.105%"></div><div class="bg" style="left:0.250%;top:93.145%;transform:translate(2px,-118%)">3</div></div></div><div class="cards"><div class="card"><h3><i>1</i>▼ 開く を押した所</h3><p>もう一度押すと「▲ 畳む」に戻ります</p></div><div class="card"><h3><i>2</i>空いているマス</h3><p>クリックすると、その日・その時間で一般（整備）の予約カードが開きます</p></div><div class="card"><h3><i>3</i>いちばん下の帯</h3><p>「午後入庫」「入庫時間未定」は、表をスクロールしても下に貼り付いたまま残ります</p></div></div></div></div></section>
+  <section class="sl dark" id="s9" hidden><div class="pad"><p class="eyebrow">第 2 部</p><h2>予約を入れる</h2><p class="lead">週間カレンダーから、そのまま予約カードを開けます</p><div class="chips"><div class="chip">車検を入れる（車検の行の ＋）</div><div class="chip">一般（整備）を入れる（時間のマス）</div><div class="chip">時間が決まっていない時（＋ 予定）</div></div></div></section>
+  <section class="sl" id="s10" hidden><div class="pad"><span class="kick" style="background:var(--green)">予約</span><h2 class="ttl">⑥ 車検を入れる</h2><p class="sub">「車検」の行の右端にある ＋ を押します</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:7.6000"><img src="img/w2-week-folded-0_55_760_100.png" alt="⑥ 車検を入れる（画面写真）"><div class="fr" style="left:18.016%;top:47.609%;width:2.500%;height:19.000%"></div><div class="bg" style="left:19.266%;top:47.609%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:21.832%;top:47.609%;width:2.500%;height:19.000%"></div><div class="bg" style="left:23.082%;top:47.609%;transform:translate(-50%,-118%)">2</div><div class="fr" style="left:25.051%;top:16.609%;width:4.356%;height:21.000%"></div><div class="bg" style="left:27.230%;top:16.609%;transform:translate(-50%,-118%)">3</div></div></div><div class="cards"><div class="card"><h3><i>1</i>入っている車検</h3><p>マ・ク・レ の札。押すとその予約を開いて直せます。なぞると時間・お名前・コースが出ます</p></div><div class="card"><h3><i>2</i>車検の ＋</h3><p>その日の車検を新しく受けます。押すと車検予約カードが開きます</p></div><div class="card"><h3><i>3</i>○台</h3><p>その日の合計。6台を超えると「承認待ち」の印（！）が付きます</p></div></div></div></div></section>
+  <section class="sl" id="s11" hidden><div class="pad"><span class="kick" style="background:var(--green)">予約</span><h2 class="ttl">⑥ 車検を入れる（カード）</h2><p class="sub">＊の付いた項目は必ず入れてください。Enter で次の項目へ移れます</p><div class="shotwrap side"><div class="shot"><div class="in" style="aspect-ratio:0.7368"><img src="img/w4-insp-card-0_0_560_760.png" alt="⑥ 車検を入れる（カード）（画面写真）"><div class="fr" style="left:0.000%;top:0.000%;width:99.464%;height:9.381%"></div><div class="bg" style="left:0.000%;top:0.000%;transform:translate(2px,-118%)">1</div><div class="fr" style="left:3.571%;top:11.486%;width:92.321%;height:8.947%"></div><div class="bg" style="left:3.571%;top:11.486%;transform:translate(2px,-118%)">2</div></div></div><div class="cards"><div class="card"><h3><i>1</i>カードの見出し</h3><p>日にちと時間。「クリックで日付変更」で別の日へ移せます</p></div><div class="card"><h3><i>2</i>★ここが変わりました　来店者氏名 ＊ ／ 車検証の使用者</h3><p>氏名の欄を左右に分け、右に「車検証の使用者」を入れられるようにしました。当日ご来店された方に確かめる項目です。車検証の名前と来店者が違っていれば、右の「車検証の使用者」にその名前を入れてください（同じ時は「同じ」を押すと入ります）。陸運局へ出す時に、車検証の使用者と来店された方の名前が違うと不都合があるためです。</p></div></div></div></div></section>
+  <section class="sl" id="s12" hidden><div class="pad"><span class="kick" style="background:var(--green)">予約</span><h2 class="ttl">⑦ 一般（整備）を入れる</h2><p class="sub">時間のマスをクリックすると、その日・その時間で予約カードが開きます</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:5.0000"><img src="img/w3-week-open-0_150_1500_300.png" alt="⑦ 一般（整備）を入れる（画面写真）"><div class="fr" style="left:86.021%;top:32.766%;width:13.696%;height:12.698%"></div><div class="bg" style="left:92.869%;top:32.766%;transform:translate(-50%,-118%)">1</div></div></div><div class="cards"><div class="card"><h3><i>1</i>空いているマス</h3><p>クリックで一般（整備）の予約カードが開きます。日と時間は、押したマスのものが最初から入ります</p></div></div></div></div></section>
+  <section class="sl" id="s13" hidden><div class="pad"><span class="kick" style="background:var(--green)">予約</span><h2 class="ttl">⑧ 時間がまだ決まっていない時</h2><p class="sub">畳んだ表のいちばん下「＋ 予定」から入れます</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:31.2500"><img src="img/w2-week-folded-0_265_1500_48.png" alt="⑧ 時間がまだ決まっていない時（画面写真）"><div class="fr" style="left:0.283%;top:28.353%;width:99.433%;height:56.250%"></div><div class="bg" style="left:0.283%;top:28.353%;transform:translate(2px,-118%)">1</div><div class="fr" style="left:8.794%;top:35.645%;width:3.869%;height:41.667%"></div><div class="bg" style="left:10.728%;top:35.645%;transform:translate(-50%,-118%)">2</div></div></div><div class="cards"><div class="card"><h3><i>1</i>「予定を足す」の行</h3><p>畳んでいても、開いていても、いつも表のいちばん下にあります</p></div><div class="card"><h3><i>2</i>＋ 予定</h3><p>その日の予約カードを、時間を決めずに開きます</p></div></div></div></div></section>
+  <section class="sl" id="s14" hidden><div class="pad"><span class="kick" style="background:var(--green)">予約</span><h2 class="ttl">⑧ 時間はカードの中で選ぶ</h2><p class="sub">「時間帯」を押すと、選べる時間が全部ならびます（スクロールしません）</p><div class="shotwrap side"><div class="shot"><div class="in" style="aspect-ratio:1.5556"><img src="img/w5b-sched-slot-0_60_560_360.png" alt="⑧ 時間はカードの中で選ぶ（画面写真）"><div class="fr" style="left:5.000%;top:28.416%;width:21.830%;height:9.722%"></div><div class="bg" style="left:15.915%;top:28.416%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:5.000%;top:50.082%;width:21.830%;height:9.722%"></div><div class="bg" style="left:15.915%;top:50.082%;transform:translate(-50%,-118%)">2</div></div></div><div class="cards"><div class="card"><h3><i>1</i>午前入庫 ／ 午後入庫</h3><p>「午前に来る」「午後に来る」だけ決まっている時に使います</p></div><div class="card"><h3><i>2</i>入庫時間未定</h3><p>時間がまったく決まっていない時。あとから直せます</p></div></div></div></div></section>
+  <section class="sl dark" id="s15" hidden><div class="pad"><p class="eyebrow">第 3 部</p><h2>空き検索</h2><p class="lead">お客様の電話を受けながら、空いている日・時間をすぐ出せます</p><div class="chips"><div class="chip">🔍 空き検索の開き方</div><div class="chip">車検の空き検索（コースで探す）</div><div class="chip">一般の空き検索（かかる時間で探す）</div><div class="chip">やめる／週を送る</div></div></div></section>
+  <section class="sl" id="s16" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑨ 空き検索を開く</h2><p class="sub">上の帯の「🔍 空き検索」を押すと、条件を決める帯が出ます</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:12.0000"><img src="img/w6-find-insp-bar-0_0_1500_125.png" alt="⑨ 空き検索を開く（画面写真）"><div class="fr" style="left:5.767%;top:57.700%;width:4.907%;height:22.400%"></div><div class="bg" style="left:8.220%;top:57.700%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:10.674%;top:57.700%;width:4.907%;height:22.400%"></div><div class="bg" style="left:13.128%;top:57.700%;transform:translate(-50%,-118%)">2</div><div class="fr" style="left:50.772%;top:55.700%;width:10.212%;height:26.400%"></div><div class="bg" style="left:55.878%;top:55.700%;transform:translate(-50%,-118%)">3</div><div class="fr" style="left:61.191%;top:10.500%;width:8.355%;height:32.000%"></div><div class="bg" style="left:65.368%;top:10.500%;transform:translate(-50%,-118%)">4</div><div class="fr" style="left:61.918%;top:54.500%;width:4.205%;height:28.800%"></div><div class="bg" style="left:64.020%;top:54.500%;transform:translate(-50%,-118%)">5</div></div></div><div class="cards"><div class="card"><h3><i>1</i>🚗 車検</h3><p>車検の空きを探します</p></div><div class="card"><h3><i>2</i>⏰ 整備</h3><p>一般（整備）の空きを探します</p></div><div class="card"><h3><i>3</i>この条件で空きを探す</h3><p>押すと、いま出している1週間の中から空きを探して色を付けます</p></div><div class="card"><h3><i>4</i>🔍 空き検索</h3><p>もう一度押すと帯が閉じます</p></div><div class="card"><h3><i>5</i>やめる</h3><p>色を消して、ふつうの表に戻します（帯は出たまま。条件を変えてもう一度探せます）</p></div></div></div></div></section>
+  <section class="sl" id="s17" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑩ 車検の空き検索（条件）</h2><p class="sub">車検は「コース」で探します。コースごとに数え方が違います</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:16.2903"><img src="img/w6-find-insp-bar-0_55_1010_62.png" alt="⑩ 車検の空き検索（条件）（画面写真）"><div class="fr" style="left:28.970%;top:27.621%;width:8.062%;height:45.161%"></div><div class="bg" style="left:33.000%;top:27.621%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:37.031%;top:27.621%;width:8.920%;height:45.161%"></div><div class="bg" style="left:41.491%;top:27.621%;transform:translate(-50%,-118%)">2</div><div class="fr" style="left:45.951%;top:27.621%;width:9.633%;height:45.161%"></div><div class="bg" style="left:50.768%;top:27.621%;transform:translate(-50%,-118%)">3</div><div class="fr" style="left:57.169%;top:38.105%;width:16.849%;height:24.194%"></div><div class="bg" style="left:65.593%;top:38.105%;transform:translate(-50%,-118%)">4</div></div></div><div class="cards"><div class="card"><h3><i>1</i>マッハ車検</h3><p>10:00 と 14:00 の枠で見ます（入庫から1時間）</p></div><div class="card"><h3><i>2</i>クイック車検</h3><p>台数で見ます。1日6台まで（台数制限を掛けた日はその数）</p></div><div class="card"><h3><i>3</i>レギュラー車検</h3><p>台数で見ます。1日3台まで</p></div><div class="card"><h3><i>4</i>数え方の案内</h3><p>選んだコースの数え方が、その場に出ます</p></div></div></div></div></section>
+  <section class="sl" id="s18" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑩ 車検の空き検索（結果の見方）</h2><p class="sub">空いている日が明るく残り、空いていない日は暗くなります</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:3.4091"><img src="img/w7-find-insp-run-0_55_1500_440.png" alt="⑩ 車検の空き検索（結果の見方）（画面写真）"><div class="fr" style="left:94.831%;top:22.866%;width:4.552%;height:2.727%"></div><div class="bg" style="left:97.107%;top:22.866%;transform:translate(-50%,-118%)">1</div></div></div><div class="cards"><div class="card"><h3><i>1</i>空いている枠の案内</h3><p>マッハなら「10:00・14:00 空き」のように、どの枠が空いているかが出ます</p></div></div></div><div class="note">マッハ車検は、整備の表の中に「マッハ可」の緑の札が出ます。札の隣の ＋ を押すと、その日・その時間でマッハ車検として受けられます。</div></div></section>
+  <section class="sl" id="s19" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑪ 一般（整備）の空き検索（条件）</h2><p class="sub">整備は「作業にかかる時間」で探します</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:13.2258"><img src="img/w8-find-sched-bar-0_55_820_62.png" alt="⑪ 一般（整備）の空き検索（条件）（画面写真）"><div class="fr" style="left:19.526%;top:27.621%;width:8.977%;height:45.161%"></div><div class="bg" style="left:24.014%;top:27.621%;transform:translate(-50%,-118%)">1</div><div class="fr" style="left:42.826%;top:27.621%;width:29.623%;height:45.161%"></div><div class="bg" style="left:42.826%;top:27.621%;transform:translate(2px,-118%)">2</div><div class="fr" style="left:74.400%;top:23.589%;width:18.681%;height:53.226%"></div><div class="bg" style="left:83.740%;top:23.589%;transform:translate(-50%,-118%)">3</div></div></div><div class="cards"><div class="card"><h3><i>1</i>⏰ 整備</h3><p>ここを押すと、条件が「作業の所要時間」に変わります</p></div><div class="card"><h3><i>2</i>作業の所要時間</h3><p>30分／1時間／1時間半／2時間。選んだ時間より短い空きは出ません</p></div><div class="card"><h3><i>3</i>この条件で空きを探す</h3><p>押すと、続けて取れる空きを探して囲います</p></div></div></div></div></section>
+  <section class="sl" id="s20" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑪ 一般の空き検索（結果の見方）</h2><p class="sub">「続けて取れるひとかたまり」を丸ごと囲います。1時間ずつには刻みません</p><div class="shotwrap"><div class="shot"><div class="in" style="aspect-ratio:2.8302"><img src="img/w9-find-sched-run-0_55_1500_530.png" alt="⑪ 一般の空き検索（結果の見方）（画面写真）"><div class="fr" style="left:72.310%;top:33.134%;width:13.685%;height:9.811%"></div><div class="bg" style="left:79.153%;top:33.134%;transform:translate(-50%,-118%)">1</div></div></div><div class="cards"><div class="card"><h3><i>1</i>明るい囲い</h3><p>続けて空いているひとかたまり。この中のどこから始めるかは、使う人が決めます</p></div></div></div><div class="note">囲いに入っていない枠は暗くなります。選んだ所要時間より短い続きは取れないので、暗いままです。</div></div></section>
+  <section class="sl" id="s21" hidden><div class="pad"><span class="kick" style="background:var(--orange)">空き検索</span><h2 class="ttl">⑫ 覚えておくと便利なこと</h2><p class="sub">空き検索まわりの決まりごと</p><div class="blocks"><div class="blk"><h3><i>1</i>週を送っても条件は残る</h3><p>「次の週 ›」を押すと、同じ条件でその週の空きを探し直します。
+電話で「来週は？」と聞かれた時に、そのまま送れます。</p></div><div class="blk"><h3><i>2</i>「やめる」は色を消すだけ</h3><p>帯は出たままなので、コースや時間を変えてもう一度探せます。
+帯ごと閉じたい時は、上の「🔍 空き検索」をもう一度押します。</p></div><div class="blk ok"><h3><i>3</i>探した枠は畳んでも隠れない</h3><p>畳んだ状態でも、見つかった枠の行は残ります。
+探した結果が消えてしまわないようにしています。</p></div><div class="blk warn"><h3><i>4</i>休業日・過ぎた日は対象外</h3><p>休業日の列と、今日より前の日は、はじめから対象にしません。</p></div></div></div></section>
+  <section class="sl" id="s22" hidden><div class="pad"><span class="kick" style="background:var(--blue)">見る</span><h2 class="ttl">困った時は</h2><p class="sub">週間カレンダーでよくある「あれ？」</p><div class="blocks"><div class="blk"><h3>予定が出てこない</h3><p>「▲ 畳む」になっていると、予定が無い時間の行は隠れています。「▼ 開く」で全部出ます。
+それでも出ない時は、店（本店／三田店）が合っているか確かめてください。</p></div><div class="blk"><h3>入れたい時間の行が無い</h3><p>畳んでいるためです。「▼ 開く」で出すか、いちばん下の「＋ 予定」から、時間を決めずにカードを開いてください。</p></div><div class="blk"><h3>今日がどこか分からない</h3><p>太いオレンジの枠で囲まれた列が今日です。「本日へ」を押すと今日の週に戻ります。</p></div><div class="blk"><h3>表が小さくて見づらい</h3><p>右上の「画面いっぱい」の印を押すと、表だけを画面いっぱいに広げられます。もう一度押すと戻ります。</p></div><div class="blk"><h3>並び順を紙と同じにしたい</h3><p>「📅 月曜から」に切り替えると、A3の紙と同じ月曜はじまりになります。</p></div><div class="blk ok"><h3>誰が入れた予約か知りたい</h3><p>お名前をなぞると「いつ・だれが予約を入れたか」が出ます。日にちを変えた記録も残ります。</p></div></div></div></section>
+  <div class="foot">
+    <button class="btn" id="prev2">‹ 前のページ</button>
+    <span class="mid" id="mid"></span>
+    <button class="btn" id="next2">次のページ ›</button>
+  </div>
+</div></main>
+<div id="idx" hidden><div class="panel" role="dialog" aria-label="目次">
+  <h2>目次（全 22 ページ）</h2>
+  <ol id="idxlist"></ol>
+  <div style="margin-top:14px"><button class="btn" id="close" style="background:var(--blue);border-color:var(--blue)">とじる</button></div>
+</div></div>
+<script id="names" type="application/json">["Hub a Nice Day","この説明書でわかること","第1部　見る・開く","① 週間カレンダーの開き方","② 画面の見方（上の帯）","③ 表の見方","④ 畳む／開く の考え方","⑤「▼ 開く」で全部の時間を出す","第2部　予約を入れる","⑥ 車検を入れる","⑥ 車検を入れる（カード）","⑦ 一般（整備）を入れる","⑧ 時間がまだ決まっていない時","⑧ 時間はカードの中で選ぶ","第3部　空き検索","⑨ 空き検索を開く","⑩ 車検の空き検索（条件）","⑩ 車検の空き検索（結果の見方）","⑪ 一般（整備）の空き検索（条件）","⑪ 一般の空き検索（結果の見方）","⑫ 覚えておくと便利なこと","困った時は"]</script>
+<script>
+(function(){
+  var N = 22, names = JSON.parse(document.getElementById('names').textContent), cur = 1;
+  var list = document.getElementById('idxlist');
+  names.forEach(function(nm, i){
+    var li = document.createElement('li'), b = document.createElement('button');
+    var sp = document.createElement('span'); sp.textContent = (i + 1);
+    b.appendChild(sp); b.appendChild(document.createTextNode(nm));
+    b.onclick = function(){ go(i + 1); hideIdx(); };
+    li.appendChild(b); list.appendChild(li);
+  });
+  function show(n){
+    for (var i = 1; i <= N; i++){ var el = document.getElementById('s' + i); if (el) el.hidden = (i !== n); }
+    cur = n;
+    document.getElementById('cnt').textContent = n + ' / ' + N;
+    document.getElementById('mid').textContent = names[n - 1] || '';
+    document.getElementById('prev').disabled = document.getElementById('prev2').disabled = (n === 1);
+    document.getElementById('next').disabled = document.getElementById('next2').disabled = (n === N);
+    var bs = list.querySelectorAll('button');
+    for (var j = 0; j < bs.length; j++) bs[j].setAttribute('aria-current', (j + 1 === n) ? 'true' : 'false');
+  }
+  function go(n){
+    show(Math.max(1, Math.min(N, n)));
+    try { history.replaceState(null, '', '#s' + cur); } catch(e) {}
+    window.scrollTo(0, 0);
+  }
+  function hideIdx(){ document.getElementById('idx').hidden = true; }
+  document.getElementById('prev').onclick = document.getElementById('prev2').onclick = function(){ go(cur - 1); };
+  document.getElementById('next').onclick = document.getElementById('next2').onclick = function(){ go(cur + 1); };
+  document.getElementById('open').onclick = function(){ document.getElementById('idx').hidden = false; };
+  document.getElementById('close').onclick = hideIdx;
+  document.getElementById('idx').onclick = function(e){ if (e.target === this) hideIdx(); };
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){ hideIdx(); return; }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown'){ go(cur + 1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft'  || e.key === 'PageUp'){ go(cur - 1); e.preventDefault(); }
+  });
+  function fromHash(){
+    var m = (location.hash || '').match(/^#s(\d+)$/);
+    return m ? Math.max(1, Math.min(N, parseInt(m[1], 10))) : 1;
+  }
+  // ページ番号つきのリンク（#s11）で開いた時・同じページの中で飛ばされた時の両方に合わせる
+  window.addEventListener('hashchange', function(){ show(fromHash()); window.scrollTo(0, 0); });
+  show(fromHash());
+})();
+</script>

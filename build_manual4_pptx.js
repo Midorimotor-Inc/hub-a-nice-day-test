@@ -27,6 +27,11 @@ pres.layout = 'LAYOUT_WIDE'; pres.author = 'Hub a Nice Day'; pres.title = 'Hub a
 const dim = {};
 async function loadDims() { if (!sharp) return; for (const f of fs.readdirSync(SHOTS).filter(x => x.endsWith('.png'))) { try { const m = await sharp(path.join(SHOTS, f)).metadata(); dim[f] = { w: m.width, h: m.height }; } catch (e) {} } }
 const shadow = () => ({ type: 'outer', color: '8A9AAD', blur: 8, offset: 2, angle: 90, opacity: 0.3 });
+// ── URL版（manual4_web/deck.json）用に、同じ素データを控えておく ──
+//   PPTX と URL版で中身がずれないように、文章を作る所は1か所だけにしてある。
+const WEBDIR = path.join(__dirname, 'manual4_web');
+const WEB = [];
+const webImgs = new Set();
 const T = (s, text, o) => s.addText(text, Object.assign({ fontFace: F, isTextBox: true, margin: 0 }, o));
 
 function pageTitle(s, kicker, title, sub) {
@@ -87,6 +92,16 @@ async function annotated(kicker, title, sub, file, items, opt) {
   (opt.mask || []).forEach(m => { const bx0 = meta.boxes[m.k]; if (!inside(bx0)) return; const mx = ix + (bx0.x - crop.x + 2) * r, my = iy + (bx0.y - crop.y + 2) * r, mw = (bx0.w - 4) * r, mh = (bx0.h - 4) * r; s.addShape(pres.ShapeType.rect, { x: mx, y: my, w: mw, h: mh, fill: { color: WHITE }, line: { color: WHITE, width: 0 } }); if (m.text) T(s, m.text, { x: mx + 0.12, y: my, w: mw - 0.2, h: mh, fontSize: Math.max(9, Math.min(14, mh * 40)), color: INK, valign: 'middle' }); });
   const frame = (it) => ({ fx: ix + (it.box.x - crop.x - pad) * r, fy: iy + (it.box.y - crop.y - pad) * r, fw: (it.box.w + pad * 2) * r, fh: (it.box.h + pad * 2) * r });
   const frames = list.map(frame);
+  // URL版の素データ（赤枠の位置は、切り出した写真に対する割合で持つ）
+  {
+    const fr = b0 => ({ x: (b0.x - crop.x) / crop.w, y: (b0.y - crop.y) / crop.h, w: b0.w / crop.w, h: b0.h / crop.h });
+    webImgs.add(imgPath);
+    WEB.push({ kind: 'shot', kicker: kicker || null, title, sub: sub || '', img: path.basename(imgPath),
+      ratio: crop.w / crop.h, below: opt.layout === 'below',
+      items: list.map((it, i) => ({ n: i + 1, t: it.t, d: it.d || '', rect: fr(it.box) })),
+      masks: (opt.mask || []).filter(m => inside(meta.boxes[m.k])).map(m => ({ rect: fr(meta.boxes[m.k]), text: m.text || '' })),
+      note: opt.note || '' });
+  }
   // ★番号は【枠の真上】に出す（2026-10-30 ユーザー指示）。
   //   それまでは枠の左の外に出していたので、ボタンが横に並んでいる所では
   //   となりのボタンの上に数字が乗って読めなかった。
@@ -170,6 +185,7 @@ function slideSection(no, title, lead, items, color) {
     s.addShape(pres.ShapeType.roundRect, { x, y, w: 5.6, h: 0.5, rectRadius: 0.08, fill: { color: '1E3A66' }, line: { color: '2F5590', width: 1 } });
     T(s, it, { x: x + 0.2, y, w: 5.3, h: 0.5, fontSize: 13, color: WHITE, valign: 'middle' });
   });
+  WEB.push({ kind: 'section', no, title, lead: lead || '', items: items || [] });
 }
 function slideText(kicker, title, sub, blocks, opt) {
   opt = opt || {};
@@ -185,6 +201,7 @@ function slideText(kicker, title, sub, blocks, opt) {
     T(s, b.d, { x: x + 0.25, y: y + 0.68, w: cw - 0.5, h: rh - 0.85, fontSize: 11.5, color: INK, valign: 'top', paraSpaceAfter: 4 });
   });
   if (opt.note) s.addNotes(opt.note);
+  WEB.push({ kind: 'text', kicker: kicker || null, title, sub: sub || '', blocks, note: opt.note || '' });
 }
 
 // ── 表紙 ──
@@ -196,6 +213,9 @@ function slideCover() {
   s.addShape(pres.ShapeType.roundRect, { x: 0.9, y: 4.7, w: 3.05, h: 0.46, rectRadius: 0.2, fill: { color: '1E3A66' }, line: { color: '2F5590', width: 1 } });
   T(s, '本店・三田店 共通', { x: 0.9, y: 4.7, w: 3.05, h: 0.46, fontSize: 12, color: 'C6D4E8', align: 'center', valign: 'middle' });
   T(s, '緑モータース　2026年10月版（v' + VERSION + '）' + (PROTO ? '　※試作' : ''), { x: 0.9, y: 6.5, w: 11.5, h: 0.35, fontSize: 11, color: '7E92AE' });
+  WEB.push({ kind: 'cover', title: 'Hub a Nice Day', sub: '週間カレンダーの使い方',
+    lead: '1週間ぶんの車検と整備を、1枚で見る・入れる・空きを探す', tag: '本店・三田店 共通',
+    foot: '緑モータース　2026年10月版（v' + VERSION + '）' });
   s.addNotes('実際の画面を撮影して作っています。お客様のお名前・電話・住所は架空のものに置き換えてあります。');
 }
 
@@ -216,6 +236,9 @@ function slideToc4() {
       T(s, it, { x: x + 0.76, y: 2.3 + j * 0.85, w: 3.0, h: 0.55, fontSize: 12.5, color: INK, valign: 'middle' });
     });
   });
+  WEB.push({ kind: 'toc', title: 'この説明書でわかること',
+    sub: '週間カレンダーは「見る」だけでなく、そのまま「予約を入れる」「空きを探す」ところまでできます',
+    cols: cols.map(c => ({ t: c.t, c: c.c, items: c.items })) });
 }
 
 (async () => {
@@ -228,7 +251,7 @@ function slideToc4() {
 
   // ═══════════ 第1部　見る・開く ═══════════
   slideSection(1, '見る・開く', '1週間ぶんを1枚で見られるようにしました',
-    ['週間カレンダーの開き方', '画面の見方（上の帯のボタン）', '畳む／開く', '日付を押して1日表示へ']);
+    ['週間カレンダーの開き方', '画面の見方（上の帯のボタン）', '畳む／開く', '日付を押して、その日の1日表示へ']);
 
   await annotated(A, '① 週間カレンダーの開き方', 'スケジュール画面のいちばん上、ナビの「週間カレンダー」を押します', 'w1-open-sched.png', [
     { k: 'navWeek', t: '週間カレンダー', d: 'ここを押すと、1週間ぶんの表が画面いっぱいに開きます' },
@@ -337,6 +360,11 @@ function slideToc4() {
     { t: '並び順を紙と同じにしたい', d: '「📅 月曜から」に切り替えると、A3の紙と同じ月曜はじまりになります。' },
     { t: '誰が入れた予約か知りたい', d: 'お名前をなぞると「いつ・だれが予約を入れたか」が出ます。日にちを変えた記録も残ります。', tone: 'ok' },
   ]);
+
+  // URL版（manual4_web）の素データと写真を書き出す。build_manual4_web.js がこれを読む
+  fs.mkdirSync(path.join(WEBDIR, 'img'), { recursive: true });
+  for (const f of webImgs) fs.copyFileSync(f, path.join(WEBDIR, 'img', path.basename(f)));
+  fs.writeFileSync(path.join(WEBDIR, 'deck.json'), JSON.stringify({ version: VERSION, built: new Date().toISOString(), slides: WEB }, null, 1));
 
   await pres.writeFile({ fileName: OUT });
   console.log('');
