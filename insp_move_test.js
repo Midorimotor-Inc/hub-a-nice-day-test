@@ -230,10 +230,14 @@ const CUST = { name: '山東　庸子', carType: 'スペーシア', no: 5902 };
   const moveTo = await pp.evaluate(() => {
     const box = [...document.querySelectorAll('div')].find(e => getComputedStyle(e).position === 'fixed' && getComputedStyle(e).zIndex === '9999' && /年\d+月/.test(e.innerText || ''));
     const grid = [...box.querySelectorAll('div')].filter(e => getComputedStyle(e).display === 'grid' && e.children.length > 20)[0];
-    const today = new Date().getDate();
-    const cell = [...grid.children].find(c => c.innerText.trim() === String(today + 2));
+    // ★月末（29〜31日）に流すと「今日+2」がその月に無く、検査が落ちていた（2026-10-30 に判明）。
+    //   同じ月の中に必ずある日を選ぶこと。
+    const now = new Date(), today = now.getDate();
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const want = (today + 2 <= last) ? today + 2 : today - 2;
+    const cell = [...grid.children].find(c => c.innerText.trim() === String(want));
     if (!cell) return null;
-    cell.click(); return today + 2;
+    cell.click(); return want;
   });
   t('別の日を選べる', !!moveTo, moveTo);
   await pp.waitForTimeout(600);

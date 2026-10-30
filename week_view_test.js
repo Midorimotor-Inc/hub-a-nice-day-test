@@ -425,15 +425,19 @@ const seed = {
     const fr = foot ? [...foot.querySelectorAll('tr')] : [];
     const lastCell = fr.length ? fr[fr.length - 1].children[ix] : null;
     return { head: px(th), other: other ? px(other) : null, thick: col.filter(x => parseFloat(x.l) >= 3 && parseFloat(x.r) >= 3).length, rows: col.length,
-      bottom: lastCell ? px(lastCell).b : '' };
+      bottom: lastCell ? px(lastCell).b : '',
+      line: other ? getComputedStyle(other).borderRightColor : '' };
   });
   t('★本日の見出しに印が付く', !!tdy, tdy);
-  t('★本日の列の左右が太い（3px以上）', !!tdy && parseFloat(tdy.head.l) >= 3 && parseFloat(tdy.head.r) >= 3, tdy && tdy.head);
-  t('★上も閉じている（見出しの上に線）', !!tdy && parseFloat(tdy.head.t) >= 3, tdy && tdy.head);
-  t('★いちばん下も閉じている（据え置きの表の最後）', !!tdy && parseFloat(tdy.bottom) >= 3, tdy && tdy.bottom);
-  t('★色はカレンダーの今日と同じオレンジ', !!tdy && /194, 65, 12/.test(tdy.head.c), tdy && tdy.head.c);
+  // ★2026-10-30：日割りの縦線をダークグレーに濃くしたので、本日の枠は 5px・明るいオレンジ(#fb923c)。
+  //   3px・濃いオレンジ(#c2410c)だと線に埋もれて「どこが今日か」が分からなかった。
+  t('★本日の列の左右が太い（5px）', !!tdy && parseFloat(tdy.head.l) >= 5 && parseFloat(tdy.head.r) >= 5, tdy && tdy.head);
+  t('★上も閉じている（見出しの上に線）', !!tdy && parseFloat(tdy.head.t) >= 5, tdy && tdy.head);
+  t('★いちばん下も閉じている（据え置きの表の最後）', !!tdy && parseFloat(tdy.bottom) >= 5, tdy && tdy.bottom);
+  t('★色は明るいオレンジ #fb923c', !!tdy && /251, 146, 60/.test(tdy.head.c), tdy && tdy.head.c);
   t('★本日の列は上から下までずっと太枠', !!tdy && tdy.rows >= 10 && tdy.thick === tdy.rows, tdy);
   t('ほかの日は太くしない', !!tdy && !!tdy.other && parseFloat(tdy.other.l) < 3, tdy && tdy.other);
+  t('★日割りの縦線はダークグレー #64748b', !!tdy && /100, 116, 139/.test(tdy.line), tdy && tdy.line);
 
   // ── ③ 同じ時間に数件＝積む ──
   console.log('\n■ ③ 同じ時間に数件あっても積んで全部出す');

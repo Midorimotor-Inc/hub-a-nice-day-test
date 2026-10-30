@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793264855323';
+    window.__APP_BUILD='build-1793323501259';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.82.0';
+const APP_VERSION = '3.83.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4450,10 +4450,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
       .map(k=>({k,r:day[k]})).filter(x=>x.r&&x.r.name);};
   const nextSlotKey=(dk,slot)=>{const day=schedData[dk]||{};let n=0;
     while(day[makeSlotKey(slot,n)]&&day[makeSlotKey(slot,n)].name)n++;return makeSlotKey(slot,n);};
-  const TH={padding:'5px 4px',fontSize:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid #d7dde5',
+  // ★日割りの縦線は【ダークグレー】（2026-10-30 ユーザー決定・mock_week_lines.html で5色から選んだ）。
+  //   うすい線だと「どの日の列か」を目で追えなかった。罫線はこの1つで決めること。
+  const WLINE='#64748b';
+  const TH={padding:'5px 4px',fontSize:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid '+WLINE,
     background:'#f1f5f9',position:'sticky',top:0,zIndex:4};
-  const TD={border:'1px solid #d7dde5',padding:'1px 3px',fontSize:11.5,verticalAlign:'middle',height:26};
-  const TM={border:'1px solid #d7dde5',width:54,minWidth:54,background:'#f8fafc',fontSize:11,fontWeight:800,
+  const TD={border:'1px solid '+WLINE,padding:'1px 3px',fontSize:11.5,verticalAlign:'middle',height:26};
+  const TM={border:'1px solid '+WLINE,width:54,minWidth:54,background:'#f8fafc',fontSize:11,fontWeight:800,
     color:'#475569',textAlign:'center',whiteSpace:'nowrap'};
   const SB={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:17,height:17,padding:'0 2px',
     borderRadius:4,background:'#475569',color:'white',fontSize:10,fontWeight:900,margin:1,verticalAlign:'middle'};
@@ -4482,12 +4485,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   // 時刻を持たない枠の呼び名（画面の言葉。「入庫未定」→「時間未定」に変更）
   const spName=(x)=>x==='未定'?'時間未定':x==='午前'?'午前入庫':x==='午後'?'午後入庫':x;
   // ★本日の列は太枠で囲む（2026-10-24 ユーザー指示・ア案）。色はカレンダーの「今日」と同じ
-  const TODAY_LINE='#c2410c';
+  // ★線を濃くすると本日の枠が埋もれるので、【太さ5px・明るいオレンジ】で浮かせる
+  //   （2026-10-30 ユーザー決定。太さ4種・明るさ5種を見比べて決めた）
+  const TODAY_LINE='#fb923c';
+  const TODAY_W='5px';
   // ★見出しの右端の四角いボタン（⛶ と ✕ で共用。大きさを必ず揃える・2026-10-30 ユーザー指示）
   const WHDR_SQ={width:32,height:26,padding:0,display:'inline-flex',alignItems:'center',justifyContent:'center',
     background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.45)',borderRadius:7,
     fontSize:13,fontWeight:900,color:'white',cursor:'pointer',fontFamily:'inherit',lineHeight:1,flexShrink:0};
-  const todayCol=(dk)=>dk===todayDk?{borderLeft:'3px solid '+TODAY_LINE,borderRight:'3px solid '+TODAY_LINE}:{};
+  const todayCol=(dk)=>dk===todayDk?{borderLeft:TODAY_W+' solid '+TODAY_LINE,borderRight:TODAY_W+' solid '+TODAY_LINE}:{};
   // ★時刻を持たない枠の置き方（2026-10-23 ユーザー指示）
   //   ・12:00 の枠はやめる（ほとんど入らない）。**その場所に「午前」を置く**（午前の入庫＝お昼までに入る分）
   //   ・「午後」「入庫未定」は**スクロールする表の外**に出し、画面の下に据え置く（入庫未定がいちばん下）
@@ -4621,7 +4627,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
     const h0=!sp&&isHourSlot(slot);
     const cellBand=h0?{background:BAND_BG}:{};
     // 本日の列。いちばん下の行だけ枠の底も閉じる
-    const tcol=(dk)=>({...todayCol(dk),...(last&&dk===todayDk?{borderBottom:'3px solid '+TODAY_LINE}:{})});
+    const tcol=(dk)=>({...todayCol(dk),...(last&&dk===todayDk?{borderBottom:TODAY_W+' solid '+TODAY_LINE}:{})});
     return <tr key={slot} data-wband={h0?'1':'0'} data-wpin={pinned?'1':'0'} data-wthin={thin?'1':'0'}>
       <td style={{...TM,...(thin?{height:15,fontSize:10}:{}),...(sp?SP_TM:h0?{background:BAND_TM,color:'#0e5a6b'}:{})}}>
         {spName(slot)}</td>
@@ -4810,7 +4816,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                   const dowCol=weekDowCol(d);
                   const hDim=!!(sr&&sr.dayDim[dk]);
                   return <th key={dk} data-wtoday={dk===todayDk?'1':'0'} data-wdim={hDim?'1':'0'}
-                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:'3px solid '+TODAY_LINE}:{}),...todayCol(dk),
+                    style={{...TH,...(dk===todayDk?{background:'#ffedd5',borderTop:TODAY_W+' solid '+TODAY_LINE}:{}),...todayCol(dk),
                       position:'relative'}}>
                     <PastOv dk={dk}/>
                     {hDim&&<DimOv/>}
@@ -8349,6 +8355,19 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     :{};
   // 次/前のフィールドへ
   const TIME_VALS=SCHED_SLOTS; // 9:00〜18:00＋整理用の特別枠（未定/午前/午後）
+  // ★カードの中のポップは【中をスクロールさせない】（2026-10-30 ユーザー指示・A案）。
+  //   欄のすぐ下に項目を全部ならべて出す。選ぶ時に全体を見渡せるようにするため。
+  //   ・列の数は mock_card_pop.html で見比べて決めた（時間は4列・作業内容と指見は2列）。
+  //   ・ポップの中に maxHeight / overflow を付け直さないこと（スクロールが戻る）。
+  //   ・position:fixed では出せない。カードは .slide-in の transform で包含ブロックになるので、
+  //     fixed にするとカードの中に閉じ込められ、カードの overflow で切られる（実測）。
+  const POPBOX=(color,cols)=>({border:'2px solid '+color,borderRadius:8,marginTop:4,background:'white',
+    boxShadow:'0 6px 18px rgba(0,0,0,0.18)',padding:6,display:'grid',gap:4,
+    gridTemplateColumns:'repeat('+cols+',minmax(0,1fr))'});
+  const POPIT=(sel,color,bg,opt)=>({padding:(opt&&opt.left)?'8px 10px':'8px 6px',cursor:'pointer',fontSize:13,
+    textAlign:(opt&&opt.left)?'left':'center',whiteSpace:'nowrap',borderRadius:6,boxSizing:'border-box',
+    border:'1px solid '+(sel?color:'#e5e7eb'),background:sel?bg:((opt&&opt.tint)||'white'),
+    fontWeight:sel?800:500,color:sel?color:((opt&&opt.fg)||'#374151')});
   // ★編集中の欄が**カードの半分より下**に来たら、真ん中へ戻す（B案・2026-10-15 ユーザー選択）。
   //   上半分にいる間は動かさない＝必要な時しか画面が動かない。
   //   以前は ↓キーで送った時だけ scrollIntoView していたので、**Tab・クリックでは一度もスクロールしなかった**
@@ -8753,14 +8772,13 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <span style={{fontSize:10,color:'#6b7280'}}>{showSlotPk?'▲':'▼'}</span>
               </div>
               {showSlotPk&&(
-                <div style={{border:'2px solid #0891b2',borderRadius:8,marginTop:4,maxHeight:200,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                <div data-popgrid="slot" style={POPBOX('#0891b2',4)}>
                   {SCHED_SLOTS.map(v=>{
                     const sel=getBaseSlot(form._slot||timeSlot||'')===v;
                     return(
                       <div key={v} data-slotid={v}
                         onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,_slot:v}));setShowSlotPk(false);goNext('slot');}}
-                        style={{padding:'8px 16px',cursor:'pointer',fontSize:14,fontWeight:sel?800:400,
-                          background:sel?'#e0f2fe':'white',color:sel?'#0891b2':'#374151'}}>
+                        style={POPIT(sel,'#0891b2','#e0f2fe',isSpecialSlot(v)?{tint:'#faf5ff',fg:'#9333ea'}:null)}>
                         {specialSlotLabel(v)}
                       </div>
                     );
@@ -8904,14 +8922,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <span style={{fontSize:10,color:'#6b7280'}}>{showWkPk?'▲':'▼'}</span>
               </div>
               {showWkPk&&(
-                <div style={{border:'2px solid #0891b2',borderRadius:8,marginTop:4,maxHeight:180,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                <div data-popgrid="work" style={POPBOX('#0891b2',2)}>
                   {WORKS.map((w,i)=>(
                     <div key={i} data-wkid={w.id}
                       onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,work:w.id}));setShowWkPk(false);setKbField('shimi');}}
-                      style={{padding:'8px 12px',cursor:'pointer',fontSize:13,
-                        background:form.work===w.id?'#e0f2fe':'white',
-                        fontWeight:form.work===w.id?700:400,
-                        borderLeft:form.work===w.id?'3px solid #0891b2':'3px solid transparent'}}>
+                      style={POPIT(form.work===w.id,'#0891b2','#e0f2fe',{left:true})}>
                       {w.id} {w.name}
                     </div>
                   ))}
@@ -9015,14 +9030,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <span style={{fontSize:10,color:'#6b7280'}}>{showShPk?'▲':'▼'}</span>
               </div>
               {showShPk&&(
-                <div style={{border:'2px solid #0891b2',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                <div data-popgrid="shimi" style={POPBOX('#0891b2',2)}>
                   {SHIMIS.map((s,i)=>(
-                    <div key={i}
+                    <div key={i} data-shid={s.id}
                       onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,shimi:s.id}));setShowShPk(false);contRef.current?.focus();setKbField('note');}}
-                      style={{padding:'8px 12px',cursor:'pointer',fontSize:13,
-                        background:form.shimi===s.id?'#e0f2fe':'white',
-                        fontWeight:form.shimi===s.id?700:400,
-                        borderLeft:form.shimi===s.id?'3px solid #0891b2':'3px solid transparent'}}>
+                      style={POPIT(form.shimi===s.id,'#0891b2','#e0f2fe',{left:true})}>
                       {s.name}
                     </div>
                   ))}
@@ -9044,14 +9056,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <span style={{fontSize:10,color:'#6b7280'}}>{showTmPk?'▲':'▼'}</span>
               </div>
               {showTmPk&&(
-                <div style={{border:'2px solid #0891b2',borderRadius:8,marginTop:4,maxHeight:200,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                <div data-popgrid="time" style={POPBOX('#0891b2',4)}>
                   {TIME_VALS.map(v=>(
                     <div key={v} data-tmid={v}
                       onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,time:v}));setShowTmPk(false);goNext('time');}}
-                      style={{padding:'8px 16px',cursor:'pointer',fontSize:14,fontWeight:form.time===v?800:400,
-                        background:form.time===v?'#e0f2fe':(isSpecialSlot(v)?'#faf5ff':'white'),
-                        color:form.time===v?'#0891b2':(isSpecialSlot(v)?'#9333ea':'#374151'),
-                        borderLeft:form.time===v?'4px solid #0891b2':'4px solid transparent'}}>
+                      style={POPIT(form.time===v,'#0891b2','#e0f2fe',isSpecialSlot(v)?{tint:'#faf5ff',fg:'#9333ea'}:null)}>
                       {specialSlotLabel(v)}
                     </div>
                   ))}
@@ -9125,14 +9134,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                   <span style={{fontSize:10,color:'#6b7280'}}>{showDelivTmPk?'▲':'▼'}</span>
                 </div>
                 {showDelivTmPk&&(
-                  <div style={{border:'2px solid #047857',borderRadius:8,marginTop:4,maxHeight:200,overflowY:'auto',background:'white',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                  <div data-popgrid="deliv" style={POPBOX('#047857',4)}>
                     {TIME_VALS.map(v=>{const sel=(form.deliveryTime||'未定')===v;return(
-                      <div key={v}
+                      <div key={v} data-dtmid={v}
                         onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,deliveryTime:v}));setShowDelivTmPk(false);}}
-                        style={{padding:'8px 16px',cursor:'pointer',fontSize:14,fontWeight:sel?800:400,
-                          background:sel?'#ecfdf5':(isSpecialSlot(v)?'#faf5ff':'white'),
-                          color:sel?'#047857':(isSpecialSlot(v)?'#9333ea':'#374151'),
-                          borderLeft:sel?'4px solid #047857':'4px solid transparent'}}>
+                        style={POPIT(sel,'#047857','#ecfdf5',isSpecialSlot(v)?{tint:'#faf5ff',fg:'#9333ea'}:null)}>
                         {deliverySlotLabel(v)}
                       </div>
                     );})}
@@ -9267,6 +9273,46 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
 
 // ============================================
 
+// ── 1日表示でお名前をなぞると「いつ予約を入れたか」が出る（2026-10-30 ユーザー指示）─────
+//   車検も整備も、予約が入っている行すべてに付ける。週表のお名前と同じ動き。
+//   ★言葉は【週表・予約カードと同じ hubEntryLines】を使うこと。別々に書くと食い違う。
+//   ★BLOCK-C の行で触るのは【出す言葉・見た目だけ】。判定・並び・保存には手を出さない。
+//   見た目は NoteCell の吹き出しにそろえた（position:fixed・角丸・pointerEvents:none）。
+//     fixed にする理由：行は横に狭く overflow で切られるので、中に置くと吹き出しが欠ける。
+const EntryName=({row,style,children})=>{
+  const [rect,setRect]=useState(null);
+  const lines=hubEntryLines(row);
+  const W=Math.max(240,Math.min(340,typeof window!=='undefined'?window.innerWidth-24:320));
+  const pop=rect?(()=>{
+    const left=Math.max(8,Math.min(rect.left,(window.innerWidth||1200)-W-8));
+    const below=rect.bottom+4, fits=below+150<=(window.innerHeight||800)-8;
+    return fits?{position:'fixed',left,top:below}
+               :{position:'fixed',left,bottom:Math.max(8,(window.innerHeight||800)-rect.top+4)};
+  })():null;
+  return (
+    <span data-entrynm="1"
+      onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
+        setRect({left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
+      onMouseLeave={()=>setRect(null)}
+      style={{...(style||{}),cursor:'help'}}>
+      {children}
+      {rect&&(
+        <span data-entrytip="1" style={{...pop,zIndex:9999,width:W,background:'white',
+          border:'2px solid #0891b2',borderRadius:10,boxShadow:'0 12px 32px rgba(0,0,0,0.22)',
+          padding:'9px 11px',pointerEvents:'none',display:'block',textAlign:'left',
+          whiteSpace:'normal',wordBreak:'break-word',boxSizing:'border-box'}}>
+          <span style={{display:'block',fontSize:10.5,fontWeight:800,color:'#0e7490',
+            marginBottom:5,letterSpacing:'.04em'}}>🕘 この予約の受け付け</span>
+          {lines.map((x,i)=>(
+            <span key={i} style={{display:'block',fontSize:11.5,lineHeight:1.75,
+              fontWeight:i===0?700:400,color:i===0?'#475569':'#9a3412'}}>{x}</span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+};
+
 // ╔══════════════════════════════════════════════════════════════════╗
 // ║  BLOCK-C: コアロジック・行表示                                  ║
 // ║  【変更禁止】7台目承認・店舗判定・ロック処理が含まれる          ║
@@ -9369,7 +9415,7 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-                <span style={{fontWeight:700,color:pending?'#6b7280':'#7c2d12',whiteSpace:'nowrap'}}>{sama(row.name)}</span>
+                <EntryName row={row} style={{fontWeight:700,color:pending?'#6b7280':'#7c2d12',whiteSpace:'nowrap'}}>{sama(row.name)}</EntryName>
                 {row.store&&<span style={{padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:800,background:row.store==='honten'?'#2563eb':'#dc2626',color:'white',flexShrink:0,whiteSpace:'nowrap'}}>
                   {row.store==='honten'?'本店':'三田店'}
                 </span>}
@@ -9557,7 +9603,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
            {machCov&&<span style={{marginLeft:4,fontSize:11,fontWeight:800,color:'#b91c1c',fontStyle:'normal',whiteSpace:'nowrap'}}>マッハ車検</span>}</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'nowrap'}}>
-                <span style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{sama(row.name)}</span>
+                <EntryName row={row} style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{sama(row.name)}</EntryName>
                 {/* ★店舗バッジは出さない（2026-10-17 ユーザー指示）。整備の予定は店ごとのデータなので、
                     見ている店と必ず同じ＝情報がない。食い違っている時だけ出す（押せない理由になるため）。 */}
                 {otherStore&&<span style={{padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:800,background:row.store==='honten'?'#2563eb':'#dc2626',color:'white',flexShrink:0,whiteSpace:'nowrap'}}>

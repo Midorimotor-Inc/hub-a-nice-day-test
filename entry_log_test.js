@@ -4,6 +4,7 @@
 //   ③ 新規のカードには出さない（まだ受け付けていないため）
 //   ④ 日にちを変えて保存すると「日にち変更　10/21 → 10/23　いつ・だれ」が残る
 //      ★受け付けの日時は上書きしない（最初に入れた時のまま）
+//   ⑤ 1日表示でお名前をなぞっても出る（車検も整備も・2026-10-30 ユーザー指示）
 //   実行: node entry_log_test.js      （Firebase には繋がず、にせの firebase を使う）
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -23,7 +24,10 @@ const TODAY = '2026-10-21', MOVED = '2026-10-23';
 const AT = new Date(2026, 9, 15, 14, 23).getTime();
 
 const seed = {
-  [STOR + 'insp']: {},
+  // ★1日表示の【車検の行】のなぞり書きを見るため、車検も1件入れておく
+  [STOR + 'insp']: {
+    [TODAY]: [{ name: '車検記録子', carType: 'ヴィッツ', no: '5555', course: 2, staff: '江川京志', store: 'honten', bookingStatus: 'confirmed', seq: AT, rcvAt: AT, rcvBy: '江川京志' }],
+  },
   [STOR + 'honten-sched']: {
     [TODAY]: {
       '09:00': { name: '記録あり花子', carType: 'アルト', no: '3503', work: 'O', content: 'オイル交換', staff: '江川京志', rcvAt: AT, rcvBy: '江川京志' },
@@ -119,6 +123,31 @@ const seed = {
   t('★「記録なし」と出る', !!box && /受け付け　記録なし/.test(box), box);
   t('★理由も書いてある（この仕組みを入れる前の予約）', !!box && /この仕組みを入れる前の予約/.test(box), box);
   await closeCard();
+
+  // ── ⑤ 1日表示のお名前をなぞる（2026-10-30 ユーザー指示）────────────────
+  //   週表だけでなく、1日表示の車検・整備すべての行で読めるようにした。
+  //   ★BLOCK-C の行で触ったのは【出す言葉・見た目だけ】。判定・並び・保存には手を出していない。
+  console.log('\n■ ⑤ 1日表示でお名前をなぞると受け付けの記録が出る');
+  const hoverName = async (name) => {
+    const el = page.locator('[data-entrynm]').filter({ hasText: name }).first();
+    if (!(await el.count())) return '';
+    await el.hover();
+    await page.waitForTimeout(400);
+    return await page.evaluate(() => { const e = document.querySelector('[data-entrytip]'); return e ? e.innerText.replace(/\n/g, ' / ') : ''; });
+  };
+  const tipS = await hoverName('記録あり花子');
+  t('★整備のお名前になぞり書きが付いている', !!tipS, tipS);
+  t('★見出しが「この予約の受け付け」', /この予約の受け付け/.test(tipS), tipS);
+  t('★入れた日時と入れた人が出る', /受け付け　10\/15 14:23/.test(tipS) && /江川京志/.test(tipS), tipS);
+  await page.mouse.move(5, 5); await page.waitForTimeout(300);
+  const tipI = await hoverName('車検記録子');
+  t('★車検のお名前にも付いている', !!tipI, tipI);
+  t('★車検も入れた日時が出る', /受け付け　10\/15 14:23/.test(tipI), tipI);
+  await page.mouse.move(5, 5); await page.waitForTimeout(300);
+  const tipN = await hoverName('記録なし太郎');
+  t('★記録が無い予約は「記録なし」と出る', /受け付け　記録なし/.test(tipN), tipN);
+  await page.mouse.move(5, 5); await page.waitForTimeout(300);
+  t('★なぞるのをやめると消える', await page.evaluate(() => !document.querySelector('[data-entrytip]')));
 
   console.log('\n■ ③ 新しく入れるカードには出さない');
   await page.evaluate(() => { const td = document.querySelector('[data-wadd]'); if (td) td.click(); });
