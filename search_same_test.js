@@ -122,7 +122,7 @@ const cfxRow = (c, f) => ({ n: c.name, c: c.carType, no: c.no, p: [c.phoneMobile
   await mp.waitForTimeout(2500);
 
   const typeIn = async (page, q) => page.evaluate(x => {
-    const i = [...document.querySelectorAll('input')].find(e => e.offsetParent !== null && /セリエ/.test(e.placeholder || ''));
+    const i = [...document.querySelectorAll('input[data-searchq]')].find(e => e.offsetParent !== null);
     if (!i) return false;
     const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     s.call(i, x); i.dispatchEvent(new Event('input', { bubbles: true }));

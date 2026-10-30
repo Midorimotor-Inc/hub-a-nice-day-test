@@ -280,9 +280,9 @@ async function loadDevStore() {
     await page2.waitForTimeout(800);
     {
       const b = {};
-      b.input = await boxOf(page2, () => document.querySelector('input[placeholder*="セリエ"]'));
+      b.input = await boxOf(page2, () => document.querySelector('input[data-searchq]'));
       b.tabs = await boxOf(page2, () => { const t = [...document.querySelectorAll('button')].filter(x => x.offsetParent !== null && /^(全て|車検|整備|顧客)/.test(x.textContent.trim()) && x.textContent.length < 8); if (!t.length) return null; const r = t.map(e => e.getBoundingClientRect()); const x1 = Math.min(...r.map(q => q.left)), y1 = Math.min(...r.map(q => q.top)), x2 = Math.max(...r.map(q => q.right)), y2 = Math.max(...r.map(q => q.bottom)); return { getBoundingClientRect: () => ({ left: x1, top: y1, width: x2 - x1, height: y2 - y1 }) }; });
-      await page2.fill('input[placeholder*="セリエ"]', '山田').catch(() => {});
+      await page2.fill('input[data-searchq]', '山田').catch(() => {});
       await page2.waitForTimeout(1500);
       await shoot(page2, 'c3-find.png', '検索', b);
     }

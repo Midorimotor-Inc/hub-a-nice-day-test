@@ -82,6 +82,8 @@ const real1011 = [
   await clickText(page, 'カレンダー');
   await page.waitForTimeout(1500);
 
+  // SHOT=<保存先.png> を付けると、この時点の見た目を撮る（「！」の位置・色の確認用）
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
   // 日のマスを読む（日付の数字 → そのマスの ！ の種類）
   const cells = await page.evaluate(() => {
     const out = {};
@@ -92,7 +94,16 @@ const real1011 = [
       if (!num) return;
       const n = Number(num.innerText.trim());
       if (!n) return;
-      out[n] = { kind: b.getAttribute('data-calbang'), title: b.getAttribute('title') || '', bg: getComputedStyle(b).backgroundColor };
+      const cs = getComputedStyle(b), r = b.getBoundingClientRect();
+      // 「！」は【6コマのグリッドの中】にあり、その真上に浮いている（6枠には重ねない）
+      const grid = b.parentElement, gr = grid.getBoundingClientRect();
+      out[n] = { kind: b.getAttribute('data-calbang'), title: b.getAttribute('title') || '',
+        bg: cs.backgroundColor, bd: cs.borderTopWidth, w: Math.round(r.width), h: Math.round(r.height),
+        // 丸の真ん中と6コマの真ん中が合っているか（左右のずれ）
+        dx: Math.round((r.left + r.width / 2) - (gr.left + gr.width / 2)),
+        // 丸の下の端と6コマの上の端のすきま（0以上＝重なっていない）
+        gap: Math.round(gr.top - r.bottom),
+        cols: getComputedStyle(grid).gridTemplateColumns.split(' ').length };
     });
     return out;
   });
@@ -107,7 +118,16 @@ const real1011 = [
   console.log('\n■ ② まだ承認されていない予約があれば黄色');
   t('7台の日（8日）に「！」がある', !!cells[8], Object.keys(cells));
   t('★黄色（未承認）になっている', !!cells[8] && cells[8].kind === 'wait', cells[8] && cells[8].kind);
-  t('★色が黄色', !!cells[8] && /250, 204, 21/.test(cells[8].bg), cells[8] && cells[8].bg);
+  t('★色は蛍光の黄色（#fff200）', !!cells[8] && /255, 242, 0/.test(cells[8].bg), cells[8] && cells[8].bg);
+
+  // ── 置き場所と大きさ（2026-10-30 ユーザー指示）──
+  //   日付のとなりの 17px・白ふち付き では小さくて見落としていた。
+  console.log(String.fromCharCode(10)+'■ ②-2 ★6枠の真ん中の真上に、大きく出す');
+  t('★大きさは 26px', !!cells[8] && cells[8].w === 26 && cells[8].h === 26, cells[8]);
+  t('★白いふちは付けない', !!cells[8] && parseFloat(cells[8].bd) === 0, cells[8] && cells[8].bd);
+  t('★6コマのグリッドの中に置いてある', !!cells[8] && cells[8].cols === 3, cells[8] && cells[8].cols);
+  t('★左右の真ん中に来ている（ずれ2px以内）', !!cells[8] && Math.abs(cells[8].dx) <= 2, cells[8] && cells[8].dx);
+  t('★6枠には重ねない（すぐ上に浮かせる）', !!cells[8] && cells[8].gap >= 0 && cells[8].gap <= 8, cells[8] && cells[8].gap);
 
   console.log('\n■ ③ 承認が済んでいれば緑');
   t('8台の日（10日）に「！」がある', !!cells[10], cells[10]);

@@ -218,9 +218,9 @@ const cust = (i, o) => Object.assign({
   console.log('\n■ 検索（🔍）も索引から');
   await clickText(page, '🔍');
   await seeText(page, '氏名・車種・顧客No・電話', 8000);
-  await page.fill('input[placeholder*="セリエ"]', '1234');
+  await page.fill('input[data-searchq]', '1234');
   t('🔍 検索の「顧客」も24ヶ月ぶんの索引から出る', await seeText(page, '鎌田五郎', 10000), await page.evaluate(() => document.body.innerText.slice(0, 400)));
-  await page.fill('input[placeholder*="セリエ"]', '先客');
+  await page.fill('input[data-searchq]', '先客');
   t('車検の予約も今までどおり出る', await seeText(page, '先客さん', 8000));
 
   t('スマホ：画面のエラーは出ていない', errs.length === 0, errs.slice(0, 3));

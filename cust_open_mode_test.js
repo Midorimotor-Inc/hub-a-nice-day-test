@@ -89,7 +89,7 @@ const signedInInit = ([me, stor]) => {
   await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find(e => e.innerText.trim() === "検索" && e.offsetParent !== null); if (b) b.click(); });
   await page.waitForTimeout(1200);
   await page.evaluate(() => {
-    const i = [...document.querySelectorAll("input")].find(e => e.offsetParent !== null && /セリエ/.test(e.placeholder || ""));
+    const i = [...document.querySelectorAll("input[data-searchq]")].find(e => e.offsetParent !== null);
     if (!i) return false;
     const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     s.call(i, "井上"); i.dispatchEvent(new Event("input", { bubbles: true }));

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793342559580';
+  window.__APP_BUILD='build-1793345653167';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.85.1';
+const MOBILE_VERSION='3.85.2';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -5582,7 +5582,7 @@ const FindSheet=({inspData,schedDataH,schedDataS,cfx,custBusy,onGo,onGoCust,onCl
         <button onClick={onClose} style={XBTN}>✕</button>
       </div>
       <div style={{flexShrink:0,padding:10,borderBottom:'1px solid #e5e7eb',background:'#f8fafc'}}>
-        <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="例：セリエ／ハイエース／1386／090"
+        <input ref={inputRef} data-searchq="1" value={q} onChange={e=>setQ(e.target.value)} placeholder="名前／車種／ナンバー4桁／電話番号"
           style={{width:'100%',boxSizing:'border-box',padding:'11px 12px',border:'2px solid #93c5fd',borderRadius:10,fontSize:16,outline:'none'}}/>
         <div style={{display:'flex',gap:5,marginTop:8,overflowX:'auto'}}>
           <button onClick={()=>setTab('all')} style={CHIP(tab==='all')}>すべて {nq?total:''}</button>

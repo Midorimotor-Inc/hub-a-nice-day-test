@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793342559580';
+  window.__APP_BUILD='build-1793345653167';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -146,7 +146,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.85.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.85.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1713,6 +1713,15 @@ const isSecondTuesdayHoliday=(year,month,day,overrideOpen)=>{
   return true;
 };
 
+// ── 休業日の見た目（2026-10-30 ユーザー指示・Hub ぜんぶ赤にそろえた）──
+//   それまでは灰色の斜めしま（#f9fafb/#f3f4f6）で、休業日なのか
+//   ただ薄く出ているだけなのか見分けがつかなかった。
+//   ★index_dev.html・mobile.html の CLOSED_* と同じ値にすること。片方だけ変えない。
+const CLOSED_BG    = '#fecaca';
+const CLOSED_FG    = '#991b1b';
+const CLOSED_BAR   = 'inset 3px 0 0 #b91c1c';
+const CLOSED_LABEL = '休業日';
+
 // ── 車検カレンダーピッカー（入庫日選択用）──
 function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,overrideOpen,inspLimits,open,onClose}){
   const [calMonth,setCalMonth]=useState(()=>{
@@ -1778,7 +1787,7 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
             const numColor=di===0?'#dc2626':di===6?'#2563eb':'#111';
             let bg='white';
             if(isSel)bg='#dbeafe';
-            else if(isClosed)bg='repeating-linear-gradient(45deg,#f9fafb,#f9fafb 3px,#f3f4f6 3px,#f3f4f6 6px)';
+            else if(isClosed)bg=CLOSED_BG;
             else if(isFull)bg='#fee2e2';
             // 6枠スロットを生成
             const slots=[];
@@ -1793,9 +1802,10 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
                 onClick={()=>{if(isClosed)return;if(limitBlocked){alert(`🚫 ${cm+1}/${d} は台数制限（最大${lmt}台）に達しているため、予約できません。`);return;}onChange(ds);if(onClose)onClose();}}
                 style={{minHeight:66,padding:'3px 2px',cursor:(isClosed||limitBlocked)?'not-allowed':'pointer',
                   borderTop:'1px solid #f3f4f6',borderLeft:di>0?'1px solid #f3f4f6':'none',
-                  background:bg,outline:isSel?'2px solid #2563eb':isToday?'2px solid #93c5fd':'none',position:'relative'}}>
+                  background:bg,boxShadow:(isClosed&&!isSel)?CLOSED_BAR:'none',
+                  outline:isSel?'2px solid #2563eb':isToday?'2px solid #93c5fd':'none',position:'relative'}}>
                 <div style={{textAlign:'center',fontWeight:isToday?900:700,fontSize:11,
-                  color:isSel?'#1d4ed8':isClosed?'#9ca3af':numColor,lineHeight:1.3}}>{d}</div>
+                  color:isSel?'#1d4ed8':isClosed?CLOSED_FG:numColor,lineHeight:1.3}}>{d}</div>
                 {!isClosed&&(
                   <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:1,padding:'2px 2px'}}>
                     {slots.map((cid,si)=>(
@@ -1809,7 +1819,8 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
                     ))}
                   </div>
                 )}
-                {isClosed&&<div style={{textAlign:'center',fontSize:9,color:'#9ca3af',marginTop:2}}>休</div>}
+                {isClosed&&<div data-custclosed={ds} style={{display:'flex',alignItems:'center',justifyContent:'center',
+                  height:40,fontSize:10.5,fontWeight:900,color:CLOSED_FG,letterSpacing:1}}>{CLOSED_LABEL}</div>}
                 {!isClosed&&limitBlocked&&<div style={{textAlign:'center',fontSize:8,color:'#dc2626',fontWeight:800,marginTop:1}}>予約不可</div>}
                 {isSel&&<div style={{position:'absolute',top:1,right:1,width:5,height:5,borderRadius:'50%',background:'#2563eb'}}/>}
               </div>

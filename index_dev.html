@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793342559580';
+    window.__APP_BUILD='build-1793345653167';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.85.1';
+const APP_VERSION = '3.85.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -414,6 +414,16 @@ const CLOSED_LABEL = '休業日';
 // 「休業日」を札（濃い赤に白抜き）で出す時の色。週間カレンダーの車検の欄で使う
 const CLOSED_TAG_BG = '#dc2626';
 const CLOSED_TAG_FG = '#ffffff';
+
+// ── 「！」の丸（車検カレンダー・ダッシュボード共通）──
+//   2026-10-30 ユーザー指示。17px の白ふち付きでは小さくて見落とすため、
+//   大きさ 26px・白ふちなし・黄色は蛍光（#fff200）にそろえた。
+//   ★黄色＝まだ承認されていない／緑＝承認は済んでいる。この意味は変えていない。
+//   ★ダッシュボードのボタンの上に出す分だけは、濃い青の帯に沈むので白ふちを残す。
+const CALBANG      = 26;        // 車検カレンダーの「！」の直径（px）
+const CALBANG_YEL  = '#fff200'; // まだ承認されていない時の黄色（蛍光）
+const CALBANG_GRN  = '#22c55e'; // 承認は済んでいる時の緑
+const DASHBANG     = 23;        // ダッシュボードのボタンに出る「！」の直径（px）
 // 休業日セルの中央に置くラベル（topOffset=日付表示の下から始める）
 const ClosedMark = ({small,topOffset=26})=>(
   <div style={{position:'absolute',left:6,right:6,top:topOffset,bottom:6,display:'flex',alignItems:'center',
@@ -1473,9 +1483,43 @@ const resolveOrderSlot = (orderDate, mailing2) => {
 //   ネイティブの type="date" は、入ると Windows の IME が英数になり、次の「備考」へ移っても
 //   ひらがな に戻らない。予約カード（納車日）と同じやり方で、ボタン＋自前のカレンダーにする。
 //   入力欄に focus しないので IME を落とさない。値は今までどおり "YYYY-MM-DD" の文字列。
+// ★カレンダーのポップの大きさ（2026-10-30 ユーザー指示・モックの「大」）。
+//   幅238・マス6px では小さくて押しにくかった。幅360・マス14px にする。
+const DP_W=360, DP_CELL=14, DP_FS=16, DP_HEAD=15, DP_H=430;
 const HubDatePick = ({value,onChange,placeholder='日付を選ぶ',style,color='#1d4ed8',clearable=true,icon='📅',fmt,txColor})=>{
   const [open,setOpen]=useState(false);
   const [mon,setMon]=useState(null);
+  // ★ポップは【画面に対して】出す（position:fixed）。2026-10-30 ユーザー指示。
+  //   absolute のままだと、代車の編集モーダル（overflowY:auto・maxHeight:88vh）に
+  //   切られて、スクロールしないと下半分が見えなかった。
+  //   ★入れ物の形に頼らないこと。モーダルの大きさを変えても勝手に直ってはくれない。
+  const [pos,setPos]=useState(null);
+  const wrapRef=useRef(null);
+  const popRef=useRef(null);
+  const hRef=useRef(DP_H);   // ポップの高さ。描いたあとに実測して入れ替える（月によって行数が変わるため）
+  const place=()=>{
+    const el=wrapRef.current; if(!el)return;
+    const r=el.getBoundingClientRect(),h=hRef.current;
+    const left=Math.max(8,Math.min(r.left,window.innerWidth-DP_W-8));
+    let top=r.bottom+4;
+    if(top+h>window.innerHeight-8)top=r.top-h-4;      // 下に入らなければ上に出す
+    if(top<8)top=Math.max(8,window.innerHeight-h-8);  // それでも入らなければ画面に収める
+    setPos(p=>(p&&p.left===left&&p.top===top)?p:{left,top});
+  };
+  // ★高さは【実測】する。決め打ちの数字だと、6行の月や字の大きさを変えた時にまた下がはみ出す。
+  useLayoutEffect(()=>{
+    if(!open||!popRef.current)return;
+    const h=popRef.current.offsetHeight;
+    if(h&&Math.abs(h-hRef.current)>2){hRef.current=h;place();}
+  });
+  useEffect(()=>{
+    if(!open)return;
+    place();
+    const f=()=>place();
+    window.addEventListener('resize',f);
+    window.addEventListener('scroll',f,true);   // true＝モーダルの中のスクロールも拾う
+    return ()=>{window.removeEventListener('resize',f);window.removeEventListener('scroll',f,true);};
+  },[open]);
   const monOf=()=>{const p=String(value||'').split('-').map(Number);
     return (p.length===3&&p[0])?{year:p[0],month:p[1]-1}:{year:new Date().getFullYear(),month:new Date().getMonth()};};
   const pick=(y,m,d)=>{onChange(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);setOpen(false);};
@@ -1485,7 +1529,7 @@ const HubDatePick = ({value,onChange,placeholder='日付を選ぶ',style,color='
     if(fmt)return fmt(String(value),dt);
     return `${Number(p[1])}/${Number(p[2])}（${['日','月','火','水','木','金','土'][dt.getDay()]}）`;};
   return(
-    <div style={{position:'relative'}}>
+    <div ref={wrapRef} style={{position:'relative'}}>
       <button type="button" data-datepick="1" onClick={()=>{setMon(monOf());setOpen(o=>!o);}}
         style={{...(style||{}),textAlign:'left',cursor:'pointer',display:'flex',alignItems:'center',gap:7,fontFamily:'inherit'}}>
         {icon&&<span style={{fontSize:13}}>{icon}</span>}
@@ -1495,19 +1539,24 @@ const HubDatePick = ({value,onChange,placeholder='日付を選ぶ',style,color='
             style={{marginLeft:'auto',color:'#9ca3af',fontSize:13,padding:'0 2px'}}>✕</span>
         )}
       </button>
-      {open&&mon&&(
-        <div style={{position:'absolute',top:'100%',left:0,zIndex:9999,marginTop:4,background:'white',borderRadius:10,
-          boxShadow:'0 8px 30px rgba(0,0,0,0.25)',padding:12,minWidth:238,border:`2px solid ${color}`}}>
+      {/* ★ポップは document.body へ出す（ポータル）。
+          モーダルの箱（.modal-box）には開く時のアニメーションが残っていて transform が効いている。
+          transform のある箱の中では position:fixed が【画面】ではなく【その箱】を基準にしてしまい、
+          いくら画面に収めて計算しても下がはみ出していた（2026-10-30）。
+          ★React の行事（クリック等）は React の木をたどるので、モーダルの stopPropagation はそのまま効く。 */}
+      {open&&mon&&pos&&ReactDOM.createPortal(
+        <div data-datepop="1" ref={popRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'white',borderRadius:10,
+          boxShadow:'0 8px 30px rgba(0,0,0,0.25)',padding:12,width:DP_W,maxHeight:'calc(100vh - 16px)',overflowY:'auto',border:`2px solid ${color}`}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
             <button type="button" onClick={()=>setMon(p=>{const d=new Date(p.year,p.month-1,1);return{year:d.getFullYear(),month:d.getMonth()};})}
               data-mnav="prev" style={{background:'none',border:'none',cursor:'pointer',fontSize:17,padding:'2px 9px',fontFamily:'inherit'}}>‹</button>
-            <span data-mon={mon.year+'-'+String(mon.month+1).padStart(2,'0')} style={{fontWeight:700,fontSize:13,color:'#1f2937'}}>{mon.year}年{mon.month+1}月</span>
+            <span data-mon={mon.year+'-'+String(mon.month+1).padStart(2,'0')} style={{fontWeight:700,fontSize:DP_HEAD,color:'#1f2937'}}>{mon.year}年{mon.month+1}月</span>
             <button type="button" onClick={()=>setMon(p=>{const d=new Date(p.year,p.month+1,1);return{year:d.getFullYear(),month:d.getMonth()};})}
               data-mnav="next" style={{background:'none',border:'none',cursor:'pointer',fontSize:17,padding:'2px 9px',fontFamily:'inherit'}}>›</button>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:2}}>
             {['日','月','火','水','木','金','土'].map((d,i)=>(
-              <div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,padding:'2px 0',
+              <div key={d} style={{textAlign:'center',fontSize:DP_FS-2,fontWeight:700,padding:'3px 0',
                 color:i===0?'#ef4444':i===6?'#2563eb':'#9ca3af'}}>{d}</div>))}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
@@ -1516,16 +1565,16 @@ const HubDatePick = ({value,onChange,placeholder='日付を選ぶ',style,color='
               for(let d=1;d<=days;d++){
                 const v=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,on=String(value||'')===v;
                 cells.push(<button type="button" key={d} data-day={v} onClick={()=>pick(yr,mo,d)}
-                  style={{padding:'6px 0',borderRadius:6,fontFamily:'inherit',cursor:'pointer',fontSize:12,
+                  style={{padding:DP_CELL+'px 0',borderRadius:6,fontFamily:'inherit',cursor:'pointer',fontSize:DP_FS,
                     border:on?`2px solid ${color}`:'1px solid #e5e7eb',background:on?color:'white',
                     color:on?'white':'#374151',fontWeight:on?800:500}}>{d}</button>);}
               return cells;})()}
           </div>
           <button type="button" onClick={()=>setOpen(false)}
-            style={{marginTop:8,width:'100%',padding:'5px',background:'#f3f4f6',border:'none',borderRadius:6,
-              cursor:'pointer',fontSize:11,color:'#6b7280',fontFamily:'inherit'}}>閉じる</button>
+            style={{marginTop:8,width:'100%',padding:'8px',background:'#f3f4f6',border:'none',borderRadius:6,
+              cursor:'pointer',fontSize:13,color:'#6b7280',fontFamily:'inherit'}}>閉じる</button>
         </div>
-      )}
+      ,document.body)}
     </div>
   );
 };
@@ -7071,7 +7120,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
           <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:'50%',width:30,height:30,cursor:'pointer',color:'white',fontSize:15}}>×</button>
         </div>
         <div style={{display:'flex',gap:8,padding:12,borderBottom:'1px solid #e5e7eb',background:'#fafafa',flexShrink:0}}>
-          <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="例：セリエ / ハイエース / 1386 / 090"
+          <input ref={inputRef} data-searchq="1" value={q} onChange={e=>setQ(e.target.value)} placeholder="名前 / 車種 / ナンバー4桁 / 電話番号"
             style={{flex:1,padding:'10px 12px',border:'2px solid #fdba74',borderRadius:9,fontSize:15,outline:'none'}}/>
           <span style={{alignSelf:'center',fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>{nq?total+'件':(custBusy?'顧客ファイル読込中…':'')}</span>
         </div>
@@ -15920,11 +15969,13 @@ function AppInner() {
                   cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',boxShadow:'0 2px 10px rgba(0,0,0,.22)'}}>
                 {/* ★「（別タブ）」の字は出さない（2026-10-30 ユーザー指示）。なぞると説明が出る */}
                 🏠 ダッシュボード
+                {/* ★濃い青の帯の上に出るので、ここだけ白ふちを残す（無いと帯に沈む）。
+                    色と大きさは車検カレンダーの「！」にそろえてある（2026-10-30 ユーザー指示）。*/}
                 {dashBang&&(
-                  <span data-dashbang="1" style={{position:'absolute',top:-8,right:-8,width:19,height:19,
-                    borderRadius:'50%',background:'#facc15',color:'#111',border:'2px solid white',
-                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:900,
-                    lineHeight:1,boxShadow:'0 1px 4px rgba(0,0,0,.35)'}}>!</span>
+                  <span data-dashbang="1" style={{position:'absolute',top:-9,right:-9,width:DASHBANG,height:DASHBANG,
+                    borderRadius:'50%',background:CALBANG_YEL,color:'#111',border:'2px solid white',
+                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:Math.round(DASHBANG*0.74),
+                    fontWeight:900,lineHeight:1,paddingBottom:1,boxShadow:'0 2px 6px rgba(0,0,0,.4)'}}>!</span>
                 )}
               </button>
               <div style={{display:'flex',alignItems:'center',gap:5,position:'relative',zIndex:3}}>
@@ -16254,47 +16305,9 @@ function AppInner() {
                           <div style={{fontWeight:800,fontSize:15,marginBottom:3,color:isCl?CLOSED_FG:numCol,display:'flex',alignItems:'center',gap:3}}>
                             <span style={isToday?{flexShrink:0,...TODAY_NUM}:{flexShrink:0}}>{day}</span>
                             {isHol&&<span style={{fontSize:8,color:isCl?CLOSED_FG:'#dc2626',flexShrink:0}}>祝</span>}
-                            {/* ★日のマスの「！」（2026-10-29 ユーザー指示・A案＝日付のとなり）
-                                日のマスは 3×2 の【6コマ固定】なので、入っていても見えない予約がある。
-                                ★★【位置】と【承認】は別のもの。混ぜないこと。
-                                  ・位置 … 画面に出ないのは irows[6] 以降（並んでいる順＝配列の順）
-                                  ・承認 … 枠からあふれたかどうかは **seq（予約を入れた順）** で BLOCK-C が決める。
-                                          配列の順とは違うので、irows[6] が承認の対象とは限らない。
-                                  2026-10-29 に混ぜてしまい、10/11 が誤って黄色になった：
-                                  7台目（＝あふれた分）は みどりモータース様で承認済み、
-                                  6コマに出ていなかったのは 小畠様＝ふつうの確定予約だった。
-                                黄色＝まだ承認されていない予約がある／緑＝承認は済んでいる（どちらも黒の！）。
-                                ★6コマの見た目は変えないこと（現場が見慣れているため）。 */}
-                            {!isCl&&(()=>{
-                              const hidden=irows.slice(6);                                   // 6コマに出ていない分（位置）
-                              const pend=irows.filter(r=>r.pendingApproval);                 // まだ承認されていない分（承認）
-                              const appr=irows.filter(r=>r.approved&&!r.pendingApproval);    // あふれたが承認済みの分
-                              if(!hidden.length&&!pend.length)return null;
-                              const nmOf=r=>{const cc=COURSES.find(x=>x.id===Number(r.course));
-                                return sama(r.name)+'（'+(cc?cc.name:'コース未設定')+'）';};
-                              // ★【位置】と【承認】の両方に当てはまる人は1行にまとめる（同じ名前を2回出さない）
-                              const lines=[day+'日　'+irows.length+'台'];
-                              irows.forEach((r,i)=>{
-                                const tags=[];
-                                if(i>=6)tags.push('6コマに出ていません');
-                                if(r.pendingApproval)tags.push('⚠ まだ承認されていません');
-                                else if(r.approved)tags.push('枠からあふれた分（承認済み）');
-                                if(tags.length)lines.push('　'+nmOf(r)+'　'+tags.join('／'));
-                              });
-                              lines.push(pend.length?'承認をお願いします':(appr.length?'承認は済んでいます':'承認が要る予約はありません'));
-                              const wait=pend.length>0;
-                              return (
-                                <span data-calbang={wait?'wait':'ok'} title={lines.join(String.fromCharCode(10))}
-                                  onClick={e=>e.stopPropagation()}
-                                  style={{flexShrink:0,width:17,height:17,borderRadius:'50%',display:'inline-flex',
-                                    alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#111',
-                                    background:wait?'#facc15':'#22c55e',border:'2px solid #fff',
-                                    boxShadow:'0 1px 4px rgba(0,0,0,.35)',cursor:'help'}}>!</span>
-                              );
-                            })()}
                           </div>
                           {/* 休業日は6コマを描かない（営業日と見分けがつくように） */}
-                          {!isCl&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:2,position:'relative'}}>
+                          {!isCl&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:2,position:'relative',overflow:'visible'}}>
                             {icons.map(({c,si,store})=>{
                               const isLimitedSlot=si>=cellLimit;
                               return (
@@ -16315,6 +16328,51 @@ function AppInner() {
                                 最大{inspLimits[dkk]}台
                               </div>
                             )}
+                              {/* ★日のマスの「！」（2026-10-30 ユーザー指示・6枠の真ん中の真上）
+                                  日のマスは 3×2 の【6コマ固定】なので、入っていても見えない予約がある。
+                                  ★2026-10-30 に、日付のとなり（17px・白ふち）から【6枠の真ん中の真上】へ移した。
+                                    小さくて見落とすため。白ふちは外し、黄色も蛍光（#fff200）にして目立たせた。
+                                    6枠には重ねない（コマが隠れると現場が困るため）＝6枠のすぐ上に浮かせる。
+                                    この span は【6コマのグリッド（position:relative）の中】に置くこと。
+                                    日付の行に戻すと、また小さい丸に戻ってしまう。
+                                  ★★【位置】と【承認】は別のもの。混ぜないこと。
+                                    ・位置 … 画面に出ないのは irows[6] 以降（並んでいる順＝配列の順）
+                                    ・承認 … 枠からあふれたかどうかは **seq（予約を入れた順）** で BLOCK-C が決める。
+                                            配列の順とは違うので、irows[6] が承認の対象とは限らない。
+                                    2026-10-29 に混ぜてしまい、10/11 が誤って黄色になった：
+                                    7台目（＝あふれた分）は みどりモータース様で承認済み、
+                                    6コマに出ていなかったのは 小畠様＝ふつうの確定予約だった。
+                                  黄色＝まだ承認されていない予約がある／緑＝承認は済んでいる（どちらも黒の！）。
+                                  ★6コマの見た目は変えないこと（現場が見慣れているため）。 */}
+                              {(()=>{
+                                const hidden=irows.slice(6);                                   // 6コマに出ていない分（位置）
+                                const pend=irows.filter(r=>r.pendingApproval);                 // まだ承認されていない分（承認）
+                                const appr=irows.filter(r=>r.approved&&!r.pendingApproval);    // あふれたが承認済みの分
+                                if(!hidden.length&&!pend.length)return null;
+                                const nmOf=r=>{const cc=COURSES.find(x=>x.id===Number(r.course));
+                                  return sama(r.name)+'（'+(cc?cc.name:'コース未設定')+'）';};
+                                // ★【位置】と【承認】の両方に当てはまる人は1行にまとめる（同じ名前を2回出さない）
+                                const lines=[day+'日　'+irows.length+'台'];
+                                irows.forEach((r,i)=>{
+                                  const tags=[];
+                                  if(i>=6)tags.push('6コマに出ていません');
+                                  if(r.pendingApproval)tags.push('⚠ まだ承認されていません');
+                                  else if(r.approved)tags.push('枠からあふれた分（承認済み）');
+                                  if(tags.length)lines.push('　'+nmOf(r)+'　'+tags.join('／'));
+                                });
+                                lines.push(pend.length?'承認をお願いします':(appr.length?'承認は済んでいます':'承認が要る予約はありません'));
+                                const wait=pend.length>0;
+                                return (
+                                  <span data-calbang={wait?'wait':'ok'} title={lines.join(String.fromCharCode(10))}
+                                    onClick={e=>e.stopPropagation()}
+                                    style={{position:'absolute',left:'50%',top:-(CALBANG+3),transform:'translateX(-50%)',zIndex:6,
+                                      width:CALBANG,height:CALBANG,borderRadius:'50%',display:'flex',
+                                      alignItems:'center',justifyContent:'center',fontSize:Math.round(CALBANG*0.78),
+                                      fontWeight:900,color:'#111',lineHeight:1,paddingBottom:2,
+                                      background:wait?CALBANG_YEL:CALBANG_GRN,
+                                      boxShadow:'0 2px 6px rgba(0,0,0,.4)',cursor:'help'}}>!</span>
+                                );
+                              })()}
                           </div>}
                         </div>
                       );

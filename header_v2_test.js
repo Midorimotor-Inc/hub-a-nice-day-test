@@ -117,7 +117,7 @@ const run = async (chromium, seed) => {
 
   console.log('\n■ ⑤ 車両管理の知らせ → 黄色の！');
   t('★★！が出ている（期日を過ぎた点検が1台ある）', !!d && d.bang, d);
-  t('★色は黄色（250,204,21）', !!d && /250, 204, 21/.test(d.bangBg), d && d.bangBg);
+  t('★色は黄色（255, 242, 0）', !!d && /255, 242, 0/.test(d.bangBg), d && d.bangBg);
 
   console.log('\n■ ② ナビの段から外したもの');
   const nav = await page.evaluate(() => {
