@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793435804306';
+  window.__APP_BUILD='build-1793452738006';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,6 +97,10 @@ input,select,textarea{font-family:inherit;}
 .row-new_car:hover {background:#fbbf24;}
 @keyframes spin{to{transform:rotate(360deg);}}
 @keyframes rowflash{0%{background:#fde68a;}60%{background:#fef3c7;}100%{background:transparent;}}
+/* ★投函済みにした時の「ポストに入れる」アニメ（2026-10-31） */
+@keyframes dmFly{0%{transform:translate(0,-46px) rotate(-8deg);opacity:0;}25%{opacity:1;}
+  70%{transform:translate(0,2px) rotate(0);}100%{transform:translate(0,10px) rotate(0);opacity:0;}}
+@keyframes dmPop{from{transform:scale(.92);opacity:0;}to{transform:scale(1);opacity:1;}}
 .row-flash{animation:rowflash 3.5s ease-out;}
 .spinner{width:38px;height:38px;border:4px solid #e2e8f0;border-top-color:#1d4ed8;border-radius:50%;animation:spin .8s linear infinite;}
 .spinner-sm{width:15px;height:15px;border:2.5px solid #cbd5e1;border-top-color:#1d4ed8;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
@@ -146,7 +150,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.88.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.89.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1303,6 +1307,29 @@ const cellColorToStatus=hexColor=>{
   return null;
 };
 
+// ═══ 投函済みチェック（2026-10-31） ═══
+//   元ファイルでは「投函日①②」のセルが【黄色＝まだ投函していない】【白＝投函済み】。
+//   担当者が投函したら黄色を白に塗り替える運用を、そのまま Hub に持ってきた。
+//   ★dm1Sent/dm2Sent が false の時だけ「未投函（黄色）」。true も未設定も「投函済み（白）」。
+//     取り込み前の古いファイルには印が無いので、いきなり全員が黄色にならないようにしてある。
+//   ★日付が入っていないマスは、そもそも投函する予定が無いので黄色にしない。
+//     （元ファイルの投函②は、列ごとの書式で中身が空でも黄色になっている月があるため）
+const DM_SENT_KEYS=['dm1Sent','dm2Sent'];
+const DM_DATE_KEYS=['dm1Date','dm2Date'];
+const DM_YELLOW='#FFF200';
+// 黄系の塗りかどうか（#FFFF00 を中心に、薄い黄色も拾う。青・緑・赤は拾わない）
+const isDmYellow=hex=>{
+  if(!hex)return false;
+  let h=String(hex).replace('#','').toUpperCase();
+  if(h.length===8)h=h.slice(2);              // ARGB の先頭のアルファを落とす
+  if(!/^[0-9A-F]{6}$/.test(h))return false;
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  //  赤と緑が高く、青だけはっきり低い＝黄系。白(FFFFFF)や象牙色(FFFFF0)は青も高いので外れる。
+  return r>=200&&g>=170&&b<Math.min(r,g)-25;
+};
+// まだ投函していないマスか（n: 0=投函① 1=投函②）
+const dmUnsent=(c,n)=>!!c&&!!c[DM_DATE_KEYS[n]]&&c[DM_SENT_KEYS[n]]===false;
+
 // ═══════════════════════════════════════════
 // Excelインポート
 // ═══════════════════════════════════════════
@@ -1443,6 +1470,17 @@ const parseExcelFile=async(file)=>{
           const phoneMobile =String(row[cPhoneMobile>=0?cPhoneMobile:null]||'').trim();
           const address     =String(row[cAddress>=0?cAddress:null]||'').trim();
 
+          // ★投函日のセルの色から「もう投函したか」を読む（2026-10-31）。
+          //   黄色＝まだ投函していない。青・緑・赤は行の状態色で上塗りされた分なので投函済み扱い。
+          const fillHex=(c)=>{
+            if(c<0)return '';
+            const cl=ws[XLSX.utils.encode_cell({r:i,c})];
+            const fg=cl&&cl.s&&(cl.s.fgColor||(cl.s.fill&&cl.s.fill.fgColor));
+            return (fg&&fg.rgb)||'';          // theme 指定（＝白に塗り直した分）は rgb が無い＝投函済み
+          };
+          const dm1Sent=!(dm1Date&&isDmYellow(fillHex(cDm1D)));
+          const dm2Sent=!(dm2Date&&isDmYellow(fillHex(cDm2D)));
+
           // セル背景色からステータス取得
           const cellRef=XLSX.utils.encode_cell({r:i,c:cName>=0?cName:0});
           const cell=ws[cellRef];
@@ -1480,6 +1518,7 @@ const parseExcelFile=async(file)=>{
             expiry,name,no:isNaN(Number(no))?no:Number(no),carType,
             phoneHome,phoneMobile,address,
             dm1Date,dm1Book,dm2Date,dm2Book,
+            dm1Sent,dm2Sent,
             entryDate,tokuten,
             course:courseObj?courseObj.id:null,
             store:storeId,staff,note,status,
@@ -1496,6 +1535,8 @@ const parseExcelFile=async(file)=>{
           phoneHeader:[colName(cPhoneHome),colName(cPhoneMobile)].filter(Boolean).join('・'),
           phoneCount:customers.filter(c=>c.phoneHome||c.phoneMobile).length,
           addressHeader:colName(cAddress), addressCount:cnt('address'),
+          dmUnsent1:customers.filter(c=>dmUnsent(c,0)).length,
+          dmUnsent2:customers.filter(c=>dmUnsent(c,1)).length,
           headers:headers.filter(Boolean).join(' / '),
         }});
       }catch(err){reject(err);}
@@ -1516,6 +1557,8 @@ const StatsPanel=memo(({customers})=>{
   const rate=Math.round(booked/total*100);
   const dm1=customers.filter(c=>c.dm1Book).length;
   const dm2=customers.filter(c=>c.dm2Book).length;
+  const un1=customers.filter(c=>dmUnsent(c,0)).length;
+  const un2=customers.filter(c=>dmUnsent(c,1)).length;
   const tok1=customers.filter(c=>c.tokuten==='①').length;
   const tok2=customers.filter(c=>c.tokuten==='②').length;
 
@@ -1529,6 +1572,8 @@ const StatsPanel=memo(({customers})=>{
     {label:'獲得率',val:`${rate}%`,color:rate>=70?'#059669':rate>=40?'#d97706':'#dc2626'},
     {label:'DM①後予約',val:dm1,color:'#7c3aed'},
     {label:'DM②後予約',val:dm2,color:'#0284c7'},
+    {label:'未投函①',val:un1,color:'#a16207'},
+    {label:'未投函②',val:un2,color:'#a16207'},
     {label:'特典①',val:tok1,color:'#374151'},
     {label:'特典②',val:tok2,color:'#374151'},
   ];
@@ -2357,7 +2402,92 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
 // ═══════════════════════════════════════════
 // 連絡先の表示（2026-09-20）：氏名の下に住所、車種の横に電話（携帯→自宅）。常時表示（👁 の切替は 2026-09-21 に廃止）
 const custPhones=c=>[c.phoneMobile,c.phoneHome].map(v=>String(v||'').trim()).filter(Boolean);
-const CustomerRow=memo(({customer,onBook,onRevive,pending,flash})=>{
+// ── 投函①② のマス（2026-10-31）
+//   黄色＝まだ投函していない／白＝投函済み。元ファイルの塗り分けと同じ。
+//   上から下へドラッグして選び、離すと確認のポップが出る（代車カレンダーと同じ操作）。
+const DmCell=memo(({customer,n,row,sel,onDown,onOver})=>{
+  const date=customer[DM_DATE_KEYS[n]];
+  const has=!!date;
+  const unsent=dmUnsent(customer,n);
+  return(
+    <td
+      onMouseDown={e=>{if(has){e.preventDefault();onDown(row,n);}}}
+      onMouseOver={()=>{if(has)onOver(row,n);}}
+      title={!has?'':unsent?'まだ投函していません（ドラッグで選ぶと投函済みにできます）':'投函済み（ドラッグで選ぶと未投函に戻せます）'}
+      style={{padding:'7px 8px',verticalAlign:'middle',fontSize:11,whiteSpace:'nowrap',
+        color:unsent?'#422006':has?'#94a3b8':'#111827',fontWeight:unsent?800:400,
+        background:sel?'#bae6fd':unsent?DM_YELLOW:undefined,
+        boxShadow:sel?'inset 0 0 0 2px #0284c7':undefined,
+        cursor:has?'pointer':'default',userSelect:'none',WebkitUserSelect:'none'}}>
+      {fmtDateShort(date)}
+      {has&&!unsent&&<span style={{marginLeft:5,color:'#16a34a',fontWeight:900}}>✓</span>}
+    </td>
+  );
+});
+
+// ── 投函済みにした時に出る「赤いポストに入れる」絵（0.9秒）
+const DmPostAnim=({n,toSent})=>(
+  <div style={{position:'fixed',inset:0,zIndex:4200,background:'rgba(15,23,42,.35)',
+    display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
+    <div style={{background:'white',borderRadius:18,padding:'22px 34px 18px',textAlign:'center',
+      boxShadow:'0 20px 60px rgba(0,0,0,.3)',animation:'dmPop .16s ease-out'}}>
+      <svg width="150" height="140" viewBox="0 0 150 140">
+        <ellipse cx="75" cy="131" rx="40" ry="5" fill="#0f172a" opacity=".12"/>
+        <g style={{animation:'dmFly .9s cubic-bezier(.45,.05,.55,.95) forwards'}}>
+          <rect x="47" y="12" width="56" height="36" rx="3" fill="#fff" stroke="#cbd5e1" strokeWidth="2"/>
+          <path d="M47 15 L75 34 L103 15" fill="none" stroke="#f59e0b" strokeWidth="2.5"/>
+        </g>
+        <rect x="68" y="78" width="14" height="50" fill="#9ca3af"/>
+        <rect x="44" y="46" width="62" height="44" rx="9" fill="#dc2626"/>
+        <rect x="44" y="40" width="62" height="12" rx="6" fill="#b91c1c"/>
+        <rect x="55" y="60" width="40" height="7" rx="3.5" fill="#7f1d1d"/>
+        <rect x="52" y="74" width="46" height="12" rx="3" fill="#fecaca" opacity=".55"/>
+        <text x="75" y="84" fontSize="8" fontWeight="700" fill="#991b1b" textAnchor="middle">〒</text>
+      </svg>
+      <div style={{fontSize:15,fontWeight:900,color:toSent?'#166534':'#92400e',marginTop:6}}>
+        {n}件 {toSent?'投函しました':'未投函に戻しました'}
+      </div>
+      <div style={{fontSize:11.5,color:'#64748b',marginTop:3}}>
+        {toSent?'黄色 → 白 に変わりました':'白 → 黄色 に戻りました'}
+      </div>
+    </div>
+  </div>
+);
+
+// ── 「投函済みにしますか？」の確認ポップ
+const DmConfirm=({ask,onYes,onNo})=>(
+  <div style={{position:'fixed',inset:0,zIndex:4100,background:'rgba(15,23,42,.55)',
+    display:'flex',alignItems:'center',justifyContent:'center',padding:14}} onClick={onNo}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:'min(94vw,430px)',
+      border:'3px solid #0284c7',boxShadow:'0 24px 64px rgba(0,0,0,.4)',overflow:'hidden',animation:'dmPop .16s ease-out'}}>
+      <div style={{background:'linear-gradient(135deg,#0284c7,#075985)',color:'white',padding:'12px 16px',fontWeight:900,fontSize:15}}>
+        📮 投函の記録
+      </div>
+      <div style={{padding:16}}>
+        <div style={{fontSize:15,fontWeight:800,marginBottom:10,color:'#0f172a'}}>
+          投函{ask.col===0?'①':'②'} の {ask.names.length}件 を
+          {ask.toSent?'「投函済み」にしますか？':'「未投函」に戻しますか？'}
+        </div>
+        <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'9px 11px',
+          maxHeight:170,overflow:'auto',fontSize:12.5,lineHeight:1.9}}>
+          {ask.names.map((x,i)=>(
+            <div key={i}>・{x.name}　<span style={{color:'#64748b'}}>{x.car}</span></div>
+          ))}
+        </div>
+      </div>
+      <div style={{display:'flex',gap:9,padding:'0 16px 16px'}}>
+        <button onClick={onNo} style={{flex:1,border:'none',borderRadius:11,padding:13,fontSize:14.5,
+          fontWeight:900,cursor:'pointer',background:'#e2e8f0',color:'#334155'}}>キャンセル</button>
+        <button onClick={onYes} style={{flex:1,border:'none',borderRadius:11,padding:13,fontSize:14.5,
+          fontWeight:900,cursor:'pointer',background:ask.toSent?'#16a34a':'#d97706',color:'white'}}>
+          {ask.toSent?'はい、投函しました':'はい、戻します'}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDmDown,onDmOver})=>{
   const st=STATUS_DEF[customer.status]||STATUS_DEF.none;
   const courseObj=COURSES.find(c=>c.id===Number(customer.course));
   const isCancelled=customer.status==='cancel';
@@ -2396,9 +2526,9 @@ const CustomerRow=memo(({customer,onBook,onRevive,pending,flash})=>{
           {custPhones(customer).map((p,i)=><span key={i} style={{fontSize:11,color:'#0369a1',fontWeight:600,whiteSpace:'nowrap'}}>📞{p}</span>)}
         </div>
       </td>
-      <td style={{padding:'7px 8px',color:'#111827',verticalAlign:'middle',fontSize:11}}>{fmtDateShort(customer.dm1Date)}</td>
+      <DmCell customer={customer} n={0} row={dmRow} sel={dmSel===1} onDown={onDmDown} onOver={onDmOver}/>
       <td style={{padding:'7px 8px',color:'#7c3aed',verticalAlign:'middle',fontSize:11,fontWeight:600}}>{fmtDateShort(customer.dm1Book)}</td>
-      <td style={{padding:'7px 8px',color:'#111827',verticalAlign:'middle',fontSize:11}}>{fmtDateShort(customer.dm2Date)}</td>
+      <DmCell customer={customer} n={1} row={dmRow} sel={dmSel===2} onDown={onDmDown} onOver={onDmOver}/>
       <td style={{padding:'7px 8px',color:'#0284c7',verticalAlign:'middle',fontSize:11,fontWeight:600}}>{fmtDateShort(customer.dm2Book)}</td>
       <td style={{padding:'7px 8px',verticalAlign:'middle',fontWeight:600,color:'#111827',whiteSpace:'nowrap'}}>
         {fmtDate(customer.entryDate)}
@@ -2485,6 +2615,11 @@ const App=()=>{
   },[]);
   const [search,setSearch]=useState('');
   const [filterStatus,setFilterStatus]=useState('all');
+  // ── 投函済みチェック（2026-10-31）
+  const [dmDrag,setDmDrag]=useState(null);      // ドラッグ中 {col,from,to}（filtered の並び順）
+  const [dmAsk,setDmAsk]=useState(null);        // 確認ポップ {col,toSent,ids,names}
+  const [dmAnim,setDmAnim]=useState(null);      // ポストの絵 {n,toSent}
+  const [dmFilter,setDmFilter]=useState('all'); // 'all'|'un1'|'un2'
   // ★スケジュール画面の「検索」から開かれた時（2026-09-19）：sessionStorage の指示で、そのファイルを開いて名前で絞る
   // ★検索から別タブで開かれた時は URL（?find=氏名&file=月）で絞り込む。
   //   同じタブ内で開く従来の経路（sessionStorage）も残す（2026-09-30）。
@@ -3811,6 +3946,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   const filtered=useMemo(()=>{
     let list=allCustomers;
     if(filterStatus!=='all')list=list.filter(c=>c.status===filterStatus);
+    if(dmFilter==='un1')list=list.filter(c=>dmUnsent(c,0));
+    else if(dmFilter==='un2')list=list.filter(c=>dmUnsent(c,1));
     if(search){
       const q=search.toLowerCase();
       list=list.filter(c=>
@@ -3821,7 +3958,88 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       );
     }
     return list;
-  },[allCustomers,filterStatus,search]);
+  },[allCustomers,filterStatus,dmFilter,search]);
+
+  // ── 投函済みチェック：ドラッグ → 確認 → 保存（2026-10-31）
+  //   ★代車カレンダーと同じで、mousedown で始めて mouseover で伸ばし、mouseup で確定する。
+  //   ★ドラッグ中の値は ref に持つ。state だけにすると handleDmOver が毎回作り直されて
+  //     memo が効かなくなり、マウスを動かすたびに全行が描き直される。
+  const dmFilteredRef=useRef([]);
+  dmFilteredRef.current=filtered;
+  const dmDragRef=useRef(null);
+  const dmDragging=useRef(false);
+  const handleDmDown=useCallback((row,n)=>{
+    dmDragRef.current={col:n,from:row,to:row};dmDragging.current=true;
+    setDmDrag({col:n,from:row,to:row});
+  },[]);
+  const handleDmOver=useCallback((row,n)=>{
+    const d=dmDragRef.current;
+    if(!dmDragging.current||!d||d.col!==n||d.to===row)return;   // 列はまたがない
+    d.to=row;setDmDrag({...d});
+  },[]);
+  const dmSelOf=useCallback((i)=>{
+    if(!dmDrag)return 0;
+    const a=Math.min(dmDrag.from,dmDrag.to),b=Math.max(dmDrag.from,dmDrag.to);
+    return (i>=a&&i<=b)?dmDrag.col+1:0;
+  },[dmDrag]);
+
+  // サーバーへ書く（変わったチャンクだけ書かれる）。先に画面へ出してから裏で保存する。
+  const applyDmSent=useCallback(async(ids,col,toSent)=>{
+    const f=files[activeIdx];if(!f)return;
+    const key=DM_SENT_KEYS[col];
+    const idSet=new Set(ids);
+    const prev=f.customers;
+    const nf={...f,customers:prev.map(c=>idSet.has(c.custId)?{...c,[key]:toSent}:c)};
+    setFiles(p=>p.map((x,i)=>i===activeIdx?nf:x));
+    try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(nf));}catch(e){}
+    for(let a=0;a<3;a++){
+      try{
+        // 他のPCの更新を消さないよう、最新を読んでから印だけ付け直す
+        const latest=await loadFileChunked(f.name);
+        const base=(latest&&Array.isArray(latest.customers))?latest.customers:prev;
+        const mf={...f,customers:base.map(c=>idSet.has(c.custId)?{...c,[key]:toSent}:c)};
+        if(await saveFileChunked(mf,base)){
+          setFiles(p=>p.map((x,i)=>i===activeIdx?mf:x));
+          try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(mf));}catch(e){}
+          return;
+        }
+      }catch(e){console.error('投函の保存エラー:',e);}
+    }
+    alert('⚠️ 投函の記録をサーバーに保存できませんでした。\n通信を確かめて、もう一度やり直してください。');
+  },[files,activeIdx]);
+
+  // マウスを離した時：選んだ分を数えて確認ポップを出す
+  useEffect(()=>{
+    const up=()=>{
+      if(!dmDragging.current)return;
+      dmDragging.current=false;
+      const d=dmDragRef.current;dmDragRef.current=null;setDmDrag(null);
+      if(!d)return;
+      const rows=dmFilteredRef.current||[];
+      const start=rows[d.from];if(!start)return;
+      const toSent=dmUnsent(start,d.col);   // 黄色から始めた→投函済みにする／白から始めた→戻す
+      const a=Math.min(d.from,d.to),b=Math.max(d.from,d.to);
+      const picked=[];
+      for(let i=a;i<=b;i++){
+        const c=rows[i];
+        if(c&&c[DM_DATE_KEYS[d.col]]&&dmUnsent(c,d.col)===toSent)picked.push(c);
+      }
+      if(!picked.length)return;
+      setDmAsk({col:d.col,toSent,ids:picked.map(c=>c.custId),
+        names:picked.map(c=>({name:c.name,car:c.carType}))});
+    };
+    window.addEventListener('mouseup',up);
+    return ()=>window.removeEventListener('mouseup',up);
+  },[]);
+
+  const dmYes=useCallback(()=>{
+    if(!dmAsk)return;
+    const{ids,col,toSent}=dmAsk;
+    setDmAsk(null);
+    applyDmSent(ids,col,toSent);
+    setDmAnim({n:ids.length,toSent});
+    setTimeout(()=>setDmAnim(null),1150);
+  },[dmAsk,applyDmSent]);
 
   // ── UI ──
   const TH={padding:'8px 8px',fontWeight:700,fontSize:11,color:'#374151',whiteSpace:'nowrap',background:'#f8fafc',borderBottom:'2px solid #e5e7eb',textAlign:'left',position:'sticky',top:0,zIndex:2};
@@ -4084,6 +4302,17 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               </button>
             ))}
           </div>
+          {/* ★未投函だけを絞って見る（2026-10-31）。200件の中から残りを探さなくて済むように */}
+          <div style={{display:'flex',gap:5}}>
+            {[['un1','📮 未投函①'],['un2','📮 未投函②']].map(([v,l])=>(
+              <button key={v} onClick={()=>setDmFilter(dmFilter===v?'all':v)}
+                style={{padding:'5px 12px',borderRadius:20,border:`1.5px solid ${dmFilter===v?'#a16207':'#e5e7eb'}`,
+                  background:dmFilter===v?DM_YELLOW:'white',color:dmFilter===v?'#422006':'#64748b',
+                  fontWeight:dmFilter===v?800:400,fontSize:11,cursor:'pointer'}}>
+                {l}
+              </button>
+            ))}
+          </div>
           <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
             <button onClick={handleSyncCheck} disabled={syncing||gasLoading}
               style={{padding:'5px 12px',borderRadius:20,border:'1.5px solid #f59e0b',
@@ -4111,16 +4340,21 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                 <tr><td colSpan={14} style={{textAlign:'center',padding:32,color:'#94a3b8',fontSize:13}}>
                   {search||filterStatus!=='all'?'条件に一致する顧客がいません':'データがありません'}
                 </td></tr>
-              ):filtered.map(c=>(
+              ):filtered.map((c,i)=>(
                 <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onRevive={handleRevive}
                   pending={pendingSync[c.custId]||pendingSync[`${c.name}__${c.no}`]||null}
-                  flash={!!(recentApplied[c.custId]||recentApplied[`${c.name}__${c.no}`])}/>
+                  flash={!!(recentApplied[c.custId]||recentApplied[`${c.name}__${c.no}`])}
+                  dmRow={i} dmSel={dmSelOf(i)} onDmDown={handleDmDown} onDmOver={handleDmOver}/>
               ))}
             </tbody>
           </table>
           </div>
         </div>
       </>)}
+
+      {/* ── 投函済みチェック：確認ポップとポストの絵（2026-10-31） ── */}
+      {dmAsk&&<DmConfirm ask={dmAsk} onYes={dmYes} onNo={()=>setDmAsk(null)}/>}
+      {dmAnim&&<DmPostAnim n={dmAnim.n} toSent={dmAnim.toSent}/>}
 
       {/* ── スケジュール同期ダイアログ ── */}
       {syncDialog&&(

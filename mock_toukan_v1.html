@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>投函済みチェック モック</title>
+<style>
+  :root{
+    --yellow:#FFF200; --yellow-soft:#FFFBCC; --ink:#111827; --sub:#64748b;
+    --line:#e2e8f0; --drag:#bae6fd; --dragline:#0284c7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Yu Gothic UI","Hiragino Kaku Gothic ProN",sans-serif;background:#f1f5f9;color:var(--ink)}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px}
+  h1{font-size:18px;margin:0 0 4px}
+  .lead{font-size:12.5px;color:var(--sub);margin:0 0 14px;line-height:1.7}
+  .panel{background:white;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+  .panel h2{font-size:13px;margin:0 0 8px;color:#0f172a}
+  .opts{display:flex;gap:8px;flex-wrap:wrap}
+  .opt{display:flex;align-items:center;gap:7px;border:2px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12.5px;font-weight:700;background:#f8fafc}
+  .opt input{accent-color:#0284c7;width:15px;height:15px}
+  .opt.on{border-color:#0284c7;background:#f0f9ff;color:#075985}
+  table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.07);user-select:none;-webkit-user-select:none}
+  th{background:#f8fafc;font-size:11px;color:#475569;padding:9px 8px;text-align:left;border-bottom:2px solid var(--line);white-space:nowrap}
+  td{padding:7px 8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .nm{font-weight:700}
+  .bk{color:#7c3aed;font-weight:600;font-size:11px}
+  .bk2{color:#0284c7;font-weight:600;font-size:11px}
+  /* 投函セル */
+  .tk{cursor:pointer;font-size:11.5px;text-align:center;position:relative;transition:background .12s}
+  .tk.no{background:var(--yellow)}
+  .tk.done{background:white;color:#94a3b8}
+  .tk.done::after{content:'✓';position:absolute;right:5px;top:50%;transform:translateY(-50%);color:#16a34a;font-weight:900;font-size:11px}
+  .tk.drag{background:var(--drag)!important;box-shadow:inset 0 0 0 2px var(--dragline)}
+  .hint{font-size:11.5px;color:var(--sub);margin:8px 0 0}
+  .tag{display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:8px;
+    padding:1px 7px;font-size:10.5px;font-weight:800;margin-left:6px}
+  /* ポップ */
+  .ov{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+  .ov.on{display:flex}
+  .dlg{background:white;border-radius:16px;width:min(94vw,420px);box-shadow:0 24px 64px rgba(0,0,0,.4);
+    border:3px solid #0284c7;overflow:hidden;animation:pop .16s ease-out}
+  @keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  .dlg .hd{background:linear-gradient(135deg,#0284c7,#075985);color:white;padding:12px 16px;font-weight:900;font-size:15px}
+  .dlg .bd{padding:16px}
+  .dlg .q{font-size:15px;font-weight:800;margin:0 0 10px}
+  .dlg .names{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+    max-height:150px;overflow:auto;font-size:12.5px;line-height:1.9}
+  .dlg .ft{display:flex;gap:9px;padding:0 16px 16px}
+  .btn{flex:1;border:none;border-radius:11px;padding:13px;font-size:14.5px;font-weight:900;cursor:pointer}
+  .btn.y{background:#16a34a;color:white}
+  .btn.n{background:#e2e8f0;color:#334155}
+  /* イラスト */
+  .anim{position:fixed;inset:0;background:rgba(15,23,42,.35);display:none;align-items:center;justify-content:center;z-index:60}
+  .anim.on{display:flex}
+  .card{background:white;border-radius:18px;padding:22px 30px 18px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
+  .card .msg{font-size:15px;font-weight:900;color:#166534;margin-top:6px}
+  .card .sub{font-size:11.5px;color:var(--sub);margin-top:3px}
+  .env{animation:fly .9s cubic-bezier(.45,.05,.55,.95) forwards}
+  @keyframes fly{
+    0%{transform:translate(0,-46px) rotate(-8deg);opacity:0}
+    25%{opacity:1}
+    70%{transform:translate(0,2px) rotate(0)}
+    100%{transform:translate(0,10px) rotate(0);opacity:0}
+  }
+  .env2{animation:slot .9s cubic-bezier(.4,0,.6,1) forwards}
+  @keyframes slot{
+    0%{transform:translate(-62px,0) rotate(0);opacity:0}
+    22%{opacity:1}
+    72%{transform:translate(4px,0)}
+    100%{transform:translate(16px,0);opacity:0}
+  }
+  .st{opacity:0;animation:stack .95s ease-out forwards}
+  @keyframes stack{0%{opacity:0;transform:translate(-30px,-34px) rotate(-16deg)}
+    30%{opacity:1}100%{opacity:0;transform:translate(0,8px) rotate(0)}}
+  .lid{transform-origin:left center;animation:lid .9s ease-in-out forwards}
+  @keyframes lid{0%,10%{transform:rotate(0)}30%,65%{transform:rotate(-34deg)}100%{transform:rotate(0)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>投函済みチェック（PC リスト）モック</h1>
+  <p class="lead">
+    <b>黄色＝まだ投函していない／白＝投函済み</b>（元ファイルと同じ）。<br>
+    「投函①」か「投函②」のマスを <b>上から下へマウスでドラッグ</b>して、離すとポップが出ます。<br>
+    ※ここに出ている名前はぜんぶ架空のものです。お客様の情報は使っていません。
+  </p>
+
+  <div class="panel">
+    <h2>投函済みにしたときのイラスト（3案・切り替えて試してください）</h2>
+    <div class="opts" id="opts">
+      <label class="opt on"><input type="radio" name="ill" value="1" checked>A案　赤いポストに入れる</label>
+      <label class="opt"><input type="radio" name="ill" value="2">B案　玄関の郵便受け</label>
+      <label class="opt"><input type="radio" name="ill" value="3">C案　封筒が束で飛んでいく</label>
+    </div>
+    <p class="hint">イラストは <b>0.9秒</b> で消えます。何十件まとめても1回だけ出ます。</p>
+  </div>
+
+  <table id="tbl">
+    <thead><tr>
+      <th>満期日</th><th>氏名</th><th>No.</th><th>車種</th>
+      <th>投函①</th><th>予約①</th><th>投函②</th><th>予約②</th>
+    </tr></thead>
+    <tbody id="tb"></tbody>
+  </table>
+  <p class="hint" id="cnt"></p>
+</div>
+
+<!-- 確認ポップ -->
+<div class="ov" id="ov">
+  <div class="dlg">
+    <div class="hd">📮 投函の記録</div>
+    <div class="bd">
+      <p class="q" id="q">3件を投函済みにしますか？</p>
+      <div class="names" id="nl"></div>
+    </div>
+    <div class="ft">
+      <button class="btn n" id="no">キャンセル</button>
+      <button class="btn y" id="yes">はい、投函しました</button>
+    </div>
+  </div>
+</div>
+
+<!-- イラスト -->
+<div class="anim" id="anim"><div class="card" id="card"></div></div>
+
+<script>
+// ───── 架空のデータ（本物のお客様は1件も入っていません）
+const ROWS=[
+  ['12/1','山田　太郎','3310','ワゴンＲ','9/12','','9/19',''],
+  ['12/1','鈴木　花子','0088','ノート','9/12','','9/19',''],
+  ['12/2','佐藤　次郎','1204','タント','9/12','10/3','9/19',''],
+  ['12/3','高橋　美咲','2277','アルト','9/12','','9/19',''],
+  ['12/4','田中　健一','0451','ハスラー','9/12','','9/19',''],
+  ['12/5','伊藤　由美','3902','フィット','9/12','','9/19',''],
+  ['12/6','渡辺　浩','1188','N-BOX','9/12','','9/19',''],
+  ['12/8','中村　和子','2640','スペーシア','9/12','10/9','9/19',''],
+  ['12/9','小林　進','0733','デイズ','9/12','','9/19',''],
+  ['12/10','加藤　千春','4015','ソリオ','9/12','','9/19',''],
+];
+// 状態: posted[row][col] col=0→投函①, 1→投函②
+const posted = ROWS.map((r,i)=>[i<2, false]);   // 最初の2件だけ投函済みの例
+
+const tb=document.getElementById('tb');
+let drag=null;           // {col, from, to}
+let dragging=false;
+
+function cellCls(i,c){ return 'tk '+(posted[i][c]?'done':'no'); }
+function inDrag(i,c){
+  if(!drag||drag.col!==c)return false;
+  const a=Math.min(drag.from,drag.to), b=Math.max(drag.from,drag.to);
+  return i>=a&&i<=b;
+}
+// ★ドラッグ中は表を作り直さない（作り直すとマウスの下の要素が入れ替わって選択が切れる）
+function paintDrag(){
+  document.querySelectorAll('.tk').forEach(td=>{
+    const i=+td.dataset.r, c=+td.dataset.c;
+    td.classList.toggle('drag', inDrag(i,c));
+  });
+}
+function render(){
+  tb.innerHTML = ROWS.map((r,i)=>{
+    const c1 = cellCls(i,0)+(inDrag(i,0)?' drag':'');
+    const c2 = cellCls(i,1)+(inDrag(i,1)?' drag':'');
+    return `<tr>
+      <td>${r[0]}</td>
+      <td class="nm">${r[1]}</td>
+      <td>${r[2]}</td>
+      <td>${r[3]}</td>
+      <td class="${c1}" data-r="${i}" data-c="0">${r[4]}</td>
+      <td class="bk">${r[5]}</td>
+      <td class="${c2}" data-r="${i}" data-c="1">${r[6]}</td>
+      <td class="bk2">${r[7]}</td>
+    </tr>`;
+  }).join('');
+  const no1=posted.filter(p=>!p[0]).length, no2=posted.filter(p=>!p[1]).length;
+  document.getElementById('cnt').innerHTML =
+    `未投函　①：<b>${no1}件</b>　／　②：<b>${no2}件</b>`;
+}
+render();
+
+// ───── ドラッグ
+tb.addEventListener('mousedown', e=>{
+  const td=e.target.closest('.tk'); if(!td) return;
+  e.preventDefault();
+  const i=+td.dataset.r, c=+td.dataset.c;
+  if(posted[i][c]) return;                 // 投函済みからは始めない
+  dragging=true; drag={col:c, from:i, to:i}; paintDrag();
+});
+tb.addEventListener('mouseover', e=>{
+  if(!dragging) return;
+  const td=e.target.closest('.tk'); if(!td) return;
+  const i=+td.dataset.r, c=+td.dataset.c;
+  if(c!==drag.col) return;                 // 列をまたがない
+  drag.to=i; paintDrag();
+});
+window.addEventListener('mouseup', ()=>{
+  if(!dragging) return;
+  dragging=false;
+  if(!drag){render();return;}
+  const a=Math.min(drag.from,drag.to), b=Math.max(drag.from,drag.to);
+  const list=[];
+  for(let i=a;i<=b;i++) if(!posted[i][drag.col]) list.push(i);
+  if(!list.length){drag=null;render();return;}
+  openConfirm(list, drag.col);
+});
+
+// ───── 確認ポップ
+let pend=null;
+function openConfirm(list,col){
+  pend={list,col};
+  document.getElementById('q').textContent =
+    `投函${col===0?'①':'②'} の ${list.length}件 を「投函済み」にしますか？`;
+  document.getElementById('nl').innerHTML =
+    list.map(i=>`・${ROWS[i][1]}　<span style="color:#64748b">${ROWS[i][3]}</span>`).join('<br>');
+  document.getElementById('ov').classList.add('on');
+}
+document.getElementById('no').onclick=()=>{
+  document.getElementById('ov').classList.remove('on');
+  pend=null; drag=null; render();
+};
+document.getElementById('yes').onclick=()=>{
+  document.getElementById('ov').classList.remove('on');
+  const {list,col}=pend; pend=null;
+  list.forEach(i=>posted[i][col]=true);
+  drag=null; render();
+  playAnim(list.length);
+};
+
+// ───── イラスト 3案
+const POST_A = n => `
+<svg width="150" height="140" viewBox="0 0 150 140">
+  <ellipse cx="75" cy="131" rx="40" ry="5" fill="#0f172a" opacity=".12"/>
+  <g class="env">
+    <rect x="47" y="12" width="56" height="36" rx="3" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
+    <path d="M47 15 L75 34 L103 15" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+  </g>
+  <rect x="68" y="78" width="14" height="50" fill="#9ca3af"/>
+  <rect x="44" y="46" width="62" height="44" rx="9" fill="#dc2626"/>
+  <rect x="44" y="40" width="62" height="12" rx="6" fill="#b91c1c"/>
+  <rect x="55" y="60" width="40" height="7" rx="3.5" fill="#7f1d1d"/>
+  <rect x="52" y="74" width="46" height="12" rx="3" fill="#fecaca" opacity=".55"/>
+  <text x="75" y="84" font-size="8" font-weight="700" fill="#991b1b" text-anchor="middle">〒</text>
+</svg>`;
+
+const POST_B = n => `
+<svg width="180" height="130" viewBox="0 0 180 130">
+  <rect x="26" y="8" width="128" height="114" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="36" y="18" width="108" height="94" rx="4" fill="#e2e8f0"/>
+  <circle cx="136" cy="66" r="5" fill="#94a3b8"/>
+  <rect x="56" y="54" width="68" height="18" rx="4" fill="#334155"/>
+  <g class="env2">
+    <rect x="58" y="56" width="64" height="15" rx="2" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <path d="M58 57 L90 68 L122 57" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  </g>
+  <rect x="56" y="54" width="68" height="7" rx="3" fill="#1e293b"/>
+  <text x="90" y="92" font-size="9" font-weight="700" fill="#64748b" text-anchor="middle">POST</text>
+</svg>`;
+
+const POST_C = n => {
+  const k = Math.min(n, 6);
+  let env = '';
+  for (let i = 0; i < k; i++) {
+    env += `<g class="st" style="animation-delay:${i*0.08}s">
+      <rect x="${50+i*4}" y="${16+i*3}" width="50" height="32" rx="3" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
+      <path d="M${50+i*4} 19 L${75+i*4} 36 L${100+i*4} 19" fill="none" stroke="#f59e0b" stroke-width="2.2"/>
+    </g>`;
+  }
+  return `
+<svg width="165" height="140" viewBox="0 0 165 140">
+  <ellipse cx="80" cy="132" rx="42" ry="5" fill="#0f172a" opacity=".12"/>
+  ${env}
+  <g class="lid"><rect x="38" y="62" width="84" height="10" rx="4" fill="#64748b"/></g>
+  <rect x="38" y="70" width="84" height="54" rx="7" fill="#94a3b8"/>
+  <rect x="38" y="70" width="84" height="54" rx="7" fill="#475569" opacity=".25"/>
+  <rect x="52" y="86" width="56" height="26" rx="4" fill="#e2e8f0" opacity=".7"/>
+  <text x="80" y="104" font-size="11" font-weight="800" fill="#334155" text-anchor="middle">〒 ${n}</text>
+</svg>`;
+};
+
+function playAnim(n){
+  const kind = document.querySelector('input[name=ill]:checked').value;
+  const art = kind==='1'?POST_A(n):kind==='2'?POST_B(n):POST_C(n);
+  const card=document.getElementById('card');
+  card.innerHTML = art +
+    `<div class="msg">${n}件 投函しました</div>
+     <div class="sub">黄色 → 白 に変わりました</div>`;
+  const a=document.getElementById('anim');
+  a.classList.add('on');
+  setTimeout(()=>a.classList.remove('on'), 1150);
+}
+
+// ラジオの見た目
+document.getElementById('opts').addEventListener('change',()=>{
+  document.querySelectorAll('.opt').forEach(l=>
+    l.classList.toggle('on', l.querySelector('input').checked));
+});
+</script>
+</body>
+</html>
