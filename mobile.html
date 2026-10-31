@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793347355023';
+  window.__APP_BUILD='build-1793416901322';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.86.0';
+const MOBILE_VERSION='3.87.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3038,12 +3038,20 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
   const _si=k=>{let b=getBaseSlot(k);if(b==='12:30')b='未定';const i=SCHED_SLOTS.indexOf(b);return i<0?999:i;};
   const sched=Object.entries(sd[dk]||{}).filter(([,r])=>r&&r.name).sort(([a],[b])=>_si(a)-_si(b)||a.localeCompare(b));
   const memos=((vsId==='honten'?memoDataH:memoDataS)[dk]||[]);
-  // 事前入庫（この日に入庫・車検作業日は別日）を収集
+  // 事前入庫（この日に入庫・作業日は別日）を収集
   const dropoffs=[];
   Object.keys(inspData||{}).forEach(wdk=>{ if(wdk===dk)return;
     (inspData[wdk]||[]).forEach(r=>{ if(!r||!r.name||r.entryDate!==dk||r.bookingStatus==='cancelled')return;
       if((normStore(r.store)||'honten')!==vsId)return;
-      dropoffs.push({r,wdk,ix:(inspData[wdk]||[]).indexOf(r)});
+      dropoffs.push({r,wdk,ix:(inspData[wdk]||[]).indexOf(r),kind:'insp'});
+    });
+  });
+  // ★整備（一般予約）の事前入庫も同じ箱に出す（2026-10-31。PC版は 2026-09-19 から出ている）
+  Object.keys(sd||{}).forEach(wdk=>{ if(wdk===dk)return;
+    Object.keys(sd[wdk]||{}).forEach(sk=>{
+      const r=sd[wdk][sk];
+      if(!r||!r.name||r.entryDate!==dk)return;
+      dropoffs.push({r,wdk,ix:-1,kind:'sched',slot:getBaseSlot(sk)});
     });
   });
   const dow=new Date(y,m,d).getDay();
@@ -3072,6 +3080,17 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
           )}
           <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0,marginLeft:2}}>✕</button>
         </div>
+        {/* ★週ごと・月ごとの送り（2026-10-31 ユーザー要望）。‹ › の1日ずつだけでは遠い日に行けない */}
+        {onMoveDay&&(
+          <div style={{display:'flex',gap:5,padding:'0 14px 10px'}}>
+            {[['‹ 1か月',-1,'m'],['‹ 1週',-7,'d'],['本日',0,'today'],['1週 ›',7,'d'],['1か月 ›',1,'m']].map(([t,v,u])=>(
+              <button key={t} data-dayjump={u==='today'?'today':(String(u)+String(v))} onClick={()=>onMoveDay(v,u)}
+                style={{flex:1,padding:'9px 0',borderRadius:9,border:`1.5px solid ${u==='today'?'#0e7490':'#e2e8f0'}`,
+                  background:u==='today'?'#0e7490':'#f8fafc',color:u==='today'?'white':'#475569',
+                  fontWeight:800,fontSize:11.5,fontFamily:'inherit'}}>{t}</button>
+            ))}
+          </div>
+        )}
         <div style={{overflowY:'auto',WebkitOverflowScrolling:'touch',flex:1,padding:'12px 16px'}}>
           {sorted.length>0&&(
             <div style={{marginBottom:14}}>
@@ -3098,21 +3117,27 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
           {dropoffs.length>0&&(
               <div style={{marginBottom:14,background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:12,padding:'8px 11px'}}>
                 <div style={{fontWeight:800,fontSize:12,color:'#c2410c',marginBottom:6}}>🚗 事前入庫（{dropoffs.length}件・この日に入庫）</div>
-                {dropoffs.map(({r,wdk,ix},i)=>{const wl=wdk.split('-');
-                  // ★事前入庫の日こそ実際に車が入る日。ここでもチェックできる（印は本体の車検予約に付く）。
+                {dropoffs.map(({r,wdk,ix,kind,slot},i)=>{const wl=wdk.split('-');
+                  // ★事前入庫の日こそ実際に車が入る日。ここでもチェックできる（印は本体の予約に付く）。
+                  //   整備（一般予約）の分はチェックの持ち場が無いので、印は出さない。
+                  const isSc=kind==='sched';
                   const _ak=wdk+'|'+(r.seq||r.custId||r.name);
-                  const _arr=(arrivedOv&&_ak in arrivedOv)?!!arrivedOv[_ak]:!!r.arrived;
+                  const _arr=(!isSc&&arrivedOv&&_ak in arrivedOv)?!!arrivedOv[_ak]:!!r.arrived;
                   return(
-                  <div key={i} onClick={()=>onGoSchedule(Number(wl[0]),Number(wl[1])-1,Number(wl[2]))}
+                  <div key={i} data-dropoff={kind||'insp'} onClick={()=>onGoSchedule(Number(wl[0]),Number(wl[1])-1,Number(wl[2]))}
                     style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',padding:'7px 2px',borderTop:i>0?'1px dashed #fed7aa':'none',cursor:'pointer'}}>
+                    {isSc?(
+                      <span style={{width:22,flexShrink:0,textAlign:'center',fontSize:12}}>⏰</span>
+                    ):(
                     <span onClick={e=>{e.preventDefault();e.stopPropagation();if(onToggleArrived&&ix>=0)onToggleArrived('insp',wdk,ix);}}
                       style={{width:22,height:22,flexShrink:0,display:'inline-flex',alignItems:'center',justifyContent:'center',borderRadius:6,
                         background:_arr?'#fde047':'transparent',border:_arr?'2px solid #dc2626':'2px solid #fed7aa',
                         color:'#dc2626',fontWeight:900,fontSize:13,lineHeight:1}}>{_arr?'✓':''}</span>
-                    {r.time&&<span style={{fontSize:11,fontWeight:800,color:'#9a3412'}}>{r.time}</span>}
+                    )}
+                    {(isSc?slot:r.time)&&<span style={{fontSize:11,fontWeight:800,color:'#9a3412'}}>{isSc?slot:r.time}</span>}
                     <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                     {r.carType&&<span style={{fontSize:11,color:'#64748b'}}>🚗{r.carType}</span>}
-                    <span style={{marginLeft:'auto',fontSize:10,fontWeight:800,color:'#9a3412',whiteSpace:'nowrap'}}>→ {wl[1]}/{wl[2]}車検 ›</span>
+                    <span style={{marginLeft:'auto',fontSize:10,fontWeight:800,color:'#9a3412',whiteSpace:'nowrap'}}>→ {wl[1]}/{wl[2]}{isSc?'整備':'車検'} ›</span>
                   </div>
                 );})}
               </div>
@@ -3129,6 +3154,8 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
                       <span style={{fontWeight:700,fontSize:13}}>{sama(r.name)}</span>
                       {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                       {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
+                      {/* ★事前入庫の印（2026-10-31）。車検の行と同じ出し方にそろえる */}
+                      {(r.entryDate&&r.entryDate!==dk)&&(()=>{const p=String(r.entryDate).split('-');return <span style={{marginLeft:5,fontSize:11,color:'#c2410c',fontWeight:800}}>🚗{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')}入庫</span>;})()}
                       {r.content&&<div style={{fontSize:11,color:'#64748b',marginTop:1}}>{r.content}</div>}
                     </div>
                   </div>
@@ -3211,10 +3238,21 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
     alert(`🏖 ${dkLabel(dk)} は休業日です。\n${what}日には設定できません（休業日の設定はPC版で変更できます）。`);
     return true;
   };
+  // 事前入庫の既定日＝その日より前の、いちばん近い開いている日（休業日は飛ばす）
+  const prevOpenDk=(dk)=>{
+    const p=String(dk).split('-').map(Number);
+    if(p.length!==3||p.some(isNaN))return '';
+    for(let i=1;i<=14;i++){
+      const t=new Date(p[0],p[1]-1,p[2]-i);
+      const v=`${t.getFullYear()}-${t.getMonth()+1}-${t.getDate()}`;
+      if(!closedDk(v))return v;
+    }
+    return '';
+  };
   const sc=isInsp?'#3730a3':'#0e7490';
   const [form,setForm]=useState(()=>{
     const base={
-      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
+      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
       staff:currentUser?.name||'',
       ...(initial||{}),
     };
@@ -3685,6 +3723,28 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
                 </div>
                 <textarea value={form.content||''} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={3} style={{...INP,resize:'none'}}/>
               </div>
+              {/* ★事前入庫（2026-10-31 ユーザー要望：車検と同じものを一般予約にも）。
+                   PC版は 2026-09-19 から整備でも入庫日を決められる。ここはその追いつき。
+                   既定は空＝当日に入庫。日を入れると、その日の画面に「🚗 事前入庫」として出る。 */}
+              <div>
+                <label style={LBL}>入庫日 <span style={{fontWeight:400,color:'#94a3b8',fontSize:10}}>任意。前の日に車が入る時（事前入庫）だけ決める</span></label>
+                {!form.entryDate?(
+                  <button onClick={()=>{const v=prevOpenDk(mvDk);if(!v){setErr('前の日が休業日ばかりで決められません');return;}setForm(p=>({...p,entryDate:v}));}}
+                    style={{width:'100%',padding:'11px 12px',borderRadius:10,border:'2px dashed #fdba74',background:'#fff7ed',color:'#9a3412',fontWeight:800,fontSize:13}}>
+                    ＋ 事前入庫にする（前の日から）
+                  </button>
+                ):(
+                  <React.Fragment>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <input type="date" value={dkToInputDate(form.entryDate)}
+                        onChange={e=>{const v=inputDateToDk(e.target.value)||mvDk;if(rejectIfClosed(v,'入庫'))return;setForm(p=>({...p,entryDate:v}));}}
+                        style={{...INP,flex:1,border:'2px solid #9a3412',background:'#fff7ed',color:'#9a3412',fontWeight:800}}/>
+                      <button onClick={()=>setForm(p=>({...p,entryDate:''}))} style={{padding:'0 14px',background:'#f1f5f9',border:'none',borderRadius:10,fontWeight:800,color:'#64748b',fontSize:16}}>✕</button>
+                    </div>
+                    {(()=>{const p=String(form.entryDate).split('-');return <div style={{fontSize:11,color:'#9a3412',marginTop:4,fontWeight:800}}>🚗 事前入庫：{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')} に入庫</div>;})()}
+                  </React.Fragment>
+                )}
+              </div>
             </React.Fragment>
           )}
           {/* 納車日（任意・車検/タイムスケジュール共通）。設定すると納車日のタイムスケジュールに派生表示される（行そのものは保存しない） */}
@@ -3830,7 +3890,14 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
   const {y,m,d}=ds;
   const dk=`${y}-${m+1}-${d}`;
   const sc=vsId==='honten'?'#1d4ed8':'#dc2626';
-  const moveDate=dir=>{const dt=new Date(y,m,d+dir);setDs({y:dt.getFullYear(),m:dt.getMonth(),d:dt.getDate()});};
+  // 日付送り。unit='d'（既定）は日数ぶん、'm' は月ぶん（2026-10-31 ユーザー要望で週・月を追加）。
+  //   ★月送りは「1/31 の次は 2/31」が無いので、行き先の月の最終日で止める。
+  const moveDate=(dir,unit)=>{
+    let dt;
+    if(unit==='m'){ const last=new Date(y,m+dir+1,0).getDate(); dt=new Date(y,m+dir,Math.min(d,last)); }
+    else dt=new Date(y,m,d+dir);
+    setDs({y:dt.getFullYear(),m:dt.getMonth(),d:dt.getDate()});
+  };
   const isToday_=y===today.getFullYear()&&m===today.getMonth()&&d===today.getDate();
   const dow=new Date(y,m,d).getDay();
   // 元配列のindexを保持したまま表示用に絞り込む（編集・代車紐付けにindexが必須）
@@ -3890,6 +3957,15 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
             <div style={{fontSize:10,color:'#94a3b8'}}>↕ スワイプで日付移動 / カードをタップで編集</div>
           </div>
           <button onClick={()=>moveDate(1)} style={{width:38,height:38,borderRadius:10,border:'2px solid #e5e7eb',background:'white',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>&#8250;</button>
+        </div>
+        {/* ★週ごと・月ごとの送り（2026-10-31 ユーザー要望）。1日ずつだと遠い日に行くのに時間がかかる。
+             PC版の「‹ 前の週／次の週 ›」と同じ考え方で、スマホには月送りも付ける。 */}
+        <div style={{display:'flex',gap:5,marginTop:6}}>
+          {[['‹ 1か月',-1,'m'],['‹ 1週',-7,'d'],['1週 ›',7,'d'],['1か月 ›',1,'m']].map(([t,v,u])=>(
+            <button key={t} data-datejump={String(u)+String(v)} onClick={()=>moveDate(v,u)}
+              style={{flex:1,padding:'9px 0',borderRadius:9,border:'2px solid #e5e7eb',background:'white',
+                fontWeight:800,fontSize:11.5,color:'#475569',fontFamily:'inherit'}}>{t}</button>
+          ))}
         </div>
         {!isToday_&&<button onClick={()=>setDs({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()})} style={{width:'100%',marginTop:6,padding:'5px 0',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,fontSize:11,color:'#64748b',fontWeight:600}}>今日に戻る</button>}
       </div>
@@ -7208,8 +7284,12 @@ const App=()=>{
       </div>
       {dayDetail&&<DayDetailModal {...dayDetail} onEditMemo={otherView?null:(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={otherView?null:toggleDayMemo} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
         onClose={()=>setDayDetail(null)}
-        onMoveDay={delta=>setDayDetail(p=>{ if(!p)return p;
-          const nd=new Date(p.y,p.m,p.d+delta);
+        onMoveDay={(delta,unit)=>setDayDetail(p=>{ if(!p)return p;
+          let nd;
+          if(unit==='today'){ const t=new Date(); nd=new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
+          // 月送りは行き先の月の最終日で止める（1/31 の1か月先は 2/28）
+          else if(unit==='m'){ const last=new Date(p.y,p.m+delta+1,0).getDate(); nd=new Date(p.y,p.m+delta,Math.min(p.d,last)); }
+          else nd=new Date(p.y,p.m,p.d+delta);
           return {dk:`${nd.getFullYear()}-${nd.getMonth()+1}-${nd.getDate()}`,y:nd.getFullYear(),m:nd.getMonth(),d:nd.getDate()}; })}
         mySchedPanel={<MySchedPanel compact dk={dayDetail.dk} user={{uid:user.uid,name:user.name}} pub={mySched} savePub={saveMySched} priv={myPriv}/>}
         onGoSchedule={(y,m,d)=>{setSchedInitDate({y,m,d});setTab('sched');setDayDetail(null);}}/>}
