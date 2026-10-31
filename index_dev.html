@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793417889942';
+    window.__APP_BUILD='build-1793432095340';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.87.1';
+const APP_VERSION = '3.88.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -332,7 +332,8 @@ const CarColorChip=({hex,label,size})=>{ const h=hex||''; if(!h)return null; con
     border:'1px solid rgba(0,0,0,.35)',boxShadow:'inset 0 0 0 1px rgba(255,255,255,.35)',flexShrink:0,verticalAlign:'middle'}}/>; };
 const WORK_COLORS = {
   'Q':'#0891b2',
-  '⑫':'#4f46e5','M12':'#4f46e5','M6':'#4f46e5','N1':'#4f46e5','N6':'#4f46e5',
+  'メンパ':'#4f46e5','有点':'#7c3aed','無点':'#2563eb',
+  '⑫':'#4f46e5','M12':'#4f46e5','M6':'#4f46e5','M1':'#4f46e5','N1':'#4f46e5','N6':'#4f46e5',
   'B':'#9333ea',
   'R':'#be123c',
   '商':'#b45309','保':'#b45309','試':'#b45309',
@@ -341,7 +342,7 @@ const WORK_COLORS = {
 };
 // 略号スクエアのみ（作業名は幅を取るので出さない。マウスを乗せると名称がツールチップで出る）
 const WorkBadge = ({id, dim}) => {
-  const w = WORKS.find(x => x.id === id);
+  const w = workDef(id);
   if (!w) return <span style={{fontSize:13,color:'#374151'}}>{id||'—'}</span>;
   const c = WORK_COLORS[id] || '#64748b';
   return (
@@ -816,21 +817,66 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave})=>{
   );
 };
 const TOKUENS = [{id:'①',name:'1ヶ月前予約'},{id:'②',name:'2ヶ月前予約'},{id:'-',name:'なし'}];
+// ★作業項目（主作業）＝2026-10-31 ユーザー決定で11個に整理した。
+//   ・メンパ1ヶ月／6ヶ月／12ヶ月点検 → 「メンパ」1つ。月数は内容欄（⚡ クイックメニュー）で書く
+//   ・12ヶ月点検・新車1ヶ月／6ヶ月点検 → 「有点（有料点検）」「無点（無料点検）」に寄せる
+//   ・「クイック整備・修理のリフト作業」「ピット作業」は**主作業には作らない**。
+//     Q を選んだ時だけ出る QKINDS（複数えらべる）で持ち、入庫制限の解除だけを分ける
 const WORKS = [
-  {id:'Q',name:'クイック整備・修理'},{id:'⑫',name:'12ヶ月点検'},{id:'M12',name:'メンパ12ヶ月点検'},
-  {id:'M6',name:'メンパ6ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'},
+  {id:'Q',name:'クイック整備・修理'},
+  {id:'メンパ',name:'メンパ'},{id:'有点',name:'有料点検'},{id:'無点',name:'無料点検'},
   {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
 ];
+// ★昔の予約がまだ持っている作業項目（2026-10-31 より前の分。本番に92件あった）。
+//   **データは書き換えない**＝保存されている字のまま出す。新しく選ぶ一覧には出さない。
+const WORKS_OLD = [
+  {id:'⑫',name:'12ヶ月点検'},{id:'M12',name:'メンパ12ヶ月点検'},{id:'M6',name:'メンパ6ヶ月点検'},
+  {id:'M1',name:'メンパ1ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'}
+];
+// 作業項目を引く時は必ずこれを通すこと（昔の分も引ける）
+const workDef = (id) => WORKS.find(x => x.id === id) || WORKS_OLD.find(x => x.id === id) || null;
+const workName = (id) => { const w = workDef(id); return w ? w.name : (id || ''); };
+// ★Q（クイック整備・修理）を選んだ時だけ出る「どこで作業する」。両方えらべる。
+//   どちらも選ばなければ「ふつうのクイック整備・修理」。入庫制限の解除はこの3通りで分ける。
+const QKINDS = [{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業'}];
+const qkindOf = (row) => Array.isArray(row && row.qkind) ? row.qkind.filter(k => QKINDS.some(x => x.k === k)) : [];
+const qkindLabel = (row) => QKINDS.filter(x => qkindOf(row).indexOf(x.k) >= 0).map(x => x.name).join('・');
+const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >= 0 ? a.filter(x => x !== k) : a.concat([k]); };
+// ★作業項目を選んだ時の決まり（2026-10-31 ユーザー決定・A案）
+//   ・内容（整備）／備考（車検）が**空のときだけ**作業名を入れる。書いてあるものは触らない
+//   ・「その他」は入れない（何が入るか分からないため）
+//   ・Q 以外にしたら「どこで作業する」は外す
+//   ・keyOnly＝↑↓で流しているだけの時は内容を触らない（確定していないため）
+const applyWorkPick = (form, id, keyOnly) => {
+  const next = { ...form, work: id };
+  if (id !== 'Q') next.qkind = [];
+  if (!keyOnly && id !== '他') {
+    const field = ('note' in form && !('content' in form)) ? 'note' : 'content';
+    if (!String(form[field] || '').trim()) next[field] = workName(id);
+  }
+  return next;
+};
 const SHIMIS = [{id:'',name:'なし'},{id:'指',name:'指示書'},{id:'見',name:'見積'},{id:'両',name:'両方'}];
 
 // -- クイックアイテム（内容・備考欄へのクイック入力テキスト） --
+// ★2026-10-31 からグループを持つ（g＝グループID）。グループそのものは setGroups（別キー）。
+const DEFAULT_SET_GROUPS = [
+  {id:'g1', name:'点検',       col:'#0891b2'},
+  {id:'g2', name:'整備・交換',  col:'#059669'},
+  {id:'g3', name:'預かり・搬入', col:'#b45309'},
+  {id:'g4', name:'その他',      col:'#64748b'},
+];
 const DEFAULT_SET_ITEMS = [
-  {id:'si1', label:'Eオイル交換',            text:'エンジンオイル交換'},
-  {id:'si2', label:'Eオイル・エレメント交換', text:'エンジンオイル+エレメント交換'},
-  {id:'si3', label:'持込シーズンタイヤ付替',  text:'持込シーズンタイヤ付替'},
-  {id:'si4', label:'預かりシーズンタイヤ付替',text:'預かりシーズンタイヤ付替'},
-  {id:'si5', label:'レッカー搬入',            text:'レッカー搬入'},
-  {id:'si6', label:'書類預かり',              text:'書類預かり'},
+  {id:'sq1', g:'g1', label:'1ヶ月',  text:'1ヶ月'},
+  {id:'sq2', g:'g1', label:'6ヶ月',  text:'6ヶ月'},
+  {id:'sq3', g:'g1', label:'12ヶ月', text:'12ヶ月'},
+  {id:'sq4', g:'g1', label:'18ヶ月', text:'18ヶ月'},
+  {id:'si1', g:'g2', label:'Eオイル交換',            text:'エンジンオイル交換'},
+  {id:'si2', g:'g2', label:'Eオイル・エレメント交換', text:'エンジンオイル+エレメント交換'},
+  {id:'si3', g:'g2', label:'持込シーズンタイヤ付替',  text:'持込シーズンタイヤ付替'},
+  {id:'si4', g:'g2', label:'預かりシーズンタイヤ付替',text:'預かりシーズンタイヤ付替'},
+  {id:'si5', g:'g3', label:'レッカー搬入',            text:'レッカー搬入'},
+  {id:'si6', g:'g3', label:'書類預かり',              text:'書類預かり'},
 ];
 const DEFAULT_MEMO_ITEMS = [];
 
@@ -876,6 +922,28 @@ const restrRanges = r => {
 };
 const restrExempt = r => (r && Array.isArray(r.exemptWorks)) ? r.exemptWorks : [];
 const restrHas = r => restrRanges(r).length > 0;
+// ── 制限解除項目のキー（2026-10-31）────────────────────────────
+//   クイック整備・修理だけ3通りに分ける：'Q'＝ふつう／'Q:lift'＝リフト作業／'Q:pit'＝ピット作業。
+//   ★昔の 'Q' はそのまま「ふつう」として効く（入れ直し不要）。
+//   ★その予約が何に当たるかは restrKeysOf で出すこと。中の形を直接見ないこと。
+const QK_PLAIN = 'Q', QK_PRE = 'Q:';
+const EXEMPT_LIST = () => {
+  const out = [];
+  WORKS.forEach(w => {
+    if (w.id === 'Q') { out.push({key:'Q', label:'クイック整備・修理（リフトもピットも使わない）'});
+      QKINDS.forEach(k => out.push({key:QK_PRE+k.k, label:'クイック整備・修理の'+k.name})); }
+    else out.push({key:w.id, label:w.id+' '+w.name});
+  });
+  return out;
+};
+// その予約が通るために要る解除キー（両方えらんだ時は両方が解除されていないと通さない）
+const restrKeysOf = (row) => {
+  if (!row || row.work !== 'Q') return [row && row.work];
+  const ks = qkindOf(row);
+  return ks.length ? ks.map(k => QK_PRE+k) : [QK_PLAIN];
+};
+const restrPasses = (r, row) => { const need = restrKeysOf(row); const ex = restrExempt(r);
+  return need.length > 0 && need.every(k => ex.indexOf(k) >= 0); };
 const restrMin = t => { const m = String(t || '').match(/(\d+):(\d+)/); return m ? Number(m[1]) * 60 + Number(m[2]) : -1; };
 // その時刻が制限の中か（重なっていても、どれか1つに入っていれば制限中）
 const restrCovers = (r, time) => {
@@ -894,8 +962,10 @@ const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime
 const MACH_COURSE = 1;                 // コース：1＝マッハ車検
 const MACH_STORE  = 'honten';          // 本店だけ
 const MACH_SPAN_MIN = 60;              // 入庫から1時間
-const MACH_BLOCK_WORKS = ['Q','⑫','M12','M6','N1','N6','R'];   // クイック整備・全ての点検・リコール
-const machDefaultExempt = () => WORKS.map(w => w.id).filter(id => MACH_BLOCK_WORKS.indexOf(id) < 0);
+// ★ピット作業（Q:pit）は止めない＝マッハ車検中でもピットなら受けられる（2026-10-31 ユーザー指示）
+const MACH_BLOCK_WORKS = ['Q','Q:lift','メンパ','有点','無点','R',
+  '⑫','M12','M6','M1','N1','N6'];   // クイック整備（ピット以外）・全ての点検・リコール（昔の分も止める）
+const machDefaultExempt = () => EXEMPT_LIST().map(x => x.key).filter(k => MACH_BLOCK_WORKS.indexOf(k) < 0);
 const machAddMin = (t, add) => {
   const n = restrMin(t); if (n < 0) return '';
   const m = Math.min(n + add, 23 * 60 + 59);
@@ -2317,7 +2387,7 @@ const BOOKING_STATUS_STRIPE = {
 };
 const BOOKING_STATUS_COLOR  = {new:'#166534',provisional:'#166534',confirmed:'#075985',cancelled:'#991b1b'};
 const BOOKING_STATUS_BORDER = {new:'#4ade80',provisional:'#4ade80',confirmed:'#38bdf8',cancelled:'#f87171'};
-const blankSched = () => ({name:'',staff:'',carType:'',no:'',phone:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
+const blankSched = () => ({name:'',staff:'',carType:'',no:'',phone:'',work:'',qkind:[],loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
 const blankMemo  = () => ({content:''});
 const dateKey    = (y,m,d) => `${y}-${m+1}-${d}`;
 const toNum      = (y,m,d) => y*10000+(m+1)*100+d;
@@ -3242,7 +3312,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops',
   'usrchk'];   // ★車検証の使用者を確認した印（2026-10-29）
@@ -7547,15 +7617,20 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,autoRanges
           <label style={{display:'block',fontWeight:700,fontSize:13,color:'#374151',marginBottom:8}}>✅ 制限解除項目<span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>（この日ぜんぶ共通）</span></label>
           <div style={{fontSize:11,color:'#6b7280',marginBottom:8}}>上のどの時間帯でも、この作業なら予約できます</div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,maxHeight:280,overflowY:'auto'}}>
-            {WORKS.map(w=>{
-              const on=exemptWorks.includes(w.id);
+            {EXEMPT_LIST().map(x=>{
+              const on=exemptWorks.includes(x.key);
+              const wide=x.key===QK_PLAIN||x.key.indexOf(QK_PRE)===0;   // クイック整備の3つは横いっぱい
               return(
-                <button key={w.id} onClick={()=>toggleWork(w.id)}
-                  style={{padding:'8px 12px',border:`2px solid ${on?'#10b981':'#d1d5db'}`,borderRadius:8,background:on?'#d1fae5':'white',cursor:'pointer',textAlign:'left',fontSize:12,fontWeight:600,color:on?'#065f46':'#6b7280'}}>
-                  <span style={{marginRight:6}}>{on?'✓':'○'}</span>{w.id} {w.name}
+                <button key={x.key} onClick={()=>toggleWork(x.key)}
+                  style={{padding:'8px 12px',border:`2px solid ${on?'#10b981':'#d1d5db'}`,borderRadius:8,background:on?'#d1fae5':'white',cursor:'pointer',textAlign:'left',fontSize:12,fontWeight:600,color:on?'#065f46':'#6b7280',
+                    ...(wide?{gridColumn:'1 / -1'}:{})}}>
+                  <span style={{marginRight:6}}>{on?'✓':'○'}</span>{x.label}
                 </button>
               );
             })}
+          </div>
+          <div style={{marginTop:8,fontSize:11,color:'#6b7280',lineHeight:1.7,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'7px 10px'}}>
+            🔧 クイック整備・修理は3通りに分かれます。予約カードで「リフト作業」「ピット作業」を<b>両方えらんだ時は、両方が解除になっていないと通りません</b>。
           </div>
         </div>
         
@@ -8309,8 +8384,191 @@ const withDeliveryNote = (entry, dk, isInsp) => {
   e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
   return e;
 };
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
+// ============================================
+//  ⚡ クイックメニュー（2026-10-31 ユーザー決定・A案）
+//   ・内容欄に常に並んでいたバッジ列はしまい、このポップ1つにまとめた
+//     （押すと内容に入る／つかんで動かすと並べ替え・グループの引っ越し／✎で直す／＋で足す）
+//   ・グループは**区画で全部出す**（A案）。タブ式は不採用（増えた時に探すことになる）
+//   ★短く押した時だけ「内容に入れる」。5px 動いたら並べ替え（代車の帯と同じ作法）
+//   ★グループは setGroups（項目とは別のキー）。項目の g がどのグループに居るか
+//   ★内容の足し引きはその場で効く。やめる＝バッジの直しだけを元に戻す
+// ============================================
+const QM_FALLBACK={id:'g_etc',name:'その他',col:'#64748b'};
+const qmTint=(hex,on)=>on?{background:hex,borderColor:hex,color:'white'}
+  :{background:'#f8fafc',borderColor:hex+'66',color:hex};
+const QuickMenuModal=memo(({isOpen,onClose,items,groups,value,onChangeValue,onSaveList})=>{
+  const [list,setList]=useState([]);
+  const [grps,setGrps]=useState([]);
+  const [edit,setEdit]=useState(false);
+  const [nl,setNl]=useState(''); const [nt,setNt]=useState(''); const [ng,setNg]=useState('');
+  const [eIdx,setEIdx]=useState(null); const [eL,setEL]=useState(''); const [eT,setET]=useState('');
+  const dg=useRef(null);
+  useEffect(()=>{
+    if(!isOpen)return;
+    setList((items||[]).map(x=>({...x})));
+    const g=(groups&&groups.length?groups:[QM_FALLBACK]).map(x=>({...x}));
+    setGrps(g); setNg(g[0].id);
+    setEdit(false); setEIdx(null); setNl(''); setNt('');
+  },[isOpen,items,groups]);
+  if(!isOpen)return null;
+
+  const gidOf=(it)=>grps.some(g=>g.id===it.g)?it.g:(grps[grps.length-1]||QM_FALLBACK).id;
+  const gOf=(id)=>grps.find(g=>g.id===id)||QM_FALLBACK;
+  const txtOf=(q)=>(q.text&&String(q.text).trim())?q.text:(q.label||'');
+  const lines=String(value||'').split(String.fromCharCode(10));
+  const toggleText=(q)=>{
+    const t=txtOf(q); if(!t)return;
+    const cur=String(value||'').split(String.fromCharCode(10)).filter(l=>l!=='');
+    onChangeValue(cur.indexOf(t)>=0?cur.filter(l=>l!==t).join(String.fromCharCode(10))
+      :(value?value+String.fromCharCode(10)+t:t));
+  };
+  // -- つかんで動かす（並べ替え・グループの引っ越し）--
+  const onDown=(e)=>{
+    if(e.target.closest('button'))return;
+    const el=e.target.closest('[data-qi]'); if(!el)return;
+    dg.current={i:Number(el.getAttribute('data-qi')),x:e.clientX,y:e.clientY,moved:false};
+  };
+  const onMove=(e)=>{
+    const d=dg.current; if(!d)return;
+    if(!d.moved&&Math.abs(e.clientX-d.x)<5&&Math.abs(e.clientY-d.y)<5)return;
+    d.moved=true; e.preventDefault();
+    const over=document.elementFromPoint(e.clientX,e.clientY); if(!over||!over.closest)return;
+    const t=over.closest('[data-qi]');
+    if(t){
+      const j=Number(t.getAttribute('data-qi')); if(j===d.i)return;
+      const gb=t.closest('[data-qg]'), tg=gb?gb.getAttribute('data-qg'):null;
+      setList(p=>{const n=[...p];const it=n.splice(d.i,1)[0];if(tg)it.g=tg;n.splice(j,0,it);return n;});
+      d.i=j; return;
+    }
+    const box=over.closest('[data-qg]');
+    if(box){ const gid=box.getAttribute('data-qg');
+      setList(p=>{if(!p[d.i]||p[d.i].g===gid)return p;const n=[...p];n[d.i]={...n[d.i],g:gid};return n;}); }
+  };
+  const onUp=()=>{
+    const d=dg.current; dg.current=null; if(!d)return;
+    if(!d.moved&&!edit&&list[d.i])toggleText(list[d.i]);
+  };
+  const addItem=()=>{
+    const l=nl.trim(); if(!l)return;
+    setList(p=>[...p,{id:'q_'+Date.now(),g:ng||(grps[0]||QM_FALLBACK).id,label:l,text:(nt.trim()||l)}]);
+    setNl(''); setNt('');
+  };
+  const BTN={border:'none',background:'#f1f5f9',borderRadius:7,padding:'4px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#475569',fontWeight:700};
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:4800,display:'flex',alignItems:'center',justifyContent:'center',padding:12}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="modal-box"
+        style={{background:'white',borderRadius:16,width:'min(820px,96vw)',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
+        <div style={{padding:'14px 18px',background:'linear-gradient(135deg,#0e7490,#0891b2)',borderRadius:'16px 16px 0 0',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <div>
+            <div style={{color:'white',fontWeight:900,fontSize:15}}>⚡ クイックメニュー</div>
+            <div style={{color:'rgba(255,255,255,0.8)',fontSize:11}}>押すと内容欄に入ります。つかんで動かすと並べ替えできます。</div>
+          </div>
+          <div style={{marginLeft:'auto',display:'flex',gap:7}}>
+            <button data-qmedit onClick={()=>{setEdit(p=>!p);setEIdx(null);}}
+              style={{border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,fontWeight:800,cursor:'pointer',fontFamily:'inherit',
+                background:edit?'white':'rgba(255,255,255,0.22)',color:edit?'#0e7490':'white'}}>✎ 編集</button>
+            <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:'50%',width:30,height:30,cursor:'pointer',color:'white',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={14}/></button>
+          </div>
+        </div>
+
+        <div style={{flex:1,overflowY:'auto',padding:'14px 18px'}}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+          <div style={{fontSize:12,color:'#475569',background:'#f1f5f9',borderRadius:9,padding:'8px 11px',marginBottom:11,lineHeight:1.6}}>
+            {edit?'編集中：✎ で字を直す／✕ で消す／下の欄から足す。つかんで動かすと並べ替え・グループの引っ越しができます。'
+                 :'押すと内容欄に行として足されます（もう一度押すと外れます）。つかんで動かすと並べ替え、ほかのグループへも引っ越せます。'}
+          </div>
+          {grps.map(g=>{
+            const mine=list.map((q,i)=>({q,i})).filter(x=>gidOf(x.q)===g.id);
+            return(
+              <div key={g.id} data-qg={g.id} style={{border:`2px solid ${g.col}55`,borderRadius:12,padding:'9px 11px 11px',marginBottom:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8}}>
+                  <span style={{padding:'2px 10px',borderRadius:14,background:g.col,color:'white',fontSize:11.5,fontWeight:900}}>{g.name}</span>
+                  <span style={{fontSize:11,color:'#94a3b8',fontWeight:700}}>{mine.length}個</span>
+                  {edit&&(
+                    <span style={{marginLeft:'auto',display:'flex',gap:4}}>
+                      <button style={BTN} onClick={()=>{const n=window.prompt('グループの名前',g.name);if(n&&n.trim())setGrps(p=>p.map(x=>x.id===g.id?{...x,name:n.trim()}:x));}}>名前</button>
+                      <button style={BTN} onClick={()=>{
+                        if(grps.length<=1)return;
+                        const rest=grps.filter(x=>x.id!==g.id);
+                        setList(p=>p.map(q=>q.g===g.id?{...q,g:rest[0].id}:q));
+                        setGrps(rest);
+                      }}>消す</button>
+                    </span>
+                  )}
+                </div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:7,minHeight:38}}>
+                  {mine.length===0&&<span style={{fontSize:11.5,color:'#cbd5e1'}}>（ここへ引っぱってくると入ります）</span>}
+                  {mine.map(({q,i})=>{
+                    if(edit&&eIdx===i)return(
+                      <div key={q.id||i} style={{width:'100%',background:'#f8fafc',border:'2px solid #e5e7eb',borderRadius:10,padding:'9px 11px',display:'flex',flexDirection:'column',gap:6}}>
+                        <input value={eL} onChange={ev=>setEL(ev.target.value)} placeholder="ボタンに出す字" style={{...INP,fontSize:13}}/>
+                        <input value={eT} onChange={ev=>setET(ev.target.value)} placeholder="内容欄に入れる文（空なら上の字がそのまま入ります）" style={{...INP,fontSize:12}}/>
+                        <div style={{display:'flex',gap:6}}>
+                          <button onClick={()=>{if(!eL.trim())return;setList(p=>{const n=[...p];n[i]={...n[i],label:eL.trim(),text:(eT.trim()||eL.trim())};return n;});setEIdx(null);}}
+                            style={{flex:1,padding:'7px 0',background:'#0891b2',color:'white',border:'none',borderRadius:7,fontWeight:700,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>✓ 確定</button>
+                          <button onClick={()=>setEIdx(null)} style={{padding:'7px 14px',background:'#f3f4f6',border:'none',borderRadius:7,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>やめる</button>
+                        </div>
+                      </div>
+                    );
+                    const t=txtOf(q), on=lines.indexOf(t)>=0;
+                    return(
+                      <div key={q.id||i} data-qi={i}
+                        style={{display:'inline-flex',alignItems:'center',gap:6,padding:'9px 16px',borderRadius:22,
+                          border:'2px solid',fontSize:14,fontWeight:700,cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',touchAction:'none',
+                          ...qmTint(g.col,on)}}>
+                        <span style={{fontSize:13,opacity:0.45}}>⠿</span>
+                        <span style={{fontSize:10,opacity:0.75}}>{on?'✓':'＋'}</span>{q.label}
+                        {edit&&(
+                          <span style={{display:'inline-flex',gap:3,marginLeft:3}}>
+                            <button onClick={()=>{setEIdx(i);setEL(q.label||'');setET(q.text||'');}}
+                              style={{border:'none',background:'rgba(255,255,255,0.9)',borderRadius:6,width:22,height:22,fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#0369a1'}}>✎</button>
+                            <button onClick={()=>{setList(p=>p.filter((_,j)=>j!==i));setEIdx(null);}}
+                              style={{border:'none',background:'rgba(255,255,255,0.9)',borderRadius:6,width:22,height:22,fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#dc2626'}}>✕</button>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          {edit&&(
+            <button onClick={()=>{const n=window.prompt('新しいグループの名前','新しいグループ');if(n&&n.trim())setGrps(p=>[...p,{id:'g_'+Date.now(),name:n.trim(),col:'#7c3aed'}]);}}
+              style={{width:'100%',padding:'9px 0',border:'2px dashed #cbd5e1',background:'white',borderRadius:11,fontSize:12.5,fontWeight:800,color:'#64748b',cursor:'pointer',fontFamily:'inherit'}}>
+              ＋ グループを足す
+            </button>
+          )}
+          {edit&&(
+            <div style={{marginTop:12,background:'#f0fdf4',border:'2px dashed #86efac',borderRadius:11,padding:'11px 13px'}}>
+              <div style={{fontWeight:800,fontSize:12.5,color:'#059669',marginBottom:8}}>＋ 新しいバッジを足す</div>
+              <input value={nl} onChange={e=>setNl(e.target.value)} placeholder="ボタンに出す字（例：バッテリー交換）" style={{...INP,fontSize:13,marginBottom:6}}/>
+              <input value={nt} onChange={e=>setNt(e.target.value)} placeholder="内容欄に入れる文（空なら上の字がそのまま入ります）" style={{...INP,fontSize:12,marginBottom:6}}/>
+              <select value={ng} onChange={e=>setNg(e.target.value)} style={{...INP,fontSize:13,marginBottom:6}}>
+                {grps.map(g=><option key={g.id} value={g.id}>{g.name} に入れる</option>)}
+              </select>
+              <button onClick={addItem} disabled={!nl.trim()}
+                style={{width:'100%',padding:'9px 0',background:nl.trim()?'#059669':'#d1d5db',color:'white',border:'none',borderRadius:8,fontWeight:800,fontSize:12.5,cursor:nl.trim()?'pointer':'default',fontFamily:'inherit'}}>
+                ＋ 追加する
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:'12px 18px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8,flexShrink:0}}>
+          <button onClick={()=>{onSaveList(list,grps);onClose();}}
+            style={{flex:1,padding:'11px 0',background:'linear-gradient(135deg,#0e7490,#0891b2)',color:'white',border:'none',borderRadius:9,fontWeight:900,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+            ✓ 保存して閉じる
+          </button>
+          <button onClick={onClose} style={{padding:'11px 18px',background:'#f3f4f6',border:'none',borderRadius:9,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>やめる</button>
+        </div>
+      </div>
+    </div>
+  );
+});
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
   const [form,setForm]=useState(initialData);
+  const [showQuickMenu,setShowQuickMenu]=useState(false);   // ⚡ クイックメニュー（2026-10-31）
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
   //   三田店で予約したお客様が本店入庫に変わる、といった時に使う（めったに使わない）。
   const [mvStore,setMvStore]=useState(()=>hubNormStore(initialData&&initialData.store)||storeId||'honten');
@@ -8547,8 +8805,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     const cur=WIDS.indexOf(form.work);
     // 選択中の項目を常にリスト内に見えるようスクロール（下端に来たらドラム式に上へ送る）
     const scrollWkIntoView=(id)=>{const el=document.querySelector('[data-wkid="'+id+'"]');if(el)el.scrollIntoView({block:'nearest'});};
-    if(e.key==='ArrowDown'){e.preventDefault();const ni=cur<0?0:Math.min(cur+1,WIDS.length-1);setForm(p=>({...p,work:WIDS[ni]}));scrollWkIntoView(WIDS[ni]);}
-    else if(e.key==='ArrowUp'){e.preventDefault();const ni=Math.max(cur-1,0);setForm(p=>({...p,work:WIDS[ni]}));scrollWkIntoView(WIDS[ni]);}
+    if(e.key==='ArrowDown'){e.preventDefault();const ni=cur<0?0:Math.min(cur+1,WIDS.length-1);setForm(p=>applyWorkPick(p,WIDS[ni],true));scrollWkIntoView(WIDS[ni]);}
+    else if(e.key==='ArrowUp'){e.preventDefault();const ni=Math.max(cur-1,0);setForm(p=>applyWorkPick(p,WIDS[ni],true));scrollWkIntoView(WIDS[ni]);}
     else if(e.key==='Enter'){e.preventDefault();setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);}
     else if(e.key==='Escape'){e.preventDefault();setShowWkPk(false);}
   };
@@ -9019,7 +9277,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 onKeyDown={onWorkKb} onClick={()=>setShowWkPk(p=>!p)}
                 style={{...INP,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',...KB('work')}}>
                 <span style={{color:form.work?'#111':'#9ca3af'}}>
-                  {form.work?(WORKS.find(w=>w.id===form.work)||{name:'未選択'}).name:'選択してください（Enterで開く）'}
+                  {form.work?workName(form.work):'選択してください（Enterで開く）'}
                 </span>
                 <span style={{fontSize:10,color:'#6b7280'}}>{showWkPk?'▲':'▼'}</span>
               </div>
@@ -9027,11 +9285,25 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <div data-popgrid="work" style={POPBOX('#0891b2',2)}>
                   {WORKS.map((w,i)=>(
                     <div key={i} data-wkid={w.id}
-                      onMouseDown={e=>{e.preventDefault();setForm(p=>({...p,work:w.id}));setShowWkPk(false);setKbField('shimi');}}
+                      onMouseDown={e=>{e.preventDefault();setForm(p=>applyWorkPick(p,w.id,false));setShowWkPk(false);setKbField('shimi');}}
                       style={POPIT(form.work===w.id,'#0891b2','#e0f2fe',{left:true})}>
                       {w.id} {w.name}
                     </div>
                   ))}
+                </div>
+              )}
+              {/* ★Q を選んだ時だけ「どこで作業する」。両方えらべる（2026-10-31 ユーザー指示） */}
+              {form.work==='Q'&&(
+                <div style={{marginTop:7}}>
+                  <div style={{display:'flex',gap:7}} data-qkrow="1">
+                    {QKINDS.map(k=>{const on=qkindOf(form).indexOf(k.k)>=0;return(
+                      <button key={k.k} data-qkind={k.k} onClick={()=>setForm(p=>({...p,qkind:toggleQkind(p,k.k)}))}
+                        style={{flex:1,padding:'8px 0',borderRadius:9,border:`2px solid ${on?'#7c3aed':'#e5e7eb'}`,
+                          background:on?'#f5f3ff':'white',color:on?'#7c3aed':'#64748b',fontSize:12.5,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+                        {on?'✓ ':''}{k.name}
+                      </button>);})}
+                  </div>
+                  <div style={{fontSize:10,color:'#9ca3af',marginTop:4}}>どちらも選ばなければ ふつうのクイック整備・修理。入庫制限は3通りで別々に通せます</div>
                 </div>
               )}
             </div>
@@ -9270,62 +9542,17 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           <div>
             <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
               <label style={{...LBL,margin:0}}>{isInsp?'備考':'内容'}</label>
-              {onOpenSetItemEdit&&<button onClick={onOpenSetItemEdit}
-                style={{marginLeft:'auto',padding:'2px 8px',background:'#e0f2fe',border:'1px solid #7dd3fc',borderRadius:5,fontSize:10,color:'#0369a1',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}>
-                ⚙ クイック編集
-              </button>}
+              <button data-quickmenu onClick={()=>setShowQuickMenu(true)}
+                style={{marginLeft:'auto',padding:'6px 13px',background:'#ecfeff',border:'1.5px solid #67e8f9',borderRadius:8,fontSize:12.5,color:'#0e7490',fontWeight:800,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}}>
+                ⚡ クイックメニュー
+              </button>
             </div>
-            {/* クイックアイテム バッジ一覧（常時表示） */}
-            {(setItems||[]).length>0&&(
-              <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6}}>
-                {(setItems||[]).map((si,i)=>{
-                  const field=isInsp?'note':'content';
-                  const cur=(isInsp?form.note:form.content)||'';
-                  // ★挿入するテキストが空のアイテムは表示名をそのまま入れる（2026-09-19 報告：「部品手配OK」がテキスト未入力で無反応だった）
-                  const txt=(si.text&&String(si.text).trim())?si.text:(si.label||'');
-                  // 現在の内容にこのアイテムのテキストが含まれているか
-                  const lines=cur.split('\n');
-                  const isActive=!!(txt&&lines.includes(txt));
-                  return(
-                    <button key={si.id||i}
-                      onClick={()=>{
-                        if(isActive){
-                          // 2回目：該当行を削除
-                          const next=lines.filter(l=>l!==txt).join('\n');
-                          setForm(p=>({...p,[field]:next}));
-                        }else{
-                          // 1回目：末尾に追記
-                          if(!txt)return;
-                          setForm(p=>({...p,[field]:cur?cur+'\n'+txt:txt}));
-                        }
-                      }}
-                      style={{
-                        display:'inline-flex',alignItems:'center',gap:5,
-                        padding:'6px 14px',
-                        background:isActive?'#d1fae5':'#ecfdf5',
-                        border:`2px solid ${isActive?'#10b981':'#6ee7b7'}`,
-                        borderRadius:20,
-                        fontSize:13,fontWeight:700,
-                        color:isActive?'#065f46':'#059669',
-                        cursor:'pointer',
-                        whiteSpace:'nowrap',
-                        transition:'all 0.12s',
-                        boxShadow:isActive?'inset 0 1px 3px rgba(0,0,0,0.1)':'none',
-                      }}
-                      onMouseEnter={e=>{e.currentTarget.style.background=isActive?'#a7f3d0':'#d1fae5';}}
-                      onMouseLeave={e=>{e.currentTarget.style.background=isActive?'#d1fae5':'#ecfdf5';}}>
-                      {isActive?<span style={{fontSize:10}}>✓</span>:<span style={{fontSize:10,opacity:0.7}}>＋</span>}
-                      {si.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* ★クイックのバッジ列はしまった（2026-10-31）。⚡ クイックメニューの中にまとめてある */}
             <textarea ref={isInsp?noteRef:contRef} value={isInsp?form.note:form.content}
               onChange={e=>setForm({...form,[isInsp?'note':'content']:e.target.value})}
               onFocus={()=>setKbField('note')} onBlur={()=>setKbField('')}
               onKeyDown={e=>{if(e.key==='ArrowUp'&&e.target.selectionStart===0){e.preventDefault();goPrev('note');}}}              
-              rows={3} lang="ja" placeholder="メモや特記事項（クイックバッジはマウスで選択）" style={{...INP,resize:'vertical',minHeight:65,...KB('note')}}/>
+              rows={3} lang="ja" placeholder="メモや特記事項（⚡ クイックメニューから入れられます）" style={{...INP,resize:'vertical',minHeight:65,...KB('note')}}/>
           </div>
           {/* ★この予約の受け付け（2026-10-29 ユーザー指示）。新規の時は出さない。
               入れた日時・入れた人と、日にちを変えた記録。1日表示の行（BLOCK-C）は触れないので、
@@ -9369,6 +9596,12 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           </div>
         </div>
       </div>
+      {/* ⚡ クイックメニュー（2026-10-31）。内容の足し引きはその場で効く */}
+      <QuickMenuModal isOpen={showQuickMenu} onClose={()=>setShowQuickMenu(false)}
+        items={setItems||[]} groups={setGroups||[]}
+        value={(isInsp?form.note:form.content)||''}
+        onChangeValue={v=>setForm(p=>({...p,[isInsp?'note':'content']:v}))}
+        onSaveList={(it,gs)=>{if(onSaveQuick)onSaveQuick(it,gs);}}/>
     </div>
   );
 });
@@ -9552,8 +9785,9 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
 // ============================================
 const RestrictionTip=({r,style,rect})=>{
   const ex=restrExempt(r);
-  const okWorks=WORKS.filter(w=>ex.includes(w.id));
-  const ngCount=WORKS.length-okWorks.length;
+  const _all=EXEMPT_LIST();
+  const okWorks=_all.filter(x=>ex.includes(x.key)).map(x=>({id:x.key,name:x.label}));
+  const ngCount=_all.length-okWorks.length;
   // ★rect（マウスが乗った枠の位置）をもらった時は画面に対する固定位置で出す（2026-10-03）。
   //   行の中に absolute で出すと、一番下までスクロールした状態で「出す→高さが伸びる→
   //   行が逃げる→消える→高さが戻る→また入る」を繰り返してチラついていた。
@@ -9677,7 +9911,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
   //   マッハより先に入っていた予定は特例でそのまま（白いまま）。
   const machCov=isRestricted?machCovering(restriction,baseSlot):null;
   const rowMachPre=isRestricted&&!!row.name&&machPreexisting(restriction,row);
-  const rowExempt=isRestricted&&!!row.name&&(restrExempt(restriction).includes(row.work)||rowMachPre);
+  const rowExempt=isRestricted&&!!row.name&&(restrPasses(restriction,row)||rowMachPre);
   const rowBgSched=rowExempt?'white'
     :isRestricted?'#fee2e2'
     :locked?'#fffbeb':row.store==='sanda'?'#fff0f0':row.store==='honten'?'#eff6ff':isHour?'white':'#f0feff';
@@ -9718,7 +9952,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
       {/* ★車種の下にナンバー4桁、電話は作業内容のバッジの下（2026-09-30 ユーザー指示・A案） */}
       <td style={TD}><span style={{color:'#374151',fontSize:13,fontWeight:700}}>{row.carType||'—'}</span>
         {(row.no!==undefined&&row.no!==null&&String(row.no)!=='')&&<div style={{fontSize:12,fontWeight:800,letterSpacing:'.06em',color:'#0f172a',whiteSpace:'nowrap'}}>ナンバー {row.no}</div>}</td>
-      <td style={TD}>{row.work?<WorkBadge id={row.work} dim={locked||otherStore}/>:<span style={{fontSize:13,color:'#374151'}}>—</span>}
+      <td style={TD}>{row.work?<><WorkBadge id={row.work} dim={locked||otherStore}/>{qkindLabel(row)&&<span data-qklab title={'クイック整備・修理の'+qkindLabel(row)} style={{marginLeft:4,fontSize:10,fontWeight:800,color:'#7c3aed',whiteSpace:'nowrap'}}>{qkindLabel(row)}</span>}</>:<span style={{fontSize:13,color:'#374151'}}>—</span>}
         {row.phone&&<div style={{fontSize:11,marginTop:3,color:'#0369a1',fontWeight:600,whiteSpace:'nowrap'}}>📞{row.phone}</div>}</td>
       <td style={TD}><span style={{fontSize:12,color:row.rentalLabel?'#065f46':'#374151',fontWeight:400}}>
         {/* ★限定（この車でないとダメ）の代車は鍵マークを付ける。最適化で動かない印 */}
@@ -13631,8 +13865,15 @@ function AppInner() {
       text: si.text ?? si.content ?? si.label ?? '',
     }));
   },[quickItemsRaw]);
-  const setSetItems = useCallback(v=>setQuickItemsRaw(v),[setQuickItemsRaw]);
-  const [showSetItemEdit, setShowSetItemEdit] = useState(false);
+  // ★クイックメニューのグループ（2026-10-31）。項目とは別のキーに持つ（配列なので丸ごと置き換え）
+  const [setGroupsRaw, setSetGroupsRaw] = useShared(STOR+'setGroups', DEFAULT_SET_GROUPS);
+  const setGroups = useMemo(()=>{
+    const raw = Array.isArray(setGroupsRaw)&&setGroupsRaw.length>0 ? setGroupsRaw : DEFAULT_SET_GROUPS;
+    return raw.filter(g=>g&&g.id).map(g=>({id:g.id,name:g.name||'（名前なし）',col:g.col||'#64748b'}));
+  },[setGroupsRaw]);
+  const saveQuickMenu = useCallback((items,groups)=>{
+    setQuickItemsRaw(items); setSetGroupsRaw(groups);
+  },[setQuickItemsRaw,setSetGroupsRaw]);
   // 備考・メモ用クイックアイテム（スケジュール内容欄とは独立）
   const [memoItemsRaw, setMemoItemsRaw] = useShared(STOR+'memoItems', DEFAULT_MEMO_ITEMS);
   const memoItems = useMemo(()=>{
@@ -14963,9 +15204,10 @@ function AppInner() {
 
         // 制限時間帯の場合、制限解除項目に含まれていないかチェック
         if(isRestricted&&!_machPre){   // ★マッハより先にあった予定は通す（2026-10-05）
-          const workId=cleanData.work;
-          const isExempt=restrExempt(restriction).includes(workId);
-          
+          // ★クイック整備・修理は「ふつう／リフト作業／ピット作業」で分けて見る（2026-10-31）。
+          //   両方えらんだ時は両方が解除されていないと通さない。必ず restrPasses を通すこと。
+          const isExempt=restrPasses(restriction,cleanData);
+
           if(!isExempt){
             alert(`🚫 この時間帯（${restrLabels(restriction).join('／')}）は入庫制限中です。\n制限解除されている作業内容のみ予約可能です。`);
             setModalOpen(true); // モーダルを再度開く
@@ -17552,7 +17794,8 @@ function AppInner() {
         onTogglePendingLoanerLock={togglePendingLoanerLock}
         currentUser={currentUser}
         setItems={setItems}
-        onOpenSetItemEdit={()=>setShowSetItemEdit(true)}
+        setGroups={setGroups}
+        onSaveQuick={saveQuickMenu}
         allCars={currentLoaners}
         fromCustList={fromCustList}
         staffHere={currentStaffList}
@@ -17640,13 +17883,8 @@ function AppInner() {
         inspLimits={inspLimits}
         onNavigate={handleSearchNavigate}/>
 
-      {/* -- セットアイテム編集（スケジュール内容欄用） -- */}
-      <SetItemEditModal
-        isOpen={showSetItemEdit}
-        onClose={()=>setShowSetItemEdit(false)}
-        title="スケジュール内容欄 クイック編集"
-        items={Array.isArray(quickItemsRaw)&&quickItemsRaw.length>0?quickItemsRaw.map(si=>({...si,text:si.text??si.content??si.label??''})):DEFAULT_SET_ITEMS}
-        onSave={v=>setSetItems(v)}/>
+      {/* ★スケジュール内容欄のクイックは ⚡ クイックメニュー（QuickMenuModal）に移した（2026-10-31）。
+          予約カードの中に出すので、ここには置かない。備考・メモ用は今までどおり。 */}
       {/* -- セットアイテム編集（備考・メモ用） -- */}
       <SetItemEditModal
         isOpen={showMemoItemEdit}

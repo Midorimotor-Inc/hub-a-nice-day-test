@@ -54,7 +54,7 @@ const EMPTY_D = EMPTY.getDate();
 
 (async () => {
   const seed = {
-    [STOR + 'setItems']: [{ id: 'si1', label: 'Eオイル交換', text: 'エンジンオイル交換' }, { id: 'si2', label: 'レッカー搬入', text: 'レッカー搬入' }],
+    [STOR + 'setItems']: [{ id: 'sq1', g: 'g1', label: '1ヶ月', text: '1ヶ月' }, { id: 'sq2', g: 'g1', label: '6ヶ月', text: '6ヶ月' }, { id: 'sq3', g: 'g1', label: '12ヶ月', text: '12ヶ月' }, { id: 'sq4', g: 'g1', label: '18ヶ月', text: '18ヶ月' }, { id: 'si1', g: 'g2', label: 'Eオイル交換', text: 'エンジンオイル交換' }, { id: 'si2', g: 'g3', label: 'レッカー搬入', text: 'レッカー搬入' }],
     [STOR + 'insp']: { [DK]: [
       { name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' },
       { name: '稲木', carType: 'ワゴンR', no: '3311', course: 3, store: 'honten', seq: 2, time: '09:30', bookingStatus: 'confirmed', note: '' },
@@ -190,7 +190,7 @@ const EMPTY_D = EMPTY.getDate();
     if (!sh) return -1;
     return [...sh.querySelectorAll('button')].filter(b2 => !/^✕$|とじる/.test(b2.innerText.trim())).length;
   });
-  t('★作業内容が13項目ぜんぶ大きく出る', opts === 13, opts);
+  t('★作業内容が11項目ぜんぶ大きく出る', opts === 11, opts);
   const optH = await page.evaluate(() => {
     const sh = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).zIndex === '3150').pop();
     const b2 = sh && [...sh.querySelectorAll('button')].find(x => !/^✕$|とじる/.test(x.innerText.trim()));
@@ -199,25 +199,58 @@ const EMPTY_D = EMPTY.getDate();
   t('★1項目が指で押せる大きさ（40px以上）', optH >= 40, optH + 'px');
   await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/とじる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
   await page.waitForTimeout(400);
-  t('★内容欄に ⚡ クイックのボタンがある', await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /⚡ クイック/.test(e.innerText) && e.offsetParent !== null)));
-  // ★クイック項目は PC で作った定型文がそのまま出て、押すと内容に行として入る（PC と同じ）
-  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/⚡ クイック/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  t('★内容欄に ⚡ クイックメニューのボタンがある', await page.evaluate(() => !!document.querySelector('button[data-quickmenu]')));
+  // ★クイックメニュー（2026-10-31）：グループの区画で全部出す／押すと内容に行として入る／長押しで並べ替え
+  await page.click('button[data-quickmenu]');
   await page.waitForTimeout(600);
-  t('★クイックに PC の定型文が出る', await seeText(page, 'Eオイル交換', 4000));
-  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/Eオイル交換/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
-  await page.waitForTimeout(500);
+  t('★クイックメニューが開く', await page.evaluate(() => !!document.querySelector('[data-quickmenusheet]')));
+  t('★グループの区画に分かれて出る', await page.evaluate(() => document.querySelectorAll('[data-qg]').length >= 4),
+    await page.evaluate(() => document.querySelectorAll('[data-qg]').length));
+  t('★グループ名「点検」「整備・交換」「預かり・搬入」が出る', await page.evaluate(() => {
+    const x = document.querySelector('[data-quickmenusheet]'); if (!x) return false;
+    return /点検/.test(x.innerText) && /整備・交換/.test(x.innerText) && /預かり・搬入/.test(x.innerText);
+  }));
+  t('★PC で作った定型文がそのまま出る', await seeText(page, 'Eオイル交換', 4000));
+  t('★点検のグループに 1ヶ月・6ヶ月・12ヶ月・18ヶ月が入っている', await page.evaluate(() => {
+    const g = [...document.querySelectorAll('[data-qg]')].find(e => /点検/.test(e.innerText));
+    if (!g) return false;
+    return ['1ヶ月','6ヶ月','12ヶ月','18ヶ月'].every(w => [...g.querySelectorAll('[data-qi]')].some(b => b.innerText.indexOf(w) >= 0));
+  }));
+  const tapQuick = async (word) => {
+    const box = await page.evaluate((w) => {
+      const b = [...document.querySelectorAll('[data-qi]')].find(e => e.innerText.indexOf(w) >= 0);
+      if (!b) return null; const r = b.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    }, word);
+    if (!box) return false;
+    await page.mouse.move(box.x, box.y); await page.mouse.down(); await page.mouse.up();
+    await page.waitForTimeout(350); return true;
+  };
+  t('★バッジは指で押せる大きさ（40px以上）', await page.evaluate(() => {
+    const b = document.querySelector('[data-qi]'); return b ? Math.round(b.getBoundingClientRect().height) >= 40 : false;
+  }), await page.evaluate(() => { const b = document.querySelector('[data-qi]'); return b ? Math.round(b.getBoundingClientRect().height) + 'px' : '(無い)'; }));
+  await tapQuick('Eオイル交換');
   t('★押すと内容欄に入る', await page.evaluate(() => {
     const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null);
     return !!ta && ta.value.indexOf('エンジンオイル交換')>=0;
   }), await page.evaluate(() => { const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null); return ta?ta.value:'(無い)'; }));
-  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/Eオイル交換/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
-  await page.waitForTimeout(500);
+  await tapQuick('Eオイル交換');
   t('★もう一度押すと外れる', await page.evaluate(() => {
     const ta=[...document.querySelectorAll('textarea')].find(e=>e.offsetParent!==null);
     return !!ta && ta.value.indexOf('エンジンオイル交換')<0;
   }));
-  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/とじる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
+  await page.click('[data-qmedit]');
+  await page.waitForTimeout(300);
+  t('★✎ 編集で「新しいバッジを足す」が出る', await seeText(page, '新しいバッジを足す', 3000));
+  t('★編集中は ✎／✕ のボタンが出る', await page.evaluate(() => {
+    const b = document.querySelector('[data-qi]'); if (!b) return false;
+    const txt = [...b.querySelectorAll('button')].map(x => x.innerText.trim()).join('');
+    return txt.indexOf('✎') >= 0 && txt.indexOf('✕') >= 0;
+  }));
+  t('★「保存して閉じる」がある', await page.evaluate(() => !!document.querySelector('[data-qmsave]')));
+  await page.evaluate(() => { const b2=[...document.querySelectorAll('button')].find(e=>/やめる/.test(e.innerText)&&e.offsetParent!==null); if(b2)b2.click(); });
   await page.waitForTimeout(400);
+  t('★やめるで閉じる', await page.evaluate(() => !document.querySelector('[data-quickmenusheet]')));
   t('移動の案内文は出さない（ユーザー指示）', !(await page.evaluate(() => document.body.innerText)).includes('元の枠は空きます'));
   // 翌日の 13:00 へ移す
   await page.evaluate(([inDate]) => {

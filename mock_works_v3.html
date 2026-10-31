@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub モック：作業項目の最終形／入庫制限／クイックメニューのグループ</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Yu Gothic','Hiragino Sans',Meiryo,sans-serif;background:#f1f5f9;color:#1b2129;font-size:14px;line-height:1.7}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px 16px 90px}
+  h1{font-size:19px;font-weight:900;margin-bottom:4px}
+  .lead{font-size:13px;color:#475569;margin-bottom:16px}
+  h2{font-size:16px;font-weight:900;margin:28px 0 6px;padding-left:9px;border-left:5px solid #1d4ed8}
+  h2 .q{font-size:12px;font-weight:700;color:#64748b;margin-left:8px}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#92400e;margin-bottom:12px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:12px}
+  .one{display:block}
+  .card{background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:14px}
+  .card.rec{border-color:#1d4ed8;box-shadow:0 2px 10px rgba(29,78,216,.12)}
+  .card h3{font-size:14.5px;font-weight:900}
+  .tagrec{display:inline-block;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:7px;vertical-align:2px}
+  .desc{font-size:12.5px;color:#475569;margin:4px 0 11px}
+  .ui{background:#f8fafc;border:1px solid #e2e8f0;border-radius:11px;padding:11px}
+  .lbl{font-size:11px;font-weight:800;color:#475569;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .works{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+  .w{border:2px solid #e2e8f0;background:#fff;border-radius:8px;padding:5px 9px;font-size:12px;font-weight:700;color:#475569;cursor:pointer;font-family:inherit}
+  .w.on{border-color:#0e7490;background:#ecfeff;color:#0e7490}
+  .w .cd{display:inline-block;min-width:22px;text-align:center;background:#eef2f7;border-radius:4px;padding:0 3px;margin-right:5px;font-weight:900;color:#334155}
+  .w.on .cd{background:#0e7490;color:#fff}
+  .w.nw{border-style:dashed;border-color:#f59e0b}
+  .gone{display:flex;flex-wrap:wrap;gap:5px}
+  .gone span{border:2px solid #fecaca;background:#fef2f2;color:#b91c1c;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:700;text-decoration:line-through}
+  textarea{width:100%;border:2px solid #e2e8f0;border-radius:9px;padding:8px 10px;font:inherit;font-size:13px;resize:vertical;background:#fff;min-height:58px}
+  .sched{margin-top:11px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;overflow:hidden}
+  .sched .hd{background:#f1f5f9;font-size:11px;font-weight:800;color:#475569;padding:5px 9px}
+  .row{display:flex;gap:8px;padding:8px 9px;align-items:flex-start;border-top:1px solid #f1f5f9}
+  .tm{font-size:11.5px;font-weight:800;color:#0e7490;width:40px;flex-shrink:0}
+  .bdg{display:inline-block;background:#cffafe;color:#0e7490;border:1px solid #67e8f9;border-radius:6px;padding:0 6px;font-size:11px;font-weight:900;flex-shrink:0}
+  .nm{font-weight:800;font-size:13px}
+  .ct{font-size:12px;color:#475569;white-space:pre-wrap}
+  .sub{font-size:11px;color:#94a3b8;margin-top:7px}
+  .qbtn{margin-left:auto;padding:7px 14px;background:#ecfeff;border:1.5px solid #67e8f9;border-radius:8px;font-size:13px;color:#0e7490;font-weight:800;cursor:pointer;font-family:inherit}
+  .pit{display:flex;gap:6px;margin:0 0 10px}
+  .pit button{flex:1;border:2px solid #e2e8f0;background:#fff;border-radius:8px;padding:8px 0;font-size:12.5px;font-weight:800;color:#475569;cursor:pointer;font-family:inherit}
+  .pit button.on{border-color:#7c3aed;background:#f5f3ff;color:#7c3aed}
+  .ex{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .ex button{border:2px solid #d1d5db;background:#fff;border-radius:8px;padding:7px 10px;text-align:left;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer;font-family:inherit}
+  .ex button.on{border-color:#10b981;background:#d1fae5;color:#065f46}
+  .ex button.q{grid-column:1/-1}
+  .mach{background:#fee2e2;border:2px solid #ef4444;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:800;color:#b91c1c;margin-bottom:9px}
+  .try{margin-top:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:9px 11px;font-size:12.5px}
+  .ok{color:#047857;font-weight:800}.ng{color:#b91c1c;font-weight:800}
+  /* ポップ */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:center;justify-content:center;padding:14px}
+  .ov.on{display:flex}
+  .pop{background:#fff;border-radius:16px;width:min(820px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  .pop .ph{padding:14px 18px;background:linear-gradient(135deg,#0e7490,#0891b2);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px}
+  .pop .ph .t{color:#fff;font-weight:900;font-size:15px}
+  .pop .ph .s{color:rgba(255,255,255,.8);font-size:11px}
+  .pop .ph .sp{margin-left:auto;display:flex;gap:7px}
+  .ebtn{border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.22);color:#fff}
+  .ebtn.on{background:#fff;color:#0e7490}
+  .pbody{flex:1;overflow-y:auto;padding:14px 18px}
+  .hint{font-size:12px;color:#475569;background:#f1f5f9;border-radius:9px;padding:8px 11px;margin-bottom:11px}
+  .grp{border:2px solid #e5e7eb;border-radius:12px;padding:9px 11px 11px;margin-bottom:10px}
+  .grp .gh{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:900;margin-bottom:8px}
+  .grp .gh .gn{padding:2px 10px;border-radius:14px;color:#fff;font-size:11.5px}
+  .grp .gh .gc{font-size:11px;color:#94a3b8;font-weight:700}
+  .grp .gh .ga{margin-left:auto;display:flex;gap:4px}
+  .grp .gh .ga button{border:none;background:#f1f5f9;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-family:inherit;color:#475569;font-weight:700}
+  .qgrid{display:flex;flex-wrap:wrap;gap:7px;min-height:38px}
+  .qi{position:relative;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:22px;font-size:14px;font-weight:700;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;border:2px solid}
+  .qi.drag{opacity:.35}
+  .qi .mk{font-size:10px;opacity:.75}
+  .qi .ic{display:inline-flex;gap:3px;margin-left:3px}
+  .qi .ic button{border:none;background:rgba(255,255,255,.9);border-radius:6px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:inherit;color:#0369a1}
+  .qi .ic button.del{color:#dc2626}
+  .grip{font-size:13px;opacity:.45;margin-right:-2px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tabs button{border:2px solid #e5e7eb;background:#fff;border-radius:10px;padding:7px 14px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;color:#64748b}
+  .addbox{margin-top:12px;background:#f0fdf4;border:2px dashed #86efac;border-radius:11px;padding:11px 13px}
+  .addbox .t{font-weight:800;font-size:12.5px;color:#059669;margin-bottom:8px}
+  .addbox input,.addbox select{width:100%;border:2px solid #d1fae5;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;margin-bottom:6px;background:#fff}
+  .addbox button{width:100%;padding:9px 0;background:#059669;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .pf{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;gap:8px}
+  .pf .okb{flex:1;padding:11px 0;background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;border:none;border-radius:9px;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit}
+  .pf .ngb{padding:11px 18px;background:#f3f4f6;border:none;border-radius:9px;font-size:12px;cursor:pointer;font-family:inherit}
+  .foot{margin-top:26px;background:#fff;border:2px solid #1d4ed8;border-radius:14px;padding:14px}
+  .foot b{color:#1d4ed8}
+  ul{margin:6px 0 0 20px}li{font-size:13px;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>モック（作り直し）：作業項目の最終形／入庫制限／クイックメニューのグループ</h1>
+  <div class="lead">前のモックで混同していた「主作業のバッジ」と「入庫制限の中だけの分け方」を切り分けました。</div>
+
+  <h2>③ 作業項目（主作業）の最終形<span class="q">この11個でよいですか？</span></h2>
+  <div class="note">
+    <b>消したもの</b>：⑫ 12ヶ月点検／新車1ヶ月点検／新車6ヶ月点検／メンパ1ヶ月・6ヶ月・12ヶ月点検。
+    <b>足したもの</b>：メンパ／有点（有料点検）／無点（無料点検）。
+    <b>QL・QP は主作業には作りません</b>（入庫制限の中だけの話なので ② に移しました）。
+  </div>
+  <div class="cards one"><div class="card rec" id="c3"></div></div>
+
+  <h2>② 入庫制限のクイック整備を3つに分ける<span class="q">この分け方でよいですか？</span></h2>
+  <div class="note">
+    主作業は <b>「Q クイック整備・修理」1つのまま</b>。Q を選んだ時だけ、カードに小さく
+    <b>「リフト作業／ピット作業」</b>が出ます（<b>両方えらべます</b>。どちらも選ばなければ ふつうのクイック整備・修理）。
+    入庫制限では、その3通りを<b>別々に通せます</b>。
+  </div>
+  <div class="cards one"><div class="card rec" id="c2"></div></div>
+
+  <h2>④ クイックメニューをグループで分ける<span class="q">どちらの出し方にしますか？</span></h2>
+  <div class="note">
+    どちらも中身は同じ（押すと内容に入る／つかんで動かすと並べ替え・グループ間の引っ越しもできる／✎で直す／＋で足す）。
+    <b>ちがうのは「全部いっぺんに出す」か「グループを選んで出す」か</b>だけです。
+  </div>
+  <div class="cards one"><div class="card rec" id="c4"></div></div>
+
+  <div class="foot">
+    <b>お返事のしかた</b>
+    <ul>
+      <li>③ 11個のバッジ、これでよいか（字も変えられます）</li>
+      <li>② 「リフト作業／ピット作業」の呼び名と、両方えらんだ時の通し方</li>
+      <li>④ は <b>A案（区画）</b>で決まりました。スマホの見え方は <b>mock_works_v4.html</b> を見てください</li>
+    </ul>
+  </div>
+</div>
+
+<div class="ov" id="ov">
+  <div class="pop">
+    <div class="ph">
+      <div>
+        <div class="t">⚡ クイックメニュー</div>
+        <div class="s" id="psub"></div>
+      </div>
+      <div class="sp">
+        <button class="ebtn" id="eb">✎ 編集</button>
+        <button class="ebtn" id="xb">✕</button>
+      </div>
+    </div>
+    <div class="pbody">
+      <div class="hint" id="hint"></div>
+      <div id="pmain"></div>
+      <div class="addbox" id="ab" style="display:none">
+        <div class="t">＋ 新しいバッジを足す</div>
+        <input id="nl" placeholder="ボタンに出す字（例：バッテリー交換）">
+        <input id="nt" placeholder="内容欄に入れる文（空なら上の字がそのまま入ります）">
+        <select id="ng"></select>
+        <button id="nb">＋ 追加する</button>
+      </div>
+    </div>
+    <div class="pf">
+      <button class="okb" id="okb">✓ 保存して閉じる</button>
+      <button class="ngb" id="cnb">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var E=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+
+/* ========== ③ 作業項目の最終形 ========== */
+var WORKS=[
+  {id:'Q',name:'クイック整備・修理'},
+  {id:'メンパ',name:'メンパ',nw:1},
+  {id:'有点',name:'有料点検',nw:1},
+  {id:'無点',name:'無料点検',nw:1},
+  {id:'B',name:'鈑金塗装'},
+  {id:'R',name:'リコール'},
+  {id:'商',name:'商談'},
+  {id:'保',name:'保険'},
+  {id:'試',name:'試乗'},
+  {id:'納',name:'納車'},
+  {id:'他',name:'その他'}
+];
+var GONE=['⑫ 12ヶ月点検','N1 新車1ヶ月点検','N6 新車6ヶ月点検','M1 メンパ1ヶ月点検','M6 メンパ6ヶ月点検','M12 メンパ12ヶ月点検'];
+var s3={work:'',text:''};
+function draw3(){
+  document.getElementById('c3').innerHTML=
+    '<h3>作業項目（主作業）<span class="tagrec">11個</span></h3>'
+    +'<div class="desc">押すと、内容欄が空のときだけ作業名が入ります（「その他」は入りません）。破線＝今回ふえるもの。</div>'
+    +'<div class="ui">'
+    +'<span class="lbl">作業内容</span>'
+    +'<div class="works">'+WORKS.map(function(w){
+        return '<button class="w'+(s3.work===w.id?' on':'')+(w.nw?' nw':'')+'" data-w3="'+E(w.id)+'">'
+          +'<span class="cd">'+E(w.id)+'</span>'+E(w.name)+'</button>';
+      }).join('')+'</div>'
+    +'<span class="lbl">内容</span>'
+    +'<textarea rows="2" id="t3" placeholder="（ここに書きます）">'+E(s3.text)+'</textarea>'
+    +'<div class="sched"><div class="hd">⏰ スケジュールの出かた</div>'
+    +'<div class="row"><span class="tm">09:30</span><span class="bdg">'+E(s3.work||'—')+'</span>'
+    +'<div><div class="nm">山田 一郎 様　アルト</div><div class="ct">'+(s3.text?E(s3.text):'<span style="color:#cbd5e1">（内容なし）</span>')+'</div></div></div></div>'
+    +'<div style="margin-top:12px"><span class="lbl">この並びから消えるもの</span>'
+    +'<div class="gone">'+GONE.map(function(g){return '<span>'+E(g)+'</span>';}).join('')+'</div></div>'
+    +'<div class="sub">※ すでに入っている M12・M6 の予約は、画面では「メンパ」と出します（データは書き換えません）</div>'
+    +'</div>';
+}
+draw3();
+document.getElementById('c3').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-w3]'); if(!b)return;
+  var id=b.getAttribute('data-w3');
+  s3.work=id;
+  if(id!=='他'&&!s3.text.trim()){ for(var i=0;i<WORKS.length;i++) if(WORKS[i].id===id) s3.text=WORKS[i].name; }
+  draw3();
+});
+document.getElementById('c3').addEventListener('input',function(e){
+  if(e.target.id!=='t3')return;
+  s3.text=e.target.value;
+  var ct=document.querySelector('#c3 .ct');
+  ct.innerHTML=e.target.value?E(e.target.value):'<span style="color:#cbd5e1">（内容なし）</span>';
+});
+
+/* ========== ② 入庫制限 ========== */
+var QKIND=[{k:'lift',n:'リフト作業'},{k:'pit',n:'ピット作業'}];
+var EXKEYS=['plain','lift','pit'];
+var QEXLBL={plain:'クイック整備・修理（リフトもピットも使わない）',lift:'クイック整備・修理のリフト作業',pit:'ピット作業'};
+var s2={work:'Q',kinds:['pit'],ex:['pit']};
+function draw2(){
+  // 選んだものが全部「制限解除項目」に入っていれば通す。何も選んでいなければ plain を見る
+  var need = s2.kinds.length ? s2.kinds : ['plain'];
+  var blocked = (s2.work!=='Q') ? true : !need.every(function(k){return s2.ex.indexOf(k)>=0;});
+  var kindName = QKIND.filter(function(x){return s2.kinds.indexOf(x.k)>=0;}).map(function(x){return x.n;}).join('・');
+  document.getElementById('c2').innerHTML=
+    '<h3>入庫制限のときの受け方<span class="tagrec">ご指示どおり</span></h3>'
+    +'<div class="desc">ピット作業なら、入庫制限がかかっていても受けられます。</div>'
+    +'<div class="ui">'
+    +'<div class="mach">🚫 入庫制限 09:00〜10:00（マッハ車検）</div>'
+    +'<span class="lbl">予約の作業内容</span>'
+    +'<div class="works">'+WORKS.slice(0,5).map(function(w){
+        return '<button class="w'+(s2.work===w.id?' on':'')+'" data-w2="'+E(w.id)+'"><span class="cd">'+E(w.id)+'</span>'+E(w.name)+'</button>';
+      }).join('')+'</div>'
+    +(s2.work==='Q'
+      ? '<span class="lbl">どこで作業する（Q を選んだ時だけ出ます・両方えらべます）</span>'
+        +'<div class="pit">'+QKIND.map(function(x){
+            return '<button class="'+(s2.kinds.indexOf(x.k)>=0?'on':'')+'" data-k2="'+x.k+'">'
+              +(s2.kinds.indexOf(x.k)>=0?'✓ ':'')+E(x.n)+'</button>';
+          }).join('')+'</div>'
+        +'<div class="sub" style="margin:-4px 0 10px">※ どちらも選ばなければ「ふつうのクイック整備・修理」。両方押せば両方使う扱いです</div>'
+      : '<div class="sub" style="margin:0 0 10px">※ Q 以外を選んでいるので「どこで作業する」は出ません</div>')
+    +'<span class="lbl">✅ 入庫制限の「制限解除項目」（押すと通せる作業になります）</span>'
+    +'<div class="ex">'+EXKEYS.map(function(k){
+        return '<button class="q'+(s2.ex.indexOf(k)>=0?' on':'')+'" data-e2="'+k+'">'
+          +(s2.ex.indexOf(k)>=0?'✓':'○')+' '+E(QEXLBL[k])+'</button>';
+      }).join('')
+      +'<button class="q" style="border-style:dashed;color:#94a3b8">…このあとに メンパ・有点・無点・鈑金塗装 … と続きます</button>'
+      +'</div>'
+    +'<div class="try">09:30 にこの予約を入れると… '
+      +(blocked?'<span class="ng">🚫 入庫制限中なので入れられません</span>':'<span class="ok">✔ 入れられます</span>')+'</div>'
+    +'<div class="sched"><div class="hd">⏰ スケジュールの出かた</div>'
+      +'<div class="row"><span class="tm">09:30</span><span class="bdg">'+E(s2.work)+'</span>'
+      +'<div><div class="nm">山田 一郎 様　アルト</div><div class="ct">クイック整備・修理'
+      +(s2.work==='Q'&&kindName?'<span style="color:#7c3aed;font-weight:800"> ・'+E(kindName)+'</span>':'')
+      +'</div></div></div></div>'
+    +'<div class="sub">※ スケジュールの印は今までどおり「Q」のまま。リフト／ピットは内容の横に小さく出ます<br>'
+    +'※ 両方えらんだ時は、両方が制限解除になっていないと通しません（リフトがふさがっているのに通ってしまわないように）</div>'
+    +'</div>';
+}
+draw2();
+document.getElementById('c2').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b)return;
+  if(b.hasAttribute('data-w2')) s2.work=b.getAttribute('data-w2');
+  else if(b.hasAttribute('data-k2')){ var k=b.getAttribute('data-k2'),n=s2.kinds.indexOf(k); if(n>=0)s2.kinds.splice(n,1); else s2.kinds.push(k); }
+  else if(b.hasAttribute('data-e2')){ var v=b.getAttribute('data-e2'),i=s2.ex.indexOf(v); if(i>=0)s2.ex.splice(i,1); else s2.ex.push(v); }
+  else return;
+  draw2();
+});
+
+/* ========== ④ クイックメニュー（グループ） ========== */
+var GRP=[
+  {id:'g1',name:'点検',      col:'#0891b2', bg:'#ecfeff', bd:'#67e8f9', fg:'#0e7490'},
+  {id:'g2',name:'整備・交換', col:'#059669', bg:'#ecfdf5', bd:'#6ee7b7', fg:'#047857'},
+  {id:'g3',name:'預かり・搬入',col:'#b45309', bg:'#fffbeb', bd:'#fcd34d', fg:'#92400e'},
+  {id:'g4',name:'その他',    col:'#64748b', bg:'#f8fafc', bd:'#cbd5e1', fg:'#475569'}
+];
+var QDEF=[
+  {id:'q1',g:'g1',label:'1ヶ月',text:'1ヶ月'},
+  {id:'q2',g:'g1',label:'6ヶ月',text:'6ヶ月'},
+  {id:'q3',g:'g1',label:'12ヶ月',text:'12ヶ月'},
+  {id:'q4',g:'g1',label:'18ヶ月',text:'18ヶ月'},
+  {id:'si1',g:'g2',label:'Eオイル交換',text:'エンジンオイル交換'},
+  {id:'si2',g:'g2',label:'Eオイル・エレメント交換',text:'エンジンオイル+エレメント交換'},
+  {id:'si3',g:'g2',label:'持込シーズンタイヤ付替',text:'持込シーズンタイヤ付替'},
+  {id:'si4',g:'g2',label:'預かりシーズンタイヤ付替',text:'預かりシーズンタイヤ付替'},
+  {id:'si5',g:'g3',label:'レッカー搬入',text:'レッカー搬入'},
+  {id:'si6',g:'g3',label:'書類預かり',text:'書類預かり'}
+];
+var QL=QDEF.map(function(x){return {id:x.id,g:x.g,label:x.label,text:x.text};});
+var QSAVE=null, EDIT=false, CONTENT='メンパ', MODE='A', TAB='g1';
+
+function draw4(){
+  document.getElementById('c4').innerHTML=
+    '<h3>クイックメニュー</h3>'
+    +'<div class="desc">「⚡ クイックメニュー」を押すと開きます。下のボタンで A案／B案 を見くらべてください。</div>'
+    +'<div class="tabs" style="margin-bottom:12px">'
+      +'<button id="mA" style="'+(MODE==='A'?'border-color:#1d4ed8;background:#eff6ff;color:#1d4ed8':'')+'">A案：グループを区画で全部出す（おすすめ）</button>'
+      +'<button id="mB" style="'+(MODE==='B'?'border-color:#1d4ed8;background:#eff6ff;color:#1d4ed8':'')+'">B案：グループをタブで選んで出す</button>'
+    +'</div>'
+    +'<div class="ui">'
+    +'<div class="lbl">内容<button class="qbtn" id="openq">⚡ クイックメニュー</button></div>'
+    +'<textarea rows="4" id="cta" placeholder="（ここに書きます）">'+E(CONTENT)+'</textarea>'
+    +'<div class="sched"><div class="hd">⏰ スケジュールの出かた</div>'
+    +'<div class="row"><span class="tm">09:30</span><span class="bdg">メンパ</span>'
+    +'<div><div class="nm">山田 一郎 様　アルト</div><div class="ct">'+(CONTENT?E(CONTENT):'<span style="color:#cbd5e1">（内容なし）</span>')+'</div></div></div></div>'
+    +'<div class="sub">※ A案は全部見えるぶん縦に長くなります。B案は短いぶん、別のグループを見るのに1回押します</div>'
+    +'</div>';
+}
+draw4();
+
+function gOf(id){for(var i=0;i<GRP.length;i++)if(GRP[i].id===id)return GRP[i];return GRP[GRP.length-1];}
+function badge(q,i){
+  var g=gOf(q.g), lines=CONTENT.split('\n');
+  var txt=(q.text&&q.text.trim())?q.text:q.label;
+  var act=lines.indexOf(txt)>=0;
+  return '<div class="qi" data-qi="'+i+'" style="background:'+(act?g.col:g.bg)+';border-color:'+(act?g.col:g.bd)+';color:'+(act?'#fff':g.fg)+'">'
+    +'<span class="grip">⠿</span><span class="mk">'+(act?'✓':'＋')+'</span>'+E(q.label)
+    +(EDIT?'<span class="ic"><button data-ed="'+i+'">✎</button><button class="del" data-dl="'+i+'">✕</button></span>':'')
+    +'</div>';
+}
+function pbody(){
+  var html='';
+  if(MODE==='A'){
+    html=GRP.map(function(g){
+      var items=QL.map(function(q,i){return {q:q,i:i};}).filter(function(x){return x.q.g===g.id;});
+      return '<div class="grp" data-grp="'+g.id+'" style="border-color:'+g.bd+'">'
+        +'<div class="gh"><span class="gn" style="background:'+g.col+'">'+E(g.name)+'</span>'
+        +'<span class="gc">'+items.length+'個</span>'
+        +(EDIT?'<span class="ga"><button data-gr="'+g.id+'">名前</button><button data-gx="'+g.id+'">消す</button></span>':'')
+        +'</div>'
+        +'<div class="qgrid" data-gq="'+g.id+'">'+(items.length?items.map(function(x){return badge(x.q,x.i);}).join(''):'<span style="font-size:11.5px;color:#cbd5e1">（ここへ引っぱってくると入ります）</span>')+'</div>'
+        +'</div>';
+    }).join('')+(EDIT?'<button id="gadd" style="width:100%;padding:9px 0;border:2px dashed #cbd5e1;background:#fff;border-radius:11px;font-size:12.5px;font-weight:800;color:#64748b;cursor:pointer;font-family:inherit">＋ グループを足す</button>':'');
+  }else{
+    html='<div class="tabs">'+GRP.map(function(g){
+        var n=QL.filter(function(q){return q.g===g.id;}).length;
+        return '<button data-gt="'+g.id+'" style="'+(TAB===g.id?'border-color:'+g.col+';background:'+g.bg+';color:'+g.col:'')+'">'+E(g.name)+' <span style="opacity:.6">'+n+'</span></button>';
+      }).join('')+(EDIT?'<button id="gadd" style="border-style:dashed">＋ グループ</button>':'')+'</div>'
+      +'<div class="grp" data-grp="'+TAB+'" style="border-color:'+gOf(TAB).bd+'">'
+      +(EDIT?'<div class="gh"><span class="gn" style="background:'+gOf(TAB).col+'">'+E(gOf(TAB).name)+'</span><span class="ga"><button data-gr="'+TAB+'">名前</button><button data-gx="'+TAB+'">消す</button></span></div>':'')
+      +'<div class="qgrid" data-gq="'+TAB+'">'
+      +(function(){var it=QL.map(function(q,i){return {q:q,i:i};}).filter(function(x){return x.q.g===TAB;});
+        return it.length?it.map(function(x){return badge(x.q,x.i);}).join(''):'<span style="font-size:11.5px;color:#cbd5e1">（このグループは空です）</span>';})()
+      +'</div></div>'
+      +'<div class="sub" style="margin-top:4px">※ ほかのグループへ移したい時は、バッジを上のタブの上まで引っぱります</div>';
+  }
+  document.getElementById('pmain').innerHTML=html;
+  document.getElementById('psub').textContent = MODE==='A' ? 'A案：グループを区画で全部出す' : 'B案：グループをタブで選んで出す';
+  document.getElementById('hint').innerHTML = EDIT
+    ? '<b>編集中</b>：✎ で字を直す／✕ で消す／下の欄から足す／グループの名前も変えられます。つかんで動かすと並べ替え・グループの引っ越しができます。'
+    : '押すと内容欄に<b>行として足されます</b>（もう一度押すと外れます）。<b>つかんで動かすと並べ替え</b>、<b>ほかのグループへも引っ越せます</b>。';
+  document.getElementById('ab').style.display=EDIT?'block':'none';
+  document.getElementById('eb').className='ebtn'+(EDIT?' on':'');
+  document.getElementById('ng').innerHTML=GRP.map(function(g){return '<option value="'+g.id+'">'+E(g.name)+' に入れる</option>';}).join('');
+}
+function openPop(){ QSAVE=JSON.stringify({q:QL,g:GRP}); EDIT=false; pbody(); document.getElementById('ov').classList.add('on'); }
+function closePop(keep){ if(!keep){ var o=JSON.parse(QSAVE); QL=o.q; GRP=o.g; } document.getElementById('ov').classList.remove('on'); draw4(); }
+
+document.addEventListener('click',function(e){
+  if(e.target.closest('#openq')) openPop();
+  else if(e.target.closest('#mA')){ MODE='A'; draw4(); }
+  else if(e.target.closest('#mB')){ MODE='B'; draw4(); }
+});
+document.getElementById('eb').onclick=function(){ EDIT=!EDIT; pbody(); };
+document.getElementById('xb').onclick=function(){ closePop(false); };
+document.getElementById('cnb').onclick=function(){ closePop(false); };
+document.getElementById('okb').onclick=function(){ closePop(true); };
+document.getElementById('ov').onclick=function(e){ if(e.target.id==='ov') closePop(false); };
+document.getElementById('nb').onclick=function(){
+  var l=document.getElementById('nl').value.trim(); if(!l)return;
+  var t=document.getElementById('nt').value.trim(), g=document.getElementById('ng').value;
+  QL.push({id:'q_'+Date.now(),g:g,label:l,text:t||l});
+  document.getElementById('nl').value=''; document.getElementById('nt').value=''; pbody();
+};
+
+var PM=document.getElementById('pmain');
+PM.addEventListener('click',function(e){
+  var t=e.target.closest('button[data-gt]');
+  if(t){ TAB=t.getAttribute('data-gt'); pbody(); return; }
+  var b=e.target.closest('button[data-ed]');
+  if(b){ var i=+b.getAttribute('data-ed'), q=QL[i];
+    var l=prompt('ボタンに出す字',q.label); if(l===null)return;
+    var x=prompt('内容欄に入れる文（空なら上の字がそのまま入ります）',q.text||''); if(x===null)return;
+    QL[i]={id:q.id,g:q.g,label:l.trim()||q.label,text:(x.trim()||l.trim()||q.label)}; pbody(); return; }
+  var d=e.target.closest('button[data-dl]');
+  if(d){ QL.splice(+d.getAttribute('data-dl'),1); pbody(); return; }
+  var r=e.target.closest('button[data-gr]');
+  if(r){ var gid=r.getAttribute('data-gr'), g=gOf(gid);
+    var n=prompt('グループの名前',g.name); if(n===null||!n.trim())return;
+    g.name=n.trim(); pbody(); return; }
+  var xx=e.target.closest('button[data-gx]');
+  if(xx){ var id2=xx.getAttribute('data-gx');
+    if(GRP.length<=1)return;
+    var last=GRP.filter(function(g2){return g2.id!==id2;})[0];
+    QL.forEach(function(q){ if(q.g===id2) q.g=last.id; });
+    GRP=GRP.filter(function(g2){return g2.id!==id2;});
+    if(TAB===id2) TAB=GRP[0].id;
+    pbody(); return; }
+  if(e.target.closest('#gadd')){
+    var nn=prompt('新しいグループの名前','新しいグループ'); if(nn===null||!nn.trim())return;
+    GRP.push({id:'g_'+Date.now(),name:nn.trim(),col:'#7c3aed',bg:'#f5f3ff',bd:'#c4b5fd',fg:'#6d28d9'});
+    pbody(); return; }
+});
+
+/* 押す／つかんで動かす（グループ間も） */
+var dg=null;
+PM.addEventListener('pointerdown',function(e){
+  if(e.target.closest('button'))return;
+  var el=e.target.closest('[data-qi]'); if(!el)return;
+  dg={i:+el.getAttribute('data-qi'),x:e.clientX,y:e.clientY,moved:false,el:el};
+});
+PM.addEventListener('pointermove',function(e){
+  if(!dg)return;
+  if(!dg.moved&&Math.abs(e.clientX-dg.x)<5&&Math.abs(e.clientY-dg.y)<5)return;
+  if(!dg.moved){ dg.moved=true; dg.el.classList.add('drag'); }
+  e.preventDefault();
+  var over=document.elementFromPoint(e.clientX,e.clientY); if(!over||!over.closest)return;
+  var t=over.closest('[data-qi]');
+  if(t){
+    var j=+t.getAttribute('data-qi');
+    if(j!==dg.i){
+      var gb=t.closest('[data-gq]'), tg=gb?gb.getAttribute('data-gq'):null;
+      var it=QL.splice(dg.i,1)[0]; if(tg) it.g=tg; QL.splice(j,0,it); dg.i=j;
+      pbody(); dg.el=PM.querySelector('[data-qi="'+j+'"]'); if(dg.el) dg.el.classList.add('drag');
+    }
+    return;
+  }
+  var box=over.closest('[data-gq]')||over.closest('[data-grp]')||over.closest('button[data-gt]');
+  if(box){
+    var gid=box.getAttribute('data-gq')||box.getAttribute('data-grp')||box.getAttribute('data-gt');
+    if(gid&&QL[dg.i].g!==gid){
+      QL[dg.i].g=gid; pbody();
+      dg.el=PM.querySelector('[data-qi="'+dg.i+'"]'); if(dg.el) dg.el.classList.add('drag');
+    }
+  }
+});
+window.addEventListener('pointerup',function(){
+  if(!dg)return;
+  var d=dg; dg=null;
+  if(!d.moved&&!EDIT){
+    var q=QL[d.i], txt=(q.text&&q.text.trim())?q.text:q.label;
+    var lines=CONTENT.split('\n').filter(function(l){return l!=='';});
+    if(lines.indexOf(txt)>=0) CONTENT=lines.filter(function(l){return l!==txt;}).join('\n');
+    else CONTENT=CONTENT?CONTENT+'\n'+txt:txt;
+  }
+  pbody();
+});
+</script>
+</body>
+</html>

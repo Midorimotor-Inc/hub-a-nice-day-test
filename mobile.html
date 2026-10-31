@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793417889942';
+  window.__APP_BUILD='build-1793432095340';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.87.1';
+const MOBILE_VERSION='3.88.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -167,7 +167,8 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   storKey('offnote','honten'),storKey('offnote','sanda'),   // 休日タブ（2026-09-19）・休日メモ（2026-09-20）
   STOR+'mysched',    // マイスケジュール（公開予定・2026-09-20）
   STOR+'memoItems',   // 備考・メモのクイック項目（PCで作った定型文・2026-10-03）
-  STOR+'setItems'];   // 整備の【内容】欄のクイック項目（PCで作った定型文・2026-10-20）
+  STOR+'setItems',    // 整備の【内容】欄のクイック項目（PCで作った定型文・2026-10-20）
+  STOR+'setGroups'];  // ★クイックメニューのグループ（2026-10-31）
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -194,10 +195,45 @@ const COURSES=[
   {id:3,name:'レギュラー',  short:'レ',color:'#d97706',bg:'#fde68a'},
 ];
 // PC版（index_dev.html）と同一の選択肢定義
+// ★2026-10-31 ユーザー決定で11個に整理。月数は内容欄（⚡ クイックメニュー）で書く。
+//   「リフト作業」「ピット作業」は主作業に作らず、Q を選んだ時の QKINDS（複数えらべる）で持つ。
 const WORKS=[
-  {id:'Q',name:'クイック整備・修理'},{id:'⑫',name:'12ヶ月点検'},{id:'M12',name:'メンパ12'},
-  {id:'M6',name:'メンパ6ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'},
+  {id:'Q',name:'クイック整備・修理'},
+  {id:'メンパ',name:'メンパ'},{id:'有点',name:'有料点検'},{id:'無点',name:'無料点検'},
   {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
+];
+// ★昔の予約がまだ持っている作業項目（データは書き換えない＝保存されている字のまま出す）
+const WORKS_OLD=[
+  {id:'⑫',name:'12ヶ月点検'},{id:'M12',name:'メンパ12ヶ月点検'},{id:'M6',name:'メンパ6ヶ月点検'},
+  {id:'M1',name:'メンパ1ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'}
+];
+const workDef=(id)=>WORKS.find(x=>x.id===id)||WORKS_OLD.find(x=>x.id===id)||null;
+const workName=(id)=>{const w=workDef(id);return w?w.name:(id||'');};
+const QKINDS=[{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業'}];
+const qkindOf=(row)=>Array.isArray(row&&row.qkind)?row.qkind.filter(k=>QKINDS.some(x=>x.k===k)):[];
+const qkindLabel=(row)=>QKINDS.filter(x=>qkindOf(row).indexOf(x.k)>=0).map(x=>x.name).join('・');
+const toggleQkind=(row,k)=>{const a=qkindOf(row);return a.indexOf(k)>=0?a.filter(x=>x!==k):a.concat([k]);};
+// ★作業項目を選んだ時：内容が空のときだけ作業名を入れる（「その他」は入れない）
+const applyWorkPick=(form,id)=>{
+  const next={...form,work:id};
+  if(id!=='Q')next.qkind=[];
+  if(id!=='他'&&!String(form.content||'').trim())next.content=workName(id);
+  return next;
+};
+// ★クイックメニューのグループ（PC版と同じ既定）
+const DEFAULT_SET_ITEMS=[
+  {id:'sq1',g:'g1',label:'1ヶ月',text:'1ヶ月'},{id:'sq2',g:'g1',label:'6ヶ月',text:'6ヶ月'},
+  {id:'sq3',g:'g1',label:'12ヶ月',text:'12ヶ月'},{id:'sq4',g:'g1',label:'18ヶ月',text:'18ヶ月'},
+  {id:'si1',g:'g2',label:'Eオイル交換',text:'エンジンオイル交換'},
+  {id:'si2',g:'g2',label:'Eオイル・エレメント交換',text:'エンジンオイル+エレメント交換'},
+  {id:'si3',g:'g2',label:'持込シーズンタイヤ付替',text:'持込シーズンタイヤ付替'},
+  {id:'si4',g:'g2',label:'預かりシーズンタイヤ付替',text:'預かりシーズンタイヤ付替'},
+  {id:'si5',g:'g3',label:'レッカー搬入',text:'レッカー搬入'},
+  {id:'si6',g:'g3',label:'書類預かり',text:'書類預かり'},
+];
+const DEFAULT_SET_GROUPS=[
+  {id:'g1',name:'点検',col:'#0891b2'},{id:'g2',name:'整備・交換',col:'#059669'},
+  {id:'g3',name:'預かり・搬入',col:'#b45309'},{id:'g4',name:'その他',col:'#64748b'},
 ];
 // ── 車体色（2026-09-23 ユーザー要望）：代車管理・車両管理で色を目で分かるようにする ──
 //   車両には色の名前（color）と見本の色（colorHex）を持たせる。見本はここから選ぶか、自由に入れる。
@@ -240,6 +276,25 @@ const restrRanges = r => {
   return [];
 };
 const restrExempt = r => (r && Array.isArray(r.exemptWorks)) ? r.exemptWorks : [];
+// ── 制限解除項目のキー（2026-10-31・PC版と同じ）──────────────────
+//   クイック整備・修理だけ3通り：'Q'＝ふつう／'Q:lift'／'Q:pit'。昔の 'Q' はそのまま「ふつう」。
+const QK_PLAIN = 'Q', QK_PRE = 'Q:';
+const EXEMPT_LIST = () => {
+  const out = [];
+  WORKS.forEach(w => {
+    if (w.id === 'Q') { out.push({key:'Q', label:'クイック整備・修理（リフトもピットも使わない）'});
+      QKINDS.forEach(k => out.push({key:QK_PRE+k.k, label:'クイック整備・修理の'+k.name})); }
+    else out.push({key:w.id, label:w.id+' '+w.name});
+  });
+  return out;
+};
+const restrKeysOf = (row) => {
+  if (!row || row.work !== 'Q') return [row && row.work];
+  const ks = qkindOf(row);
+  return ks.length ? ks.map(k => QK_PRE+k) : [QK_PLAIN];
+};
+const restrPasses = (r, row) => { const need = restrKeysOf(row); const ex = restrExempt(r);
+  return need.length > 0 && need.every(k => ex.indexOf(k) >= 0); };
 const restrHas = r => restrRanges(r).length > 0;
 const restrMin = t => { const m = String(t || '').match(/(\d+):(\d+)/); return m ? Number(m[1]) * 60 + Number(m[2]) : -1; };
 // その時刻が制限の中か（重なっていても、どれか1つに入っていれば制限中）
@@ -259,8 +314,10 @@ const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime
 const MACH_COURSE = 1;                 // コース：1＝マッハ車検
 const MACH_STORE  = 'honten';          // 本店だけ
 const MACH_SPAN_MIN = 60;              // 入庫から1時間
-const MACH_BLOCK_WORKS = ['Q','⑫','M12','M6','N1','N6','R'];   // クイック整備・全ての点検・リコール
-const machDefaultExempt = () => WORKS.map(w => w.id).filter(id => MACH_BLOCK_WORKS.indexOf(id) < 0);
+// ★ピット作業（Q:pit）は止めない＝マッハ車検中でもピットなら受けられる（2026-10-31 ユーザー指示）
+const MACH_BLOCK_WORKS = ['Q','Q:lift','メンパ','有点','無点','R',
+  '⑫','M12','M6','M1','N1','N6'];   // クイック整備（ピット以外）・全ての点検・リコール（昔の分も止める）
+const machDefaultExempt = () => EXEMPT_LIST().map(x => x.key).filter(k => MACH_BLOCK_WORKS.indexOf(k) < 0);
 const machAddMin = (t, add) => {
   const n = restrMin(t); if (n < 0) return '';
   const m = Math.min(n + add, 23 * 60 + 59);
@@ -883,7 +940,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
 const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
@@ -3157,7 +3214,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
             <div style={{marginBottom:14}}>
               <div style={{fontWeight:800,fontSize:12,color:'#0e7490',marginBottom:8}}>⏰ タイムスケジュール</div>
               {sched.map(([key,r],i)=>{
-                const w=WORKS.find(x=>x.id===r.work);
+                const w=workDef(r.work);
                 return(
                   <div key={i} style={{display:'flex',gap:8,padding:'7px 10px',marginBottom:4,background:'white',borderRadius:10,border:'1.5px solid #e0f2fe',borderLeft:'4px solid #0e7490'}}>
                     <span style={{fontWeight:700,fontSize:11,color:'#0e7490',width:40,flexShrink:0}}>{getBaseSlot(key)}</span>
@@ -3165,6 +3222,7 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
                       <span style={{fontWeight:700,fontSize:13}}>{sama(r.name)}</span>
                       {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                       {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
+                      {qkindLabel(r)&&<span data-qklab style={{marginLeft:4,fontSize:10,fontWeight:800,color:'#7c3aed'}}>{qkindLabel(r)}</span>}
                       {/* ★事前入庫の印（2026-10-31）。車検の行と同じ出し方にそろえる */}
                       {(r.entryDate&&r.entryDate!==dk)&&(()=>{const p=String(r.entryDate).split('-');return <span style={{marginLeft:5,fontSize:11,color:'#c2410c',fontWeight:800}}>🚗{String(p[1]).padStart(2,'0')}/{String(p[2]).padStart(2,'0')}入庫</span>;})()}
                       {r.content&&<div style={{fontSize:11,color:'#64748b',marginTop:1}}>{r.content}</div>}
@@ -3240,7 +3298,199 @@ const withDeliveryNote = (entry, dk, isInsp) => {
   e[field] = ('【' + Number(p[1]) + '/' + Number(p[2]) + ' 納車】' + (base ? ' ' + base : ''));
   return e;
 };
-const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
+// ★⚡ クイックメニュー（スマホ・2026-10-31 ユーザー決定）
+//   PC版の QuickMenuModal と同じ中身を、下から出るシートにしたもの。
+//   ・グループごとの区画に分けて【全部出す】（A案）。たたまない。
+//   ・【長押し0.2秒】でつかむ。つかむ前に8px動いたら＝画面のスクロールとみなしてやめる
+//     （代車の長押しドラッグと同じ考え方。スマホは縦に動かす操作と取り合いになるため）。
+//   ・短く押しただけ＝内容欄に行として足す／もう一度押すと外れる（PC版と同じ）。
+//   ・✎ 編集 を押すと 字を直す／消す／グループの名前・追加・削除／新しいバッジを足す ができる。
+//   ★項目（setItems）とグループ（setGroups）は【別のキー】。どちらも配列なので丸ごと置き換わる。
+const QM_FALLBACK={id:'g_etc',name:'その他',col:'#64748b'};
+const qmTint=(hex,on)=>on?{background:hex,borderColor:hex,color:'white'}
+  :{background:'#f8fafc',borderColor:hex+'66',color:hex};
+const QM_PRESS=200;   // ★長押しの長さ（代車の入れ替えと同じ 0.2 秒）
+const QuickMenuSheet=({isOpen,onClose,items,groups,value,onChangeValue,onSaveList})=>{
+  const [list,setList]=useState([]);
+  const [grps,setGrps]=useState([]);
+  const [edit,setEdit]=useState(false);
+  const [hold,setHold]=useState(false);   // つかんでいる間は画面を動かさない
+  const [nl,setNl]=useState(''); const [nt,setNt]=useState(''); const [ng,setNg]=useState('');
+  const [eIdx,setEIdx]=useState(null); const [eL,setEL]=useState(''); const [eT,setET]=useState('');
+  const dg=useRef(null); const tmr=useRef(null);
+  useEffect(()=>{
+    if(!isOpen)return;
+    setList((Array.isArray(items)?items:[]).map(x=>({...x})));
+    const g=((Array.isArray(groups)&&groups.length?groups:DEFAULT_SET_GROUPS)).map(x=>({...x}));
+    setGrps(g); setNg(g[0].id);
+    setEdit(false); setEIdx(null); setNl(''); setNt(''); setHold(false);
+  },[isOpen,items,groups]);
+  useEffect(()=>()=>{ if(tmr.current)clearTimeout(tmr.current); },[]);
+  if(!isOpen)return null;
+
+  const gidOf=(it)=>grps.some(g=>g.id===it.g)?it.g:(grps[grps.length-1]||QM_FALLBACK).id;
+  const txtOf=(q)=>(q.text&&String(q.text).trim())?q.text:(q.label||'');
+  const NLC=String.fromCharCode(10);
+  const lines=String(value||'').split(NLC);
+  const toggleText=(q)=>{
+    const t=txtOf(q); if(!t)return;
+    const cur=String(value||'').split(NLC).filter(l=>l!=='');
+    onChangeValue(cur.indexOf(t)>=0?cur.filter(l=>l!==t).join(NLC):(value?value+NLC+t:t));
+  };
+  // -- 長押しでつかむ → 並べ替え／グループの引っ越し --
+  const onDown=(e)=>{
+    if(e.target.closest('button')||e.target.closest('input'))return;
+    const el=e.target.closest('[data-qi]'); if(!el)return;
+    dg.current={i:Number(el.getAttribute('data-qi')),x:e.clientX,y:e.clientY,hold:false,moved:false};
+    if(tmr.current)clearTimeout(tmr.current);
+    tmr.current=setTimeout(()=>{
+      if(!dg.current)return;
+      dg.current.hold=true; setHold(true);
+      try{navigator.vibrate&&navigator.vibrate(12);}catch(_){}
+    },QM_PRESS);
+  };
+  const onMove=(e)=>{
+    const d=dg.current; if(!d)return;
+    const far=Math.abs(e.clientX-d.x)>8||Math.abs(e.clientY-d.y)>8;
+    if(!d.hold){ if(far){ clearTimeout(tmr.current); dg.current=null; } return; }   // つかむ前に動いた＝スクロール
+    d.moved=true; e.preventDefault();
+    const over=document.elementFromPoint(e.clientX,e.clientY); if(!over||!over.closest)return;
+    const t=over.closest('[data-qi]');
+    if(t){
+      const j=Number(t.getAttribute('data-qi')); if(j===d.i)return;
+      // ★引っ越し先のグループは splice の【前】に読むこと（後だと別のグループへ飛ぶ）
+      const gb=t.closest('[data-qg]'), tg=gb?gb.getAttribute('data-qg'):null;
+      setList(p=>{const n=[...p];const it=n.splice(d.i,1)[0];if(tg)it.g=tg;n.splice(j,0,it);return n;});
+      d.i=j; return;
+    }
+    const box=over.closest('[data-qg]');
+    if(box){ const gid=box.getAttribute('data-qg');
+      setList(p=>{if(!p[d.i]||p[d.i].g===gid)return p;const n=[...p];n[d.i]={...n[d.i],g:gid};return n;}); }
+  };
+  const onUp=()=>{
+    if(tmr.current)clearTimeout(tmr.current);
+    const d=dg.current; dg.current=null; setHold(false); if(!d)return;
+    if(!d.hold&&!d.moved&&!edit&&list[d.i])toggleText(list[d.i]);
+  };
+  const addItem=()=>{
+    const l=nl.trim(); if(!l)return;
+    setList(p=>[...p,{id:'q_'+Date.now(),g:ng||(grps[0]||QM_FALLBACK).id,label:l,text:(nt.trim()||l)}]);
+    setNl(''); setNt('');
+  };
+  const INP={width:'100%',padding:'10px 11px',border:'1.5px solid #d1d5db',borderRadius:10,fontSize:16,boxSizing:'border-box',background:'white',fontFamily:'inherit'};
+  const BTN={border:'none',background:'#f1f5f9',borderRadius:7,padding:'5px 11px',fontSize:11,fontFamily:'inherit',color:'#475569',fontWeight:800};
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3150,display:'flex',alignItems:'flex-end'}}>
+      <div onClick={e=>e.stopPropagation()} data-quickmenusheet
+        style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',maxHeight:'90vh',
+          display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
+        <div style={{padding:'12px 13px 10px',borderBottom:'2px solid #e2e8f0',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:900,fontSize:15,color:'#0e7490'}}>⚡ クイックメニュー</div>
+            <div style={{fontSize:10.5,color:'#94a3b8'}}>押すと内容欄に入ります</div>
+          </div>
+          <button data-qmedit onClick={()=>{setEdit(p=>!p);setEIdx(null);}}
+            style={{marginLeft:'auto',border:'none',borderRadius:9,padding:'8px 13px',fontSize:12.5,fontWeight:800,fontFamily:'inherit',
+              background:edit?'#0e7490':'#f1f5f9',color:edit?'white':'#475569'}}>✎ 編集</button>
+          <button onClick={onClose} style={{border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
+        </div>
+
+        <div style={{flex:1,overflowY:hold?'hidden':'auto',padding:'11px 13px',touchAction:hold?'none':'pan-y'}}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+          <div style={{fontSize:11.5,color:'#475569',background:'#f1f5f9',borderRadius:9,padding:'8px 10px',marginBottom:10,lineHeight:1.65}}>
+            {edit?'編集中：✎ で字を直す／✕ で消す／下の欄から足す。長めに押して動かすと並べ替え・グループの引っ越しができます。'
+                 :'押すと内容欄に行として足されます（もう一度押すと外れます）。長めに押して動かすと並べ替え・グループの引っ越し。'}
+          </div>
+          {grps.map(g=>{
+            const mine=list.map((q,i)=>({q,i})).filter(x=>gidOf(x.q)===g.id);
+            return(
+              <div key={g.id} data-qg={g.id} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'8px 10px 10px',marginBottom:9}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:7}}>
+                  <span style={{padding:'3px 11px',borderRadius:14,background:g.col,color:'white',fontSize:11.5,fontWeight:900}}>{g.name}</span>
+                  <span style={{fontSize:11,color:'#94a3b8',fontWeight:700}}>{mine.length}個</span>
+                  {edit&&(
+                    <span style={{marginLeft:'auto',display:'flex',gap:4}}>
+                      <button style={BTN} onClick={()=>{const n=window.prompt('グループの名前',g.name);if(n&&n.trim())setGrps(p=>p.map(x=>x.id===g.id?{...x,name:n.trim()}:x));}}>名前</button>
+                      <button style={BTN} onClick={()=>{
+                        if(grps.length<=1)return;
+                        const rest=grps.filter(x=>x.id!==g.id);
+                        setList(p=>p.map(q=>q.g===g.id?{...q,g:rest[0].id}:q));
+                        setGrps(rest);
+                      }}>消す</button>
+                    </span>
+                  )}
+                </div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:7,minHeight:40}}>
+                  {mine.length===0&&<span style={{fontSize:11.5,color:'#cbd5e1'}}>（ここへ引っぱってくると入ります）</span>}
+                  {mine.map(({q,i})=>{
+                    if(edit&&eIdx===i)return(
+                      <div key={q.id||i} style={{width:'100%',background:'#f8fafc',border:'2px solid #e2e8f0',borderRadius:10,padding:'9px 10px',display:'flex',flexDirection:'column',gap:6}}>
+                        <input value={eL} onChange={ev=>setEL(ev.target.value)} placeholder="ボタンに出す字" style={INP}/>
+                        <input value={eT} onChange={ev=>setET(ev.target.value)} placeholder="内容欄に入れる文（空なら上の字）" style={INP}/>
+                        <div style={{display:'flex',gap:6}}>
+                          <button onClick={()=>{if(!eL.trim())return;setList(p=>{const n=[...p];n[i]={...n[i],label:eL.trim(),text:(eT.trim()||eL.trim())};return n;});setEIdx(null);}}
+                            style={{flex:1,padding:'10px 0',background:'#0891b2',color:'white',border:'none',borderRadius:8,fontWeight:800,fontSize:13,fontFamily:'inherit'}}>✓ 確定</button>
+                          <button onClick={()=>setEIdx(null)} style={{padding:'10px 16px',background:'#f3f4f6',border:'none',borderRadius:8,fontSize:13,fontFamily:'inherit'}}>やめる</button>
+                        </div>
+                      </div>
+                    );
+                    const t=txtOf(q), on=lines.indexOf(t)>=0;
+                    return(
+                      <div key={q.id||i} data-qi={i}
+                        style={{display:'inline-flex',alignItems:'center',gap:6,padding:'11px 15px',borderRadius:22,
+                          border:'2px solid',fontSize:14,fontWeight:700,userSelect:'none',WebkitUserSelect:'none',
+                          WebkitTouchCallout:'none',touchAction:'none',...qmTint(g.col,on)}}>
+                        <span style={{fontSize:13,opacity:.45}}>⠿</span>
+                        <span style={{fontSize:10,opacity:.75}}>{on?'✓':'＋'}</span>{q.label}
+                        {edit&&(
+                          <span style={{display:'inline-flex',gap:3,marginLeft:3}}>
+                            <button onClick={()=>{setEIdx(i);setEL(q.label||'');setET(q.text||'');}}
+                              style={{border:'none',background:'rgba(255,255,255,.92)',borderRadius:6,width:26,height:26,fontSize:12,fontFamily:'inherit',color:'#0369a1'}}>✎</button>
+                            <button onClick={()=>{setList(p=>p.filter((_,j)=>j!==i));setEIdx(null);}}
+                              style={{border:'none',background:'rgba(255,255,255,.92)',borderRadius:6,width:26,height:26,fontSize:12,fontFamily:'inherit',color:'#dc2626'}}>✕</button>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          {edit&&(
+            <button onClick={()=>{const n=window.prompt('新しいグループの名前','新しいグループ');if(n&&n.trim())setGrps(p=>[...p,{id:'g_'+Date.now(),name:n.trim(),col:'#7c3aed'}]);}}
+              style={{width:'100%',padding:'11px 0',border:'2px dashed #cbd5e1',background:'white',borderRadius:11,fontSize:13,fontWeight:800,color:'#64748b',fontFamily:'inherit'}}>
+              ＋ グループを足す
+            </button>
+          )}
+          {edit&&(
+            <div style={{marginTop:11,background:'#f0fdf4',border:'2px dashed #86efac',borderRadius:11,padding:'10px 11px'}}>
+              <div style={{fontWeight:800,fontSize:12.5,color:'#059669',marginBottom:7}}>＋ 新しいバッジを足す</div>
+              <input value={nl} onChange={e=>setNl(e.target.value)} placeholder="ボタンに出す字（例：バッテリー交換）" style={{...INP,marginBottom:6}}/>
+              <input value={nt} onChange={e=>setNt(e.target.value)} placeholder="内容欄に入れる文（空なら上の字）" style={{...INP,marginBottom:6}}/>
+              <select value={ng} onChange={e=>setNg(e.target.value)} style={{...INP,marginBottom:6}}>
+                {grps.map(g=><option key={g.id} value={g.id}>{g.name} に入れる</option>)}
+              </select>
+              <button onClick={addItem} disabled={!nl.trim()}
+                style={{width:'100%',padding:'11px 0',background:nl.trim()?'#059669':'#d1d5db',color:'white',border:'none',borderRadius:9,fontWeight:800,fontSize:13,fontFamily:'inherit'}}>
+                ＋ 追加する
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:'10px 13px 18px',borderTop:'1px solid #e5e7eb',display:'flex',gap:8,flexShrink:0}}>
+          <button data-qmsave onClick={()=>{onSaveList&&onSaveList(list,grps);onClose();}}
+            style={{flex:1,padding:'13px 0',background:'#0e7490',color:'white',border:'none',borderRadius:10,fontWeight:900,fontSize:14,fontFamily:'inherit'}}>
+            ✓ 保存して閉じる
+          </button>
+          <button onClick={onClose} style={{padding:'13px 18px',background:'#f3f4f6',border:'none',borderRadius:10,fontSize:13,fontFamily:'inherit',color:'#475569',fontWeight:700}}>やめる</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
   const isInsp=mode.type==='insp';
   // 休業日には入庫・納車を入れられない（選んだ時点で弾き、元の値に戻す）
   const closedDk=dk=>!!(isClosedDk&&isClosedDk(dk));
@@ -3263,7 +3513,7 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
   const sc=isInsp?'#3730a3':'#0e7490';
   const [form,setForm]=useState(()=>{
     const base={
-      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
+      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',qkind:[],loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
       staff:currentUser?.name||'',
       ...(initial||{}),
     };
@@ -3457,37 +3707,6 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
   );
   // ★内容欄のクイック項目（2026-10-20）。**PC で作った定型文**（setItems）がそのまま出る。
   //   PC と同じで、行として足す／もう一度押すと外す。
-  const quickSheet=(!quickOpen)?null:(()=>{
-    const its=(Array.isArray(quickItems)?quickItems:[]).map(si=>({...si,text:(si&&(si.text||si.content||si.label))||''})).filter(si=>si.text);
-    const lines=String(form.content||'').split('\n').filter(x=>x!=='');
-    const toggle=(t)=>{const i=lines.indexOf(t);const nx=i>=0?lines.filter(x=>x!==t):lines.concat([t]);setForm(p=>({...p,content:nx.join('\n')}));};
-    return(
-      <div onClick={()=>setQuickOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:3150,display:'flex',alignItems:'flex-end'}}>
-        <div onClick={e=>e.stopPropagation()} style={{background:'white',width:'100%',borderRadius:'18px 18px 0 0',
-          padding:'13px 13px 20px',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 -8px 40px rgba(0,0,0,.25)'}}>
-          <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
-            <div style={{fontWeight:900,fontSize:15,color:sc}}>⚡ クイック</div>
-            <button onClick={()=>setQuickOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:'50%',width:32,height:32,fontSize:15,fontWeight:800,color:'#64748b'}}>✕</button>
-          </div>
-          {its.length===0
-            ?<div style={{fontSize:12.5,color:'#94a3b8',padding:'14px 4px',lineHeight:1.9}}>まだ定型文がありません。<br/>PC の「内容」欄の <b>⚙ クイック編集</b> で足すと、ここにも出ます。</div>
-            :its.map((si,i)=>{
-              const on=lines.indexOf(si.text)>=0;
-              return(
-                <button key={si.id||i} onClick={()=>toggle(si.text)}
-                  style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'12px 11px',marginBottom:7,borderRadius:11,fontFamily:'inherit',
-                    border:'2px solid '+(on?'#10b981':'#6ee7b7'),background:on?'#d1fae5':'#ecfdf5',color:on?'#065f46':'#059669',
-                    fontSize:14,fontWeight:700,textAlign:'left'}}>
-                  <span style={{flexShrink:0,width:20,textAlign:'center',fontSize:13}}>{on?'✓':'＋'}</span>
-                  <span style={{flex:1,minWidth:0}}>{si.label||si.text}</span>
-                </button>
-              );
-            })}
-          <button onClick={()=>setQuickOpen(false)} style={{width:'100%',marginTop:4,padding:'11px 0',background:'#f3f4f6',border:'none',borderRadius:10,fontWeight:700,fontSize:13.5,color:'#475569',fontFamily:'inherit'}}>とじる</button>
-        </div>
-      </div>
-    );
-  })();
   // ★住所シート（2026-10-20）。住所を直して、そのまま Google マップで開ける。
   //   カード（zIndex 300）より上に出す。住所が空の時はマップのボタンを押せなくする。
   const addrSheet=(!addrOpen)?null:(
@@ -3517,7 +3736,9 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:300,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={saving?undefined:onClose}>
       {addrSheet}
       {pickSheet}
-      {quickSheet}
+      <QuickMenuSheet isOpen={quickOpen} onClose={()=>setQuickOpen(false)}
+        items={quickItems} groups={quickGroups} value={form.content||''}
+        onChangeValue={v=>setForm(p=>({...p,content:v}))} onSaveList={onSaveQuick}/>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
           <div style={{flex:1,minWidth:0}}>
@@ -3713,9 +3934,10 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
               <div style={{display:'flex',gap:10}}>
                 <div style={{flex:1.4}}>
                   <label style={LBL}>作業内容 *</label>
-                  {pickBtn((()=>{const w=WORKS.find(x=>x.id===form.work);return w?(w.id+' '+w.name):'選択';})(),!form.work,'⏰ 作業内容',
+                  {/* ★選んだら内容欄が空の時だけ作業名を入れる（A案・2026-10-31）。昔の id も workDef で引ける */}
+                  {pickBtn((()=>{const w=workDef(form.work);return w?(w.id+' '+w.name):'選択';})(),!form.work,'⏰ 作業内容',
                     WORKS.map(w=>({v:w.id,label:w.name,code:w.id})),
-                    form.work||'',v=>setForm(p=>({...p,work:v})),null,2)}
+                    form.work||'',v=>setForm(p=>applyWorkPick(p,v)),null,2)}
                 </div>
                 <div style={{flex:1}}>
                   <label style={LBL}>指・見</label>
@@ -3724,13 +3946,30 @@ const EditModal=({quickItems,mode,initial,vsId,currentUser,staffList,loanerCars,
                     form.shimi||'',v=>setForm(p=>({...p,shimi:v})),null,2)}
                 </div>
               </div>
+              {/* ★クイック整備・修理を選んだ時だけ「どこで作業するか」（2026-10-31 ユーザー決定）。
+                  リフト作業・ピット作業は【両方えらべる】。どちらも選ばなければ＝ふつう。
+                  入庫制限は両方が解除になっていないと通さない（restrPasses）。 */}
+              {form.work==='Q'&&(
+                <div data-qkrow style={{marginTop:-2,padding:'8px 10px',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:10}}>
+                  <div style={{fontSize:11,fontWeight:800,color:'#6d28d9',marginBottom:6}}>どこで作業しますか（えらばなければ「ふつう」）</div>
+                  <div style={{display:'flex',gap:8}}>
+                    {QKINDS.map(k=>{const on=qkindOf(form).indexOf(k.k)>=0;return(
+                      <button key={k.k} type="button" data-qkind={k.k}
+                        onClick={()=>setForm(p=>({...p,qkind:toggleQkind(p,k.k)}))}
+                        style={{flex:1,padding:'10px 0',borderRadius:10,fontSize:13,fontWeight:800,
+                          border:on?'2px solid #7c3aed':'1px solid #cbd5e1',
+                          background:on?'#7c3aed':'white',color:on?'white':'#475569'}}>{on?'✓ ':''}{k.name}</button>
+                    );})}
+                  </div>
+                </div>
+              )}
               <div>
-                {/* ★内容のクイック項目（2026-10-20 ユーザー要望）。PC で作った定型文がそのまま出る。 */}
+                {/* ★内容のクイックメニュー（2026-10-31）。グループの区画で全部出す。PC と同じ定型文（setItems/setGroups）。 */}
                 <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
                   <label style={{...LBL,marginBottom:0}}>内容</label>
-                  <button type="button" onClick={()=>setQuickOpen(true)}
+                  <button type="button" data-quickmenu onClick={()=>setQuickOpen(true)}
                     style={{marginLeft:'auto',padding:'4px 11px',background:'#e0f2fe',border:'1.5px solid #7dd3fc',borderRadius:7,
-                      fontSize:11.5,color:'#0369a1',fontWeight:800,fontFamily:'inherit'}}>⚡ クイック</button>
+                      fontSize:11.5,color:'#0369a1',fontWeight:800,fontFamily:'inherit'}}>⚡ クイックメニュー</button>
                 </div>
                 <textarea value={form.content||''} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={3} style={{...INP,resize:'none'}}/>
               </div>
@@ -3940,8 +4179,9 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
   const [showRestr,setShowRestr]=useState(false); // 入庫制限バッジをタップした時の内容ポップアップ
   useEffect(()=>{setShowRestr(false);},[dk]);
   const restrExemptIds=restrExempt(restr);
-  const restrOkWorks=WORKS.filter(w=>restrExemptIds.includes(w.id));
-  const restrNgWorks=WORKS.filter(w=>!restrExemptIds.includes(w.id));
+  // ★クイック整備・修理は「ふつう/リフト/ピット」の3通り（2026-10-31）。EXEMPT_LIST を通すこと
+  const restrOkWorks=EXEMPT_LIST().filter(x=>restrExemptIds.includes(x.key)).map(x=>({id:x.key,name:x.label}));
+  const restrNgWorks=EXEMPT_LIST().filter(x=>!restrExemptIds.includes(x.key)).map(x=>({id:x.key,name:x.label}));
   const toMinR=t=>{const[hh,mm]=String(t).split(':').map(Number);return hh*60+mm;};
   const isSlotRestricted=slot=>{
     try{
@@ -4281,7 +4521,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
               const restricted=isSlotRestricted(slot); // 入庫制限の時間帯（PC版と同じく整備予約のみ制限）
               // 制限中でも「制限解除の作業」の予約が入っている枠は、入庫時間の欄だけ制限色を残して
               // 案件の内容は白背景にする（入庫できる案件だと一目で分かるように・PC版と共通の考え方）
-              const exemptInSlot=restricted&&dks.some(k=>restrExemptIds.includes(day[k]&&day[k].work));
+              const exemptInSlot=restricted&&dks.some(k=>restrPasses(restr,day[k]));
               // ★入庫済みチェック。押した直後は手元の保持を優先（古いキャッシュで点滅しないように）
               const _r0=dks[0]&&day[dks[0]];
               const _sk=_r0?dk+'|'+(_r0.name||dks[0]):null;
@@ -4295,7 +4535,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                   <div style={{flex:1,padding:'5px 9px',background:exemptInSlot?'white':undefined}}>
                     {dks.map((key,ki)=>{
                       const r=day[key];
-                      const w=WORKS.find(x=>x.id===r.work);
+                      const w=workDef(r.work);
                       const loanerTxt=r.loaner||r.rentalLabel||'';
                       return(
                         <div key={ki} onClick={()=>{if(otherView){alert('🏪 他の店のタイムスケジュールは閲覧のみです。\n直すには上の切り替えで自分の店に戻してください。\n（車検は他の店でも直せます）');return;}onOpenEdit({type:'sched',dk,slot:key,isNew:false});}}
@@ -4303,6 +4543,7 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                           <span style={{fontWeight:800,fontSize:13}}>{sama(r.name)}</span>
                           {r.carType&&<span style={{fontSize:11,color:'#64748b',marginLeft:5}}>{r.carType}</span>}
                           {(w||r.workType)&&<span style={{marginLeft:5,padding:'1px 5px',background:'#ccfbf1',color:'#0f766e',borderRadius:6,fontSize:10,fontWeight:700}}>{w?w.name:r.workType}</span>}
+                      {qkindLabel(r)&&<span data-qklab style={{marginLeft:4,fontSize:10,fontWeight:800,color:'#7c3aed'}}>{qkindLabel(r)}</span>}
                           {loanerTxt&&<span style={{marginLeft:5,fontSize:10,color:'#0284c7'}}>{loanerTxt}</span>}
                           <span style={{fontSize:12,color:'#cbd5e1',marginLeft:4}}>›</span>
                           {r.content&&<div style={{fontSize:11,color:'#64748b',marginTop:1}}>{r.content}</div>}
@@ -5965,6 +6206,7 @@ const App=()=>{
   const [memoDataS,setMemoDataS]=useState({});
   const [memoItemsRaw,setMemoItemsRaw]=useState([]);   // 備考のクイック項目（PCで作った定型文・2026-10-03）
   const [setItemsRaw,setSetItemsRaw]=useState([]);     // 整備の【内容】欄のクイック項目（2026-10-20）
+  const [setGroupsRaw,setSetGroupsRaw]=useState([]);   // ★クイックメニューのグループ（2026-10-31）
   const [memoEdit,setMemoEdit]=useState(null);         // 備考・メモの追加／編集 {dk,idx}（idx=null で新規）
   const [loanerResH,setLoanerResH]=useState({});
   const [rentalCars,setRentalCars]=useState([]);
@@ -6114,7 +6356,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -6148,6 +6390,7 @@ const App=()=>{
       if(isPlainObj(msch))setMySched(msch);
       if(Array.isArray(mitems))setMemoItemsRaw(mitems);
       if(Array.isArray(sitems))setSetItemsRaw(sitems);
+      if(Array.isArray(sgroups))setSetGroupsRaw(sgroups);
       setGasOk(FB_ON?!(window.__hubGasDown||0):true);   // Firestore では購読の失敗（fbDown）を接続状態に反映
     }catch{setGasOk(false);}
     finally{fetchBusyRef.current=false;}
@@ -6217,6 +6460,19 @@ const App=()=>{
   const guardWrite=()=>{
     writeGuardRef.current++;
     setTimeout(()=>{writeGuardRef.current=Math.max(0,writeGuardRef.current-1);},70000);
+  };
+  // ★クイックメニューの保存（2026-10-31）。項目もグループも【配列】なので writeShared は使えない。
+  //   配列は useShared／mergeSharedObjects が丸ごと置き換える決まりなので、そのまま入れ替えてよい。
+  const saveQuickMenu=async(items,groups)=>{
+    guardWrite();
+    setSetItemsRaw(items); setSetGroupsRaw(groups);   // 先に画面へ（楽観）
+    const put=async(key,arr)=>{
+      if(FB_ON){ const out={}; const r=await fbTxn(key,()=>arr,{out});
+        if(r!=='ok'&&r!=='nochange')throw new Error('サーバーへの保存を確認できませんでした'); }
+      else await sSet(key,arr);
+    };
+    await put(STOR+'setItems',items);
+    await put(STOR+'setGroups',groups);
   };
   //   ★requireBase=true のキー（insp/lres/rres など予約そのもの）は、サーバー値を読めなかった時に
   //     ローカル全文へフォールバックしない。読めない＝GASの一時失敗なので、そこでローカルを書き戻すと
@@ -6951,7 +7207,8 @@ const App=()=>{
         const toMin=t=>{const[h,m]=String(t).split(':').map(Number);return h*60+m;};
         const slotMin=toMin(_tSlot);
         if(restrCovers(restriction,_tSlot)&&!_machPre){
-          const isExempt=restrExempt(restriction).includes(form.work);
+          // ★クイック整備・修理は「ふつう/リフト/ピット」で分けて見る（2026-10-31）。必ず restrPasses を通す
+          const isExempt=restrPasses(restriction,form);
           if(!isExempt)throw new Error(`🚫 この時間帯（${restrLabels(restriction).join('／')}）は入庫制限中です。制限解除されている作業内容のみ予約可能です`);
         }
       }
@@ -7335,6 +7592,8 @@ const App=()=>{
       })()}
       {editMode&&<EditModal
         quickItems={setItemsRaw}
+        quickGroups={setGroupsRaw}
+        onSaveQuick={saveQuickMenu}
         mode={editMode}
         initial={editMode.initial}
         vsId={vsId}

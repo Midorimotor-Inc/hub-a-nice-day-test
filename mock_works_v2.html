@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub モック：作業項目の整理／クイックメニュー</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Yu Gothic','Hiragino Sans',Meiryo,sans-serif;background:#f1f5f9;color:#1b2129;font-size:14px;line-height:1.7}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px 16px 90px}
+  h1{font-size:19px;font-weight:900;margin-bottom:4px}
+  .lead{font-size:13px;color:#475569;margin-bottom:16px}
+  h2{font-size:16px;font-weight:900;margin:26px 0 6px;padding-left:9px;border-left:5px solid #1d4ed8}
+  h2 .q{font-size:12px;font-weight:700;color:#64748b;margin-left:8px}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#92400e;margin-bottom:12px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(390px,1fr));gap:12px}
+  .card{background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:14px}
+  .card.rec{border-color:#1d4ed8;box-shadow:0 2px 10px rgba(29,78,216,.12)}
+  .card h3{font-size:14.5px;font-weight:900}
+  .tagrec{display:inline-block;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:7px;vertical-align:2px}
+  .desc{font-size:12.5px;color:#475569;margin:4px 0 11px}
+  .ui{background:#f8fafc;border:1px solid #e2e8f0;border-radius:11px;padding:11px}
+  .lbl{font-size:11px;font-weight:800;color:#475569;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .works{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+  .w{border:2px solid #e2e8f0;background:#fff;border-radius:8px;padding:5px 9px;font-size:11.5px;font-weight:700;color:#475569;cursor:pointer;font-family:inherit}
+  .w.on{border-color:#0e7490;background:#ecfeff;color:#0e7490}
+  .w .cd{display:inline-block;min-width:20px;text-align:center;background:#eef2f7;border-radius:4px;padding:0 3px;margin-right:4px;font-weight:900;color:#334155}
+  .w.on .cd{background:#0e7490;color:#fff}
+  .w.nw{border-style:dashed;border-color:#f59e0b}
+  textarea{width:100%;border:2px solid #e2e8f0;border-radius:9px;padding:8px 10px;font:inherit;font-size:13px;resize:vertical;background:#fff;min-height:58px}
+  .sched{margin-top:11px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;overflow:hidden}
+  .sched .hd{background:#f1f5f9;font-size:11px;font-weight:800;color:#475569;padding:5px 9px}
+  .row{display:flex;gap:8px;padding:8px 9px;align-items:flex-start;border-top:1px solid #f1f5f9}
+  .tm{font-size:11.5px;font-weight:800;color:#0e7490;width:40px;flex-shrink:0}
+  .bdg{display:inline-block;background:#cffafe;color:#0e7490;border:1px solid #67e8f9;border-radius:6px;padding:0 6px;font-size:11px;font-weight:900;flex-shrink:0}
+  .nm{font-weight:800;font-size:13px}
+  .ct{font-size:12px;color:#475569;white-space:pre-wrap}
+  .sub{font-size:11px;color:#94a3b8;margin-top:7px}
+  .qbtn{margin-left:auto;padding:4px 11px;background:#e0f2fe;border:1.5px solid #7dd3fc;border-radius:7px;font-size:11.5px;color:#0369a1;font-weight:800;cursor:pointer;font-family:inherit}
+  .qbtn.big{padding:7px 14px;font-size:13px;background:#ecfeff;border-color:#67e8f9;color:#0e7490}
+  .old{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+  .old b{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;background:#ecfdf5;border:2px solid #6ee7b7;border-radius:20px;font-size:13px;font-weight:700;color:#059669}
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:center;justify-content:center;padding:14px}
+  .ov.on{display:flex}
+  .pop{background:#fff;border-radius:16px;width:min(780px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  .pop .ph{padding:14px 18px;background:linear-gradient(135deg,#0e7490,#0891b2);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px}
+  .pop .ph .t{color:#fff;font-weight:900;font-size:15px}
+  .pop .ph .s{color:rgba(255,255,255,.8);font-size:11px}
+  .pop .ph .sp{margin-left:auto;display:flex;gap:7px}
+  .ebtn{border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.22);color:#fff}
+  .ebtn.on{background:#fff;color:#0e7490}
+  .pbody{flex:1;overflow-y:auto;padding:14px 18px}
+  .hint{font-size:12px;color:#475569;background:#f1f5f9;border-radius:9px;padding:8px 11px;margin-bottom:11px}
+  .qgrid{display:flex;flex-wrap:wrap;gap:7px}
+  .qi{position:relative;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#ecfdf5;border:2px solid #6ee7b7;border-radius:22px;font-size:14px;font-weight:700;color:#059669;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none}
+  .qi.act{background:#d1fae5;border-color:#10b981;color:#065f46;box-shadow:inset 0 1px 3px rgba(0,0,0,.1)}
+  .qi.drag{opacity:.35}
+  .qi .mk{font-size:10px;opacity:.75}
+  .qi .ic{display:inline-flex;gap:3px;margin-left:3px}
+  .qi .ic button{border:none;background:rgba(255,255,255,.85);border-radius:6px;width:22px;height:22px;font-size:11px;cursor:pointer;font-family:inherit;color:#0369a1}
+  .qi .ic button.del{color:#dc2626}
+  .grip{font-size:13px;color:#94a3b8;margin-right:-2px}
+  .addbox{margin-top:14px;background:#f0fdf4;border:2px dashed #86efac;border-radius:11px;padding:11px 13px}
+  .addbox .t{font-weight:800;font-size:12.5px;color:#059669;margin-bottom:8px}
+  .addbox input{width:100%;border:2px solid #d1fae5;border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;margin-bottom:6px;background:#fff}
+  .addbox button{width:100%;padding:9px 0;background:#059669;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .pf{padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;gap:8px}
+  .pf .ok{flex:1;padding:11px 0;background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;border:none;border-radius:9px;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit}
+  .pf .ng{padding:11px 18px;background:#f3f4f6;border:none;border-radius:9px;font-size:12px;cursor:pointer;font-family:inherit}
+  .foot{margin-top:26px;background:#fff;border:2px solid #1d4ed8;border-radius:14px;padding:14px}
+  .foot b{color:#1d4ed8}
+  ul{margin:6px 0 0 20px}li{font-size:13px;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>モック：③ 作業項目のならび直し　④ クイックメニュー</h1>
+  <div class="lead">①②は <b>A案・A案</b> で決まったものを、そのまま組み込んであります。実際に押して動かせます。</div>
+
+  <h2>③ 作業項目（主作業）のならび<span class="q">点検の項目をどこまでまとめますか？</span></h2>
+  <div class="note">
+    <b>メンパ1ヶ月／6ヶ月／12ヶ月点検 → 「メンパ」1つ</b>にまとめ、<b>有料点検（有点）</b>と<b>無料点検（無点）</b>を足しました。
+    月数（1ヶ月・6ヶ月・12ヶ月・18ヶ月）は <b>④ のクイックメニュー</b>から内容欄に入れます。<br>
+    ちがうのは <b>⑫ 12ヶ月点検・新車1ヶ月点検・新車6ヶ月点検 を残すか、有点／無点にまとめるか</b>だけです。
+  </div>
+  <div class="cards" id="c3"></div>
+
+  <h2>④ クイックメニュー<span class="q">この形でよいですか？</span></h2>
+  <div class="note">
+    バッジのずらっと並んだ列は<b>しまいました</b>。<b>「⚡ クイックメニュー」</b>を押すと大きく開きます。
+    中では <b>押すと内容に入る／つかんで動かすと並べ替え／✎で直す／＋で足す</b> が全部できます。
+  </div>
+  <div class="cards" id="c4"></div>
+
+  <div class="foot">
+    <b>お返事のしかた</b>
+    <ul>
+      <li>③は <b>A案／B案</b> のどちらか</li>
+      <li>④は <b>このまま／ここを直したい</b></li>
+      <li>バッジの字（メンパ・有点・無点）やクイックの項目を変えたい時は、そのまま書いてください</li>
+    </ul>
+  </div>
+</div>
+
+<div class="ov" id="ov">
+  <div class="pop">
+    <div class="ph">
+      <div>
+        <div class="t">⚡ クイックメニュー</div>
+        <div class="s">押すと内容欄に入ります。つかんで動かすと並べ替えできます。</div>
+      </div>
+      <div class="sp">
+        <button class="ebtn" id="eb">✎ 編集</button>
+        <button class="ebtn" id="xb">✕</button>
+      </div>
+    </div>
+    <div class="pbody">
+      <div class="hint" id="hint"></div>
+      <div class="qgrid" id="qg"></div>
+      <div class="addbox" id="ab" style="display:none">
+        <div class="t">＋ 新しいバッジを足す</div>
+        <input id="nl" placeholder="ボタンに出す字（例：バッテリー交換）">
+        <input id="nt" placeholder="内容欄に入れる文（空なら上の字がそのまま入ります）">
+        <button id="nb">＋ 追加する</button>
+      </div>
+    </div>
+    <div class="pf">
+      <button class="ok" id="okb">✓ 保存して閉じる</button>
+      <button class="ng" id="cnb">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var E=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+
+var BASE=[
+  {id:'Q',name:'クイック整備・修理'},
+  {id:'QL',name:'クイック整備・修理（リフト作業）',nw:1},
+  {id:'QP',name:'ピット作業',nw:1}
+];
+var KEEP=[{id:'⑫',name:'12ヶ月点検'}];
+var NEWINS=[
+  {id:'メンパ',name:'メンパ',nw:1},
+  {id:'有点',name:'有料点検',nw:1},
+  {id:'無点',name:'無料点検',nw:1}
+];
+var NSHA=[{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'}];
+var TAIL=[{id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}];
+
+var PLANS3=[
+  {k:'A',t:'A案：メンパだけまとめる',rec:true,
+   d:'⑫ 12ヶ月点検・新車1ヶ月点検・新車6ヶ月点検は今までどおり残します。足すのは メンパ／有点／無点 の3つ。今までの予約の見え方が変わりません。',
+   works:BASE.concat(KEEP,NEWINS,NSHA,TAIL)},
+  {k:'B',t:'B案：点検を3つに集約',
+   d:'点検は メンパ／有点／無点 の3つだけ。⑫ も 新車1ヶ月・6ヶ月 も外し、「何の点検か」は内容欄（クイックメニュー）で書きます。バッジの数がぐっと減ります。',
+   works:BASE.concat(NEWINS,TAIL)}
+];
+var st3={A:{work:'',text:''},B:{work:'',text:''}};
+function nameOf(ws,id){for(var i=0;i<ws.length;i++)if(ws[i].id===id)return ws[i].name;return '';}
+function draw3(){
+  document.getElementById('c3').innerHTML=PLANS3.map(function(p){
+    var s=st3[p.k];
+    return '<div class="card'+(p.rec?' rec':'')+'">'
+      +'<h3>'+E(p.t)+(p.rec?'<span class="tagrec">おすすめ</span>':'')+'</h3>'
+      +'<div class="desc">'+E(p.d)+'</div>'
+      +'<div class="ui">'
+      +'<span class="lbl">作業内容（押して選ぶ）　<span style="color:#f59e0b;font-weight:700">破線＝今回ふえるもの</span></span>'
+      +'<div class="works">'+p.works.map(function(w){
+          return '<button class="w'+(s.work===w.id?' on':'')+(w.nw?' nw':'')+'" data-p3="'+p.k+'" data-w="'+E(w.id)+'">'
+            +'<span class="cd">'+E(w.id)+'</span>'+E(w.name)+'</button>';
+        }).join('')+'</div>'
+      +'<span class="lbl">内容</span>'
+      +'<textarea rows="2" data-t3="'+p.k+'" placeholder="（ここに書きます）">'+E(s.text)+'</textarea>'
+      +'<div class="sched"><div class="hd">⏰ スケジュールの出かた</div>'
+      +'<div class="row"><span class="tm">09:30</span><span class="bdg">'+E(s.work||'—')+'</span>'
+      +'<div><div class="nm">山田 一郎 様　アルト</div><div class="ct">'+(s.text?E(s.text):'<span style="color:#cbd5e1">（内容なし）</span>')+'</div></div></div></div>'
+      +'<div class="sub">※ ①で決めたとおり、内容欄が空のときだけ作業名が入ります（「その他」は入りません）</div>'
+      +'</div></div>';
+  }).join('');
+}
+draw3();
+document.getElementById('c3').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-p3]'); if(!b)return;
+  var k=b.getAttribute('data-p3'), id=b.getAttribute('data-w');
+  var p=PLANS3.filter(function(x){return x.k===k;})[0], s=st3[k];
+  s.work=id;
+  if(id!=='他'&&!s.text.trim()) s.text=nameOf(p.works,id);
+  draw3();
+});
+document.getElementById('c3').addEventListener('input',function(e){
+  var ta=e.target.closest('textarea[data-t3]'); if(!ta)return;
+  st3[ta.getAttribute('data-t3')].text=ta.value;
+  var ct=ta.closest('.ui').querySelector('.ct');
+  ct.innerHTML=ta.value?E(ta.value):'<span style="color:#cbd5e1">（内容なし）</span>';
+});
+
+var QDEF=[
+  {id:'q1',label:'1ヶ月',text:'1ヶ月'},
+  {id:'q2',label:'6ヶ月',text:'6ヶ月'},
+  {id:'q3',label:'12ヶ月',text:'12ヶ月'},
+  {id:'q4',label:'18ヶ月',text:'18ヶ月'},
+  {id:'si1',label:'Eオイル交換',text:'エンジンオイル交換'},
+  {id:'si2',label:'Eオイル・エレメント交換',text:'エンジンオイル+エレメント交換'},
+  {id:'si3',label:'持込シーズンタイヤ付替',text:'持込シーズンタイヤ付替'},
+  {id:'si4',label:'預かりシーズンタイヤ付替',text:'預かりシーズンタイヤ付替'},
+  {id:'si5',label:'レッカー搬入',text:'レッカー搬入'},
+  {id:'si6',label:'書類預かり',text:'書類預かり'}
+];
+var QL=QDEF.map(function(x){return {id:x.id,label:x.label,text:x.text};});
+var QSAVE=null, EDIT=false, CONTENT='メンパ', WORKNOW='メンパ';
+
+function draw4(){
+  document.getElementById('c4').innerHTML=
+    '<div class="card rec"><h3>新しい形<span class="tagrec">ご依頼どおり</span></h3>'
+    +'<div class="desc">バッジの列はしまって、ボタン1つに。押すと大きなポップが開きます。</div>'
+    +'<div class="ui">'
+    +'<div class="lbl">内容<button class="qbtn big" id="openq">⚡ クイックメニュー</button></div>'
+    +'<textarea rows="4" id="cta" placeholder="（ここに書きます）">'+E(CONTENT)+'</textarea>'
+    +'<div class="sched"><div class="hd">⏰ スケジュールの出かた</div>'
+    +'<div class="row"><span class="tm">09:30</span><span class="bdg">'+E(WORKNOW)+'</span>'
+    +'<div><div class="nm">山田 一郎 様　アルト</div><div class="ct">'+(CONTENT?E(CONTENT):'<span style="color:#cbd5e1">（内容なし）</span>')+'</div></div></div></div>'
+    +'<div class="sub">※ 「⚡ クイックメニュー」は今の「⚙ クイック編集」の代わりです（使う・並べ替え・直す・足す が1か所にまとまります）</div>'
+    +'</div></div>'
+
+    +'<div class="card"><h3>今の形（くらべる用）</h3>'
+    +'<div class="desc">バッジが常に並んでいて、直すには別の「⚙ クイック編集」を開く必要がありました。</div>'
+    +'<div class="ui">'
+    +'<div class="lbl">内容<button class="qbtn">⚙ クイック編集</button></div>'
+    +'<div class="old">'+QDEF.slice(4).map(function(q){return '<b><span style="font-size:10px;opacity:.7">＋</span>'+E(q.label)+'</b>';}).join('')+'</div>'
+    +'<textarea rows="2" placeholder="（ここに書きます）"></textarea>'
+    +'<div class="sub">※ 項目が増えるほど、カードの中がバッジで埋まっていきます</div>'
+    +'</div></div>';
+}
+draw4();
+
+function qrow(){
+  var lines=CONTENT.split('\n');
+  document.getElementById('qg').innerHTML=QL.map(function(q,i){
+    var txt=(q.text&&q.text.trim())?q.text:q.label;
+    var act=lines.indexOf(txt)>=0;
+    return '<div class="qi'+(act?' act':'')+'" data-qi="'+i+'">'
+      +'<span class="grip">⠿</span>'
+      +'<span class="mk">'+(act?'✓':'＋')+'</span>'+E(q.label)
+      +(EDIT?'<span class="ic"><button data-ed="'+i+'">✎</button><button class="del" data-dl="'+i+'">✕</button></span>':'')
+      +'</div>';
+  }).join('');
+  document.getElementById('hint').innerHTML = EDIT
+    ? '<b>編集中</b>：✎ で字を直す／✕ で消す／下の欄から足す。つかんで動かすと並べ替えできます。'
+    : '押すと内容欄に<b>行として足されます</b>（もう一度押すと外れます）。<b>つかんで動かすと並べ替え</b>できます。';
+  document.getElementById('ab').style.display = EDIT?'block':'none';
+  document.getElementById('eb').className = 'ebtn'+(EDIT?' on':'');
+}
+function openPop(){ QSAVE=QL.map(function(x){return {id:x.id,label:x.label,text:x.text};}); EDIT=false; qrow(); document.getElementById('ov').classList.add('on'); }
+function closePop(keep){ if(!keep){ QL=QSAVE.map(function(x){return {id:x.id,label:x.label,text:x.text};}); } document.getElementById('ov').classList.remove('on'); draw4(); }
+
+document.addEventListener('click',function(e){ if(e.target.closest('#openq')) openPop(); });
+document.getElementById('eb').onclick=function(){ EDIT=!EDIT; qrow(); };
+document.getElementById('xb').onclick=function(){ closePop(false); };
+document.getElementById('cnb').onclick=function(){ closePop(false); };
+document.getElementById('okb').onclick=function(){ closePop(true); };
+document.getElementById('ov').onclick=function(e){ if(e.target.id==='ov') closePop(false); };
+document.getElementById('nb').onclick=function(){
+  var l=document.getElementById('nl').value.trim(); if(!l)return;
+  var t=document.getElementById('nt').value.trim();
+  QL.push({id:'q_'+Date.now(),label:l,text:t||l});
+  document.getElementById('nl').value=''; document.getElementById('nt').value=''; qrow();
+};
+
+var dg=null;
+var QG=document.getElementById('qg');
+QG.addEventListener('pointerdown',function(e){
+  if(e.target.closest('button'))return;
+  var el=e.target.closest('[data-qi]'); if(!el)return;
+  dg={i:+el.getAttribute('data-qi'),x:e.clientX,y:e.clientY,moved:false,el:el};
+});
+QG.addEventListener('pointermove',function(e){
+  if(!dg)return;
+  if(!dg.moved&&Math.abs(e.clientX-dg.x)<5&&Math.abs(e.clientY-dg.y)<5)return;
+  if(!dg.moved){ dg.moved=true; dg.el.classList.add('drag'); }
+  e.preventDefault();
+  var over=document.elementFromPoint(e.clientX,e.clientY);
+  var t=over&&over.closest&&over.closest('[data-qi]');
+  if(t){
+    var j=+t.getAttribute('data-qi');
+    if(j!==dg.i){
+      var it=QL.splice(dg.i,1)[0]; QL.splice(j,0,it); dg.i=j;
+      qrow();
+      dg.el=QG.querySelector('[data-qi="'+j+'"]');
+      if(dg.el) dg.el.classList.add('drag');
+    }
+  }
+});
+window.addEventListener('pointerup',function(){
+  if(!dg)return;
+  var d=dg; dg=null;
+  if(!d.moved&&!EDIT){
+    var q=QL[d.i], txt=(q.text&&q.text.trim())?q.text:q.label;
+    var lines=CONTENT.split('\n').filter(function(l){return l!=='';});
+    if(lines.indexOf(txt)>=0) CONTENT=lines.filter(function(l){return l!==txt;}).join('\n');
+    else CONTENT=CONTENT?CONTENT+'\n'+txt:txt;
+  }
+  qrow();
+});
+QG.addEventListener('click',function(e){
+  var b=e.target.closest('button[data-ed]');
+  if(b){ var i=+b.getAttribute('data-ed'), q=QL[i];
+    var l=prompt('ボタンに出す字',q.label); if(l===null)return;
+    var t=prompt('内容欄に入れる文（空なら上の字がそのまま入ります）',q.text||'');
+    if(t===null)return;
+    QL[i]={id:q.id,label:l.trim()||q.label,text:(t.trim()||l.trim()||q.label)}; qrow(); return; }
+  var d=e.target.closest('button[data-dl]');
+  if(d){ QL.splice(+d.getAttribute('data-dl'),1); qrow(); }
+});
+</script>
+</body>
+</html>

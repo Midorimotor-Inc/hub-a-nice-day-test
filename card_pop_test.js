@@ -148,12 +148,12 @@ const seed = {
   await openField('[data-kbkey="work"]');
   m = await measure('work');
   t('ポップが出る', !!m, m);
-  t('★13項目ぜんぶ出る', !!m && m.n === 13, m && m.n);
+  t('★11項目ぜんぶ出る', !!m && m.n === 11, m && m.n);
   t('★縦にスクロールしない', !!m && !m.vScroll, m);
   t('★横にスクロールしない', !!m && !m.hScroll, m);
   t('★高さの上限を付けていない', !!m && m.maxH === 'none', m && m.maxH);
   t('★2列', !!m && m.cols === 2, m && m.cols);
-  t('★どの項目も字が切れていない（メンパ12ヶ月点検まで）', !!m && m.clipped === 0, m && m.clipped);
+  t('★どの項目も字が切れていない（クイック整備・修理まで）', !!m && m.clipped === 0, m && m.clipped);
   t('★先頭は「Q クイック整備・修理」', !!m && /クイック整備/.test(m.first), m && m.first);
   t('★最後は「他 その他」', !!m && /その他/.test(m.last), m && m.last);
   await page.evaluate(() => { const e = document.querySelector('[data-wkid="B"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });

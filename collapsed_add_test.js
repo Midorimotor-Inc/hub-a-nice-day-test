@@ -176,7 +176,7 @@ const DK = `${Y}-${M + 1}-${D}`;
     await page.waitForTimeout(400);
     return page.evaluate(() => {
       const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
-      const names = ['その他', '12ヶ月点検', 'メンパ6ヶ月点検', '鈑金塗装'];
+      const names = ['その他', 'メンパ', '有料点検', '鈑金塗装'];
       const all = [...box.querySelectorAll('div,button')];
       for (const nm of names) {
         const item = all.find(e => e.innerText.trim() === nm);

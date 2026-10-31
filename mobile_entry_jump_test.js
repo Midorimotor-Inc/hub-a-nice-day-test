@@ -13,7 +13,7 @@ for (const base of [__dirname, path.join(process.env.LOCALAPPDATA || '', 'Temp',
 }
 if (!chromium) { console.error('playwright が見つかりません'); process.exit(1); }
 
-const DIR = __dirname, PORT = 8377, STOR = 'hub-v8-dev-';
+const DIR = __dirname, PORT = 8409, STOR = 'hub-v8-dev-';
 const SRC = process.env.SRC || 'mobile.html';
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 400)); } };
