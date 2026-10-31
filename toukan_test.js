@@ -37,8 +37,8 @@ const SEL = 'rgb(186, 230, 253)';    // #bae6fd（ドラッグ中）
 const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin' };
 const FIX = [2026, 10, 31];
 
-// 12件。1〜7 は未投函①、8〜9 は投函済み①、10 は投函①の日付が無い、
-//       11〜12 は赤（キャンセル・案内不要）＝投函の対象外
+// 13件。1〜7 は未投函①、8〜9 は投函済み①、10 は投函①の日付が無い、
+//       11〜12 は赤（キャンセル・案内不要）、13 は青（本予約）＝どちらも投函の対象外
 const mk = (i, o) => Object.assign({
   custId: 'F__' + i + '__客' + i, rowIdx: i, expiry: '2026-12-0' + ((i % 9) + 1),
   name: '客' + i, no: 1000 + i, carType: '車' + i,
@@ -55,6 +55,8 @@ const CUSTS = [
   // ★赤い行。元ファイルの凡例が「キャンセル・案内不要 … 赤」なので投函の対象外
   mk(11, { status: 'cancel', dm1Sent: false }),  // 印は未投函だが、黄色にしてはいけない
   mk(12, { status: 'cancel', dm1Sent: true }),   // 印は投函済みだが、✓を出してはいけない
+  // ★青い行＝もう本予約が入っている。投函する前に予約が決まったので DM は要らない
+  mk(13, { status: 'confirm', dm1Sent: false }),
 ];
 
 const seed = {
@@ -154,7 +156,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
 
   head('① 黄色＝まだ投函していない／白＋✓＝投函済み');
   let c0 = await cells(page, 0);
-  t('12行ぜんぶ出ている', c0.length === 12, c0.length);
+  t('13行ぜんぶ出ている', c0.length === 13, c0.length);
   t('★客1（未投函）は黄色', c0[0] && c0[0].bg === YELLOW, c0[0]);
   t('★客1 に ✓ は付かない', c0[0] && !/✓/.test(c0[0].text), c0[0]);
   t('★客8（投函済み）は黄色でない', c0[7] && c0[7].bg !== YELLOW, c0[7]);
@@ -212,7 +214,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
   await page.waitForTimeout(1300);
   t('★絵は自分で消える', await page.evaluate(() => !document.querySelector('svg rect[fill="#dc2626"]')));
   c0 = await cells(page, 0);
-  t('行数は12のまま', c0.length === 12, c0.map(x => x.name + ':' + x.bg));
+  t('行数は13のまま', c0.length === 13, c0.map(x => x.name + ':' + x.bg));
   t('★3件が白になった', c0.slice(0, 3).every(x => x.bg !== YELLOW), c0.slice(0, 3).map(x => x.bg));
   t('★3件に ✓ が付いた', c0.slice(0, 3).every(x => /✓/.test(x.text)), c0.slice(0, 3).map(x => x.text));
   t('★4件目は黄色のまま', c0[3].bg === YELLOW, c0[3]);
@@ -260,7 +262,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
     if (b) b.click();
   });
   await page.waitForTimeout(400);
-  t('★もう一度押すと絞り込みが解ける', (await cells(page, 0)).length === 12);
+  t('★もう一度押すと絞り込みが解ける', (await cells(page, 0)).length === 13);
 
   head('⑨ 取り込みの時の色の見分け（isDmYellow）');
   const col = await page.evaluate(() => ({
@@ -280,7 +282,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
   t('★塗りなしは黄色でない', col.none === false, col);
   t('★theme 指定（白に塗り直した分）は黄色でない', col.theme === false, col);
 
-  head('⑩ 赤い行（キャンセル・案内不要）は投函の対象外');
+  head('⑩ 赤い行（キャンセル・案内不要）と青い行（本予約）は投函の対象外');
   //   元ファイルの凡例に「キャンセル・案内不要 … 赤」と書いてある。
   //   車検のキャンセルだけでなく、もともとDMを出さない人も同じ赤で塗られている（2026-10-31 ユーザー指摘）。
   c0 = await cells(page, 0);
@@ -303,6 +305,21 @@ const clickPop = (page, label) => page.evaluate((lb) => {
   t('★赤い行しか含まない範囲ではポップが出ない', (await popText(page)) === null, await popText(page));
   c0 = await cells(page, 0);
   t('★赤い行は黄色にならないまま', c0.find(x => x.name === '客11').bg !== YELLOW);
+  // ★青い行（本予約）も同じ（2026-10-31 ユーザー指示：投函前に本予約が入った分は投函不要）
+  const bl = c0.find(x => x.name === '客13');
+  t('★本予約の行も黄色にしない（客13）', !!bl && bl.bg !== YELLOW, bl);
+  t('★本予約の行も掴めない',
+    await page.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(r => /客13/.test(r.innerText));
+      return tr ? getComputedStyle(tr.children[4]).cursor !== 'pointer' : false;
+    }));
+  t('★マウスを乗せると「本予約が入っている」と出る',
+    await page.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(r => /客13/.test(r.innerText));
+      return tr ? (tr.children[4].getAttribute('title') || '').indexOf('本予約が入っている') >= 0 : false;
+    }));
+  t('★「📮 投函の印だけ取り込む」のボタンはもう無い',
+    !(await page.evaluate(() => /投函の印だけ取り込む/.test(document.body.innerText))));
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));

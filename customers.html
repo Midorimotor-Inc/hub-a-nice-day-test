@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793457624362';
+  window.__APP_BUILD='build-1793458511883';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -150,7 +150,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.90.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.90.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1304,9 +1304,6 @@ const makeCustId=(fileName,rowIdx,name,no)=>{
   const normNo=String(no||'').trim();
   return `${fileName}__${rowIdx}__${normName}__${normNo}`;
 };
-// ★同じ月を取り込み直さずに照らし合わせるための鍵（行番号を含めない・2026-10-31）
-const custKey2=(name,no)=>String(name||'').replace(/[\s　]/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
-  +'__'+String(no||'').trim();
 
 // セル背景色 → ステータス変換
 const cellColorToStatus=hexColor=>{
@@ -1347,11 +1344,15 @@ const isDmYellow=hex=>{
   //  赤と緑が高く、青だけはっきり低い＝黄系。白(FFFFFF)や象牙色(FFFFF0)は青も高いので外れる。
   return r>=200&&g>=170&&b<Math.min(r,g)-25;
 };
-// ★赤い行は投函の対象外（2026-10-31 ユーザー指摘）。
-//   元ファイルの凡例に「キャンセル・案内不要 … 赤」と書いてある。
-//   車検のキャンセルだけでなく、**もともとDMを出さない人**も同じ赤で塗られている。
-//   なので「投函済み」とも「未投函」とも数えない。
-const dmSkip=(c)=>!!c&&c.status==='cancel';
+// ★投函の対象外にする行（2026-10-31 ユーザー指摘）。「投函済み」とも「未投函」とも数えない。
+//   ・赤（cancel）… 元ファイルの凡例が「キャンセル・案内不要」。車検のキャンセルだけでなく、
+//                   もともとDMを出さない人も同じ赤で塗られていて、見分けがつかない。
+//   ・青（confirm）… もう本予約が入っている人。投函する前に予約が決まったので、DMは要らない。
+//   ★緑（temp／仮予約）はわざと外していない。仮のうちは案内を出すことがあるため。
+const DM_SKIP_STATUS=['cancel','confirm'];
+const dmSkip=(c)=>!!c&&DM_SKIP_STATUS.indexOf(c.status)>=0;
+const dmSkipWhy=(c)=>!c?'':c.status==='confirm'?'本予約が入っているので、投函の対象外です'
+  :c.status==='cancel'?'キャンセル・案内不要なので、投函の対象外です':'';
 // まだ投函していないマスか（n: 0=投函① 1=投函②）
 const dmUnsent=(c,n)=>!!c&&!dmSkip(c)&&!!c[DM_DATE_KEYS[n]]&&c[DM_SENT_KEYS[n]]===false;
 
@@ -2440,11 +2441,11 @@ const DmCell=memo(({customer,n,row,sel,onDown,onOver,canEdit})=>{
     <td
       onMouseDown={e=>{if(has){e.preventDefault();onDown(row,n);}}}
       onMouseOver={()=>{if(has)onOver(row,n);}}
-      title={skip?(date?'キャンセル・案内不要なので、投函の対象外です':''):
+      title={skip?(date?dmSkipWhy(customer):''):
         !canEdit?(date?'投函の記録を変えられるのは管理者だけです':''):
         !has?'':unsent?'まだ投函していません（ドラッグで選ぶと投函済みにできます）':'投函済み（ドラッグで選ぶと未投函に戻せます）'}
       style={{padding:'7px 8px',verticalAlign:'middle',fontSize:11,whiteSpace:'nowrap',
-        color:unsent?'#422006':skip?'#9f1239':date?'#94a3b8':'#111827',fontWeight:unsent?800:400,
+        color:unsent?'#422006':skip?'#475569':date?'#94a3b8':'#111827',fontWeight:unsent?800:400,
         opacity:skip?0.55:1,
         background:sel?'#bae6fd':unsent?DM_YELLOW:undefined,
         boxShadow:sel?'inset 0 0 0 2px #0284c7':undefined,
@@ -2896,7 +2897,6 @@ const App=()=>{
   const [syncDialog,setSyncDialog]=useState(null);
   const [syncing,setSyncing]=useState(false);
   const fileInputRef=useRef();
-  const dmInputRef=useRef();   // 「投函の印だけ取り込む」用（2026-10-31）
 
   // GASからデータ取得
   useEffect(()=>{
@@ -3269,81 +3269,6 @@ const App=()=>{
     return()=>clearTimeout(t);
   },[]);
 
-  // ★「投函の印だけ取り込む」（2026-10-31 ユーザー指示）
-  //   ふつうの Excel インポートは、その月を元ファイルの内容で【まるごと置き換える】ので、
-  //   Hub 側だけで入れた予約・入庫日・状態が消える（202701 は本番に予約22件が入っていた）。
-  //   投函の色だけ後から足したい時のために、dm1Sent/dm2Sent だけを書き換える道を用意する。
-  //   ★ここで触るのは dm1Sent と dm2Sent の2つだけ。ほかの項目には一切さわらない。
-  const handleDmImport=useCallback(async e=>{
-    const file=(e.target.files||[])[0];
-    e.target.value='';
-    if(!file)return;
-    if(!isHubAdmin(currentUser)){alert('投函の記録を変えられるのは管理者だけです。');return;}
-    setImporting(true);
-    try{
-      const r=await parseExcelFile(file);
-      const cur=filesRef.current.find(f=>f.name===r.name);
-      if(!cur){
-        alert(`「${r.name}」は Hub にまだありません。\n先に「＋Excelインポート」で取り込んでください。`);
-        return;
-      }
-      // 元ファイル側の印を引けるようにする（custId が合わない時は 氏名＋No で照らす）
-      const byId={},byNm={};
-      r.customers.forEach(c=>{
-        const m={dm1Sent:c.dm1Sent,dm2Sent:c.dm2Sent,dm1Date:c.dm1Date,dm2Date:c.dm2Date};
-        byId[c.custId]=m;byNm[custKey2(c.name,c.no)]=m;
-      });
-      let hit=0,miss=0,ch1=0,ch2=0;
-      let skipped=0;
-      const mark=(list)=>list.map(c=>{
-        if(dmSkip(c)){skipped++;return c;}       // 赤い行（キャンセル・案内不要）はさわらない
-        const m=byId[c.custId]||byNm[custKey2(c.name,c.no)];
-        if(!m){miss++;return c;}
-        hit++;
-        if(c.dm1Sent!==m.dm1Sent)ch1++;
-        if(c.dm2Sent!==m.dm2Sent)ch2++;
-        return {...c,dm1Sent:m.dm1Sent,dm2Sent:m.dm2Sent};
-      });
-      const next=mark(cur.customers);
-      const un1=next.filter(c=>dmUnsent(c,0)).length;
-      const un2=next.filter(c=>dmUnsent(c,1)).length;
-      if(!window.confirm(
-        `「${r.name}」の投函の印だけを元ファイルから取り込みます。\n\n`+
-        `▼ 取り込んだあと\n`+
-        `    未投函① … ${un1}件（まだ投函していない）\n`+
-        `    未投函② … ${un2}件\n`+
-        `    照らし合わせ … ${hit}件${miss?`（元ファイルに見当たらない人 ${miss}件はそのまま）`:''}\n`+
-        (skipped?`    キャンセル・案内不要 … ${skipped}件（投函の対象外なのでさわりません）\n`:'')+`\n`+
-        `★変わるのは投函の色だけです。予約・入庫日・状態・担当・備考には一切さわりません。\n`+
-        `   （この月には予約が ${cur.customers.filter(c=>c.status==='confirm'||c.status==='temp').length}件 入っています）\n\n`+
-        `取り込みますか？`))return;
-      // 先に画面へ出してから、最新を読み直して印だけ付け直して書く
-      const nf={...cur,customers:next};
-      const at=filesRef.current.findIndex(f=>f.name===r.name);
-      const shown=filesRef.current.map((x,i)=>i===at?nf:x);
-      filesRef.current=shown;setFiles(shown);
-      try{localStorage.setItem(STOR+'cf-'+safeName(r.name),JSON.stringify(nf));}catch(_e){}
-      setImportMsg(`「${r.name}」の投函の印を保存中…`);
-      let ok=false;
-      for(let a=0;a<3&&!ok;a++){
-        try{
-          const latest=await loadFileChunked(r.name);
-          const base=(latest&&Array.isArray(latest.customers)&&latest.customers.length)?latest.customers:cur.customers;
-          const mf={...cur,customers:mark(base)};
-          ok=await saveFileChunked(mf,base);
-          if(ok){
-            const after=filesRef.current.map(x=>x.name===r.name?mf:x);
-            filesRef.current=after;setFiles(after);
-            try{localStorage.setItem(STOR+'cf-'+safeName(r.name),JSON.stringify(mf));}catch(_e){}
-          }
-        }catch(_e){console.error('投函の印の取り込みエラー:',_e);}
-      }
-      setImportMsg('');
-      alert(ok?`「${r.name}」の投函の印を取り込みました。\n未投函① ${un1}件 / 未投函② ${un2}件`
-              :`⚠ サーバーに保存できませんでした。\n通信を確かめて、もう一度お試しください。`);
-    }catch(err){setImportMsg('');alert('取り込みエラー: '+err.message);}
-    finally{setImporting(false);}
-  },[currentUser]);
   // Excelインポート
   const handleImport=useCallback(async e=>{
     const fileList=Array.from(e.target.files||[]);
@@ -4288,17 +4213,6 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
             opacity:importing?0.6:1}}>
           {importing?(importMsg||'読み込み中...'):'+ Excelインポート'}
         </button>
-        {/* ★投函の色だけを後から足す（2026-10-31）。ふつうの取り込みは月をまるごと置き換えるので、
-            予約が入ったあとの月に投函の色だけ入れたい時はこちらを使う */}
-        {dmCanEdit&&(
-        <button onClick={()=>dmInputRef.current?.click()} disabled={importing}
-          title="元のExcelの「投函日①②」の黄色だけを読み込みます。予約や入庫日には触れません"
-          style={{marginLeft:8,marginBottom:3,padding:'6px 14px',background:'white',
-            color:'#a16207',border:'2px solid #facc15',borderRadius:8,fontWeight:800,fontSize:12,
-            flexShrink:0,opacity:importing?0.6:1,cursor:importing?'default':'pointer'}}>
-          📮 投函の印だけ取り込む
-        </button>
-        )}
         {cfPending>0&&(
           <span style={{display:'inline-flex',alignItems:'center',gap:5,marginLeft:8,marginBottom:3,
             fontSize:11,color:'#b45309',fontWeight:800,flexShrink:0,whiteSpace:'nowrap'}}>
@@ -4313,8 +4227,6 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         )}
         <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple style={{display:'none'}}
           onChange={handleImport}/>
-        <input ref={dmInputRef} type="file" accept=".xlsx,.xls" style={{display:'none'}}
-          onChange={handleDmImport}/>
       </div>
 
       {/* ── 全月から探す（横断検索・v2.98）。月ごとの一覧と集計は今までどおり下に出る ── */}

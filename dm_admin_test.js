@@ -3,7 +3,6 @@
 //   管理者でない人は：
 //     ① 黄色／白は**見える**（まだ投函していないのが誰かは分かってよい）
 //     ② マスを掴めない（ドラッグしても選べない・ポップも出ない）
-//     ③ 「📮 投函の印だけ取り込む」のボタンが出ない
 //     ④ 絞り込みと統計は使える（見るだけだから）
 //   ★管理者の判定は index_dev.html の canRestore と同じ条件（isHubAdmin）。
 //     共有端末は誰が座っているか分からないので、誰であっても管理者扱いにしない。
@@ -128,8 +127,6 @@ const stop = async (c) => { await c.browser.close(); c.server.close(); await new
   await c.page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
   await c.page.waitForTimeout(500);
   t('★離してもポップが出ない', !(await popOpen(c.page)));
-  t('★「📮 投函の印だけ取り込む」のボタンが無い',
-    !(await c.page.evaluate(() => [...document.querySelectorAll('button')].some(b => /投函の印だけ取り込む/.test(b.innerText)))));
   t('絞り込みボタンは使える（見るだけ）',
     await c.page.evaluate(() => [...document.querySelectorAll('button')].some(b => /未投函①/.test(b.innerText) && b.offsetParent !== null)));
   t('統計の未投函も見える', await c.page.evaluate(() => /未投函①/.test(document.body.innerText)));
@@ -148,8 +145,6 @@ const stop = async (c) => { await c.browser.close(); c.server.close(); await new
   await c.page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })));
   await c.page.waitForTimeout(500);
   t('★ポップが出る', await popOpen(c.page));
-  t('★「📮 投函の印だけ取り込む」のボタンが出る',
-    await c.page.evaluate(() => [...document.querySelectorAll('button')].some(b => /投函の印だけ取り込む/.test(b.innerText) && b.offsetParent !== null)));
   t('JSエラーが出ていない', c.errs.length === 0, c.errs.slice(0, 3));
   await stop(c);
 
@@ -158,8 +153,6 @@ const stop = async (c) => { await c.browser.close(); c.server.close(); await new
   c = await run('device', { email: 'egawa@midori-m.com', fbuid: 'uid_ega', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin', kind: 'shared', cert: { isAdmin: true, isDevice: true } });
   c0 = await cells(c.page, 0);
   t('★共有端末では触れない（指の形にならない）', c0.every(x => x.cur !== 'pointer'), c0.map(x => x.cur));
-  t('★共有端末では取り込みボタンも出ない',
-    !(await c.page.evaluate(() => [...document.querySelectorAll('button')].some(b => /投函の印だけ取り込む/.test(b.innerText)))));
   t('★それでも投函の色は見える', c0.filter(x => x.bg === YELLOW).length === 3, c0.map(x => x.bg));
   t('JSエラーが出ていない', c.errs.length === 0, c.errs.slice(0, 3));
   await stop(c);
