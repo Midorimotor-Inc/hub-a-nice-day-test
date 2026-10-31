@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793453867929';
+  window.__APP_BUILD='build-1793456170346';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -150,7 +150,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.90.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.90.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -980,6 +980,23 @@ const hubLoadAdminNames = () => {
     } catch (e) {}
   });
 };
+// ★管理者かどうか（2026-10-31）。index_dev.html の canRestore と同じ条件にそろえてある。
+//   共有端末は誰が座っているか分からないので、誰であっても管理者扱いにしない。
+//   HUB_ADMIN_NAMES は許可簿を読んでから入るので、まずは利用証の isAdmin を見る。
+const isHubAdmin=(u)=>{
+  if(hubIsDevice())return false;                       // 共有端末では管理者扱いにしない
+  const live=hubLive(hubLoadMine());
+  if(!live.length)return false;
+  // ★誰が座っているかは、スケジュール側で選んだ人（u）で決める。
+  //   顧客リストを直接ブックマークから開くと u が無いことがあるので、
+  //   その時はこの端末の登録者が1人だけなら、その人として判定する。
+  //   2人以上登録されていて u が無い＝誰だか分からない → 管理者扱いにしない。
+  const cert=(u&&u.name)?live.find(x=>x.name===u.name):(live.length===1?live[0]:null);
+  if(cert&&cert.isAdmin)return true;                   // 自分の端末で管理者として認証済み
+  const nm=(u&&u.name)||(cert&&cert.name)||'';
+  return !!nm&&Array.isArray(HUB_ADMIN_NAMES)&&HUB_ADMIN_NAMES.indexOf(nm)>=0;
+};
+try{hubLoadAdminNames();}catch(e){}   // 許可簿の role=admin を読み始める（結果は後から効く）
 
 const sGet=async(k,retries=3)=>{
   if(FB_ON)return fbGet(k);            // 保存先が Firestore のとき（2026-09-18）
@@ -2408,22 +2425,24 @@ const custPhones=c=>[c.phoneMobile,c.phoneHome].map(v=>String(v||'').trim()).fil
 // ── 投函①② のマス（2026-10-31）
 //   黄色＝まだ投函していない／白＝投函済み。元ファイルの塗り分けと同じ。
 //   上から下へドラッグして選び、離すと確認のポップが出る（代車カレンダーと同じ操作）。
-const DmCell=memo(({customer,n,row,sel,onDown,onOver})=>{
+//   ★触れるのは管理者だけ（2026-10-31 ユーザー指示）。ほかの人は色が見えるだけ。
+const DmCell=memo(({customer,n,row,sel,onDown,onOver,canEdit})=>{
   const date=customer[DM_DATE_KEYS[n]];
-  const has=!!date;
+  const has=!!date&&canEdit;      // 管理者でなければ掴めない
   const unsent=dmUnsent(customer,n);
   return(
     <td
       onMouseDown={e=>{if(has){e.preventDefault();onDown(row,n);}}}
       onMouseOver={()=>{if(has)onOver(row,n);}}
-      title={!has?'':unsent?'まだ投函していません（ドラッグで選ぶと投函済みにできます）':'投函済み（ドラッグで選ぶと未投函に戻せます）'}
+      title={!canEdit?(date?'投函の記録を変えられるのは管理者だけです':''):
+        !has?'':unsent?'まだ投函していません（ドラッグで選ぶと投函済みにできます）':'投函済み（ドラッグで選ぶと未投函に戻せます）'}
       style={{padding:'7px 8px',verticalAlign:'middle',fontSize:11,whiteSpace:'nowrap',
-        color:unsent?'#422006':has?'#94a3b8':'#111827',fontWeight:unsent?800:400,
+        color:unsent?'#422006':date?'#94a3b8':'#111827',fontWeight:unsent?800:400,
         background:sel?'#bae6fd':unsent?DM_YELLOW:undefined,
         boxShadow:sel?'inset 0 0 0 2px #0284c7':undefined,
         cursor:has?'pointer':'default',userSelect:'none',WebkitUserSelect:'none'}}>
       {fmtDateShort(date)}
-      {has&&!unsent&&<span style={{marginLeft:5,color:'#16a34a',fontWeight:900}}>✓</span>}
+      {date&&!unsent&&<span style={{marginLeft:5,color:'#16a34a',fontWeight:900}}>✓</span>}
     </td>
   );
 });
@@ -2490,7 +2509,7 @@ const DmConfirm=({ask,onYes,onNo})=>(
   </div>
 );
 
-const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDmDown,onDmOver})=>{
+const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDmDown,onDmOver,dmCanEdit})=>{
   const st=STATUS_DEF[customer.status]||STATUS_DEF.none;
   const courseObj=COURSES.find(c=>c.id===Number(customer.course));
   const isCancelled=customer.status==='cancel';
@@ -2529,9 +2548,9 @@ const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDm
           {custPhones(customer).map((p,i)=><span key={i} style={{fontSize:11,color:'#0369a1',fontWeight:600,whiteSpace:'nowrap'}}>📞{p}</span>)}
         </div>
       </td>
-      <DmCell customer={customer} n={0} row={dmRow} sel={dmSel===1} onDown={onDmDown} onOver={onDmOver}/>
+      <DmCell customer={customer} n={0} row={dmRow} sel={dmSel===1} onDown={onDmDown} onOver={onDmOver} canEdit={dmCanEdit}/>
       <td style={{padding:'7px 8px',color:'#7c3aed',verticalAlign:'middle',fontSize:11,fontWeight:600}}>{fmtDateShort(customer.dm1Book)}</td>
-      <DmCell customer={customer} n={1} row={dmRow} sel={dmSel===2} onDown={onDmDown} onOver={onDmOver}/>
+      <DmCell customer={customer} n={1} row={dmRow} sel={dmSel===2} onDown={onDmDown} onOver={onDmOver} canEdit={dmCanEdit}/>
       <td style={{padding:'7px 8px',color:'#0284c7',verticalAlign:'middle',fontSize:11,fontWeight:600}}>{fmtDateShort(customer.dm2Book)}</td>
       <td style={{padding:'7px 8px',verticalAlign:'middle',fontWeight:600,color:'#111827',whiteSpace:'nowrap'}}>
         {fmtDate(customer.entryDate)}
@@ -2623,6 +2642,18 @@ const App=()=>{
   const [dmAsk,setDmAsk]=useState(null);        // 確認ポップ {col,toSent,ids,names}
   const [dmAnim,setDmAnim]=useState(null);      // ポストの絵 {n,toSent}
   const [dmFilter,setDmFilter]=useState('all'); // 'all'|'un1'|'un2'
+  // ★投函の記録を変えられるのは管理者だけ（2026-10-31 ユーザー指示）。
+  //   許可簿（meta/allowed）は読み込みが終わるまで分からないので、しばらく見張って拾う。
+  const [dmCanEdit,setDmCanEdit]=useState(()=>isHubAdmin(currentUser));
+  useEffect(()=>{
+    if(dmCanEdit)return;
+    let n=0;
+    const id=setInterval(()=>{
+      if(isHubAdmin(currentUser)){setDmCanEdit(true);clearInterval(id);return;}
+      if(++n>20)clearInterval(id);        // 14秒まで待つ
+    },700);
+    return ()=>clearInterval(id);
+  },[currentUser,dmCanEdit]);
   // ★スケジュール画面の「検索」から開かれた時（2026-09-19）：sessionStorage の指示で、そのファイルを開いて名前で絞る
   // ★検索から別タブで開かれた時は URL（?find=氏名&file=月）で絞り込む。
   //   同じタブ内で開く従来の経路（sessionStorage）も残す（2026-09-30）。
@@ -3239,6 +3270,7 @@ const App=()=>{
     const file=(e.target.files||[])[0];
     e.target.value='';
     if(!file)return;
+    if(!isHubAdmin(currentUser)){alert('投函の記録を変えられるのは管理者だけです。');return;}
     setImporting(true);
     try{
       const r=await parseExcelFile(file);
@@ -3300,7 +3332,7 @@ const App=()=>{
               :`⚠ サーバーに保存できませんでした。\n通信を確かめて、もう一度お試しください。`);
     }catch(err){setImportMsg('');alert('取り込みエラー: '+err.message);}
     finally{setImporting(false);}
-  },[]);
+  },[currentUser]);
   // Excelインポート
   const handleImport=useCallback(async e=>{
     const fileList=Array.from(e.target.files||[]);
@@ -4088,6 +4120,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     const up=()=>{
       if(!dmDragging.current)return;
       dmDragging.current=false;
+      if(!dmCanEdit){dmDragRef.current=null;setDmDrag(null);return;}   // 管理者以外は確定させない
       const d=dmDragRef.current;dmDragRef.current=null;setDmDrag(null);
       if(!d)return;
       const rows=dmFilteredRef.current||[];
@@ -4105,7 +4138,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     };
     window.addEventListener('mouseup',up);
     return ()=>window.removeEventListener('mouseup',up);
-  },[]);
+  },[dmCanEdit]);
 
   const dmYes=useCallback(()=>{
     if(!dmAsk)return;
@@ -4246,6 +4279,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         </button>
         {/* ★投函の色だけを後から足す（2026-10-31）。ふつうの取り込みは月をまるごと置き換えるので、
             予約が入ったあとの月に投函の色だけ入れたい時はこちらを使う */}
+        {dmCanEdit&&(
         <button onClick={()=>dmInputRef.current?.click()} disabled={importing}
           title="元のExcelの「投函日①②」の黄色だけを読み込みます。予約や入庫日には触れません"
           style={{marginLeft:8,marginBottom:3,padding:'6px 14px',background:'white',
@@ -4253,6 +4287,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
             flexShrink:0,opacity:importing?0.6:1,cursor:importing?'default':'pointer'}}>
           📮 投函の印だけ取り込む
         </button>
+        )}
         {cfPending>0&&(
           <span style={{display:'inline-flex',alignItems:'center',gap:5,marginLeft:8,marginBottom:3,
             fontSize:11,color:'#b45309',fontWeight:800,flexShrink:0,whiteSpace:'nowrap'}}>
@@ -4430,7 +4465,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                 <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onRevive={handleRevive}
                   pending={pendingSync[c.custId]||pendingSync[`${c.name}__${c.no}`]||null}
                   flash={!!(recentApplied[c.custId]||recentApplied[`${c.name}__${c.no}`])}
-                  dmRow={i} dmSel={dmSelOf(i)} onDmDown={handleDmDown} onDmOver={handleDmOver}/>
+                  dmRow={i} dmSel={dmSelOf(i)} onDmDown={handleDmDown} onDmOver={handleDmOver} dmCanEdit={dmCanEdit}/>
               ))}
             </tbody>
           </table>

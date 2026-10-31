@@ -128,7 +128,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
     for (const k in sd) st['kv/' + k] = { v: JSON.stringify(sd[k]), u: Date.now() };
     localStorage.setItem('__fakeFbStore', JSON.stringify(st));
     localStorage.setItem(stor + 'auth-devid', 'dev1');
-    localStorage.setItem(stor + 'auth-mine', JSON.stringify([{ uid: me.uid, name: me.name, store: me.store, email: me.email }]));
+    localStorage.setItem(stor + 'auth-mine', JSON.stringify([{ uid: me.uid, name: me.name, store: me.store, email: me.email, isAdmin: true }]));
     localStorage.setItem(stor + 'auth-kind', 'own');
   }, [ME, STOR, seed]);
   await ctx.addInitScript(([y, m, d]) => {
