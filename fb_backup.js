@@ -18,7 +18,7 @@
 //     ・auth-* / handoff … 端末の登録・引き継ぎの印（ファイルに残すとかえって危ない）
 //     ・locks / list-pending / diag-* / gasping … 作業中の印・調査の記録
 //     ・snap*       … Hub の中の時点保存（この控えが同じ役目をする）
-const fs = require('fs'), path = require('path');
+const fs = require('fs'), path = require('path'), cp = require('child_process');
 
 const KEY_FILE = process.env.HUB_FB_KEY || 'C:/Users/A/Documents/Hub重要書類/firebase-admin.json';
 // ── 復旧の部品（firebase-admin）の居場所 ──
@@ -51,6 +51,8 @@ const DRY = process.argv.indexOf('--dry') >= 0;
 //     そこで「毎朝8時」と「PCを使い始めた時」の2つから呼び、先に取れた方だけを生かす。
 //     手で取る時・訓練の控え・戻す前の控えには付けないこと（必ず取る必要があるため）。
 const DAILY = process.argv.indexOf('--daily') >= 0;
+// 紙の控え（オフラインで見て印刷する1枚のHTML）も作り直すか。--nopaper で止められる
+const NOPAPER = process.argv.indexOf('--nopaper') >= 0;
 const PREFIX = DEV ? 'hub-v8-dev-' : 'hub-v8-';
 const ENVNAME = DEV ? 'テスト版' : '本番';
 const OUT_DIR = arg('--out', 'C:/Users/A/Documents/Hub重要書類/hub-backup');
@@ -206,6 +208,18 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
     }
 
     note.ok = true; note.keys = keys; note.bytes = bytes; note.file = file; note.あらまし = summary;
+
+    // ── ついでに「紙の控え」も作り直す（ネットが無くても見て印刷できる1枚のHTML）──
+    //    ★ここで転んでも控え（JSON）はもう取れている。紙の方は次の朝また作られる。
+    if (!NOPAPER) {
+      try {
+        const args = [path.join(__dirname, 'hub_paper.js'), '--file', file].concat(DEV ? ['--dev'] : []);
+        const r = cp.spawnSync(process.execPath, args, { encoding: 'utf8' });
+        const line = String(r.stdout || '').split('\n').filter(x => x.indexOf('紙の控えを作りました') >= 0)[0] || '';
+        if (r.status === 0) { note.paper = true; console.log('  ✔ ' + (line.trim() || '紙の控えも作り直しました')); }
+        else { note.paperError = (String(r.stderr || '').trim() || ('終了コード ' + r.status)).slice(0, 300); console.log('  ⚠ 紙の控えは作れませんでした（JSONの控えは取れています）：' + note.paperError); }
+      } catch (e) { note.paperError = String((e && e.message) || e); console.log('  ⚠ 紙の控えは作れませんでした（JSONの控えは取れています）：' + note.paperError); }
+    }
   } catch (e) {
     note.error = String((e && e.message) || e);
     console.error('  ✖ 控えを取れませんでした：' + note.error);
@@ -220,7 +234,8 @@ const mb = n => (n / 1024 / 1024).toFixed(2) + 'MB';
       fs.appendFileSync(path.join(OUT_DIR, 'hub-backup.log'),
         started.toLocaleString('ja-JP') + '\t' + ENVNAME + '\t' + (note.ok ? 'OK' : 'NG')
         + '\t' + note.keys + '件\t' + mb(note.bytes) + '\t' + (note.error || path.basename(note.file))
-        + '\t写し:' + (note.mirror ? 'OK' : ('NG ' + (note.mirrorError || ''))) + '\n');
+        + '\t写し:' + (note.mirror ? 'OK' : ('NG ' + (note.mirrorError || '')))
+        + '\t紙:' + (note.paper ? 'OK' : (NOPAPER ? '—' : ('NG ' + (note.paperError || '')))) + '\n');
     } catch (e) {}
     process.exit(note.ok ? 0 : 1);
   }

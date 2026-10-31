@@ -14,3 +14,7 @@ shot-nav-*.png
 backup-prod-*-staff.json
 
 node_modules/
+
+# 紙の控え（お客様の氏名・電話が入る）はリポジトリに置かない
+Hub控え*.html
+hub-backup-*.json
