@@ -96,7 +96,7 @@ const ymd = (o) => o.y + '-' + (o.m + 1) + '-' + o.d;
         return e ? e.innerText.trim() : '';
       });
       if (now === want) return true;
-      await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '‹'); if (b) b.click(); });
+      await page.evaluate(() => { const b = document.querySelector('[data-daystep="-1"]'); if (b) b.click(); });
       await page.waitForTimeout(120);
     }
     return false;
@@ -124,7 +124,24 @@ const ymd = (o) => o.y + '-' + (o.m + 1) + '-' + o.d;
   t('★「1か月 ›」で翌月の同じ日になる', (await dayLabel()) === label(Y, M + 1, D), await dayLabel());
   await page.click('[data-datejump="m-1"]'); await page.waitForTimeout(300);
   t('★「‹ 1か月」で元に戻る', (await dayLabel()) === label(Y, M, D), await dayLabel());
-  t('1日ずつの ‹ › も今までどおり残っている', (await page.$$eval('button', a => a.filter(x => x.innerText.trim() === '‹' || x.innerText.trim() === '›').length)) >= 2);
+  // ★前日・翌日は日付のすぐ両隣に置き、ボタンだと一目で分かる形にする（2026-10-31 ユーザー指示）
+  const step = await page.$$eval('[data-daystep]', a => a.map(x => {
+    const r = x.getBoundingClientRect();
+    return { t: x.innerText.replace(/\s+/g, ''), w: r.width, h: r.height, left: r.left, right: r.right };
+  }));
+  t('1日ずつの送りは2つ残っている', step.length === 2, step);
+  t('★「前日」「翌日」と字が入っていて、ボタンだと分かる', step.length === 2 && step[0].t.indexOf('前日') >= 0 && step[1].t.indexOf('翌日') >= 0, step);
+  t('★指で押せる大きさ（44px以上）', step.length === 2 && step.every(b => b.h >= 44 && b.w >= 44), step);
+  const near = await page.evaluate(() => {
+    const d = [...document.querySelectorAll('div')].find(x => /^\d+月\d+日（.）$/.test(x.innerText.trim()));
+    const bs = [...document.querySelectorAll('[data-daystep]')];
+    if (!d || bs.length !== 2) return null;
+    const r = d.getBoundingClientRect();
+    return { left: Math.round(r.left - bs[0].getBoundingClientRect().right), right: Math.round(bs[1].getBoundingClientRect().left - r.right) };
+  });
+  t('★日付のすぐ左隣にある（すき間20px以内）', !!near && near.left >= 0 && near.left <= 20, near);
+  t('★日付のすぐ右隣にある（すき間20px以内）', !!near && near.right >= 0 && near.right <= 20, near);
+  t('★日付の下に字を出さない', await page.evaluate(() => !document.body.innerText.includes('スワイプで日付移動')));
 
   head('① 一般予約（整備）のカード');
   await page.evaluate(() => {
@@ -193,6 +210,21 @@ const ymd = (o) => o.y + '-' + (o.m + 1) + '-' + o.d;
   const td = new Date();
   t('★「本日」で今日に戻る', (await cardLabel()) === label(td.getFullYear(), td.getMonth(), td.getDate()), await cardLabel());
   t('カードは閉じていない（送りボタンがまだ出ている）', (await page.$$eval('[data-dayjump]', a => a.length)) === 5);
+  const cstep = await page.$$eval('[data-daynav]', a => a.map(x => {
+    const r = x.getBoundingClientRect();
+    return { t: x.innerText.replace(/\s+/g, ''), w: r.width, h: r.height };
+  }));
+  t('★日のカードも「前日」「翌日」の字つきボタン', cstep.length === 2 && cstep[0].t.indexOf('前日') >= 0 && cstep[1].t.indexOf('翌日') >= 0, cstep);
+  t('★日のカードも指で押せる大きさ（44px以上）', cstep.length === 2 && cstep.every(b => b.h >= 44 && b.w >= 44), cstep);
+  const cnear = await page.evaluate(() => {
+    const d = [...document.querySelectorAll('div')].find(x => /^\d+月\d+日（.）$/.test(x.innerText.trim()));
+    const bs = [...document.querySelectorAll('[data-daynav]')];
+    if (!d || bs.length !== 2) return null;
+    const r = d.getBoundingClientRect();
+    return { left: Math.round(r.left - bs[0].getBoundingClientRect().right), right: Math.round(bs[1].getBoundingClientRect().left - r.right) };
+  });
+  t('★日のカードも日付のすぐ両隣（すき間20px以内）', !!cnear && cnear.left >= 0 && cnear.left <= 20 && cnear.right >= 0 && cnear.right <= 20, cnear);
+  t('★日のカードも日付の下に字を出さない', await page.evaluate(() => !/車検 \d+台 \/ 整備 \d+件/.test(document.body.innerText)));
 
   head('月の終わりでもはみ出さない');
   const over = await page.evaluate(() => {

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793416901322';
+  window.__APP_BUILD='build-1793417889942';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.87.0';
+const MOBILE_VERSION='3.87.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -3064,20 +3064,31 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
         <div style={{padding:'14px 14px 10px',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:6}}>
           {/* ★日にちの前後送り（2026-10-24 ユーザー要望：さっと見たい時に便利）。
               カードを閉じずに前の日・次の日へ移る。月をまたいでもそのまま進む。 */}
-          {onMoveDay&&(
-            <button data-daynav="-1" title="前の日" onClick={()=>onMoveDay(-1)}
-              style={{width:40,height:40,borderRadius:12,background:'#f1f5f9',border:'none',fontSize:20,
-                color:'#475569',fontWeight:900,flexShrink:0,lineHeight:1}}>‹</button>
-          )}
-          <div style={{flex:1,minWidth:0,textAlign:onMoveDay?'center':'left'}}>
-            <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b'}}>{m+1}月{d}日（{DOW[dow]}）</div>
-            <div style={{fontSize:11,color:'#94a3b8',marginTop:1}}>車検 {irows.length}台 / 整備 {sched.length}件</div>
+          {/* ★前の日・次の日は日付のすぐ両隣（2026-10-31 ユーザー指示：端にあると遠い）。
+               ボタンだと一目で分かるよう、色を塗って「前日」「翌日」の字も入れる。 */}
+          <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',justifyContent:'center',gap:9}}>
+            {onMoveDay&&(
+              <button data-daynav="-1" title="前の日" aria-label="前の日" onClick={()=>onMoveDay(-1)}
+                style={{width:52,height:44,borderRadius:12,background:'#0e7490',border:'none',color:'white',
+                  display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',lineHeight:1,
+                  flexShrink:0,boxShadow:'0 2px 6px rgba(14,116,144,.35)',fontFamily:'inherit'}}>
+                <span style={{fontSize:19,fontWeight:900}}>‹</span>
+                <span style={{fontSize:9.5,fontWeight:800,marginTop:1}}>前日</span>
+              </button>
+            )}
+            <div style={{textAlign:'center',minWidth:0}}>
+              <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b',whiteSpace:'nowrap'}}>{m+1}月{d}日（{DOW[dow]}）</div>
+            </div>
+            {onMoveDay&&(
+              <button data-daynav="1" title="次の日" aria-label="次の日" onClick={()=>onMoveDay(1)}
+                style={{width:52,height:44,borderRadius:12,background:'#0e7490',border:'none',color:'white',
+                  display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',lineHeight:1,
+                  flexShrink:0,boxShadow:'0 2px 6px rgba(14,116,144,.35)',fontFamily:'inherit'}}>
+                <span style={{fontSize:19,fontWeight:900}}>›</span>
+                <span style={{fontSize:9.5,fontWeight:800,marginTop:1}}>翌日</span>
+              </button>
+            )}
           </div>
-          {onMoveDay&&(
-            <button data-daynav="1" title="次の日" onClick={()=>onMoveDay(1)}
-              style={{width:40,height:40,borderRadius:12,background:'#f1f5f9',border:'none',fontSize:20,
-                color:'#475569',fontWeight:900,flexShrink:0,lineHeight:1}}>›</button>
-          )}
           <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'#f1f5f9',border:'none',fontSize:16,color:'#64748b',flexShrink:0,marginLeft:2}}>✕</button>
         </div>
         {/* ★週ごと・月ごとの送り（2026-10-31 ユーザー要望）。‹ › の1日ずつだけでは遠い日に行けない */}
@@ -3950,13 +3961,26 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
           if(Math.abs(dx)<30||Math.abs(dy)>Math.abs(dx))return;
           moveDate(dx<0?1:-1);
         }}>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <button onClick={()=>moveDate(-1)} style={{width:38,height:38,borderRadius:10,border:'2px solid #e5e7eb',background:'white',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>&#8249;</button>
-          <div style={{flex:1,textAlign:'center'}}>
-            <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b'}}>{m+1}月{d}日（{DOW[dow]}）</div>
-            <div style={{fontSize:10,color:'#94a3b8'}}>↕ スワイプで日付移動 / カードをタップで編集</div>
+        {/* ★前の日・次の日は日付のすぐ両隣に置く（2026-10-31 ユーザー指示：端にあると遠い）。
+             ボタンだと一目で分かるよう、色を塗って「前日」「翌日」の字も入れる。 */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+          <button data-daystep="-1" onClick={()=>moveDate(-1)} aria-label="前の日"
+            style={{width:54,height:46,flexShrink:0,borderRadius:12,border:'none',background:'#0e7490',color:'white',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',lineHeight:1,
+              boxShadow:'0 2px 6px rgba(14,116,144,.35)',fontFamily:'inherit'}}>
+            <span style={{fontSize:19,fontWeight:900}}>&#8249;</span>
+            <span style={{fontSize:9.5,fontWeight:800,marginTop:1}}>前日</span>
+          </button>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontWeight:900,fontSize:18,color:dow===0?'#ef4444':dow===6?'#3b82f6':'#1e293b',whiteSpace:'nowrap'}}>{m+1}月{d}日（{DOW[dow]}）</div>
           </div>
-          <button onClick={()=>moveDate(1)} style={{width:38,height:38,borderRadius:10,border:'2px solid #e5e7eb',background:'white',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>&#8250;</button>
+          <button data-daystep="1" onClick={()=>moveDate(1)} aria-label="次の日"
+            style={{width:54,height:46,flexShrink:0,borderRadius:12,border:'none',background:'#0e7490',color:'white',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',lineHeight:1,
+              boxShadow:'0 2px 6px rgba(14,116,144,.35)',fontFamily:'inherit'}}>
+            <span style={{fontSize:19,fontWeight:900}}>&#8250;</span>
+            <span style={{fontSize:9.5,fontWeight:800,marginTop:1}}>翌日</span>
+          </button>
         </div>
         {/* ★週ごと・月ごとの送り（2026-10-31 ユーザー要望）。1日ずつだと遠い日に行くのに時間がかかる。
              PC版の「‹ 前の週／次の週 ›」と同じ考え方で、スマホには月送りも付ける。 */}
