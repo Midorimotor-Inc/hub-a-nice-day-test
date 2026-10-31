@@ -37,7 +37,8 @@ const SEL = 'rgb(186, 230, 253)';    // #bae6fd（ドラッグ中）
 const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin' };
 const FIX = [2026, 10, 31];
 
-// 10件。1〜7 は未投函①、8〜9 は投函済み①、10 は投函①の日付が無い
+// 12件。1〜7 は未投函①、8〜9 は投函済み①、10 は投函①の日付が無い、
+//       11〜12 は赤（キャンセル・案内不要）＝投函の対象外
 const mk = (i, o) => Object.assign({
   custId: 'F__' + i + '__客' + i, rowIdx: i, expiry: '2026-12-0' + ((i % 9) + 1),
   name: '客' + i, no: 1000 + i, carType: '車' + i,
@@ -51,6 +52,9 @@ const CUSTS = [
   mk(1), mk(2), mk(3), mk(4), mk(5), mk(6), mk(7),
   mk(8, { dm1Sent: true }), mk(9, { dm1Sent: true }),
   mk(10, { dm1Date: '', dm1Sent: false }),      // 日付が無い＝黄色にしない
+  // ★赤い行。元ファイルの凡例が「キャンセル・案内不要 … 赤」なので投函の対象外
+  mk(11, { status: 'cancel', dm1Sent: false }),  // 印は未投函だが、黄色にしてはいけない
+  mk(12, { status: 'cancel', dm1Sent: true }),   // 印は投函済みだが、✓を出してはいけない
 ];
 
 const seed = {
@@ -150,7 +154,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
 
   head('① 黄色＝まだ投函していない／白＋✓＝投函済み');
   let c0 = await cells(page, 0);
-  t('10行ぜんぶ出ている', c0.length === 10, c0.length);
+  t('12行ぜんぶ出ている', c0.length === 12, c0.length);
   t('★客1（未投函）は黄色', c0[0] && c0[0].bg === YELLOW, c0[0]);
   t('★客1 に ✓ は付かない', c0[0] && !/✓/.test(c0[0].text), c0[0]);
   t('★客8（投函済み）は黄色でない', c0[7] && c0[7].bg !== YELLOW, c0[7]);
@@ -208,7 +212,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
   await page.waitForTimeout(1300);
   t('★絵は自分で消える', await page.evaluate(() => !document.querySelector('svg rect[fill="#dc2626"]')));
   c0 = await cells(page, 0);
-  t('行数は10のまま', c0.length === 10, c0.map(x => x.name + ':' + x.bg));
+  t('行数は12のまま', c0.length === 12, c0.map(x => x.name + ':' + x.bg));
   t('★3件が白になった', c0.slice(0, 3).every(x => x.bg !== YELLOW), c0.slice(0, 3).map(x => x.bg));
   t('★3件に ✓ が付いた', c0.slice(0, 3).every(x => /✓/.test(x.text)), c0.slice(0, 3).map(x => x.text));
   t('★4件目は黄色のまま', c0[3].bg === YELLOW, c0[3]);
@@ -219,9 +223,9 @@ const clickPop = (page, label) => page.evaluate((lb) => {
     const raw = st['kv/hub-v8-dev-cf-202612-chunk-0'];
     if (!raw) return false;
     const list = JSON.parse(raw.v);
-    return list.filter(c => c.dm1Sent === true).length === 5 ? list.map(c => [c.name, c.dm1Sent]) : false;
+    return list.filter(c => c.dm1Sent === true).length === 6 ? list.map(c => [c.name, c.dm1Sent]) : false;
   }, null, { timeout: 25000 }).then(h => h.jsonValue()).catch(() => null);
-  t('★サーバー側も 投函済み5件（元の2件＋今の3件）', !!saved, saved);
+  t('★サーバー側も 投函済み6件（元の2件＋赤の1件＋今の3件）', !!saved, saved);
   t('★客4 はサーバー側でも未投函のまま', !!saved && saved.find(x => x[0] === '客4')[1] === false, saved);
 
   head('⑦ 白からドラッグすると「未投函に戻しますか？」');
@@ -256,7 +260,7 @@ const clickPop = (page, label) => page.evaluate((lb) => {
     if (b) b.click();
   });
   await page.waitForTimeout(400);
-  t('★もう一度押すと絞り込みが解ける', (await cells(page, 0)).length === 10);
+  t('★もう一度押すと絞り込みが解ける', (await cells(page, 0)).length === 12);
 
   head('⑨ 取り込みの時の色の見分け（isDmYellow）');
   const col = await page.evaluate(() => ({
@@ -275,6 +279,30 @@ const clickPop = (page, label) => page.evaluate((lb) => {
   t('★白 ARGB も黄色でない', col.whiteArgb === false, col);
   t('★塗りなしは黄色でない', col.none === false, col);
   t('★theme 指定（白に塗り直した分）は黄色でない', col.theme === false, col);
+
+  head('⑩ 赤い行（キャンセル・案内不要）は投函の対象外');
+  //   元ファイルの凡例に「キャンセル・案内不要 … 赤」と書いてある。
+  //   車検のキャンセルだけでなく、もともとDMを出さない人も同じ赤で塗られている（2026-10-31 ユーザー指摘）。
+  c0 = await cells(page, 0);
+  const ng1 = c0.find(x => x.name === '客11'), ng2 = c0.find(x => x.name === '客12');
+  t('★印が未投函でも黄色にしない（客11）', !!ng1 && ng1.bg !== YELLOW, ng1);
+  t('★印が投函済みでも ✓ を出さない（客12）', !!ng2 && !/✓/.test(ng2.text), ng2);
+  t('★マウスを乗せると「投函の対象外」と出る',
+    await page.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(r => /客11/.test(r.innerText));
+      return tr ? (tr.children[4].getAttribute('title') || '').indexOf('対象外') >= 0 : false;
+    }));
+  t('★指の形にならない（掴めない）',
+    await page.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(r => /客11/.test(r.innerText));
+      return tr ? getComputedStyle(tr.children[4]).cursor !== 'pointer' : false;
+    }));
+  // 赤い行をまたいでドラッグしても、赤だけは変わらない
+  await dragCells(page, 0, 9, 11);
+  await page.waitForTimeout(500);
+  t('★赤い行しか含まない範囲ではポップが出ない', (await popText(page)) === null, await popText(page));
+  c0 = await cells(page, 0);
+  t('★赤い行は黄色にならないまま', c0.find(x => x.name === '客11').bg !== YELLOW);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
