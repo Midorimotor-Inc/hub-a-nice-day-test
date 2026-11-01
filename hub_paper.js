@@ -5,6 +5,9 @@
 //     node hub_paper.js --dev           … テスト版の控えから作る
 //     node hub_paper.js --file <JSON>   … 使う控えを指定する
 //     node hub_paper.js --out <場所>    … 出す場所を変える（既定は下の OUT_DIR）
+//     node hub_paper.js --also off      … Google ドライブへの写しをしない
+//     node hub_paper.js --dests off     … 写し先メモ（Hub控え-写し先.txt）を読まない
+//     node hub_paper.js --scan off      … USB や共有PC（Hub控え フォルダ）をさがさない
 //
 //   出すもの：Hub控え-YYYY-MM-DD.html（1個だけ・外から何も読み込まない）
 //     ・ネットが無くてもダブルクリックで開ける（Node も要らない。開くのはブラウザだけ）
@@ -20,13 +23,46 @@ const arg = (name, def) => { const i = process.argv.indexOf(name); return i >= 0
 const DEV = process.argv.indexOf('--dev') >= 0;
 const SRC_DIR = arg('--src', 'C:/Users/A/Documents/Hub重要書類/hub-backup');
 const OUT_DIR = arg('--out', 'C:/Users/A/Documents/Hub重要書類/Hub控え');
-const MIRROR = (() => {
-  const d = arg('--also', 'G:/マイドライブ/Hub控え');
-  if (d === 'off') return '';
-  try { if (fs.existsSync(path.dirname(d))) return d; } catch (e) {}
-  return '';
-})();
 const KEEP = Math.max(1, Number(arg('--keep', '7')) || 7);
+
+// ── 写し先（PCの控えのほかに、同じ紙を置く所）──────────────
+//   ① Google ドライブ（既定・`--also off` で止める）
+//   ② 写し先メモ `Hub控え-写し先.txt` に1行ずつ書いた所（共有PC の `\\PC名\Hub控え` など・`--dests off` で止める）
+//   ③ `Hub控え` というフォルダが置いてあるドライブ（USB・割り当てたドライブ。`--scan off` で止める）
+//   ★見えない所は飛ばすだけ（共有PC の電源が切れていても、PCの控えは必ず取れる）
+const DRIVE_DIR = 'G:/マイドライブ/Hub控え';
+const DEST_MEMO = arg('--dests', 'C:/Users/A/Documents/Hub重要書類/Hub控え-写し先.txt');
+const MIRRORS = (() => {
+  const also = arg('--also', DRIVE_DIR), seen = {}, list = [];
+  const add = (d, why) => {
+    const p = String(d || '').trim().replace(/[\\/]+$/, '');
+    if (!p) return;
+    const k = p.toLowerCase().replace(/\//g, '\\');
+    if (seen[k]) return;
+    seen[k] = 1; list.push({ dir: p, why: why });
+  };
+  if (also !== 'off') {
+    // ドライブ（や指定された所）は、親が見えている時だけ足す
+    let ok = false; try { ok = fs.existsSync(path.dirname(also)); } catch (e) {}
+    if (ok) add(also, 'ドライブ');
+  }
+  if (DEST_MEMO !== 'off') {
+    try {
+      fs.readFileSync(DEST_MEMO, 'utf8').split(/\r?\n/).forEach(line => {
+        const s = line.replace(/^\uFEFF/, '').trim();
+        if (s && s[0] !== '#') add(s, '写し先メモ');
+      });
+    } catch (e) {}
+  }
+  if (arg('--scan', '') !== 'off') {
+    'DEFHIJKLMNOPQRSTUVWXYZ'.split('').forEach(L => {   // G は ① と重なるので見ない
+      const d = L + ':/Hub控え';
+      let ok = false; try { ok = fs.existsSync(d); } catch (e) {}
+      if (ok) add(d, L + ' ドライブ');
+    });
+  }
+  return list;
+})();
 
 // ── 使う控えを決める（指定が無ければ、いちばん新しいもの）──
 const pickSrc = () => {
@@ -732,22 +768,32 @@ console.log('   予定表 本店' + DAYS.honten.length + '日 ／ 三田店' + D
   + '　代車 本店' + CARS.honten.length + '台・三田' + CARS.sanda.length + '台・レンタカー' + CARS.rental.length + '台'
   + '　お客様' + CUST.length + '件　車両' + VEH.length + '台');
 
-// 古い紙の控えを片づける（同じ環境のものだけ）
-try {
-  const head = 'Hub控え-' + (DEV ? 'テスト版-' : '');
-  const mine = fs.readdirSync(OUT_DIR)
-    .filter(f => f.indexOf(head) === 0 && f.endsWith('.html') && (DEV || f.indexOf('テスト版') < 0))
-    .sort().reverse();
-  mine.slice(KEEP).forEach(f => { try { fs.unlinkSync(path.join(OUT_DIR, f)); console.log('   （古い紙の控えを片づけました：' + f + '）'); } catch (e) {} });
-} catch (e) {}
-
-// Google ドライブへ写し（あれば）
-if (MIRROR) {
+// 古い紙の控えを片づける（同じ環境のものだけ）。写し先でも同じことをする
+const tidy = (dir, quiet) => {
   try {
-    fs.mkdirSync(MIRROR, { recursive: true });
-    fs.copyFileSync(out, path.join(MIRROR, name));
-    console.log('■ ドライブにも写しました：' + path.join(MIRROR, name));
-  } catch (e) { console.log('△ ドライブへの写しは今回できませんでした（' + e.message + '）。PCの控えは取れています'); }
+    const head = 'Hub控え-' + (DEV ? 'テスト版-' : '');
+    const mine = fs.readdirSync(dir)
+      .filter(f => f.indexOf(head) === 0 && f.endsWith('.html') && (DEV || f.indexOf('テスト版') < 0))
+      .sort().reverse();
+    mine.slice(KEEP).forEach(f => {
+      try { fs.unlinkSync(path.join(dir, f)); if (!quiet) console.log('   （古い紙の控えを片づけました：' + f + '）'); } catch (e) {}
+    });
+  } catch (e) {}
+};
+tidy(OUT_DIR);
+
+// ほかの写し先へ（見えない所は飛ばす）
+if (MIRRORS.length) {
+  MIRRORS.forEach(m => {
+    try {
+      fs.mkdirSync(m.dir, { recursive: true });
+      fs.copyFileSync(out, path.join(m.dir, name));
+      tidy(m.dir, true);
+      console.log('■ ' + m.why + 'にも写しました：' + path.join(m.dir, name));
+    } catch (e) {
+      console.log('△ ' + m.why + '（' + m.dir + '）へは今回写せませんでした（' + e.message + '）。PCの控えは取れています');
+    }
+  });
 } else {
-  console.log('△ ドライブ（' + 'G:/マイドライブ' + '）が見えないので、写しは飛ばしました');
+  console.log('△ 写し先が1つも見えないので、写しは飛ばしました（PCの控えは取れています）');
 }

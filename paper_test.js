@@ -95,7 +95,7 @@ fs.writeFileSync(srcFile, JSON.stringify(fake));
   head('道具を動かす');
   let out = '';
   try {
-    out = cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', srcFile, '--out', OUTDIR, '--also', 'off'], { encoding: 'utf8' });
+    out = cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', srcFile, '--out', OUTDIR, '--also', 'off', '--dests', 'off', '--scan', 'off'], { encoding: 'utf8' });
     t('hub_paper.js が最後まで走る', true);
   } catch (e) { t('hub_paper.js が最後まで走る', false, String(e.stdout || e.message)); }
   const made = fs.readdirSync(OUTDIR).filter(f => f.endsWith('.html'));
@@ -218,7 +218,8 @@ fs.writeFileSync(srcFile, JSON.stringify(fake));
   t('休日表が出る', txt.indexOf('スタッフ休日表') >= 0);
   t('スタッフが行になっている', (await page.$$eval('#oout tbody tr', a => a.length)) === 3);
   t('公休が「休」で出る', (await page.$$eval('#oout td.o', a => a.length)) === 1);
-  t('有給が「有」で出る', (await page.$$eval('#oout td.y', a => a.length)) === 1);
+  // 有給は TD と D1 の2日に入れてある。月末だと D1 が翌月＝表に出るのは1件だけ
+  t('有給が「有」で出る', (await page.$$eval('#oout td.y', a => a.length)) === (D1.slice(0, 7) === TD.slice(0, 7) ? 2 : 1));
   t('その月の公休日数が出る', txt.indexOf('公休日数は 9日') >= 0, txt.slice(0, 160));
 
   head('⑥ 受付メモ用紙');
@@ -240,7 +241,7 @@ fs.writeFileSync(srcFile, JSON.stringify(fake));
   old.作成日時 = now.getTime() - 5 * 86400000;
   const f2 = path.join(SRCDIR, 'hub-backup-dev-2026-01-02_000000.json');
   fs.writeFileSync(f2, JSON.stringify(old));
-  cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', f2, '--out', OUTDIR, '--also', 'off'], { encoding: 'utf8' });
+  cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', f2, '--out', OUTDIR, '--also', 'off', '--dests', 'off', '--scan', 'off'], { encoding: 'utf8' });
   const made2 = fs.readdirSync(OUTDIR).filter(f => f.endsWith('.html')).sort();
   const oldFile = path.join(OUTDIR, made2[0]);
   await page.goto('file:///' + oldFile.replace(/\\/g, '/'));
@@ -248,6 +249,33 @@ fs.writeFileSync(srcFile, JSON.stringify(fake));
   t('3日以上前の写しは赤く出る', (await page.innerText('#stamp')).indexOf('古いです') >= 0);
 
   await browser.close();
+
+  head('写し先（共有PC・USB・ドライブ）');
+  const M1 = path.join(TMP, 'mirror1'), M2 = path.join(TMP, 'mirror2'), M3 = path.join(TMP, 'mirror3');
+  const MEMO = path.join(TMP, '写し先.txt');
+  const WALL = path.join(TMP, 'かべ.txt'); fs.writeFileSync(WALL, 'x', 'utf8');
+  const NOWHERE = path.join(WALL, 'Hub控え');   // ファイルの下＝作れない所（電源の切れた共有PC に見立てる）
+  fs.writeFileSync(MEMO, '# 写し先メモ' + NL + M2 + NL + NL + '# ' + M3 + NL + NOWHERE + NL, 'utf8');
+  const O3 = path.join(TMP, 'out3'); fs.mkdirSync(O3);
+  let m = cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', srcFile,
+    '--out', O3, '--also', M1, '--dests', MEMO, '--scan', 'off'], { encoding: 'utf8' });
+  const nm = fs.readdirSync(O3).filter(f => f.endsWith('.html'))[0];
+  t('指定した写し先に同じものが置かれる', fs.existsSync(path.join(M1, nm))
+    && fs.readFileSync(path.join(M1, nm), 'utf8').length === fs.readFileSync(path.join(O3, nm), 'utf8').length);
+  t('写し先メモの行にも置かれる', fs.existsSync(path.join(M2, nm)));
+  t('# の行は読み飛ばす', !fs.existsSync(M3));
+  t('見えない所は飛ばして最後まで走る', m.indexOf('写せませんでした') >= 0 && m.indexOf('紙の控えを作りました') >= 0);
+  // 写し先でも古いものを片づける（--keep 1）
+  fs.writeFileSync(path.join(M1, 'Hub控え-テスト版-2020-01-01.html'), 'ふるいの', 'utf8');
+  cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', srcFile,
+    '--out', O3, '--also', M1, '--dests', 'off', '--scan', 'off', '--keep', '1'], { encoding: 'utf8' });
+  t('写し先でも古いものを片づける', !fs.existsSync(path.join(M1, 'Hub控え-テスト版-2020-01-01.html')));
+  // 全部止めれば PC の控えだけ
+  const O4 = path.join(TMP, 'out4'); fs.mkdirSync(O4);
+  m = cp.execFileSync(process.execPath, [path.join(__dirname, 'hub_paper.js'), '--dev', '--file', srcFile,
+    '--out', O4, '--also', 'off', '--dests', 'off', '--scan', 'off'], { encoding: 'utf8' });
+  t('写し先を全部止められる', m.indexOf('写し先が1つも見えない') >= 0 && fs.readdirSync(O4).length === 1);
+
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
   console.log(NL + '合計: ' + pass + ' 合格 / ' + fail + ' 不合格');
   process.exit(fail ? 1 : 0);
