@@ -331,11 +331,14 @@ function gasMailInvite(mail, code, info){
   return fetch(GAS_URL + '?' + q.toString(), { cache:'no-store' }).then(function(r){ return r.text(); })
     .then(function(t){ try { return JSON.parse(t); } catch (e) { return { ok:false, err:'bad_response' }; } }, function(){ return { ok:false, err:'offline' }; });
 }
-function inviteByCode(mail, info){
+// ★【重要】既に登録のある人は【合言葉を変えない】（2026-11-02 ユーザー決定）。合言葉を変えると
+//   Firebase はその人の【他の端末のサインインを全部切る】＝1人を招待し直すだけで店のPCもスマホも
+//   入り直しになる。控えの6桁をそのまま送り直す。作り直したい時だけ renew=true。
+function inviteByCode(mail, info, renew){
   if (!fbAuth) return Promise.resolve({ ok:false, err:'offline' });
   var m = String(mail || '').trim().toLowerCase();
   if (badMail(m)) return Promise.resolve({ ok:false, err:'bad_email' });
-  var code = String(Math.floor(100000 + Math.random() * 900000));
+  var code = String(Math.floor(100000 + Math.random() * 900000)), kept = false, stale = false;
   return allowedUpsert(m, info || {}).then(function(){
     var app2 = secondaryApp(), auth2 = app2.auth(), db2 = app2.firestore();
     var fin = function(r){ return auth2.signOut().catch(function(){}).then(function(){ return r; }); };
@@ -344,19 +347,29 @@ function inviteByCode(mail, info){
       return fbDb.collection('users').where('email', '==', m).get().then(function(q){
         var pw = ''; q.forEach(function(d){ var v = d.data() || {}; if (!pw && v.pw) pw = v.pw; });
         if (!pw) return null;   // 控えが無い（リンクで登録した人）
-        return auth2.signInWithEmailAndPassword(m, pw).then(function(cred){ return cred.user.updatePassword(code).then(function(){ return cred.user; }); });
+        return auth2.signInWithEmailAndPassword(m, pw).then(function(cred){
+          if (!renew && /^[0-9]{6}$/.test(String(pw))) { code = pw; kept = true; return cred.user; }   // ★そのまま送り直す＝他の端末は落ちない
+          return cred.user.updatePassword(code).then(function(){ return cred.user; });
+        }, function(se){
+          var sc = fbErrCode(se);   // 控えが本当の合言葉と違う＝画面からは直せない（直すと他の端末が落ちる）
+          if (sc.indexOf('wrong-password') >= 0 || sc.indexOf('invalid-credential') >= 0 || sc.indexOf('user-not-found') >= 0 || sc.indexOf('invalid-login') >= 0) { stale = true; return null; }
+          throw se;
+        });
       });
     }).then(function(user2){
+      if (stale) return fin({ ok:false, err:'stale_pw' });
       if (!user2) return fin(null).then(function(){ return sendInvite(m, info).then(function(r){ return Object.assign({ mode:'link' }, r); }); });
       return db2.collection('users').doc(user2.uid).set({ email: m, pw: code, inviteAt: Date.now() }, { merge: true })
         .then(function(){ return fin(null); })
         .then(function(){ return gasMailInvite(m, code, info); })
-        .then(function(r){ return { ok:true, mode:'code', code: code, mailed: !!(r && r.ok), mailErr: (r && r.err) || '' }; });
+        .then(function(r){ return { ok:true, mode:'code', code: code, kept: kept, mailed: !!(r && r.ok), mailErr: (r && r.err) || '' }; });
     }, function(e){ return fin({ ok:false, err: fbErrCode(e).indexOf('permission-denied') >= 0 ? 'not_admin' : (fbErrCode(e) || 'error') }); });
   }, function(e){ return { ok:false, err: fbErrCode(e).indexOf('permission-denied') >= 0 ? 'not_admin' : (fbErrCode(e) || 'error') }; });
 }
 function inviteResult(r, who){
-  if (r && r.ok && r.mode === 'code') return [ (r.mailed ? '招待メールを送りました' : 'メールは送れませんでした'), who + '　招待コード：' + r.code + (r.mailed ? '（メールにも書いてあります。使う端末でアドレスとこの6桁を入れてもらってください）' : '（' + (r.mailErr || '') + '。この6桁を本人に伝えてください）') ];
+  if (r && r.ok && r.mode === 'code') return [ (r.mailed ? '招待メールを送りました' : 'メールは送れませんでした'), who + '　招待コード：' + r.code
+    + (r.kept ? '（前と同じコードです。この方の他の端末は入り直しになりません）' : '（新しいコードです。この方の他の端末は入り直しになります）')
+    + (r.mailed ? '' : '　' + (r.mailErr || '') + '。この6桁を本人に伝えてください') ];
   if (r && r.ok) return [ 'ログイン用のリンクを送りました', who + '　この方は合言葉の控えが無いため、メールのリンクを開いてもらう方式です。' ];
   return [ '送れませんでした', inviteErr(r) ];
 }
@@ -1548,7 +1561,8 @@ function bind(){
 //   Firebase のサインインが残っていればログイン画面を出さずに開く。メールのリンクから開いた時はサインインを完了する。
 function inviteErr(r){
   var e = r && r.err;
-  return e === 'not_admin' ? '管理者としてログインしている必要があります（許可簿に書けませんでした）。'
+  return e === 'stale_pw' ? 'この方の合言葉の控えが古くなっています。この画面からは直せません（直すとその方の端末が全部入り直しになります）。パソコンで次のコマンドを実行して6桁を出してください → node fb_seed_allowed.js --code <アドレス>'
+    : e === 'not_admin' ? '管理者としてログインしている必要があります（許可簿に書けませんでした）。'
     : e === 'quota' ? '本日のメールリンクの送信上限（Firebase の無料枠）に達しました。この方は控えが無いためリンクでしか招待できません。明日以降にもう一度送るか、node fb_seed_allowed.js --code で発行してください。'
     : e === 'too_many' ? '送信が続いています。しばらく待ってからお試しください。'
     : e === 'bad_domain' ? 'アプリのアドレスが Firebase の承認済みドメインにありません。'

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793589782513';
+    window.__APP_BUILD='build-1793600598897';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.94.0';
+const APP_VERSION = '3.94.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2876,7 +2876,10 @@ const hubSaveMine = list => { try { localStorage.setItem(HUB_MINE_KEY, JSON.stri
 //   ・QRの引き継ぎ（handoff）が端末に渡しているものと中身は同じ。新しく漏れるものは増やしていない
 //   ・管理者が招待し直す（合言葉が変わる）と、この控えは効かなくなる＝締め出しは管理者が決められる
 const HUB_KEEP_KEY = STOR + 'auth-keep';
-const hubKeepSave = (email, pw) => { try { if (email && pw) localStorage.setItem(HUB_KEEP_KEY, JSON.stringify({ e: String(email), p: String(pw) })); } catch (e) {} };
+//   ★控えには v（実際にサインインが通った合言葉か）と t（いつの控えか）を持たせる（v3.94.1）。
+//     v=1 の控えは「本物」と分かっているので、サーバーの控え（users.pw）が古い時はこちらを書き戻して直す。
+//     v=0 は users.pw から配っただけ（本物かは分からない）。★この2つを混ぜないこと。
+const hubKeepSave = (email, pw, verified) => { try { if (email && pw) localStorage.setItem(HUB_KEEP_KEY, JSON.stringify({ e: String(email), p: String(pw), v: verified ? 1 : 0, t: Date.now() })); } catch (e) {} };
 const hubKeepLoad = () => { try { const v = JSON.parse(localStorage.getItem(HUB_KEEP_KEY)); return (v && v.e && v.p) ? v : null; } catch (e) { return null; } };
 const hubKeepClear = () => { try { localStorage.removeItem(HUB_KEEP_KEY); } catch (e) {} };
 const hubLive = list => (list || []).filter(x => !x.exp || x.exp > Date.now());
@@ -3110,9 +3113,21 @@ const hubCheckDevice = async () => {
     if (!d.last || Date.now() - d.last > 86400000) fbDeviceRef().update({ last: Date.now() }).catch(() => {});   // update：消された行を作り直さない
   } catch (e) { return true; }   // 読めない（回線）時は何も変えない
   // 合言葉の控えが無い人（リンクで登録した）は作っておく。古いサインインでは作れないことがある（その時は次の登録時に）
-  try { const u = await fbDb.collection('users').doc(fbUser.uid).get(); const _pw = u.exists ? ((u.data() || {}).pw || '') : '';
+  //   ★控えは「開くたびに」最新に合わせる（v3.94.1）。空の時だけ配る作りだと、
+  //     サーバーの控えが入れ替わった時に古いまま残り、サインインが消えた時に入り直せない。
+  //   ★逆に、この端末が【実際に通った合言葉】（v=1）を持っていて、それがサーバーの控えより
+  //     新しい時は、サーバーの控えが古い＝こちらを書き戻して直す（2026-11-02 に 13人ぶんの
+  //     控えが本物とズレていて、招待もQRの引き継ぎも通らなくなっていた）。
+  //     ★合言葉そのものは触らない。触るとその人の他の端末が全部入り直しになる。
+  try { const u = await fbDb.collection('users').doc(fbUser.uid).get(); const _d = u.exists ? (u.data() || {}) : {}; const _pw = _d.pw || '';
     if (!_pw) await hubHandoffSecret();                       // 控えが無い人（リンクで登録した）は作る
-    else if (!hubKeepLoad()) hubKeepSave(fbUser.email, _pw);  // もう登録済みの端末にも入り直し用の控えを配る（v3.91.0）
+    else {
+      const _k = hubKeepLoad(), _kt = Number((_k && _k.t) || 0);
+      const _ut = Math.max(Number(_d.inviteAt) || 0, Number(_d.at) || 0);
+      if (_k && _k.v && _k.p !== _pw && _kt > _ut) {
+        try { await fbDb.collection('users').doc(fbUser.uid).set({ email: fbUser.email || '', pw: _k.p, at: Date.now(), fixedAt: Date.now() }, { merge: true }); } catch (e) {}
+      } else if (!_k || _k.p !== _pw) hubKeepSave(fbUser.email, _pw, false);
+    }
   } catch (e) {}
   try {
     const snap = await fbAllowedRef().get();
@@ -3169,7 +3184,7 @@ const hubResumeSignIn = async () => {
   if (!fbAuth || fbUser) return !!fbUser;
   const k = hubKeepLoad();
   if (!k) return false;
-  try { await fbAuth.signInWithEmailAndPassword(k.e, k.p); return true; }
+  try { await fbAuth.signInWithEmailAndPassword(k.e, k.p); hubKeepSave(k.e, k.p, true); return true; }   // 通った＝本物（v3.94.1）
   catch (e) {
     const c = String((e && e.code) || '');
     // 合言葉が変わった・消された＝もう使えない控え。回線や一時的な混み合いでは消さない
@@ -3187,11 +3202,11 @@ const hubRandom = n => { const a = new Uint8Array(n); try { crypto.getRandomValu
 const hubHandoffSecret = async () => {
   const ref = fbDb.collection('users').doc(fbUser.uid);
   const s = await ref.get(); const d = s.exists ? s.data() : null;
-  if (d && d.pw) { hubKeepSave(fbUser.email, d.pw); return d.pw; }
+  if (d && d.pw) { hubKeepSave(fbUser.email, d.pw, false); return d.pw; }   // サーバーの控えを配るだけ＝本物とは言えない
   const pw = hubRandom(24);
   await fbUser.updatePassword(pw);
   await ref.set({ email: fbUser.email || '', pw, at: Date.now() }, { merge: true });
-  hubKeepSave(fbUser.email, pw);
+  hubKeepSave(fbUser.email, pw, true);   // いま自分で付け替えた＝本物
   return pw;
 };
 const hubMakeHandoff = async () => {
@@ -3212,7 +3227,7 @@ const hubTakeHandoff = async () => {
     const d = s.exists ? s.data() : null;
     if (d && d.exp > Date.now()) {
       await fbAuth.signInWithEmailAndPassword(d.email, d.pw);
-      hubKeepSave(d.email, d.pw);
+      hubKeepSave(d.email, d.pw, true);   // 通った＝本物の控え（v3.94.1）
       let mine = []; try { mine = JSON.parse(d.mine || '[]'); } catch (e) {}
       hubSaveMine(Array.isArray(mine) ? mine.filter(x => x && x.name) : []);
       if (d.kind && !hubKind()) hubSetKind(d.kind);
@@ -3244,7 +3259,12 @@ const hubGasMailInvite = async (email, code, name, kind) => {
 const hubNewCode = () => String(Math.floor(100000 + Math.random() * 900000));
 const hubIsCodePw = pw => /^[0-9]{6}$/.test(String(pw || ''));
 // 管理者：許可簿に載せ、コードを発行してメールで送る。戻り値 {ok, mode:'code'|'link', code, mailed, err}
-const hubInviteByCode = async (staff) => {
+//   ★【重要】既に登録のある人は【合言葉を変えない】（2026-11-02 ユーザー決定）。
+//     合言葉を変えると Firebase はその人の【他の端末のサインインを全部切る】ので、
+//     1人を招待し直すだけで、その人の店のPCもスマホも入り直しになる（現場が止まる）。
+//     そこで控えの6桁をそのまま送り直す。新しい6桁にしたい時（古い端末を締め出したい時）だけ
+//     renew=true で呼ぶ＝止める時期は今までどおり管理者が決められる。
+const hubInviteByCode = async (staff, renew) => {
   const mail = String((staff && staff.loginEmail) || '').trim().toLowerCase();
   if (mail.indexOf('@') < 1) return { ok: false, err: 'bad_email' };
   if (!fbAuth || !fbUser) return { ok: false, err: 'offline' };
@@ -3253,7 +3273,7 @@ const hubInviteByCode = async (staff) => {
     await fbAllowedRef().set({ [k]: { email: mail, name: staff.name || prev.name || '', store: staff.store || prev.store || 'honten',
       uid: staff.uid || prev.uid || '', role: prev.role || 'staff', active: true, kind: staff.kind || prev.kind || 'staff', label: staff.label || prev.label || '', at: Date.now() } }, { merge: true });
   } catch (e) { return { ok: false, err: 'not_admin' }; }
-  const code = hubNewCode();
+  let code = hubNewCode(), kept = false;
   try {
     const app2 = fbSecondaryApp(); const auth2 = app2.auth(); const db2 = app2.firestore();   // 別インスタンス＝自分のサインインは変わらない
     try {
@@ -3261,18 +3281,26 @@ const hubInviteByCode = async (staff) => {
       try { user2 = (await auth2.createUserWithEmailAndPassword(mail, code)).user; }
       catch (e) {
         if (String(e && e.code).indexOf('email-already-in-use') < 0) throw e;
-        // 既にある人：合言葉の控え（users）を管理者が読んで、その人としてサインインし直してから付け替える
+        // 既にある人：合言葉の控え（users）を管理者が読んで、その人としてサインインし直す
         const q = await fbDb.collection('users').where('email', '==', mail).get();
         let pw = ''; q.forEach(d => { const v = d.data() || {}; if (!pw && v.pw) pw = v.pw; });
         if (!pw) { const r = await hubSendLink(mail); return Object.assign({ mode: 'link' }, r); }   // 控えが無い（リンクで登録した人）→ リンクで
-        user2 = (await auth2.signInWithEmailAndPassword(mail, pw)).user;
-        await user2.updatePassword(code);
+        try { user2 = (await auth2.signInWithEmailAndPassword(mail, pw)).user; }
+        catch (se) {
+          // 控えが本当の合言葉と違う。画面から直すには合言葉を変えるしかなく、それは他の端末を落とす。
+          // ここでは何もせず、やり方（コマンド）を画面に出す。
+          const sc = String((se && se.code) || '');
+          if (/wrong-password|invalid-credential|user-not-found|invalid-login/.test(sc)) return { ok: false, err: 'stale_pw', raw: sc };
+          throw se;
+        }
+        if (renew || !hubIsCodePw(pw)) await user2.updatePassword(code);   // 作り直す時／控えが6桁でない人だけ付け替える
+        else { code = pw; kept = true; }                                   // ★そのまま送り直す＝他の端末は落ちない
       }
       await db2.collection('users').doc(user2.uid).set({ email: mail, pw: code, inviteAt: Date.now() }, { merge: true });
     } finally { try { await auth2.signOut(); } catch (e) {} }
   } catch (e) { return { ok: false, err: hubAuthErr(e), raw: String((e && e.code) || '') }; }
   const m = await hubGasMailInvite(mail, code, staff.name || (hubAllowedEntry(mail) || {}).name || '', staff.kind || (hubAllowedEntry(mail) || {}).kind || 'staff');
-  return { ok: true, mode: 'code', code, mailed: !!(m && m.ok), mailErr: (m && m.err) || '' };
+  return { ok: true, mode: 'code', code, kept, mailed: !!(m && m.ok), mailErr: (m && m.err) || '' };
 };
 // 使う端末：アドレスと6桁でサインインする。7日を過ぎた招待なら、その場で合言葉を長いものに付け替える
 const hubSignInWithCode = async (email, code) => {
@@ -3280,7 +3308,7 @@ const hubSignInWithCode = async (email, code) => {
   const mail = String(email || '').trim().toLowerCase(), c = String(code || '').replace(/[^0-9]/g, '');
   if (mail.indexOf('@') < 1) return { ok: false, err: 'bad_email' };
   if (c.length !== 6) return { ok: false, err: 'bad_code' };
-  try { await fbAuth.signInWithEmailAndPassword(mail, c); hubKeepSave(mail, c); }
+  try { await fbAuth.signInWithEmailAndPassword(mail, c); hubKeepSave(mail, c, true); }   // 通った＝本物の控え（v3.94.1）
   catch (e) {
     const cc = String((e && e.code) || '');
     return { ok: false, err: /wrong-password|invalid-credential|user-not-found|invalid-login/.test(cc) ? 'bad_code' : hubAuthErr(e), raw: cc };
@@ -5589,6 +5617,26 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
   const [editEmail,setEditEmail]=useState('');
   const [inviteBusy,setInviteBusy]=useState(false);
   const [inviteMsg,setInviteMsg]=useState('');
+  // 招待を送る（renew=true なら新しい6桁にする＝その人の他の端末は入り直しになる）
+  const runInvite=async(renew)=>{
+    const mail=selectedStaff&&selectedStaff.loginEmail;
+    if(!mail)return;
+    // 打ち間違いは本人には「何も届かない」としか見えず原因が分からない。送る前に必ず読み合わせてもらう。
+    if(!window.confirm(renew
+      ? '新しい招待コードを作ります。\n\n    '+mail+'\n\n★この方が今使っている端末（店のPC・スマホ）は、すべて入り直しになります。\n続けますか？'
+      : 'このアドレスに招待メールを送ります。\n\n    '+mail+'\n\n宛先に間違いはありませんか？'))return;
+    setInviteBusy(true);setInviteMsg('');
+    const r=await hubInviteByCode(selectedStaff,renew);
+    setInviteBusy(false);
+    setInviteMsg(r&&r.ok&&r.mode==='code' ? (r.mailed?'送信しました（'+mail+'）':'メールを送れませんでした（'+(r.mailErr||'')+'）。')+' 招待コード：'+r.code
+        +(r.kept?'（前と同じコードです。この方の他の端末は入り直しになりません）':'（新しいコードです。この方の他の端末は入り直しになります）')
+      : r&&r.ok ? 'この方は控えが無いため、ログイン用のリンクを送りました（'+mail+'）'
+      : r&&r.err==='stale_pw' ? '送れません：この方の合言葉の控えが古くなっています（画面からは直せません）。江川さんに次のコマンドで6桁を出してもらってください → node fb_seed_allowed.js --code '+mail
+      : r&&r.err==='not_admin' ? '送れません：管理者としてログインしている端末から送ってください。'
+      : r&&r.err==='too_many' ? '送信が続いています。しばらく待ってからお試しください。'
+      : r&&r.err==='bad_domain' ? '送れません：この画面のアドレスが Firebase の承認済みドメインにありません。'
+      : '送信に失敗しました。通信の状態をご確認ください。'+(r&&r.raw?'（'+r.raw+'）':''));
+  };
   const [devices,setDevices]=useState(null);   // 端末台帳（null=未読込）
   const [devBusy,setDevBusy]=useState(false);
   const loadDevices=useCallback(async()=>{
@@ -5958,27 +6006,20 @@ const StaffSettingsModal=memo(({isOpen,onClose,staffListH,staffListS,onUpdate,on
                     </div>
                     <button
                       disabled={inviteBusy||!(selectedStaff&&selectedStaff.loginEmail)}
-                      onClick={async()=>{
-                        const mail=selectedStaff&&selectedStaff.loginEmail;
-                        if(!mail)return;
-                        // 打ち間違いは本人には「何も届かない」としか見えず原因が分からない。
-                        // 送る前に必ずアドレスを読み合わせてもらう。
-                        if(!window.confirm('このアドレスに招待メールを送ります。\n\n    '+mail+'\n\n宛先に間違いはありませんか？'))return;
-                        setInviteBusy(true);setInviteMsg('');
-                        const r=await hubInviteByCode(selectedStaff);
-                        setInviteBusy(false);
-                        setInviteMsg(r&&r.ok&&r.mode==='code' ? (r.mailed?'送信しました（'+mail+'）':'メールを送れませんでした（'+(r.mailErr||'')+'）。')+' 招待コード：'+r.code+'（本人に伝えてもOK）'
-                          : r&&r.ok ? 'この方は控えが無いため、ログイン用のリンクを送りました（'+mail+'）'
-                          : r&&r.err==='not_admin' ? '送れません：管理者としてログインしている端末から送ってください。'
-                          : r&&r.err==='too_many' ? '送信が続いています。しばらく待ってからお試しください。'
-                          : r&&r.err==='bad_domain' ? '送れません：この画面のアドレスが Firebase の承認済みドメインにありません。'
-                          : '送信に失敗しました。通信の状態をご確認ください。'+(r&&r.raw?'（'+r.raw+'）':''));
-                      }}
+                      onClick={()=>runInvite(false)}
                       style={{width:'100%',marginTop:8,padding:'9px 0',borderRadius:8,cursor:(selectedStaff&&selectedStaff.loginEmail)?'pointer':'default',
                         border:'2px solid '+((selectedStaff&&selectedStaff.loginEmail)?'#0284c7':'#e5e7eb'),
                         background:(selectedStaff&&selectedStaff.loginEmail)?'#f0f9ff':'#f9fafb',
                         color:(selectedStaff&&selectedStaff.loginEmail)?'#0369a1':'#9ca3af',fontWeight:800,fontSize:13}}>
                       {inviteBusy?'送信中…':'✉️ 招待メールを送る'}
+                    </button>
+                    {/* ★コードを作り直す＝古い端末を締め出したい時だけ。押すとその人の端末は全部入り直しになる */}
+                    <button data-inviterenew disabled={inviteBusy||!(selectedStaff&&selectedStaff.loginEmail)}
+                      onClick={()=>runInvite(true)}
+                      style={{width:'100%',marginTop:5,padding:'6px 0',borderRadius:8,cursor:(selectedStaff&&selectedStaff.loginEmail)?'pointer':'default',
+                        border:'1px solid #e5e7eb',background:'#fff',color:'#9a3412',fontWeight:700,fontSize:11}}
+                      title="古い端末を締め出したい時だけ。この方の端末は全部入り直しになります">
+                      🔁 コードを作り直す（他の端末は入り直し）
                     </button>
                     {inviteMsg&&<div style={{fontSize:12,fontWeight:700,marginTop:6,
                       color:inviteMsg.indexOf('送信しました')===0?'#15803d':'#dc2626'}}>{inviteMsg}</div>}

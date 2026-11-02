@@ -270,7 +270,8 @@ const SEED = {
       await p3.evaluate(() => window.__fakeFb.pwOf('tikurin@midori-m.com')));
     t('コード：台帳に2台目の行が増える', (await p3.evaluate(() => window.__fakeFb.docs('devices'))).filter(d => (d.data.names || []).includes('竹林直行')).length === 2);
     t('コード：スマホ JSエラーなし', e3.length === 0, e3.slice(0, 3));
-    // 再招待 → 新しいコード。古いコードでは入れない
+    // ★再招待しても合言葉は変えない（2026-11-02）＝その人の他の端末が入り直しにならない。
+    //   新しいコードにするのは「🔁 コードを作り直す」（renew=true）を選んだ時だけ。
     await page.evaluate(s => localStorage.setItem('__fakeFbStore', s), await p3.evaluate(() => localStorage.getItem('__fakeFbStore')));
     await page.goto(U('admin.html'), { waitUntil: 'domcontentloaded' });
     await seeText(page, '本人認証の進み具合', 20000);
@@ -279,7 +280,27 @@ const SEED = {
     const again = await page.evaluate(() => { const b = document.querySelector('[data-invite]') || document.querySelector('[data-reinvite]'); if (b) { b.click(); return true; } return false; });
     if (again) { await page.evaluate(() => { const b = document.querySelector('[data-dlg="ok"]'); if (b) b.click(); }); await page.waitForTimeout(800); }
     const code2 = await page.evaluate(() => window.__fakeFb.pwOf('tikurin@midori-m.com'));
-    t('コード：再招待で新しいコードになる（古いコードは無効）', again ? (/^[0-9]{6}$/.test(code2) && code2 !== code1) : true, { again, code1, code2 });
+    t('★コード：招待し直しても合言葉は変わらない（その人の他の端末が入り直しにならない）', again ? code2 === code1 : true, { again, code1, code2 });
+    // ★以下はファイルの中身で見張る（admin.html は IIFE で包んであり、関数を外から呼べない）。
+    //   ここが消えると「招待し直すと他の端末が落ちる」作りに戻るので、必ず残すこと。
+    for (const fn of ['index_dev.html', 'customers.html', 'mobile.html']) {
+      const src = fs.readFileSync(path.join(__dirname, fn), 'utf8');
+      t('★' + fn + '：既にある人は控えの6桁をそのまま送り直す（合言葉を変えない）',
+        /else \{ code = pw; kept = true; \}/.test(src), src.indexOf('kept = true') >= 0);
+      t('★' + fn + '：作り直す時だけ付け替える',
+        /if \(renew \|\| !hubIsCodePw\(pw\)\) await user2\.updatePassword\(code\)/.test(src));
+      t('★' + fn + '：控えが古い人は stale_pw を返す', src.indexOf("err: 'stale_pw'") >= 0);
+      t('★' + fn + '：控えは「通った合言葉か」を持つ（v=1 だけ信じる）',
+        /hubKeepSave = \(email, pw, verified\)/.test(src) && /v: verified \? 1 : 0/.test(src));
+      t('★' + fn + '：開くたびに控えを最新に合わせる（空の時だけ配る作りに戻っていない）',
+        src.indexOf('else if (!hubKeepLoad()) hubKeepSave') < 0 && /_k\.p !== _pw\) hubKeepSave\(fbUser\.email, _pw, false\)/.test(src));
+    }
+    {
+      const src = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+      t('★admin.html：既にある人は控えの6桁をそのまま送り直す',
+        /if \(!renew && \/\^\[0-9\]\{6\}\$\/\.test\(String\(pw\)\)\) \{ code = pw; kept = true;/.test(src));
+      t('★admin.html：控えが古い人は stale_pw を返す', src.indexOf("err:'stale_pw'") >= 0 || src.indexOf("err: 'stale_pw'") >= 0);
+    }
     // 管理者コンソールにコードでログイン（別の保管場所）
     const c4 = await dev(); const p4 = await c4.newPage();
     await p4.evaluate(() => {}).catch(() => {});
