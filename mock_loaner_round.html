@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>モック：代車の帯の角を丸くする</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 22px 60px;background:#f1f5f9;color:#1b2129;
+       font-family:"Yu Gothic UI","Meiryo",system-ui,sans-serif}
+  h1{font-size:22px;margin:0 0 4px}
+  .lead{font-size:14px;color:#475569;margin:0 0 14px;line-height:1.7}
+  .pick{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+  .pick b{font-size:14px}
+  .pick button{font-family:inherit;font-size:15px;font-weight:800;padding:9px 18px;border-radius:9px;
+       border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+  .pick button.on{background:#c2410c;border-color:#9a3412;color:white}
+  .note{font-size:13.5px;color:#475569;background:#fffbeb;border:2px solid #fcd34d;
+        border-radius:9px;padding:10px 14px;margin:0 0 18px;line-height:1.8}
+  .box{background:white;border-radius:12px;padding:14px 16px 18px;margin-bottom:20px;
+       box-shadow:0 2px 10px rgba(15,23,42,.08);overflow:auto}
+  .box h2{font-size:17px;margin:0 0 10px;color:#9a3412}
+  .box h2 span{font-size:13px;color:#64748b;font-weight:600;margin-left:8px}
+
+  table.lg{border-collapse:collapse;font-size:12px;table-layout:fixed;width:max-content}
+  table.lg th.hd{width:150px;min-width:150px;background:#fff7ed;padding:7px 9px;text-align:left;
+       font-weight:700;border:1px solid #fed7aa;font-size:12px}
+  table.lg th.dt{width:44px;min-width:44px;text-align:center;padding:3px 0;border:1px solid #fed7aa;
+       font-size:10px;background:#fff7ed;color:#374151;font-weight:600}
+  table.lg th.dt.sun{color:#dc2626}
+  table.lg th.dt.sat{color:#1d4ed8}
+  table.lg td.nm{background:#f9fafb;border:1px solid #e5e7eb;padding:5px 9px;font-weight:600;
+       font-size:12px;white-space:nowrap;height:40px}
+  table.lg td.nm .cn{font-weight:700;color:#7c2d12}
+  table.lg td.nm .no{color:#111827;font-size:11px;font-weight:800}
+  table.lg td.c{width:44px;min-width:44px;height:40px;border:1px solid #e5e7eb;padding:0;
+       position:relative;overflow:visible}
+  td.c.on{border-color:transparent}
+  /* 帯の本体（セルいっぱいに敷く） */
+  .bar{position:absolute;inset:0}
+  .who{position:absolute;top:50%;transform:translateY(-50%);font-size:12px;color:white;font-weight:800;
+       white-space:nowrap;overflow:hidden;z-index:2;pointer-events:none;
+       text-shadow:-1px -1px 1px rgba(0,0,0,.85),1px -1px 1px rgba(0,0,0,.85),-1px 1px 1px rgba(0,0,0,.85),1px 1px 1px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)}
+  .grip{position:absolute;top:0;bottom:0;width:8px;z-index:5;display:flex;align-items:center;justify-content:center}
+  .grip i{width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,.95);
+       box-shadow:0 0 3px rgba(0,0,0,.6)}
+  .grip.s{left:0}
+  .grip.e{right:0}
+  .today{background:#fef08a}
+</style>
+</head>
+<body>
+
+<h1>代車・レンタカーの帯 ― 角を丸くする（丸みの大きさを選んでください）</h1>
+<p class="lead">
+  帯の<b>始まりの左角と、終わりの右角</b>だけを丸くします。途中（続いているところ）は四角のままです。<br>
+  ついでに、<b>お名前が「つかむ所」の白い棒に重ならない</b>よう直したあとの見た目になっています。
+</p>
+
+<div class="pick">
+  <b>角の丸み：</b>
+  <button data-r="0">いまのまま（四角）</button>
+  <button data-r="3">3px（ごく控えめ）</button>
+  <button data-r="5" class="on">5px</button>
+  <button data-r="7">7px</button>
+  <button data-r="10">10px（はっきり）</button>
+</div>
+
+<div class="note">
+  ★ セルの高さは 40px です。10px まで丸めると、帯の端がだいぶ柔らかくなります。<br>
+  ★ 1日だけの貸出（下の「N-BOX」）は幅が 44px しかないので、丸みが大きいほど小さく見えます。<br>
+  ★ 上下に並んだ帯の境目の濃い線（2px）はそのままです。
+</div>
+
+<div class="box">
+  <h2>① 代車（工場代車）<span>（2026年11月・見本）</span></h2>
+  <table class="lg" id="t1"></table>
+</div>
+
+<div class="box">
+  <h2>② レンタカー<span>（同じ丸みを当てます）</span></h2>
+  <table class="lg" id="t2"></table>
+</div>
+
+<script>
+  var DOW = ['日','月','火','水','木','金','土'];
+  var Y = 2026, M = 10;            /* 2026年11月 */
+  var DAYS = [];
+  for (var d = 30; d <= 31; d++) DAYS.push({ m: 9, d: d });
+  for (var d2 = 1; d2 <= 18; d2++) DAYS.push({ m: 10, d: d2 });
+
+  var CARS1 = [
+    { n: 'ワゴンR', no: '1234' }, { n: 'ムーヴ', no: '5678' }, { n: 'N-BOX', no: '9012' },
+    { n: 'タント', no: '3456' }, { n: 'スペーシア', no: '0001' }, { n: 'アルト', no: '0002' }
+  ];
+  var CARS2 = [{ n: 'RAIZE', no: '3928' }, { n: 'ヤリス', no: '1177' }, { n: 'ルーミー', no: '2255' }];
+
+  /* from / to は「11月の日」。who は帯に出す名前 */
+  var RES1 = [
+    { car: 0, from: 2,  to: 5,  who: '芝田 一郎 様', col: '#c2410c' },
+    { car: 1, from: 3,  to: 8,  who: 'みどりモータース 様', col: '#be123c' },
+    { car: 2, from: 2,  to: 2,  who: '岩本 様', col: '#2563eb' },
+    { car: 3, from: 4,  to: 5,  who: '🔒 森本 様', col: '#be185d' },
+    { car: 4, from: 7,  to: 14, who: '長谷川 様', col: '#047857' },
+    { car: 5, from: 10, to: 11, who: '石井 様', col: '#7c3aed' }
+  ];
+  var RES2 = [
+    { car: 0, from: 1,  to: 6,  who: '山谷 三郎 様', col: '#0891b2' },
+    { car: 1, from: 8,  to: 9,  who: '岸本 花子 様', col: '#b45309' },
+    { car: 2, from: 12, to: 18, who: '河合 様', col: '#15803d' }
+  ];
+
+  var TODAY = 2;   /* 11/2 を本日として黄色に */
+  var RAD = 5;
+
+  function resAt(list, car, day) {
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (r.car === car && day.m === 10 && day.d >= r.from && day.d <= r.to) return r;
+    }
+    return null;
+  }
+
+  function build(tbl, cars, list) {
+    var h = '<thead><tr><th class="hd">' + (tbl === 't1' ? '代車' : 'レンタカー') + '</th>';
+    for (var i = 0; i < DAYS.length; i++) {
+      var dd = DAYS[i], w = new Date(2026, dd.m, dd.d).getDay();
+      h += '<th class="dt' + (w === 0 ? ' sun' : w === 6 ? ' sat' : '') + '">' +
+           dd.d + '<div style="font-size:8px">' + DOW[w] + '</div></th>';
+    }
+    h += '</tr></thead><tbody>';
+    for (var c = 0; c < cars.length; c++) {
+      h += '<tr><td class="nm"><div class="cn">' + cars[c].n + '</div><div class="no">' + cars[c].no + '</div></td>';
+      for (var j = 0; j < DAYS.length; j++) {
+        var day = DAYS[j], r = resAt(list, c, day);
+        if (!r) {
+          var isT = (day.m === 10 && day.d === TODAY);
+          h += '<td class="c' + (isT ? ' today' : '') + '"></td>';
+          continue;
+        }
+        var isS = (day.d === r.from), isE = (day.d === r.to);
+        var span = r.to - r.from + 1;
+        var left = isS ? 10 : 3;
+        var wid = isS ? (span * 44 - left - 9) : 0;
+        h += '<td class="c on" data-s="' + (isS ? 1 : 0) + '" data-e="' + (isE ? 1 : 0) + '">' +
+             '<div class="bar" style="background:' + r.col + '"></div>' +
+             (isS ? '<div class="grip s"><i></i></div>' : '') +
+             (isE ? '<div class="grip e"><i></i></div>' : '') +
+             (isS ? '<div class="who" style="left:' + left + 'px;width:' + wid + 'px">' + r.who + '</div>' : '') +
+             '</td>';
+      }
+      h += '</tr>';
+    }
+    h += '</tbody>';
+    document.getElementById(tbl).innerHTML = h;
+  }
+
+  function apply() {
+    var cells = document.querySelectorAll('td.c.on .bar');
+    for (var i = 0; i < cells.length; i++) {
+      var td = cells[i].parentElement;
+      var s = td.getAttribute('data-s') === '1', e = td.getAttribute('data-e') === '1';
+      cells[i].style.borderTopLeftRadius    = s ? RAD + 'px' : '0';
+      cells[i].style.borderBottomLeftRadius = s ? RAD + 'px' : '0';
+      cells[i].style.borderTopRightRadius   = e ? RAD + 'px' : '0';
+      cells[i].style.borderBottomRightRadius= e ? RAD + 'px' : '0';
+    }
+  }
+
+  build('t1', CARS1, RES1);
+  build('t2', CARS2, RES2);
+  apply();
+
+  var bs = document.querySelectorAll('.pick button');
+  for (var k = 0; k < bs.length; k++) {
+    bs[k].onclick = function () {
+      RAD = parseInt(this.getAttribute('data-r'), 10);
+      for (var m = 0; m < bs.length; m++) bs[m].className = (bs[m] === this) ? 'on' : '';
+      apply();
+    };
+  }
+</script>
+</body>
+</html>

@@ -126,6 +126,14 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     const r = th.getBoundingClientRect();
     return Math.round(r.x + r.width / 2);
   }, dnum);
+  // ★レンタカーの表は 2026-11-02 から横の初期位置が代車の表と違う（本日が右から7列目）。
+  //   代車の見出しの x をそのまま使うと別の日をつかむので、レンタカーの見出し（data-rdaynum）から取ること。
+  const rDayX = (dnum) => page.evaluate(n => {
+    const th = [...document.querySelectorAll('th')].find(e => e.getAttribute('data-rdaynum') === String(n));
+    if (!th) return null;
+    const r = th.getBoundingClientRect();
+    return Math.round(r.x + r.width / 2);
+  }, dnum);
   const pull = async (from, toX) => {
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
@@ -211,7 +219,7 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 
   head('⑧ レンタカーの表でも同じようにできる');
   const g8 = await gripAt(2001, 'end');
-  const x8r = await dayX(num(d(8)));
+  const x8r = await rDayX(num(d(8)));
   t('レンタカーの帯にもつかむ所がある', !!g8, g8);
   await pull(g8, x8r);
   const q1 = recOf(await rres(), '101', 2001);
@@ -220,6 +228,51 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 
   head('⑨ 伸ばした直後に中身のパネルを出さない');
   t('★「✎ 編集」のパネルが開いていない', await page.evaluate(() => document.body.innerText.indexOf('✎ 編集') < 0));
+
+  head('⑩ ★お名前が「つかむ所」の白い棒に重ならない（2026-11-02 現場報告）');
+  // v3.86.0 でつかむ所を付けた時、白い棒がお名前の1文字目の上に重なり、字が線で消されて見えていた。
+  const over = await page.evaluate(() => {
+    const bad = [];
+    document.querySelectorAll('[data-rsgrip="start"]').forEach(g => {
+      const td = g.parentElement;
+      const nm = [...td.querySelectorAll('div')].find(x => {
+        const s = getComputedStyle(x);
+        return s.position === 'absolute' && s.color === 'rgb(255, 255, 255)' && x.innerText.trim();
+      });
+      if (!nm) return;
+      const a = g.getBoundingClientRect(), b = nm.getBoundingClientRect();
+      if (b.x < a.right - 0.5) bad.push({ t: nm.innerText.trim(), name: Math.round(b.x), grip: Math.round(a.right) });
+    });
+    return bad;
+  });
+  t('★お名前の左端が「つかむ所」より右にある', over.length === 0, over);
+
+  head('⑪ ★レンタカーの表は本日を右寄りに出す（2026-11-02 ユーザー指示）');
+  // 「レンタカーは何を出しているかを見たいので過去を見ることが多い」＝左に過去を広く出す。
+  // 代車の表はこれまでどおり（本日が左から4列目）。2つの表で置き方が違う。
+  const pos = await page.evaluate(n => {
+    const grab = (attr) => {
+      const th = [...document.querySelectorAll('th[' + attr + ']')];
+      if (!th.length) return null;
+      const sc = th[0].closest('table').parentElement;
+      const box = sc.getBoundingClientRect();
+      const me = th.find(e => e.getAttribute(attr) === String(n));
+      if (!me) return null;
+      const mb = me.getBoundingClientRect();
+      const after = th.filter(e => { const b = e.getBoundingClientRect(); return b.x > mb.x + 1 && b.right <= box.right + 1; }).length;
+      return { left: Math.round(sc.scrollLeft), after: after };
+    };
+    return { loaner: grab('data-ldaynum'), rental: grab('data-rdaynum') };
+  }, num(d(0)));
+  t('どちらの表でも本日の列が見つかる', !!(pos.loaner && pos.rental), pos);
+  // ★ここは【必ず違う】ことを見る。直す前は2つの表が同じ位置だったので、
+  //   「以下」で見ると素通りしてしまう（見張りにならない）。
+  t('★レンタカーの方が過去を広く出す（代車の表より左寄り）',
+    !!(pos.loaner && pos.rental) && pos.rental.left < pos.loaner.left, pos);
+  t('★本日より後ろに見える日数は、代車の表より少ない',
+    !!(pos.loaner && pos.rental) && pos.rental.after < pos.loaner.after, pos);
+  t('★本日より右は7日ぶんまで（いちばん左まで戻っている時を除く）',
+    !!pos.rental && (pos.rental.after <= 7 || pos.rental.left === 0), pos.rental);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 

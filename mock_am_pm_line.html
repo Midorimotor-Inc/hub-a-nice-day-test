@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>モック：午前と午後の区切り（3案）</title>
+<style>
+  :root{
+    --wline:#64748b;        /* 週表の罫線（ダークグレー） */
+    --band:#e6f6fb;         /* :00 の帯 */
+    --bandtm:#cfeef7;
+    --sptm:#047857;         /* 時刻を持たない枠の時間列（緑） */
+    --spcell:#f0fdf4;
+    --today:#fb923c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 22px 60px;background:#f1f5f9;color:#1b2129;
+       font-family:"Yu Gothic UI","Meiryo",system-ui,sans-serif}
+  h1{font-size:22px;margin:0 0 4px}
+  .lead{font-size:14px;color:#475569;margin:0 0 14px;line-height:1.7}
+  .pick{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}
+  .pick b{font-size:14px}
+  .pick button{font-family:inherit;font-size:15px;font-weight:800;padding:9px 18px;border-radius:9px;
+       border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+  .pick button.on{background:#0891b2;border-color:#0e7490;color:white}
+  .note{font-size:13.5px;color:#475569;background:#fffbeb;border:2px solid #fcd34d;
+        border-radius:9px;padding:10px 14px;margin:0 0 18px;line-height:1.8}
+  .box{background:white;border-radius:12px;padding:14px 16px 18px;margin-bottom:22px;
+       box-shadow:0 2px 10px rgba(15,23,42,.08)}
+  .box h2{font-size:17px;margin:0 0 10px;color:#0e7490}
+  .box h2 span{font-size:13px;color:#64748b;font-weight:600;margin-left:8px}
+
+  /* ───── 週間カレンダー ───── */
+  table.wk{border-collapse:collapse;width:100%;table-layout:fixed}
+  table.wk th{padding:5px 4px;font-size:12px;font-weight:800;white-space:nowrap;
+       border:1px solid var(--wline);background:#f1f5f9}
+  table.wk td{border:1px solid var(--wline);padding:1px 3px;font-size:12.5px;height:28px;
+       vertical-align:middle;text-align:center}
+  table.wk th.tm{width:62px}
+  table.wk td.tm{width:62px;background:#f8fafc;font-size:12px;font-weight:800;color:#475569;white-space:nowrap}
+  tr.b00 td{background:var(--band)}
+  tr.b00 td.tm{background:var(--bandtm)}
+  tr.sp td.tm{background:var(--sptm);color:white}
+  tr.sp td{background:var(--spcell)}
+  .wkins{background:#fff7ed}
+  .cb{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;
+      border-radius:5px;color:white;font-size:12px;font-weight:900;margin:1px}
+  .plus{color:#94a3b8;font-weight:800}
+  .ent{font-size:11.5px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;
+       text-overflow:ellipsis;display:block}
+  .staff{font-size:11.5px;font-weight:800;color:#334155;background:#fff7ed}
+  tr.staffrow td{border-bottom:4px double #334155}
+  .tdy{border-left:5px solid var(--today) !important;border-right:5px solid var(--today) !important}
+  th.tdy{background:#ffedd5}
+  table.wkfoot{border-collapse:collapse;width:100%;table-layout:fixed;margin-top:3px}
+  table.wkfoot td{border:1px solid var(--wline);padding:1px 3px;font-size:12.5px;height:28px;
+       vertical-align:middle;text-align:center;background:var(--spcell)}
+  table.wkfoot td.tm{width:62px;background:var(--sptm);color:white;font-size:12px;font-weight:800}
+
+  /* ───── 1日表示 タイムスケジュール ───── */
+  table.dy{width:100%;border-collapse:collapse;border:1px solid #e5e7eb;table-layout:fixed}
+  table.dy th{padding:7px 8px;text-align:left;font-size:13px;font-weight:600;white-space:nowrap;
+       background:linear-gradient(90deg,#0e7490,#0891b2);color:white}
+  table.dy td{padding:7px 9px;border-bottom:1px solid #f3f4f6;border-right:1px solid #f3f4f6;
+       font-size:13.5px;vertical-align:middle}
+  table.dy tr.half td{background:#f0feff}
+  td.dtm{width:64px;font-weight:800;color:#0891b2;font-size:15px;padding-left:6px;padding-right:3px;white-space:nowrap}
+  tr.half td.dtm{font-weight:600;color:#7dd3fc;font-size:12px}
+  tr.dsp td.dtm{color:#9333ea;font-size:11.5px;font-weight:800;white-space:normal;line-height:1.15}
+  .empty{color:#475569;font-size:12px;font-style:italic;font-weight:600;display:flex;align-items:center;gap:4px}
+  .empty i{width:18px;height:18px;border:2px dashed #94a3b8;border-radius:3px;display:inline-flex;
+       align-items:center;justify-content:center;font-size:12px;font-style:normal;color:#475569;font-weight:700}
+  .nm{font-weight:600;color:#1e293b}
+
+  /* ───── 区切りの3案 ───── */
+  /* A案：線だけ（上の行の下に二重線） */
+  .vA tr.lastam td{border-bottom:4px double #334155 !important}
+  /* B案：帯＋文字 */
+  tr.sepB{display:none}
+  .vB tr.sepB{display:table-row}
+  tr.sepB td{padding:0 !important;border:1px solid var(--wline) !important;background:#e2e8f0 !important}
+  tr.sepB .bandin{height:24px;display:flex;align-items:center;justify-content:center;gap:8px;
+       font-size:13px;font-weight:900;color:#334155;letter-spacing:3px}
+  /* C案：太い色線＋左端の札 */
+  tr.sepC{display:none}
+  .vC tr.sepC{display:table-row}
+  tr.sepC td{padding:0 !important;border:none !important;background:transparent !important}
+  tr.sepC .linein{position:relative;height:16px;display:flex;align-items:center}
+  tr.sepC .linein::before{content:"";position:absolute;left:0;right:0;top:6px;height:5px;background:#4338ca}
+  tr.sepC .chip{position:relative;z-index:1;margin-left:6px;background:#4338ca;color:white;
+       font-size:12px;font-weight:900;border-radius:20px;padding:2px 12px;letter-spacing:2px;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<h1>午前と午後の間に 区切りを入れる（3案）</h1>
+<p class="lead">
+  上のボタンで3案を切り替えてください。<b>週間カレンダー</b>と<b>1日表示のタイムスケジュール</b>の両方に同じものが入ります。<br>
+  線を入れる場所は「<b>この線より下は午後</b>」。週間カレンダーは<b>午前入庫の下／13:00 の上</b>、1日表示は<b>時間未定の下／午後入庫の上</b>です。
+</p>
+
+<div class="pick">
+  <b>区切りの見た目：</b>
+  <button data-v="A" class="on">A案　線だけ（二重線）</button>
+  <button data-v="B">B案　灰色の帯＋文字</button>
+  <button data-v="C">C案　太い色線＋札</button>
+</div>
+
+<div class="note">
+  ★ A案＝いちばん控えめ。出勤の欄の下にある二重線と同じ線なので、画面の中で浮きません。<br>
+  ★ B案＝1行ぶん（24px）使って「ここから午後」と文字で出します。いちばん分かりやすい代わりに、表の高さが1行減ります。<br>
+  ★ C案＝太い線（5px）に小さな札を重ねます。高さは16pxだけ。色が付くので遠目にも分かります。
+</div>
+
+<!-- ═══════════ 週間カレンダー ═══════════ -->
+<div class="box" id="wkbox">
+  <h2>① 週間カレンダー<span>（11/2〜11/8・本店・見本）</span></h2>
+  <table class="wk">
+    <thead>
+      <tr>
+        <th class="tm">時間</th>
+        <th>11/2（日）</th><th class="tdy">11/3（月）</th><th>11/4（火）</th><th>11/5（水）</th>
+        <th>11/6（木）</th><th>11/7（金）</th><th>11/8（土）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="tm" style="background:#fff7ed">車検</td>
+        <td class="wkins"><span class="cb" style="background:#dc2626">マ</span><span class="cb" style="background:#2563eb">ク</span></td>
+        <td class="wkins tdy"><span class="cb" style="background:#dc2626">マ</span><span class="cb" style="background:#dc2626">マ</span><span class="cb" style="background:#16a34a">レ</span></td>
+        <td class="wkins"><span class="cb" style="background:#2563eb">ク</span></td>
+        <td class="wkins"><span class="cb" style="background:#dc2626">マ</span><span class="cb" style="background:#2563eb">ク</span><span class="cb" style="background:#2563eb">ク</span></td>
+        <td class="wkins"><span class="cb" style="background:#16a34a">レ</span></td>
+        <td class="wkins"><span class="cb" style="background:#dc2626">マ</span><span class="cb" style="background:#2563eb">ク</span></td>
+        <td class="wkins"><span class="plus">＋</span></td>
+      </tr>
+      <tr class="staffrow">
+        <td class="tm staff">出勤</td>
+        <td class="staff">見 岡 竹</td><td class="staff tdy">見 岡 竹 幸 魚</td><td class="staff">岡 竹 幸</td>
+        <td class="staff">見 竹 幸 魚</td><td class="staff">見 岡 幸</td><td class="staff">見 岡 竹 魚</td><td class="staff">岡 竹</td>
+      </tr>
+
+      <tr class="b00"><td class="tm">09:00</td>
+        <td></td><td class="tdy"><span class="ent">オイル交換</span></td><td></td><td></td><td></td><td><span class="ent">12ヶ月点検</span></td><td></td></tr>
+      <tr><td class="tm">09:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="b00"><td class="tm">10:00</td>
+        <td></td><td class="tdy"><span class="ent">タイヤ交換</span></td><td></td><td><span class="ent">鈑金 見積</span></td><td></td><td></td><td></td></tr>
+      <tr><td class="tm">10:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="b00"><td class="tm">11:00</td>
+        <td></td><td class="tdy"></td><td><span class="ent">バッテリー</span></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="tm">11:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="sp lastam"><td class="tm">午前入庫</td>
+        <td></td><td class="tdy"><span class="ent">車検 預かり</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+
+      <tr class="sepB"><td colspan="8"><div class="bandin">🕛 ここから午後</div></td></tr>
+      <tr class="sepC"><td colspan="8"><div class="linein"><span class="chip">午後</span></div></td></tr>
+
+      <tr class="b00"><td class="tm">13:00</td>
+        <td></td><td class="tdy"><span class="ent">ワイパー交換</span></td><td></td><td></td><td><span class="ent">6ヶ月点検</span></td><td></td><td></td></tr>
+      <tr><td class="tm">13:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="b00"><td class="tm">14:00</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td><span class="ent">持ち込み</span></td><td></td></tr>
+      <tr><td class="tm">14:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="b00"><td class="tm">15:00</td>
+        <td></td><td class="tdy"><span class="ent">納車 準備</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="tm">15:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="b00"><td class="tm">16:00</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="tm">17:30</td>
+        <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <table class="wkfoot">
+    <tr><td class="tm">午後入庫</td>
+      <td></td><td class="tdy"><span class="ent">車検 預かり</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td class="tm">時間未定</td>
+      <td></td><td class="tdy"></td><td></td><td></td><td></td><td></td><td></td></tr>
+  </table>
+</div>
+
+<!-- ═══════════ 1日表示 ═══════════ -->
+<div class="box" id="dybox">
+  <h2>② 1日表示 ⏰ タイムスケジュール<span>（11/3（月）・本店・見本）</span></h2>
+  <table class="dy">
+    <colgroup>
+      <col style="width:64px"><col style="width:17%"><col style="width:13%"><col style="width:10%">
+      <col style="width:16%"><col style="width:9%"><col>
+    </colgroup>
+    <thead><tr>
+      <th>時間</th><th>氏名</th><th>車種</th><th>作業</th><th>代車・レンタカー</th><th>指・見</th><th>内容</th>
+    </tr></thead>
+    <tbody>
+      <tr class="dsp"><td class="dtm">午前入庫</td>
+        <td><span class="nm">芝田 様</span></td><td>ハスラー</td><td>Q</td><td>ワゴンR (1234)</td><td>見</td><td>オイル・エレメント交換</td></tr>
+      <tr><td class="dtm">09:00</td>
+        <td><span class="nm">小畠 様</span></td><td>スペーシア</td><td>有点</td><td>—</td><td>指</td><td>12ヶ月点検</td></tr>
+      <tr class="half"><td class="dtm">09:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">10:00</td>
+        <td><span class="nm">みどりモータース 様</span></td><td>タント</td><td>B</td><td>ムーヴ (5678)</td><td>見</td><td>タイヤ 4本 組替</td></tr>
+      <tr class="half"><td class="dtm">10:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">11:00</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="half"><td class="dtm">11:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">12:00</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="dsp lastam"><td class="dtm">時間未定</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+
+      <tr class="sepB"><td colspan="7"><div class="bandin">🕛 ここから午後</div></td></tr>
+      <tr class="sepC"><td colspan="7"><div class="linein"><span class="chip">午後</span></div></td></tr>
+
+      <tr class="dsp"><td class="dtm">午後入庫</td>
+        <td><span class="nm">長谷川 様</span></td><td>ジムニー</td><td>商</td><td>—</td><td>見</td><td>商談・下取り確認</td></tr>
+      <tr><td class="dtm">13:00</td>
+        <td><span class="nm">河合 様</span></td><td>N-BOX</td><td>無点</td><td>N-BOX (9012)</td><td>指</td><td>ワイパーゴム交換</td></tr>
+      <tr class="half"><td class="dtm">13:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">14:00</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="half"><td class="dtm">14:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">15:00</td>
+        <td><span class="nm">石井 様</span></td><td>アルト</td><td>納</td><td>—</td><td>見</td><td>納車準備・洗車</td></tr>
+      <tr class="half"><td class="dtm">15:30</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="dtm">16:00</td>
+        <td><div class="empty"><i>+</i>クリックして追加</div></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  var body = document.body;
+  function setV(v){
+    body.className = 'v' + v;
+    var bs = document.querySelectorAll('.pick button');
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].className = (bs[i].getAttribute('data-v') === v) ? 'on' : '';
+    }
+  }
+  var bs = document.querySelectorAll('.pick button');
+  for (var i = 0; i < bs.length; i++) {
+    bs[i].onclick = function(){ setV(this.getAttribute('data-v')); };
+  }
+  setV('A');
+</script>
+</body>
+</html>
