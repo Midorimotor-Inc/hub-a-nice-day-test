@@ -323,6 +323,46 @@ const SEED = {
     t('追加：JSエラーなし', errs.length === 0, errs.slice(0, 3));
     await ctx.close();
   }
+  // ── 11. サインインだけ消えた端末が、黙って入り直す（v3.91.0 / 2026-11-02）──
+  //   11/1 の本格運用初日に、閉じて開くとコード入力画面に戻され、業務が止まった（藤原さんのPC・両澤さんのスマホ）。
+  //   登録の控え（auth-mine）は残っているのに Firebase のサインインだけが消えている、という形。
+  //   ★スマホの一覧は badge:'president' を外すので、検査は竹林さん（ふつうのスタッフ）で見る
+  const seedLost = (page, keepPw, who) => page.addInitScript((a) => {
+    const k = a.k;
+    localStorage.removeItem('__fakeFbUser');   // ★サインインだけ消えた状態
+    localStorage.setItem(k + 'auth-mine', JSON.stringify([{ uid: a.uid, name: a.name, store: 'honten', email: a.mail }]));
+    localStorage.setItem(k + 'auth-kind', 'shared'); localStorage.setItem(k + 'auth-devid', 'dev-lost');
+    if (a.keep) localStorage.setItem(k + 'auth-keep', JSON.stringify({ e: a.mail, p: a.keep }));
+    const st = JSON.parse(localStorage.getItem('__fakeFbStore') || '{}');
+    st['devices/dev-lost'] = { env: k, e: a.mail, n: a.name, names: [a.name], s: 'honten', k: 'shared', l: 'PC', at: 1, last: Date.now() };
+    st['__pw/' + a.mail] = { pw: '123456' };
+    localStorage.setItem('__fakeFbStore', JSON.stringify(st));
+  }, Object.assign({ k: STOR, keep: keepPw }, who));
+  const LOST_WHO = { uid: 'h3', name: '竹林直行', mail: 'tikurin@midori-m.com' };
+  for (const file of ['index_dev.html', 'mobile.html']) {
+    const nm = file === 'mobile.html' ? 'スマホ' : 'PC';
+    {   // 控えが合っている：コード画面に戻らず、名前を選ぶ画面まで出る
+      const ctx = await newCtx(); const page = await ctx.newPage(); const errs = watch(page);
+      await seedLost(page, '123456', LOST_WHO);
+      await page.goto(U(file), { waitUntil: 'domcontentloaded' });
+      const ok = await seeText(page, LOST_WHO.name, 20000);
+      const txt = await bodyText(page);
+      t(nm + '：サインインが消えても、黙って入り直して名前の画面が出る', ok, txt.slice(0, 200));
+      t(nm + '：コード入力画面に戻されない', !/6桁|招待コード/.test(txt), txt.slice(0, 200));
+      t(nm + '：登録の控えを捨てていない', (await page.evaluate(k => (JSON.parse(localStorage.getItem(k + 'auth-mine') || '[]')).length, STOR)) === 1);
+      t(nm + '：JSエラーなし', errs.length === 0, errs.slice(0, 3));
+      await ctx.close();
+    }
+    {   // 控えが古い（管理者が招待し直した）：今までどおり登録を捨てて登録画面へ
+      const ctx = await newCtx(); const page = await ctx.newPage();
+      await seedLost(page, '999999', LOST_WHO);
+      await page.goto(U(file), { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2500);
+      t(nm + '：合言葉が変わっていれば登録を捨てる', (await page.evaluate(k => (JSON.parse(localStorage.getItem(k + 'auth-mine') || '[]')).length, STOR)) === 0);
+      t(nm + '：効かない控えは消す', (await page.evaluate(k => localStorage.getItem(k + 'auth-keep'), STOR)) === null);
+      await ctx.close();
+    }
+  }
   await browser.close(); server.close();
   console.log(fail ? `\n${fail}件 不合格 / ${pass}件 合格` : `\n全${pass}件 PASS`);
   process.exit(fail ? 1 : 0);

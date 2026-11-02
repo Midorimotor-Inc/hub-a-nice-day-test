@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793458511883';
+  window.__APP_BUILD='build-1793578805892';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.90.3';
+const MOBILE_VERSION='3.91.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -141,6 +141,18 @@ const hubLoadMine = () => {
     return Array.isArray(v) ? v.filter(x => x && x.name && !x.token) : []; } catch (e) { return []; }   // token 付き＝旧方式の登録は無効
 };
 const hubSaveMine = list => { try { localStorage.setItem(HUB_MINE_KEY, JSON.stringify(list)); } catch (e) {} };
+// ★この端末の入り直し用の控え（v3.91.0 / 2026-11-02・Kyoshi承認のBLOCK-B変更）
+//   背景：ブラウザを閉じて開くと Firebase のサインインが消えていることがある
+//   （Edge の終了時クリア・iPhone のアプリ内ブラウザ・サイトデータの追い出し）。
+//   今までは「サインインが無い＝登録を捨てる」でコード入力画面に戻していたので、
+//   11/1 の本格運用初日に、藤原さんのPCと両澤さんのスマホが毎回締め出された。
+//   そこで登録した時の アドレス＋合言葉 を端末に控え、サインインだけが消えた時は黙って入り直す。
+//   ・QRの引き継ぎ（handoff）が端末に渡しているものと中身は同じ。新しく漏れるものは増やしていない
+//   ・管理者が招待し直す（合言葉が変わる）と、この控えは効かなくなる＝締め出しは管理者が決められる
+const HUB_KEEP_KEY = STOR + 'auth-keep';
+const hubKeepSave = (email, pw) => { try { if (email && pw) localStorage.setItem(HUB_KEEP_KEY, JSON.stringify({ e: String(email), p: String(pw) })); } catch (e) {} };
+const hubKeepLoad = () => { try { const v = JSON.parse(localStorage.getItem(HUB_KEEP_KEY)); return (v && v.e && v.p) ? v : null; } catch (e) { return null; } };
+const hubKeepClear = () => { try { localStorage.removeItem(HUB_KEEP_KEY); } catch (e) {} };
 const hubLive = list => (list || []).filter(x => !x.exp || x.exp > Date.now());
 const hubKind = () => { try { return localStorage.getItem(HUB_KIND_KEY) || ''; } catch (e) { return ''; } };
 const hubSetKind = k => { try { localStorage.setItem(HUB_KIND_KEY, k); } catch (e) {} };
@@ -740,22 +752,25 @@ const hubCheckDevice = async () => {
   if (!mine.length) return true;
   try {
     const s = await fbDeviceRef().get();
-    if (!s.exists) { hubSaveMine([]); try { await fbAuth.signOut(); } catch (e) {} return false; }
+    if (!s.exists) { hubSaveMine([]); hubKeepClear(); try { await fbAuth.signOut(); } catch (e) {} return false; }
     const d = s.data() || {};
     if (!d.last || Date.now() - d.last > 86400000) fbDeviceRef().update({ last: Date.now() }).catch(() => {});   // update：消された行を作り直さない
   } catch (e) { return true; }   // 読めない（回線）時は何も変えない
   // 合言葉の控えが無い人（リンクで登録した）は作っておく。古いサインインでは作れないことがある（その時は次の登録時に）
-  try { const u = await fbDb.collection('users').doc(fbUser.uid).get(); if (!u.exists || !(u.data() || {}).pw) await hubHandoffSecret(); } catch (e) {}
+  try { const u = await fbDb.collection('users').doc(fbUser.uid).get(); const _pw = u.exists ? ((u.data() || {}).pw || '') : '';
+    if (!_pw) await hubHandoffSecret();                       // 控えが無い人（リンクで登録した）は作る
+    else if (!hubKeepLoad()) hubKeepSave(fbUser.email, _pw);  // もう登録済みの端末にも入り直し用の控えを配る（v3.91.0）
+  } catch (e) {}
   try {
     const snap = await fbAllowedRef().get();
     const all = snap.exists ? (snap.data() || {}) : {};
     HUB_ALLOWED = all;
     const keep = mine.filter(x => !x.email || (all[fbEmailKey(x.email)] && all[fbEmailKey(x.email)].active !== false));
     if (keep.length !== mine.length) hubSaveMine(keep);
-    if (!keep.length) { try { await fbAuth.signOut(); } catch (e) {} return false; }
+    if (!keep.length) { hubKeepClear(); try { await fbAuth.signOut(); } catch (e) {} return false; }
   } catch (e) {
     // 許可簿を読めない＝自分が許可簿から外された（ルールで拒否）か回線。サインイン中なのに拒否なら登録を捨てる
-    if (e && e.code === 'permission-denied') { hubSaveMine([]); try { await fbAuth.signOut(); } catch (e2) {} return false; }
+    if (e && e.code === 'permission-denied') { hubSaveMine([]); hubKeepClear(); try { await fbAuth.signOut(); } catch (e2) {} return false; }
   }
   return true;
 };
@@ -795,6 +810,21 @@ const hubCompleteLink = async (emailTyped) => {
   try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
   return { ok: true };
 };
+// ── サインインだけが消えた時に、黙って入り直す（v3.91.0 / 2026-11-02）──
+//   戻り値 true＝入り直せた。false＝控えが無い／合言葉が変わっている（＝登録画面へ進んでよい）
+const hubResumeSignIn = async () => {
+  if (!fbAuth || fbUser) return !!fbUser;
+  const k = hubKeepLoad();
+  if (!k) return false;
+  try { await fbAuth.signInWithEmailAndPassword(k.e, k.p); return true; }
+  catch (e) {
+    const c = String((e && e.code) || '');
+    // 合言葉が変わった・消された＝もう使えない控え。回線や一時的な混み合いでは消さない
+    if (/wrong-password|invalid-credential|user-not-found|user-disabled|invalid-login/.test(c)) { hubKeepClear(); return false; }
+    console.warn('[FB] 入り直せません（今回だけ）', c || (e && e.message));
+    return false;
+  }
+};
 // ── 登録の引き継ぎ（?hand=）──
 //   iPhone では Safari／LINE の中のブラウザ／ホーム画面のアイコンが別々の保管場所を持ち、サインインも別。
 //   サインイン済みのブラウザが「引き継ぎの印」を作り、印つきURLから開いた側は印を出して同じ人としてサインインする。
@@ -804,10 +834,11 @@ const hubRandom = n => { const a = new Uint8Array(n); try { crypto.getRandomValu
 const hubHandoffSecret = async () => {
   const ref = fbDb.collection('users').doc(fbUser.uid);
   const s = await ref.get(); const d = s.exists ? s.data() : null;
-  if (d && d.pw) return d.pw;
+  if (d && d.pw) { hubKeepSave(fbUser.email, d.pw); return d.pw; }
   const pw = hubRandom(24);
   await fbUser.updatePassword(pw);
   await ref.set({ email: fbUser.email || '', pw, at: Date.now() }, { merge: true });
+  hubKeepSave(fbUser.email, pw);
   return pw;
 };
 const hubMakeHandoff = async () => {
@@ -828,6 +859,7 @@ const hubTakeHandoff = async () => {
     const d = s.exists ? s.data() : null;
     if (d && d.exp > Date.now()) {
       await fbAuth.signInWithEmailAndPassword(d.email, d.pw);
+      hubKeepSave(d.email, d.pw);
       let mine = []; try { mine = JSON.parse(d.mine || '[]'); } catch (e) {}
       hubSaveMine(Array.isArray(mine) ? mine.filter(x => x && x.name) : []);
       if (d.kind && !hubKind()) hubSetKind(d.kind);
@@ -895,7 +927,7 @@ const hubSignInWithCode = async (email, code) => {
   const mail = String(email || '').trim().toLowerCase(), c = String(code || '').replace(/[^0-9]/g, '');
   if (mail.indexOf('@') < 1) return { ok: false, err: 'bad_email' };
   if (c.length !== 6) return { ok: false, err: 'bad_code' };
-  try { await fbAuth.signInWithEmailAndPassword(mail, c); }
+  try { await fbAuth.signInWithEmailAndPassword(mail, c); hubKeepSave(mail, c); }
   catch (e) {
     const cc = String((e && e.code) || '');
     return { ok: false, err: /wrong-password|invalid-credential|user-not-found|invalid-login/.test(cc) ? 'bad_code' : hubAuthErr(e), raw: cc };
@@ -6251,7 +6283,12 @@ const App=()=>{
         const u=await fbWhenReady();
         if(HUB_HANDOFF_ID&&HUB_HANDOFF_REG){ if(await hubSignInByHandoff()){ setViaHandoff(true); setShowAuthAdd(true); } }
         else if(HUB_HANDOFF_ID&&hubLive(hubLoadMine()).length===0){ took=await hubTakeHandoff(); }
-        else if(fbAuth&&!u&&hubLoadMine().length){ hubSaveMine([]); }
+        else if(fbAuth&&!u&&hubLoadMine().length){
+          // サインインだけが消えた（アプリ内ブラウザ・サイトデータの追い出し等）：控えで黙って入り直す。
+          // 駄目な時に限り登録を捨てる（v3.91.0 / 2026-11-02）
+          if(await hubResumeSignIn()){ if(!(await hubCheckDevice())) setUser(null); }
+          else { hubSaveMine([]); hubKeepClear(); }
+        }
         else if(fbAuth&&u){ if(!(await hubCheckDevice())) setUser(null); }
       }catch(e){}
       setAuthMine(hubLive(hubLoadMine()));

@@ -65,6 +65,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 端末内の登録一覧（名前を選ぶログイン画面）は従来どおり `STOR+'auth-mine'`。
 - **スマホの QR 登録（v2.76・2026-09-22）**：PC の登録完了画面「スマホも登録しますか？」とログイン画面「📱 スマホを登録（QR）」で、サインイン中の人の引き継ぎの印を `mobile.html?hand=…&reg=1` の QR にする（qrcode-generator@1.4.4・CDN 版固定）。mobile 側は `HUB_HANDOFF_REG` なら `hubSignInByHandoff`（サインインだけ・BLOCK-B の hubTakeHandoff は使わない）→ `AuthAddScreen viaHandoff` で通常の登録の流れ（自分専用／共有 → 完了 → ホーム画面に追加）。PC でサインインしていない人は招待 URL（`?inv=1&e=`・要コード）の QR。
 - **招待 QR（v2.77）**：管理者コンソールで「招待を送る」を押すと、アドレス＋6桁を入れた `mobile.html?inv=1&e=…&code=…` の QR が出る（メールが届かない人向け。`showInviteQr`。URL コピーも可）。index/mobile は URL の `code` を登録欄に入れておく。コードが入った QR なので画面を他人に見せない運用。
+- ★**サインインだけ消えた時は、黙って入り直す（v3.91.0・2026-11-02・本格運用初日の締め出し対応）**
+  **何が起きたか**：11/1 に全員運用を始めたところ、三田店の藤原さんのPC（Edge）と両澤さんのスマホ（iPhone Safari）が
+  **閉じて開くたびコード入力画面に戻され**、仕事が止まった。両澤さんは毎回 PC の QR を読んで入り直していた。
+  **原因**：起動時の `else if(fbAuth&&!u&&hubLoadMine().length){ hubSaveMine([]) }`。
+  Firebase のサインインが消えているだけで**端末の登録証（`auth-mine`）まで即座に捨てる**作りだった。
+  サインインが消える理由は端末ごとに違う（Edge の終了時クリア／iPhone のアプリ内ブラウザ・サイトデータの追い出し）が、
+  **消えた時に自動で戻る道が無い**のが急所。実データで裏取り済み（両澤さんの iPhone は 10/31 21:23 に端末台帳の行が
+  作り直されている＝保管場所ごと消えている。藤原さんの PC の行は 10/1 のまま＝11/2 は一度も入れていない）。
+  **直し**：登録時の アドレス＋合言葉 を `STOR+'auth-keep'` に控え、サインインだけ消えていたら
+  `hubResumeSignIn()` で黙ってサインインし直す。**入り直せた時だけ** `hubCheckDevice` へ進み、
+  駄目な時（合言葉が変わった＝管理者が招待し直した）に限って今までどおり登録を捨てる。
+  ・控える中身は**QRの引き継ぎ（`handoff/{code}`）が端末に渡しているものと同じ**。新しく漏れるものは増えていない。
+  ・既に登録済みの端末にも行き渡るよう、`hubCheckDevice` が `users/{uid}.pw` を読んで控えを配る。
+  ・**管理者が招待し直すと控えは効かなくなる**＝締め出す時期は今までどおり管理者が決められる。
+  ・3ファイル（index_dev / customers / mobile）に同じものを置くこと。検査は `node fb_auth_test.js` の ⑪（88件）。
+  ★**`hubSaveMine([])` を増やす時は必ず「本当に取り消されたのか」を確かめてから**。
+  サインインの有無だけで捨てると、今回と同じ締め出しが起きる。
 - ルールの配備はコンソールに貼る（Claude の自動モードでは `node fb_rules.js --deploy` がブロックされる）。文法確認だけなら Admin SDK の createRuleset で行える。 手順書は `RULES_貼り付け手順.md`。**`firestore.rules` を編集する時は `match /kv/{key} {` が2か所ある（一番外側と snaps の中）ので、行の完全一致で一番外側だけを直すこと**（2026-09-30 に snaps 側まで書き換えて壊した）。**hub-verify の firebase-admin は 12 系を使う**（14 系は `admin.credential`/`admin.firestore()` の旧APIを廃止しており、fb_*.js・smoke_main.js が全部動かなくなる）。
 
 ### 時点保存／復旧（Firestore・2026-09-19）
