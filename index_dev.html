@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793578805892';
+    window.__APP_BUILD='build-1793583288451';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.91.0';
+const APP_VERSION = '3.92.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -14165,6 +14165,8 @@ function AppInner() {
     //   出てこなかった。他の日付の車検／作業から毎回組み立てる（2026-08-26にユーザーが要望）。
     const _inStore = r => (r.store===vsId||(r.store==null&&vsId==='honten'));
     const _slotOf  = t => (t&&SCHED_SLOTS.includes(getBaseSlot(t)))?getBaseSlot(t):'未定';
+    // ★車検の入庫時間（印刷用）。09:00 / 未定・午前・午後 をそのまま短く出す（2026-11-02 ユーザー要望）
+    const printInspTime = v => { const b=getBaseSlot(String(v||'')); return b||'-'; };
     const _mmdd    = s => {const p=String(s||'').split('-');return p.length===3?`${+p[1]}/${+p[2]}`:String(s||'');};
     const _initial = c => {const x=COURSES.find(x=>x.id===Number(c));return x?x.initial:'';};
     const derivedBySlot = {};
@@ -14251,6 +14253,9 @@ function AppInner() {
   /* 車検：タイムスケジュールの文字に合わせて拡大 */
   .insp-table td { font-size: 14px; padding: 7px 6px; }
   .insp-table th { font-size: 12px; }
+  /* 車検の入庫時間（2026-11-02 ユーザー要望：印刷に入庫時間を出す） */
+  .insp-table td.insp-time { font-size: 12.5px; font-weight: 800; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
+  .insp-table th.insp-time { text-align: center; padding-left: 2px; padding-right: 2px; }
   /* 車検コース：一文字を〇バッジで（マ＝赤丸白字／他は丸枠のみ） */
   .course-badge { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; font-weight:800; font-size:12px; line-height:1; }
   .course-ma { background:#b91c1c; color:#fff; }
@@ -14314,15 +14319,16 @@ function AppInner() {
       <table class="insp-table">
         <thead><tr class="insp-head">
           <th style="width:16px">No</th>
+          <th class="insp-time" style="width:32px">入庫</th>
           <th style="width:68px">氏名</th>
-          <th style="width:58px">車種</th>
+          <th style="width:54px">車種</th>
           <th style="width:40px">コース</th>
-          <th style="width:64px">代車</th>
+          <th style="width:60px">代車</th>
           <th style="width:24px">特典</th>
           <th>備考</th>
         </tr></thead>
         <tbody>
-          ${sortedInsp.length===0?'<tr><td colspan="7" style="text-align:center;color:#64748b;padding:8px">予約なし</td></tr>':
+          ${sortedInsp.length===0?'<tr><td colspan="8" style="text-align:center;color:#64748b;padding:8px">予約なし</td></tr>':
             sortedInsp.map((r,i)=>{
               const isOther = normSt(r.store)&&normSt(r.store)!==vsId;
               const storeTag = normSt(r.store)==='honten'?'本':normSt(r.store)==='sanda'?'三':'';
@@ -14330,6 +14336,7 @@ function AppInner() {
               const tagColor = normSt(r.store)==='honten'?'#2563eb':'#dc2626';
               return `<tr class="${isOther?'store-other':'store-my'}">
                 <td style="font-weight:700;color:${isOther?'#94a3b8':storeColor}">${i+1}</td>
+                <td class="insp-time">${printInspTime(r.time)}</td>
                 <td style="font-weight:700">${r.name||''}${storeTag?`<span style="font-size:9px;background:${tagColor};color:white;padding:1px 4px;border-radius:2px;margin-left:3px">${storeTag}</span>`:''}</td>
                 <td>${r.carType||''}</td>
                 <td>${courseBadge(r.course)}</td>
