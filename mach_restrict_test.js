@@ -94,6 +94,38 @@ const OLD_ID = MACH_SEQ - 600000;               // その10分前に入ってい
     return !!row && /マッハ車検/.test(row.innerText);
   }));
 
+  head('⑦ 赤帯に「マッハ車検」とお客様のお名前を出す（2026-11-02 ユーザー指示・週表はC案＝2段）');
+  const dayLab = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('tr')].filter(x => x.innerText.indexOf('10:00') === 0);
+    for (const r of rows) { const s = r.querySelector('[data-machlab]'); if (s) return (s.innerText || '').trim(); }
+    return null;
+  });
+  t('★1日表示（タイムスケジュール）：札に「マッハ車検」が出る', !!dayLab && dayLab.indexOf('マッハ車検') >= 0, dayLab);
+  t('★1日表示：お客様のお名前が出る', !!dayLab && dayLab.indexOf('芝田') >= 0, dayLab);
+  t('★1日表示：お名前に「様」が付く', !!dayLab && dayLab.indexOf('様') >= 0, dayLab);
+  // 週間カレンダー（畳んだ状態で開くので、時間の行を広げてから見る）
+  await clickText(page, '週間カレンダー');
+  await page.waitForTimeout(1300);
+  await page.evaluate(() => { const b = document.querySelector('[data-wfold]'); if (b) b.click(); });
+  await page.waitForTimeout(900);
+  const wk = await page.evaluate(() => {
+    const ls = [...document.querySelectorAll('[data-wmachlab]')];
+    return { n: ls.length,
+      texts: ls.map(e => (e.innerText || '').trim()),
+      cells: ls.map(e => { const td = e.closest('td'); return td ? (td.getAttribute('data-wadd') || '') : ''; }),
+      lines: ls.map(e => e.querySelectorAll('span').length) };
+  });
+  t('★週表：札は1つだけ（入庫の枠だけ・10:30 には出さない）', wk.n === 1, wk);
+  t('★週表：札は 10:00 の枠にある', !!wk.cells[0] && wk.cells[0].indexOf('/10:00') > 0, wk.cells);
+  t('★週表：「マッハ車検」が出る', !!wk.texts[0] && wk.texts[0].indexOf('マッハ車検') >= 0, wk.texts);
+  t('★週表：お客様のお名前が出る', !!wk.texts[0] && wk.texts[0].indexOf('芝田') >= 0, wk.texts);
+  t('★週表：お名前に「様」が付く', !!wk.texts[0] && wk.texts[0].indexOf('様') >= 0, wk.texts);
+  t('★週表：2段になっている（C案）', wk.lines[0] === 2, wk.lines);
+  if (process.env.SHOT2) { await page.screenshot({ path: process.env.SHOT2 }); console.log('   [shot] ' + process.env.SHOT2); }
+  await page.evaluate(() => { const b = document.querySelector('[data-wclose]'); if (b) b.click(); });
+  await page.waitForTimeout(900);
+  t('週間カレンダーを閉じてスケジュールに戻った', await seeText(page, 'タイムスケジュール', 8000));
+
   // 指定の時間の空き行をクリックして予約カードを開き、名前と作業内容を入れて保存する
   const addAt = async (slot, workName, name) => {
     alerts.length = 0;

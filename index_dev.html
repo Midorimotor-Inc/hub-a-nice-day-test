@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793583288451';
+    window.__APP_BUILD='build-1793585908279';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.92.0';
+const APP_VERSION = '3.93.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4643,6 +4643,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   const SP_CELL='#f0fdf4';
   // 時刻を持たない枠の呼び名（画面の言葉。「入庫未定」→「時間未定」に変更）
   const spName=(x)=>x==='未定'?'時間未定':x==='午前'?'午前入庫':x==='午後'?'午後入庫':x;
+  // ★マッハ車検の自動制限の札（2026-11-02 ユーザー決定・C案＝2段）。
+  //   1段目「🚗 マッハ車検」／2段目「お客様のお名前 様」。長い会社名は shortenCorpName で詰める。
+  //   ★出すのは【入庫の枠（区間の始まり）】だけ。2つ目の枠（10:30）は網掛けだけにする
+  //     （同じ札が2回出ると、別のマッハが2件あるように見えるため）。
+  const machLabel=(g)=>(<span data-wmachlab="1" style={{display:'flex',flexDirection:'column',alignItems:'center',
+    justifyContent:'center',lineHeight:1.2,color:'#b91c1c',fontWeight:800,whiteSpace:'nowrap',overflow:'hidden'}}>
+    <span style={{fontSize:10}}>🚗 マッハ車検</span>
+    {!!g.machWho&&<span style={{fontSize:11,fontWeight:900}}>{sama(shortenCorpName(String(g.machWho)))}</span>}
+  </span>);
   // ★本日の列は太枠で囲む（2026-10-24 ユーザー指示・ア案）。色はカレンダーの「今日」と同じ
   // ★線を濃くすると本日の枠が埋もれるので、【太さ5px・明るいオレンジ】で浮かせる
   //   （2026-10-30 ユーザー決定。太さ4種・明るさ5種を見比べて決めた）
@@ -4800,6 +4809,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
         const rs=restrictionOf?restrictionOf(dk):null;
         const rst=!sp&&restrCovers(rs,slot);
         const mach=rst?machCovering(rs,slot):null;
+        const machTop=(mach&&String(mach.startTime)===String(slot))?mach:null;   // 入庫の枠だけ札を出す
         const rsTip=rst?('入庫制限'+(mach?'（マッハ車検）':'')+'　'+restrLabels(rs).join('／')
           +(restrExempt(rs).length?'　通せる作業：'+restrExempt(rs).join('・'):'')):undefined;
         const cellSty={...(rst?{background:RESTR_BASE,...ZB_STY}:cellBand),...(thin?{height:15}:{}),
@@ -4811,7 +4821,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
             color:rst?'#fca5a5':'#cbd5e1',textAlign:'center',fontSize:11,cursor:'pointer'}}
           onMouseEnter={e=>{if(!rst&&!sr){e.currentTarget.style.background='#ecfeff';e.currentTarget.style.color='#0891b2';}}}
           onMouseLeave={e=>{if(!rst&&!sr){e.currentTarget.style.background=cellSty.background||'';e.currentTarget.style.color='#cbd5e1';}}}>
-          ＋<PastOv dk={dk}/>{sLab(dk)}{sDim(dk)&&<DimOv/>}</td>;
+          {machTop?machLabel(machTop):'＋'}<PastOv dk={dk}/>{sLab(dk)}{sDim(dk)&&<DimOv/>}</td>;
         return <td key={dk} data-wrcell={rst?'1':'0'} data-wzb={rst?'1':'0'} data-wdim={sDim(dk)?'1':'0'} title={rsTip}
           style={{...TD,...cellSty,...tcol(dk),...sBlk(dk),position:'relative'}}>
           <PastOv dk={dk}/>{sLab(dk)}{sDim(dk)&&<DimOv/>}
@@ -9968,7 +9978,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
         {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{sama(row.name)}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加
            {/* ★マッハ車検による自動の入庫制限（2026-10-05）。網掛けの中に名前だけ出す */}
-           {machCov&&<span style={{marginLeft:4,fontSize:11,fontWeight:800,color:'#b91c1c',fontStyle:'normal',whiteSpace:'nowrap'}}>マッハ車検</span>}</div>
+           {machCov&&<span data-machlab="1" style={{marginLeft:4,fontSize:11,fontWeight:800,color:'#b91c1c',fontStyle:'normal',whiteSpace:'nowrap'}}>🚗 マッハ車検{machCov.machWho?'　'+sama(shortenCorpName(String(machCov.machWho))):''}</span>}</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'nowrap'}}>
                 <EntryName row={row} style={{fontWeight:600,color:'#1e293b',whiteSpace:'nowrap'}}>{sama(row.name)}</EntryName>
@@ -14109,7 +14119,7 @@ function AppInner() {
   },[currentUser,inspData,schedData,memoData,loanerRes,closedDays,closedDates]);
 
   // ── 印刷・PDF出力 ──────────────────────────────────────────
-  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData, paidLeaveData) => {
+  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData, paidLeaveData, restriction) => {
     const storeName = vsId==='honten'?'本店':'三田店';
     const storeColor = vsId==='honten'?'#2563eb':'#dc2626';
     // 元配列インデックス(_idx)を保持：代車のbookingKey(insp-${dk}-${idx})照合に必要
@@ -14209,7 +14219,12 @@ function AppInner() {
       const dataKeys = subKeys.filter(k=>{const r=schedData[dk][k];return r&&r.name;});
       const derived  = derivedBySlot[slot]||[];
       if(dataKeys.length===0&&derived.length===0){
-        schedRows.push({slot, name:'', carType:'', work:'', loaner:'', note:'', isEmpty:true});
+        // ★入庫制限は紙にも出す（2026-11-02 ユーザー要望）。マッハ車検の分はお客様のお名前も。
+        //   時刻を持たない枠（未定・午前・午後）は制限の判定から外す（画面と同じ決まり）。
+        const _rst = !isSpecialSlot(slot) && restrCovers(restriction, slot);
+        const _mch = _rst ? machCovering(restriction, slot) : null;
+        schedRows.push({slot, name:'', carType:'', work:'', loaner:'', note:'', isEmpty:true,
+          rst:!!_rst, rstLab:_rst?('🚫 入庫制限'+(_mch?('　🚗 マッハ車検'+(_mch.machWho?'　'+sama(shortenCorpName(String(_mch.machWho))):'')):'')):''});
       } else {
         let first=true;
         dataKeys.forEach(k=>{
@@ -14256,6 +14271,10 @@ function AppInner() {
   /* 車検の入庫時間（2026-11-02 ユーザー要望：印刷に入庫時間を出す） */
   .insp-table td.insp-time { font-size: 12.5px; font-weight: 800; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
   .insp-table th.insp-time { text-align: center; padding-left: 2px; padding-right: 2px; }
+  /* 入庫制限の枠（2026-11-02 ユーザー要望：紙にも出す）。画面の1日表示と同じ ベタの薄い赤 */
+  .sched-table tr.slot-restr td { background: #fee2e2; }
+  .restr-lab { font-weight: 800; color: #b91c1c; white-space: nowrap; font-size: 11px; }
+  @media print and (monochrome){ .sched-table tr.slot-restr td { background: #e5e5e5; } .restr-lab { color: #000 !important; } }
   /* 車検コース：一文字を〇バッジで（マ＝赤丸白字／他は丸枠のみ） */
   .course-badge { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; font-weight:800; font-size:12px; line-height:1; }
   .course-ma { background:#b91c1c; color:#fff; }
@@ -14378,9 +14397,9 @@ function AppInner() {
           ${schedRows.map(r=>{
             const nn=(r.note||'').length;
             const nCls=nn>34?'note-xs':nn>22?'note-sm':'';
-            return `<tr class="${r.isEmpty?'slot-empty':'has-data'}${r.cls?' '+r.cls:''}">
+            return `<tr class="${r.isEmpty?'slot-empty':'has-data'}${r.cls?' '+r.cls:''}${r.rst?' slot-restr':''}">
               <td style="font-weight:700;color:#0e7490;white-space:nowrap">${r.slot||''}</td>
-              <td style="font-weight:${r.name?'700':'400'}">${r.name||''}</td>
+              <td style="font-weight:${r.name?'700':'400'}">${r.name||(r.rstLab?`<span class="restr-lab">${r.rstLab}</span>`:'')}</td>
               <td>${r.carType||''}</td>
               <td style="text-align:center${r.cls?';white-space:nowrap;font-weight:800':''}">${r.work||''}</td>
               <td class="${loanerFitCls(r.loaner)}">${r.loaner||''}</td>
@@ -17410,7 +17429,7 @@ function AppInner() {
                     <button onClick={()=>setRestrictionModal(true)} title="入庫制限設定" style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:5,cursor:'pointer',fontSize:10,color:'#dc2626',fontWeight:700}}>
                       🚫 入庫制限
                     </button>
-                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData,paidLeaveData)} title="印刷・PDF出力"
+                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData,paidLeaveData,machMerge(schedRestrictions[dk],machAutoOf(dk)))} title="印刷・PDF出力"
                       style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#f8fafc',border:'2px solid #94a3b8',borderRadius:5,cursor:'pointer',fontSize:10,color:'#475569',fontWeight:700}}>
                       🖨 印刷
                     </button>

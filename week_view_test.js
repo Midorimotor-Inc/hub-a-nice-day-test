@@ -311,7 +311,9 @@ const seed = {
       otherDay: cell(other, '10:00'),
       head: head ? head.innerText.replace(/\s+/g, '') : '',
       headTitle: head ? head.getAttribute('title') : '',
-      legend: [...document.querySelectorAll('[data-weekview] *')].filter(x => /マッハ車検$/.test(x.textContent || '') && x.children.length === 0).length,
+      // ★2026-11-02：赤帯の中の札（data-wmachlab）は数えない。あれは説明書きではなく、
+      //   その枠が誰のマッハ車検で塞がっているかを出すもの（ユーザー指示で入れた）。
+      legend: [...document.querySelectorAll('[data-weekview] *')].filter(x => /マッハ車検$/.test(x.textContent || '') && x.children.length === 0 && !x.closest('[data-wmachlab]')).length,
     };
   }, [TUE, WED]);
   // ★2026-10-25 ユーザー決定：斜めのゼブラに戻す（薄い赤）。ただし枠の境目でズレない作りにすること

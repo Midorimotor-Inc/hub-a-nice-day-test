@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793583288451';
+  window.__APP_BUILD='build-1793585908279';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -162,7 +162,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.92.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.93.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1825,6 +1825,13 @@ const CLOSED_FG    = '#991b1b';
 const CLOSED_BAR   = 'inset 3px 0 0 #b91c1c';
 const CLOSED_LABEL = '休業日';
 
+// ── キャンセル（赤帯）の行を「✎ 編集」で開いた時の見た目（2026-11-02 ユーザー指示）──
+//   CANCEL_BG は一覧の赤い行（.row-cancel）と同じ色。カードの背景に使う。
+//   CANCEL_OFF は「触らせない」区画（入庫日・時間・コース・特典・代車）にかぶせる。
+//   ★書けるのは備考だけ。予約の中身は変えさせない（キャンセルの行なので）。
+const CANCEL_BG  = '#fecaca';
+const CANCEL_OFF = {pointerEvents:'none',opacity:.5};
+
 // ── 車検カレンダーピッカー（入庫日選択用）──
 function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,overrideOpen,inspLimits,open,onClose}){
   const [calMonth,setCalMonth]=useState(()=>{
@@ -1998,7 +2005,7 @@ const MiniDatePicker=({value,onChange,open,onClose,baseDk,accent})=>{
   );
 };
 
-const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerListS,staffListH,staffListS,onSave,onClose,currentUser,closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,inspLimits})=>{
+const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerListS,staffListH,staffListS,onSave,onClose,currentUser,closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,inspLimits,cancelEdit,onSaveNote})=>{
   const normStore=s=>{if(!s)return'honten';if(s==='三田店'||s==='sanda')return'sanda';return'honten';};
   const defaultStaff=customer.staff||currentUser?.name||'';
   // デフォルト店舗: 顧客の店舗 > ログインユーザーの店舗 > 本店
@@ -2045,7 +2052,9 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
   const [showPreEntryCal,setShowPreEntryCal]=useState(false);
   const [showDelivCal,setShowDelivCal]=useState(false);
   const [showDelivTime,setShowDelivTime]=useState(false);
-  const [showCal,setShowCal]=useState(true);
+  // ★キャンセルの「✎ 編集」で開いた時はカレンダーを畳んでおく（2026-11-02）。
+  //   予約の中身は触らせないので場所を取る必要がなく、備考（コメント）がすぐ見える。
+  const [showCal,setShowCal]=useState(!cancelEdit);
   const [selCarId,setSelCarId]=useState(null);
   const [selDays,setSelDays]=useState([]);
   // ★代車の『限定』（この車でないとダメ＝最適化で動かさない）。
@@ -2176,7 +2185,7 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
       <div style={{background:'white',borderRadius:14,width:'100%',maxWidth:860,maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
-        <div style={{padding:'14px 18px',borderRadius:'14px 14px 0 0',background:storeObj.id==='sanda'?'linear-gradient(135deg,#991b1b,#dc2626)':`linear-gradient(135deg,#1e1b4b,${storeObj.color})`,display:'flex',alignItems:'center',gap:10}}>
+        <div style={{padding:'14px 18px',borderRadius:'14px 14px 0 0',background:cancelEdit?'linear-gradient(135deg,#7f1d1d,#dc2626)':(storeObj.id==='sanda'?'linear-gradient(135deg,#991b1b,#dc2626)':`linear-gradient(135deg,#1e1b4b,${storeObj.color})`),display:'flex',alignItems:'center',gap:10}}>
           <div style={{flex:1}}>
             <div style={{color:'white',fontWeight:900,fontSize:17}}>{customer.name}</div>
             <div style={{color:'rgba(255,255,255,.7)',fontSize:11,marginTop:2,display:'flex',gap:12,flexWrap:'wrap'}}>
@@ -2185,8 +2194,16 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
           </div>
           <button onClick={onClose} style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,padding:'6px 12px',color:'white',fontSize:13,fontWeight:700}}>✕</button>
         </div>
-        <div id='booking-modal-scroll' style={{overflowY:'auto',flex:1,padding:18}}>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+        <div id='booking-modal-scroll' style={{overflowY:'auto',flex:1,padding:18,...(cancelEdit?{background:CANCEL_BG}:{})}}>
+          {/* ★キャンセルの行を「✎ 編集」で開いた時（2026-11-02 ユーザー指示）。
+              背景は赤帯と同じ色。予約の中身（入庫日・時間・コース・特典・代車）は触らせず、
+              備考にキャンセルの理由だけ書けるようにする。保存しても予約には戻らない。 */}
+          {cancelEdit&&(
+            <div data-cxribbon="1" style={{background:'#991b1b',color:'white',fontSize:12,fontWeight:800,
+              borderRadius:8,padding:'8px 12px',marginBottom:14,lineHeight:1.6}}>
+              🚫 この予約は <b>キャンセル</b> です。キャンセルの理由を備考に書いて保存できます（予約には戻りません）。
+            </div>)}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14,...(cancelEdit?CANCEL_OFF:{})}}>
             <div>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,flexWrap:'wrap'}}>
                 <span style={{fontSize:11,fontWeight:700,color:'#374151'}}>📅 入庫日 <span style={{color:'#dc2626',fontSize:10}}>（本予約必須）</span></span>
@@ -2400,13 +2417,18 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
             </div>
           </div>
           <div style={{marginBottom:14}}>
-            <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>備考</label>
-            <textarea ref={noteRef} value={form.note} onChange={upd('note')} rows={2} placeholder="備考・メモ"
+            <label style={{display:'block',fontSize:11,fontWeight:700,color:cancelEdit?'#7f1d1d':'#374151',marginBottom:5}}>
+              {cancelEdit?'備考（キャンセルの理由・コメント）':'備考'}</label>
+            {/* ★A案（2026-11-02 ユーザー決定）：欄だけ白地＋黒い字。
+                薄い赤の上に白い字は読めないため、欄を白く抜いて字は黒のままにする。 */}
+            <textarea ref={noteRef} data-cxnote={cancelEdit?'1':undefined} value={form.note} onChange={upd('note')} rows={cancelEdit?3:2}
+              placeholder={cancelEdit?'例：他店で車検を済ませたため／車を手放したため／連絡が取れないため':'備考・メモ'}
               onFocus={()=>setFocusField('note')} onBlur={()=>setFocusField('')}
               onKeyDown={e=>{if(e.key==='ArrowUp'&&e.target.selectionStart===0){e.preventDefault();movePrev('note');}}}
-              style={{width:'100%',padding:'8px 10px',border:'1.5px solid #e5e7eb',borderRadius:8,fontSize:13,resize:'vertical',boxSizing:'border-box',...FR('note')}}/>
+              style={{width:'100%',padding:'8px 10px',border:cancelEdit?'2px solid #991b1b':'1.5px solid #e5e7eb',borderRadius:8,fontSize:13,resize:'vertical',boxSizing:'border-box',
+                ...(cancelEdit?{background:'white',color:'#1b2129'}:{}),...FR('note')}}/>
           </div>
-          <div>
+          <div style={cancelEdit?CANCEL_OFF:undefined}>
             <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>
               代車
               {selCarId&&selDays.length>0&&(
@@ -2441,13 +2463,18 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
           </div>
           {err&&<div style={{marginTop:10,padding:'8px 12px',background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626',fontSize:12}}>{err}</div>}
         </div>
-        <div style={{padding:'12px 18px',borderTop:'1px solid #f1f5f9',display:'flex',gap:8,justifyContent:'flex-end',background:'#fafafa',borderRadius:'0 0 14px 14px'}}>
-          <button onClick={onClose} style={{padding:'9px 20px',border:'1.5px solid #e5e7eb',borderRadius:9,background:'white',color:'#374151',fontWeight:600,cursor:'pointer'}}>キャンセル</button>
-          <button onClick={()=>handleSave(true)} disabled={saving} style={{padding:'9px 20px',border:'1.5px solid #86efac',borderRadius:9,background:'#f0fdf4',color:'#16a34a',fontWeight:700,cursor:'pointer'}}>仮予約</button>
-          <button onClick={()=>handleSave(false)} disabled={saving}
+        <div style={{padding:'12px 18px',borderTop:'1px solid #f1f5f9',display:'flex',gap:8,justifyContent:'flex-end',background:cancelEdit?'#fca5a5':'#fafafa',borderRadius:'0 0 14px 14px'}}>
+          <button onClick={onClose} style={{padding:'9px 20px',border:'1.5px solid #e5e7eb',borderRadius:9,background:'white',color:'#374151',fontWeight:600,cursor:'pointer'}}>{cancelEdit?'閉じる':'キャンセル'}</button>
+          {cancelEdit&&(
+            <button data-cxsave="1" onClick={()=>onSaveNote&&onSaveNote(customer,form.note)}
+              style={{padding:'9px 20px',border:'none',borderRadius:9,background:'linear-gradient(135deg,#7f1d1d,#dc2626)',color:'white',fontWeight:700,cursor:'pointer',boxShadow:'0 2px 8px rgba(220,38,38,0.3)'}}>
+              ✓ コメントを保存（キャンセルのまま）
+            </button>)}
+          {!cancelEdit&&<button onClick={()=>handleSave(true)} disabled={saving} style={{padding:'9px 20px',border:'1.5px solid #86efac',borderRadius:9,background:'#f0fdf4',color:'#16a34a',fontWeight:700,cursor:'pointer'}}>仮予約</button>}
+          {!cancelEdit&&<button onClick={()=>handleSave(false)} disabled={saving}
             style={{padding:'9px 20px',border:'none',borderRadius:9,background:storeObj.id==='sanda'?'linear-gradient(135deg,#991b1b,#dc2626)':`linear-gradient(135deg,#1d4ed8,${storeObj.color})`,color:'white',fontWeight:700,cursor:'pointer',boxShadow:storeObj.id==='sanda'?'0 2px 8px rgba(220,38,38,0.3)':'0 2px 8px rgba(29,78,216,0.3)'}}>
             {saving?'保存中...':'✓ 本予約'}
-          </button>
+          </button>}
         </div>
       </div>
     </div>
@@ -2550,7 +2577,7 @@ const DmConfirm=({ask,onYes,onNo})=>(
   </div>
 );
 
-const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDmDown,onDmOver,dmCanEdit})=>{
+const CustomerRow=memo(({customer,onBook,onEditCancel,pending,flash,dmRow,dmSel,onDmDown,onDmOver,dmCanEdit})=>{
   const st=STATUS_DEF[customer.status]||STATUS_DEF.none;
   const courseObj=COURSES.find(c=>c.id===Number(customer.course));
   const isCancelled=customer.status==='cancel';
@@ -2560,11 +2587,14 @@ const CustomerRow=memo(({customer,onBook,onRevive,pending,flash,dmRow,dmSel,onDm
       {/* ＋予約ボタン ＋ 満期日 */}
       <td style={{padding:'7px 6px',whiteSpace:'nowrap',verticalAlign:'middle'}}>
         <div style={{display:'flex',alignItems:'center',gap:5}}>
-          <button onClick={()=>isCancelled?onRevive(customer):onBook(customer)}
+          {/* ★キャンセル（赤帯）の行は「✎ 編集」（2026-11-02 ユーザー指示）。
+              押すと同じ予約カードが赤い背景で開き、備考にキャンセルの理由を書ける。
+              ★「↩ 復活」（未予約に戻す）は廃止。もう一度予約を取る時は「再予約」を使う。 */}
+          <button data-cxedit={isCancelled?'1':undefined} onClick={()=>isCancelled?onEditCancel(customer):onBook(customer)}
             style={{padding:'4px 9px',borderRadius:8,border:`1.5px solid ${st.btnBorder}`,
               background:st.btnBg,color:st.btnColor,fontWeight:700,fontSize:11,whiteSpace:'nowrap',
               minWidth:62}}>
-            {isCancelled?'↩ 復活':customer.status==='none'?'＋予約':st.label}
+            {isCancelled?'✎ 編集':customer.status==='none'?'＋予約':st.label}
           </button>
           {isCancelled&&(
             <button onClick={()=>onBook(customer)}
@@ -2916,9 +2946,17 @@ const App=()=>{
   const [bookingModal,setBookingModal]=useState(null);
   // ★予約モーダルを開く瞬間にスケジュール(insp)を再取得して、カレンダーの予約済み枠が
   //   常に最新で表示されるようにする（起動直後やinsp読込失敗時に枠が空表示になる不具合の対策）。
+  const [cancelEdit,setCancelEdit]=useState(false);   // キャンセル（赤帯）の「✎ 編集」で開いたか
   const openBookingModal=useCallback((customer)=>{
+    setCancelEdit(false);
     setBookingModal(customer);
     sGet(STOR+'insp').then(v=>{if(v&&typeof v==='object')setInspData(v);}).catch(()=>{});
+  },[]);
+  // ★キャンセルの行の「✎ 編集」（2026-11-02 ユーザー指示）。同じカードを赤くして開く。
+  //   「再予約」は今までどおり openBookingModal＝ふつうのカード。
+  const openCancelEdit=useCallback((customer)=>{
+    setCancelEdit(true);
+    setBookingModal(customer);
   },[]);
   const [closedDaysH,setClosedDaysH]=useState([]);
   const [closedDaysS,setClosedDaysS]=useState([3]);
@@ -3422,32 +3460,24 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   },[files]);
 
   // 予約保存（スケジュール・代車に連動）
-  // キャンセルから未予約に復活
-  const handleRevive=useCallback((customer)=>{
-    if(!confirm(`「${customer.name}」をキャンセルから未予約に戻しますか？`))return;
-    const revived={...customer,status:'none',entryDate:'',linkedInspDate:'',
-      bookingTime:'',course:'',tokuten:'',staff:'',note:''};
-    setFiles(prev=>{
-      const next=prev.map(f=>{
-        const ci=f.customers.findIndex(c=>c.custId===customer.custId);
-        if(ci<0)return f;
-        const custs=[...f.customers];
-        custs[ci]=revived;
-        saveFileChunked({...f,customers:custs});
-        return{...f,customers:custs};
-      });
-      return next;
-    });
-    // cust-updatesからキャンセル通知を削除（ポーリングで再cancelされないよう）
-    sGet(STOR+'cust-updates').then(updates=>{
-      if(!Array.isArray(updates)||updates.length===0)return;
-      const filtered=updates.filter(u=>
-        !(u.custId&&u.custId===customer.custId)&&
-        !(u.name&&u.name===customer.name&&String(u.no||'')===String(customer.no||''))
-      );
-      if(filtered.length!==updates.length)sSet(STOR+'cust-updates',filtered);
-    }).catch(()=>{});
+  // ★キャンセル（赤帯）の行の備考だけを書き換える（2026-11-02 ユーザー指示）。
+  //   状態は 'cancel' のまま。予約（insp）にも代車にも一切触らない。
+  //   一度キャンセルが点いたら未予約には戻さない＝また予約が入る時は「再予約」で取り直す。
+  const handleCancelNote=useCallback((customer,note)=>{
+    const updated={...customer,note:String(note==null?'':note)};
+    setFiles(prev=>prev.map(f=>{
+      const ci=f.customers.findIndex(c=>c.custId===customer.custId);
+      if(ci<0)return f;
+      const custs=[...f.customers];
+      custs[ci]=updated;
+      saveFileChunked({...f,customers:custs});
+      return{...f,customers:custs};
+    }));
+    setBookingModal(null);
+    setCancelEdit(false);
   },[]);
+  // ★「↩ 復活」（キャンセルを消して未予約に戻す）は 2026-11-02 に廃止（ユーザー決定）。
+  //   一度キャンセルが点いたら未予約には戻さない。また予約が入ったら「再予約」で取り直す。
 
   // スケジュール(insp)をGASへ保存し、反映状況をトーストで可視化する。
   // sSetのawaitはGASが実際に書き終えた応答で解決するので「解決＝反映完了」。
@@ -4417,7 +4447,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                   {search||filterStatus!=='all'?'条件に一致する顧客がいません':'データがありません'}
                 </td></tr>
               ):filtered.map((c,i)=>(
-                <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onRevive={handleRevive}
+                <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onEditCancel={openCancelEdit}
                   pending={pendingSync[c.custId]||pendingSync[`${c.name}__${c.no}`]||null}
                   flash={!!(recentApplied[c.custId]||recentApplied[`${c.name}__${c.no}`])}
                   dmRow={i} dmSel={dmSelOf(i)} onDmDown={handleDmDown} onDmOver={handleDmOver} dmCanEdit={dmCanEdit}/>
@@ -4535,8 +4565,10 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           staffListH={staffListH}
           staffListS={staffListS}
           currentUser={currentUser}
+          cancelEdit={cancelEdit}
+          onSaveNote={handleCancelNote}
           onSave={handleBookingSave}
-          onClose={()=>setBookingModal(null)}
+          onClose={()=>{setBookingModal(null);setCancelEdit(false);}}
         />
       )}
 

@@ -60,6 +60,11 @@ const printRows = async (page) => {
       rows: [...tb.querySelectorAll('tbody tr')].map(tr => [...tr.querySelectorAll('td')].map(cell)),
       colspan: colTd ? colTd.getAttribute('colspan') : null,
       timeCells: [...tb.querySelectorAll('tbody td.insp-time')].map(cell),
+      // タイムスケジュールの表（入庫制限の帯を見るため）
+      sched: [...d.querySelectorAll('table.sched-table tbody tr')].map(tr => ({
+        cls: tr.className, cells: [...tr.querySelectorAll('td')].map(cell),
+        lab: (tr.querySelector('.restr-lab') ? cell(tr.querySelector('.restr-lab')) : ''),
+      })),
     };
   });
 };
@@ -135,6 +140,25 @@ const printRows = async (page) => {
 
   head('⑤ 時間の欄に印（class="insp-time"）が付いている');
   t('★5行とも印が付いている', r.timeCells.length === 5, r.timeCells);
+
+  head('⑦ 入庫制限の帯も紙に出す（2026-11-02 ユーザー要望）');
+  // マッハ車検（本店・10:00）を足すと 10:00〜11:00 が自動で入庫制限になる
+  await page.evaluate(([k, dk]) => {
+    const v = JSON.parse(JSON.stringify(window.__fakeFb.get(k) || {}));
+    v[dk] = (v[dk] || []).concat([{ name: '芝田', carType: 'ワゴンR', course: 1, store: 'honten',
+      tokuten: '-', time: '10:00', bookingStatus: 'confirmed', seq: Date.now() }]);
+    window.__fakeFb.set(k, v);
+  }, [STOR + 'insp', DK]);
+  await page.waitForTimeout(2200);
+  const r3 = await printRows(page);
+  const sl = s => (r3.sched || []).find(x => (x.cells[0] || '') === s);
+  t('★10:00 の枠が入庫制限の色になっている', !!sl('10:00') && /slot-restr/.test(sl('10:00').cls), sl('10:00'));
+  t('★10:30 の枠も入庫制限', !!sl('10:30') && /slot-restr/.test(sl('10:30').cls), sl('10:30'));
+  t('11:00 の枠は制限しない', !!sl('11:00') && !/slot-restr/.test(sl('11:00').cls), sl('11:00'));
+  t('★札に「入庫制限」と出る', !!sl('10:00') && sl('10:00').lab.indexOf('入庫制限') >= 0, sl('10:00') && sl('10:00').lab);
+  t('★札に「マッハ車検」と出る', !!sl('10:00') && sl('10:00').lab.indexOf('マッハ車検') >= 0, sl('10:00') && sl('10:00').lab);
+  t('★お客様のお名前が「様」付きで出る', !!sl('10:00') && /芝田\s*様/.test(sl('10:00').lab), sl('10:00') && sl('10:00').lab);
+  t('車検の表にもマッハの入庫時間 10:00 が出る', (r3.rows.find(c => c.some(x => x.indexOf('芝田') >= 0)) || [])[1] === '10:00', r3.rows);
 
   head('⑥ 予約が無い日の「予約なし」は8列ぶん');
   await page.evaluate(k => window.__fakeFb.set(k, {}), STOR + 'insp');

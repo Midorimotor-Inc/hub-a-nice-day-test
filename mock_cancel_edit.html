@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>顧客リスト：キャンセル（赤帯）の「編集」でコメントを入れる（モック）</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px 20px 70px;background:#f1f5f9;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#1b2735}
+ h1{font-size:19px;margin:0 0 6px}
+ .lead{font-size:13px;color:#475569;line-height:1.75;margin:0 0 14px}
+ .nav{position:sticky;top:0;z-index:50;background:#f1f5f9;padding:8px 0 10px;margin-bottom:6px;border-bottom:1px solid #cbd5e1}
+ .nav button{font-family:inherit;font-size:13px;font-weight:800;padding:7px 14px;margin-right:6px;border-radius:9px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .nav button.on{background:#E8492E;border-color:#E8492E;color:white}
+ .card{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px 18px;margin-bottom:18px;
+   box-shadow:0 2px 8px rgba(0,0,0,.06)}
+ .card h2{font-size:16px;margin:0 0 4px}
+ .card .note{font-size:12px;color:#64748b;line-height:1.7;margin:0 0 12px}
+ .warn{color:#b91c1c;font-weight:800}
+ .ok{color:#047857;font-weight:800}
+ .wrap{overflow:auto}
+
+ /* ── 顧客リストの行（本物と同じ色） ── */
+ table.cl{border-collapse:collapse;width:100%;min-width:900px;font-size:12px}
+ .cl th{background:#f1f5f9;border-bottom:2px solid #cbd5e1;padding:7px 8px;font-size:11px;font-weight:800;text-align:left;white-space:nowrap}
+ .cl td{border-bottom:1px solid #f1f5f9;padding:7px 8px;vertical-align:middle}
+ .cl tr.cancel td{background:#fecaca}
+ .cl tr.confirm td{background:#bfdbfe}
+ .cl .btn{padding:4px 9px;border-radius:8px;font-weight:700;font-size:11px;white-space:nowrap;min-width:62px;
+   border:1.5px solid #dc2626;background:#fca5a5;color:#7f1d1d;cursor:pointer;font-family:inherit}
+ .cl .btn.book{border-color:#cbd5e1;background:white;color:#334155}
+ .cl .btn2{padding:4px 7px;border-radius:8px;border:1.5px solid #86efac;background:#dcfce7;color:#16a34a;
+   font-weight:700;font-size:10px;white-space:nowrap;cursor:pointer;font-family:inherit}
+ .cl .cmt{font-size:10.5px;font-weight:700;color:#7f1d1d;margin-top:2px}
+
+ /* ── 予約カード ── */
+ .modal{position:relative;border-radius:14px;max-width:760px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;background:white}
+ .mhead{padding:14px 18px;display:flex;align-items:center;gap:10px;
+   background:linear-gradient(135deg,#1e1b4b,#1d4ed8)}
+ .mhead.cx{background:linear-gradient(135deg,#7f1d1d,#dc2626)}
+ .mhead .nm{color:white;font-weight:900;font-size:17px}
+ .mhead .sub{color:rgba(255,255,255,.75);font-size:11px;margin-top:2px}
+ .mhead .x{margin-left:auto;background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:6px 12px;color:white;
+   font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+ .mbody{padding:18px}
+ .mbody.cx{background:#fecaca}
+ .ribbon{background:#991b1b;color:white;font-size:12px;font-weight:800;border-radius:8px;padding:8px 12px;margin-bottom:14px;line-height:1.6}
+ .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+ .lbl{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:5px}
+ .mbody.cx .lbl{color:#7f1d1d}
+ .fld{width:100%;padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;background:white;color:#1b2735;
+   font-family:inherit}
+ .fld.off{background:#f8fafc;color:#94a3b8}
+ .mbody.cx .fld.off{background:rgba(255,255,255,.45);color:#9f6a6a;border-color:#f0a6a6}
+ textarea.fld{resize:vertical}
+ /* 備考（コメント）の3案 */
+ .cmtA{background:white;color:#1b2735;border:2px solid #991b1b}
+ .cmtB{background:transparent;color:white;border:2px solid #991b1b}
+ .cmtC{background:#991b1b;color:white;border:2px solid #7f1d1d}
+ .mfoot{padding:12px 18px;border-top:1px solid #f1f5f9;display:flex;gap:8px;justify-content:flex-end;background:#fafafa}
+ .mfoot.cx{background:#fca5a5;border-top:1px solid #f0a6a6}
+ .mfoot button{padding:9px 20px;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
+ .b-gray{border:1.5px solid #e5e7eb;background:white;color:#374151}
+ .b-red{border:none;background:linear-gradient(135deg,#7f1d1d,#dc2626);color:white}
+ .b-green{border:1.5px solid #86efac;background:#f0fdf4;color:#16a34a}
+ .b-blue{border:none;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:white}
+ .hide{display:none}
+ .legend{font-size:12px;color:#334155;line-height:1.95}
+ .sw{display:inline-block;width:14px;height:14px;border:1px solid #94a3b8;border-radius:3px;vertical-align:-2px;margin-right:4px}
+</style></head><body>
+
+<h1>顧客リスト：キャンセル（赤帯）の行に「なぜキャンセルか」を書けるようにする</h1>
+<p class="lead">
+いまの赤帯の行には <b>「↩ 復活」</b>（キャンセルを消して未予約に戻す）と <b>「再予約」</b> の2つがあります。<br>
+この <b>「↩ 復活」を「✎ 編集」に変え</b>、押すと<b>同じ予約カード</b>が開き、<b>背景を赤帯と同じ色</b>にして
+<b>備考にキャンセルの理由を書ける</b>ようにします。<br>
+<span class="warn">決めていただきたいのは「コメント記入欄の見せ方」です。</span>
+「白字で結構」とのことでしたが、<b>薄い赤の上に白い字は読めません</b>。読める形を3案そろえました。
+</p>
+
+<div class="nav">
+ <button id="bA" class="on" onclick="pick('A')">A案：欄だけ白地＋黒い字</button>
+ <button id="bB" onclick="pick('B')">B案：言葉どおり白い字（赤のまま）</button>
+ <button id="bC" onclick="pick('C')">C案：欄を濃い赤にして白い字</button>
+</div>
+
+<div class="card">
+  <h2>① ボタンの名前（顧客リストの行）</h2>
+  <p class="note">
+    赤帯＝キャンセル。<b>「↩ 復活」→「✎ 編集」</b>に変えます。<b>「再予約」はそのまま</b>残します（もう一度予約を取る時はこちら）。<br>
+    書いたコメントは、<b>お名前の下に小さく出す</b>ようにもできます（下の行がその見た目です。要らなければ出しません）。
+  </p>
+  <div class="wrap"><table class="cl">
+    <tr><th>予約 / 満期日</th><th>氏名</th><th>No.</th><th>車種</th><th>入庫日</th><th>備考</th></tr>
+    <tr class="cancel">
+      <td style="white-space:nowrap">
+        <button class="btn" onclick="open1()">✎ 編集</button>
+        <button class="btn2">再予約</button>
+        <span style="margin-left:5px">2027/01/15</span>
+      </td>
+      <td style="font-weight:700">山谷 一郎
+        <div class="cmt">💬 他店で車検を済ませたため</div>
+      </td>
+      <td>3310</td><td>スイフト</td><td>—</td><td>他店で車検を済ませたため</td>
+    </tr>
+    <tr class="cancel">
+      <td style="white-space:nowrap">
+        <button class="btn" onclick="open1()">✎ 編集</button>
+        <button class="btn2">再予約</button>
+        <span style="margin-left:5px">2027/01/20</span>
+      </td>
+      <td style="font-weight:700">小畠 花子</td>
+      <td>1155</td><td>ハスラー</td><td>—</td><td></td>
+    </tr>
+    <tr class="confirm">
+      <td style="white-space:nowrap">
+        <button class="btn book">本予約</button>
+        <span style="margin-left:5px">2027/01/22</span>
+      </td>
+      <td style="font-weight:700">岩本 太郎</td>
+      <td>8612</td><td>ワゴンR</td><td>2027-01-10</td><td></td>
+    </tr>
+  </table></div>
+  <p class="note" style="margin-top:10px">
+    <span class="warn">ご確認：</span>「復活」を無くすと、<b>間違ってキャンセルにした人を「未予約」に戻す道が無くなります</b>。
+    カードの中に <b>「↩ キャンセルを取り消す」</b> を置いておけば残せます（下のカードの左下。要らなければ外します）。
+  </p>
+</div>
+
+<div class="card">
+  <h2>② 「✎ 編集」で開く予約カード</h2>
+  <p class="note">
+    背景を<b>赤帯と同じ色（#fecaca）</b>に、見出しも<b>赤</b>にします。<b>入庫日・時間・コース・特典・代車は触れないように薄く</b>してあります
+    （キャンセルの行なので予約の中身は変えない）。<b>書けるのは備考だけ。</b>
+  </p>
+  <div class="modal" id="mdl">
+    <div class="mhead cx">
+      <div>
+        <div class="nm">山谷 一郎</div>
+        <div class="sub">🚗 スイフト　No.3310　満期: 2027/01/15</div>
+      </div>
+      <button class="x">✕</button>
+    </div>
+    <div class="mbody cx">
+      <div class="ribbon">🚫 この予約は <b>キャンセル</b> です。キャンセルの理由を備考に書いて保存できます（予約には戻りません）。</div>
+      <div class="grid">
+        <div><span class="lbl">📅 入庫日</span><input class="fld off" value="" placeholder="（キャンセル）" disabled></div>
+        <div><span class="lbl">店舗</span><input class="fld off" value="本店" disabled></div>
+        <div><span class="lbl">入庫時間</span><input class="fld off" value="" placeholder="—" disabled></div>
+        <div><span class="lbl">コース</span><input class="fld off" value="" placeholder="—" disabled></div>
+      </div>
+      <div style="margin-bottom:14px">
+        <span class="lbl">備考（キャンセルの理由・コメント）</span>
+        <textarea id="cmt" class="fld cmtA" rows="3" placeholder="例：他店で車検を済ませたため／車を手放したため／連絡が取れないため">他店で車検を済ませたため</textarea>
+      </div>
+      <div>
+        <span class="lbl">代車</span>
+        <div class="fld off" style="height:54px;display:flex;align-items:center">（キャンセルの行では選べません）</div>
+      </div>
+    </div>
+    <div class="mfoot cx">
+      <button class="b-gray" style="margin-right:auto">↩ キャンセルを取り消す</button>
+      <button class="b-gray">閉じる</button>
+      <button class="b-red">✓ コメントを保存（キャンセルのまま）</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>③ ふつうの（キャンセルでない）予約カード　— くらべる用</h2>
+  <p class="note">いつもの青いカード。<b>こちらは今までどおり何も変えません。</b></p>
+  <div class="modal">
+    <div class="mhead">
+      <div>
+        <div class="nm">岩本 太郎</div>
+        <div class="sub">🚗 ワゴンR　No.8612　満期: 2027/01/22</div>
+      </div>
+      <button class="x">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="grid">
+        <div><span class="lbl">📅 入庫日</span><input class="fld" value="2027-01-10"></div>
+        <div><span class="lbl">店舗</span><input class="fld" value="本店"></div>
+        <div><span class="lbl">入庫時間</span><input class="fld" value="10:00"></div>
+        <div><span class="lbl">コース</span><input class="fld" value="クイック"></div>
+      </div>
+      <div style="margin-bottom:14px">
+        <span class="lbl">備考</span>
+        <textarea class="fld" rows="3" placeholder="備考・メモ"></textarea>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="b-gray">キャンセル</button>
+      <button class="b-green">仮予約</button>
+      <button class="b-blue">✓ 本予約</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>決めごと（この案で実装します）</h2>
+  <p class="legend">
+    <span class="sw" style="background:#fecaca"></span>カードの背景＝赤帯と同じ #fecaca（一覧の赤い行と同じ色）<br>
+    <span class="sw" style="background:#991b1b"></span>見出しと帯＝濃い赤　／　コメント欄は上で選んだ案<br>
+    <b>保存しても予約には戻りません</b>（キャンセルのまま・備考だけ書き換わります）。<br>
+    <b>書いたコメントは一覧の「備考」の列にそのまま出ます</b>（今の備考と同じ場所）。<br>
+    <span class="ok">◎ 「再予約」は今までどおり</span>。予約を取り直す時はこちらを押します。
+  </p>
+</div>
+
+<script>
+ function pick(m){
+   ['A','B','C'].forEach(function(x){ document.getElementById('b'+x).className=(x===m?'on':''); });
+   document.getElementById('cmt').className='fld cmt'+m;
+ }
+ function open1(){ document.getElementById('mdl').scrollIntoView({behavior:'smooth',block:'center'}); }
+</script>
+</body></html>
