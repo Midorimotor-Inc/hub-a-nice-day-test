@@ -21,11 +21,9 @@ service cloud.firestore {
         && key.matches('.*myprv-' + entry().uid);
     }
     match /kv/{key} {
-      // ★移行中（v2.45 の画面が残っている間）は DEV のキーだけ今までどおり誰でも読み書き可。
-      //   全員が v2.46 でサインインしたら firestore.final.rules に差し替える（本番データを移す前に必ず）
       allow read, write: if key.matches('.*myprv-.*')
         ? isMyPrivate(key)
-        : (isAllowed() || key.matches('hub-v8-dev-.*'));
+        : (isAllowed());
     }
     // 許可簿：読むのは許可された人、書くのは管理者
     match /meta/allowed {

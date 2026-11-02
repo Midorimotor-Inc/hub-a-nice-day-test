@@ -82,6 +82,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ・3ファイル（index_dev / customers / mobile）に同じものを置くこと。検査は `node fb_auth_test.js` の ⑪（88件）。
   ★**`hubSaveMine([])` を増やす時は必ず「本当に取り消されたのか」を確かめてから**。
   サインインの有無だけで捨てると、今回と同じ締め出しが起きる。
+- ★**2026-11-02：移行中の抜け穴を塞いだ。** それまで kv の決まりに `|| key.matches('hub-v8-dev-.*')` が残っていて、
+  **テスト版のキーはサインイン無しで誰でも読み書きできた**（中にお客様 2,799行・電話つき1,058行。外から HTTP 200 で
+  実際に読めることを確認）。`firestore.final.rules` をコンソールに貼って解消（貼った後は外から 403）。
+  **`firestore.rules` は配信中のものと同じ中身に揃えてある**＝「配信中＝手元のファイル」。貼り替えたら必ず揃えること。
+  配信中の本文は Admin SDK の `securityRules().getFirestoreRuleset()` で読めるので、食い違いはいつでも確かめられる。
 - ルールの配備はコンソールに貼る（Claude の自動モードでは `node fb_rules.js --deploy` がブロックされる）。文法確認だけなら Admin SDK の createRuleset で行える。 手順書は `RULES_貼り付け手順.md`。**`firestore.rules` を編集する時は `match /kv/{key} {` が2か所ある（一番外側と snaps の中）ので、行の完全一致で一番外側だけを直すこと**（2026-09-30 に snaps 側まで書き換えて壊した）。**hub-verify の firebase-admin は 12 系を使う**（14 系は `admin.credential`/`admin.firestore()` の旧APIを廃止しており、fb_*.js・smoke_main.js が全部動かなくなる）。
 
 ### 時点保存／復旧（Firestore・2026-09-19）
