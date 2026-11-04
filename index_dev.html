@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793753540993';
+    window.__APP_BUILD='build-1793754905981';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.94.2';
+const APP_VERSION = '3.94.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -842,18 +842,15 @@ const QKINDS = [{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業
 const qkindOf = (row) => Array.isArray(row && row.qkind) ? row.qkind.filter(k => QKINDS.some(x => x.k === k)) : [];
 const qkindLabel = (row) => QKINDS.filter(x => qkindOf(row).indexOf(x.k) >= 0).map(x => x.name).join('・');
 const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >= 0 ? a.filter(x => x !== k) : a.concat([k]); };
-// ★作業項目を選んだ時の決まり（2026-10-31 ユーザー決定・A案）
-//   ・内容（整備）／備考（車検）が**空のときだけ**作業名を入れる。書いてあるものは触らない
-//   ・「その他」は入れない（何が入るか分からないため）
+// ★作業項目を選んだ時の決まり
+//   ・★内容（整備）／備考（車検）には【入れない】（2026-11-04 ユーザー指示で見直し）。
+//     2026-10-31 は「空のときだけ作業名を入れる」にしていたが、**1行増えるぶん印刷が2枚になる**日が出た。
+//     印刷は1枚に収めたいので入れない。内容に書きたい時はクイックメニュー（⚡）から足す。
+//     ★ここを「入れる」に戻さないこと。戻すと印刷のページがまた増える。
 //   ・Q 以外にしたら「どこで作業する」は外す
-//   ・keyOnly＝↑↓で流しているだけの時は内容を触らない（確定していないため）
-const applyWorkPick = (form, id, keyOnly) => {
+const applyWorkPick = (form, id) => {
   const next = { ...form, work: id };
   if (id !== 'Q') next.qkind = [];
-  if (!keyOnly && id !== '他') {
-    const field = ('note' in form && !('content' in form)) ? 'note' : 'content';
-    if (!String(form[field] || '').trim()) next[field] = workName(id);
-  }
   return next;
 };
 const SHIMIS = [{id:'',name:'なし'},{id:'指',name:'指示書'},{id:'見',name:'見積'},{id:'両',name:'両方'}];
@@ -8942,8 +8939,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     const cur=WIDS.indexOf(form.work);
     // 選択中の項目を常にリスト内に見えるようスクロール（下端に来たらドラム式に上へ送る）
     const scrollWkIntoView=(id)=>{const el=document.querySelector('[data-wkid="'+id+'"]');if(el)el.scrollIntoView({block:'nearest'});};
-    if(e.key==='ArrowDown'){e.preventDefault();const ni=cur<0?0:Math.min(cur+1,WIDS.length-1);setForm(p=>applyWorkPick(p,WIDS[ni],true));scrollWkIntoView(WIDS[ni]);}
-    else if(e.key==='ArrowUp'){e.preventDefault();const ni=Math.max(cur-1,0);setForm(p=>applyWorkPick(p,WIDS[ni],true));scrollWkIntoView(WIDS[ni]);}
+    if(e.key==='ArrowDown'){e.preventDefault();const ni=cur<0?0:Math.min(cur+1,WIDS.length-1);setForm(p=>applyWorkPick(p,WIDS[ni]));scrollWkIntoView(WIDS[ni]);}
+    else if(e.key==='ArrowUp'){e.preventDefault();const ni=Math.max(cur-1,0);setForm(p=>applyWorkPick(p,WIDS[ni]));scrollWkIntoView(WIDS[ni]);}
     else if(e.key==='Enter'){e.preventDefault();setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);}
     else if(e.key==='Escape'){e.preventDefault();setShowWkPk(false);}
   };
@@ -9422,7 +9419,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 <div data-popgrid="work" style={POPBOX('#0891b2',2)}>
                   {WORKS.map((w,i)=>(
                     <div key={i} data-wkid={w.id}
-                      onMouseDown={e=>{e.preventDefault();setForm(p=>applyWorkPick(p,w.id,false));setShowWkPk(false);setKbField('shimi');}}
+                      onMouseDown={e=>{e.preventDefault();setForm(p=>applyWorkPick(p,w.id));setShowWkPk(false);setKbField('shimi');}}
                       style={POPIT(form.work===w.id,'#0891b2','#e0f2fe',{left:true})}>
                       {w.id} {w.name}
                     </div>

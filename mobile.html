@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793753540993';
+  window.__APP_BUILD='build-1793754905981';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.94.2';
+const MOBILE_VERSION='3.94.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -228,11 +228,11 @@ const QKINDS=[{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業'}
 const qkindOf=(row)=>Array.isArray(row&&row.qkind)?row.qkind.filter(k=>QKINDS.some(x=>x.k===k)):[];
 const qkindLabel=(row)=>QKINDS.filter(x=>qkindOf(row).indexOf(x.k)>=0).map(x=>x.name).join('・');
 const toggleQkind=(row,k)=>{const a=qkindOf(row);return a.indexOf(k)>=0?a.filter(x=>x!==k):a.concat([k]);};
-// ★作業項目を選んだ時：内容が空のときだけ作業名を入れる（「その他」は入れない）
+// ★作業項目を選んでも【内容欄には入れない】（2026-11-04 ユーザー指示。PC と同じ）。
+//   入れると印刷の行が増えて2枚になる日が出るため。戻さないこと。
 const applyWorkPick=(form,id)=>{
   const next={...form,work:id};
   if(id!=='Q')next.qkind=[];
-  if(id!=='他'&&!String(form.content||'').trim())next.content=workName(id);
   return next;
 };
 // ★クイックメニューのグループ（PC版と同じ既定）
