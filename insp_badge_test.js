@@ -143,7 +143,7 @@ const seed = {
   t('★幅は760px以上（クイックメニューと同じ大きさ）', !!wm && wm.w >= 760, wm && wm.w);
   t('★区画は 点検／整備・修理／その他', !!wm && wm.grps.join('/') === '点検/整備・修理/その他', wm && wm.grps);
   t('★11項目ぜんぶ出る', !!wm && wm.ids.length === 11, wm && wm.ids.length);
-  t('★点検の3つが先頭', !!wm && wm.ids.slice(0, 3).join(',') === 'メンパ,有点,無点', wm && wm.ids.slice(0, 3));
+  t('★点検は メンパ→無料点検→有料点検 の順（2026-11-04 ユーザー指示）', !!wm && wm.ids.slice(0, 3).join(',') === 'メンパ,無点,有点', wm && wm.ids.slice(0, 3));
   t('★字は15px以上', !!wm && wm.fs >= 15, wm && wm.fs);
   t('★予約カードより前に出る（zIndex 1000超）', !!wm && wm.z > 1000, wm && wm.z);
   t('点検を選ぶ前は月数の段を出さない', !!wm && wm.mon === false, wm && wm.mon);
@@ -152,6 +152,26 @@ const seed = {
   head('③ メンパ＝月数を選ばないと閉じられない');
   await tap('[data-wkid="メンパ"]'); await page.waitForTimeout(350);
   t('月数の段が出る', await page.evaluate(() => !!document.querySelector('[data-wkmonrow]')));
+  // ★置き場所は【点検の区画のすぐ下】＝整備・修理の区画より上（2026-11-04 ユーザー指示）。
+  //   いちばん下に戻さないこと。縁も太く（4px以上）。
+  const mrow = await page.evaluate(() => {
+    const r = document.querySelector('[data-wkmonrow]'); if (!r) return null;
+    const g = [...document.querySelectorAll('[data-wkgrp]')];
+    const y = (e) => e.getBoundingClientRect().top;
+    const cs = getComputedStyle(r);
+    return {
+      afterInsp: y(r) > y(g[0]),
+      beforeSeibi: y(r) < y(g[1]),
+      beforeEtc: y(r) < y(g[2]),
+      bw: parseFloat(cs.borderTopWidth),
+      ring: cs.boxShadow !== 'none',
+    };
+  });
+  t('★点検の区画より下に出る', !!mrow && mrow.afterInsp, mrow);
+  t('★整備・修理の区画より【上】に割って入る', !!mrow && mrow.beforeSeibi, mrow);
+  t('★その他の区画より上', !!mrow && mrow.beforeEtc, mrow);
+  t('★縁は4px以上（目立たせる）', !!mrow && mrow.bw >= 4, mrow && mrow.bw);
+  t('★まわりに輪がある', !!mrow && mrow.ring, mrow);
   t('★選んでも窓は閉じない', await popOpen());
   const mons = await page.evaluate(() => [...document.querySelectorAll('[data-wkmon]')].map(e => e.getAttribute('data-wkmon')));
   t('★月数は 1・6・12 の3つ', mons.join(',') === '1,6,12', mons);
@@ -234,6 +254,13 @@ const seed = {
   t('スマホ：★月数を選ばないと保存できない', mb.indexOf('workSubOf(form.work)&&!workMonOf(form)') >= 0);
   t('スマホ：月数の段がある', mb.indexOf('data-wkmonrow') >= 0);
   t('紙の控え：点検の月数まで出す', hp.indexOf('workNameP') >= 0 && /WORK_SUB_P/.test(hp));
+  for (const [nm, src] of [['スケジュール', ix], ['スマホ', mb]]) {
+    t(nm + '：★点検の並びは メンパ→無点→有点', /ids: *\['メンパ', *'無点', *'有点'\]|ids:\['メンパ','無点','有点'\]/.test(src));
+    t(nm + '：WORKS も同じ並び', src.indexOf("{id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'}") >= 0);
+  }
+  t('スマホ：★車検の備考にも ⚡ クイックメニュー', /isInsp\?'note':'content'/.test(mb) && (mb.match(/data-quickmenu/g) || []).length >= 2);
+  t('スマホ：区画の見出しを出せる（data-pkhdr）', mb.indexOf('data-pkhdr') >= 0);
+  t('スマホ：作業内容も区画入り', mb.indexOf('workGroups().reduce') >= 0);
   t('★小さい並び（popgrid work）はもう無い', ix.indexOf('data-popgrid="work"') < 0);
   t('★data-wkid は残してある（既存の検査が押している）', ix.indexOf('data-wkid={w.id}') >= 0);
 

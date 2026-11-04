@@ -191,6 +191,18 @@ const EMPTY_D = EMPTY.getDate();
     return [...sh.querySelectorAll('button')].filter(b2 => !/^✕$|とじる/.test(b2.innerText.trim())).length;
   });
   t('★作業内容が11項目ぜんぶ大きく出る', opts === 11, opts);
+  // ★区画（点検／整備・修理／その他）は PC の大きな窓と同じ並べ方（2026-11-04 ユーザー指示）
+  const grp = await page.evaluate(() => {
+    const sh = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).zIndex === '3150').pop();
+    if (!sh) return null;
+    return {
+      hdr: [...sh.querySelectorAll('[data-pkhdr]')].map(e => e.getAttribute('data-pkhdr')),
+      order: [...sh.querySelectorAll('button')].map(b2 => b2.innerText.replace(/\s+/g, ' ').trim())
+        .filter(x => /メンパ|無料点検|有料点検/.test(x)),
+    };
+  });
+  t('★区画は 点検／整備・修理／その他', !!grp && grp.hdr.join('/') === '点検/整備・修理/その他', grp && grp.hdr);
+  t('★点検は メンパ→無料点検→有料点検 の順', !!grp && /メンパ/.test(grp.order[0]) && /無料点検/.test(grp.order[1]) && /有料点検/.test(grp.order[2]), grp && grp.order);
   const optH = await page.evaluate(() => {
     const sh = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).zIndex === '3150').pop();
     const b2 = sh && [...sh.querySelectorAll('button')].find(x => !/^✕$|とじる/.test(x.innerText.trim()));
@@ -305,6 +317,33 @@ const EMPTY_D = EMPTY.getDate();
     const b = [...box.querySelectorAll('button')].find(e => e.innerText.trim() === '代車なし');
     return !!b && getComputedStyle(b).borderColor.indexOf('2, 132, 199') >= 0;
   }));
+
+  // ── ③ 車検のカードにも ⚡ クイックメニュー（2026-11-04 ユーザー指示） ──
+  console.log('\n■ ③ 車検のカードの備考にも ⚡ クイックメニュー');
+  t('★車検のカードに ⚡ クイックメニューのボタンがある',
+    await page.evaluate(() => !!document.querySelector('button[data-quickmenu]')));
+  await page.click('button[data-quickmenu]');
+  await page.waitForTimeout(700);
+  t('★クイックメニューが開く', await page.evaluate(() => !!document.querySelector('[data-quickmenusheet]')));
+  const qi = await page.evaluate(() => {
+    const x = document.querySelector('[data-quickmenusheet]'); if (!x) return null;
+    return [...x.querySelectorAll('[data-qi]')].map(e => e.innerText.replace(/\s+/g, ' ').trim());
+  });
+  t('★PC で作った定型文が出る', !!qi && qi.length > 0, qi);
+  // ★本物のマウス操作で押すこと（項目は onPointerDown / onPointerUp で拾っている）
+  const okTap = await tapQuick('Eオイル交換');
+  t('定型文を押せた（検査の前提）', okTap);
+  t('★押すと【備考】に入る', await page.evaluate(() => {
+    const ta = [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null);
+    return ta.some(e => (e.value || '').indexOf('エンジンオイル交換') >= 0);
+  }), await page.evaluate(() => [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null).map(e => e.value)));
+  await tapQuick('Eオイル交換');
+  t('★もう一度押すと外れる', await page.evaluate(() => {
+    const ta = [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null);
+    return ta.every(e => (e.value || '').indexOf('エンジンオイル交換') < 0);
+  }));
+  await page.evaluate(() => { const x = document.querySelector('[data-quickmenusheet]'); const b = x && [...x.querySelectorAll('button')].find(e => /とじる|やめる/.test(e.innerText)); if (b) b.click(); });
+  await page.waitForTimeout(500);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-mobile-move.png') });

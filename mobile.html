@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793768113494';
+  window.__APP_BUILD='build-1793769816289';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.96.0';
+const MOBILE_VERSION='3.97.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -223,7 +223,8 @@ const COURSES=[
 //   「リフト作業」「ピット作業」は主作業に作らず、Q を選んだ時の QKINDS（複数えらべる）で持つ。
 const WORKS=[
   {id:'Q',name:'クイック整備・修理'},
-  {id:'メンパ',name:'メンパ'},{id:'有点',name:'有料点検'},{id:'無点',name:'無料点検'},
+  // ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
+  {id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'},
   {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
 ];
 // ★昔の予約がまだ持っている作業項目（データは書き換えない＝保存されている字のまま出す）
@@ -253,6 +254,16 @@ const workBadgeText=(row)=>{const id=(row&&row.work)||'',m=workMonOf(row);
   return id;};
 const workFullName=(row)=>{const id=(row&&row.work)||'',m=workMonOf(row);
   return id?(workName(id)+(m?'（'+m+'ヶ月）':'')):'';};
+// ★作業内容の並べ方（2026-11-04 ユーザー指示。PC と同じ区画・同じ順にすること）
+const WORK_GROUPS=[
+  {name:'点検',col:'#0891b2',ids:['メンパ','無点','有点']},
+  {name:'整備・修理',col:'#9333ea',ids:['Q','B','R']},
+  {name:'その他',col:'#64748b',ids:['商','保','試','納','他']}
+];
+const workGroups=()=>{const g=WORK_GROUPS.map(x=>({...x,items:x.ids.map(id=>WORKS.find(w=>w.id===id)).filter(Boolean)}));
+  const rest=WORKS.filter(w=>!WORK_GROUPS.some(x=>x.ids.indexOf(w.id)>=0));
+  if(rest.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
+  return g;};
 // ★作業項目を選んでも【内容欄には入れない】（2026-11-04 ユーザー指示。PC と同じ）。
 //   入れると印刷の行が増えて2枚になる日が出るため。戻さないこと。
 const applyWorkPick=(form,id)=>{
@@ -3846,6 +3857,11 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat('+pickState.cols+',1fr)',gap:7}}>
           {pickState.opts.map(o=>{
+            // ★区画の見出し（2026-11-04）。PC の大きな窓と同じ並べ方をスマホでも出すため。
+            if(o.hdr)return(
+              <div key={String(o.v)} data-pkhdr={o.label} style={{gridColumn:'1/-1',marginTop:4,
+                fontSize:12,fontWeight:900,color:o.col||'#475569',borderBottom:'2px solid '+((o.col||'#cbd5e1')+'55'),paddingBottom:3}}>{o.label}</div>
+            );
             const on=String(pickState.cur||'')===String(o.v);
             return(
               <button key={String(o.v)} onClick={()=>{pickState.onPick(o.v);setPickState(null);}}
@@ -3894,9 +3910,11 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:300,display:'flex',flexDirection:'column',justifyContent:'flex-end'}} onClick={saving?undefined:onClose}>
       {addrSheet}
       {pickSheet}
+      {/* ★車検は備考（note）・整備は内容（content）に入れる（2026-11-04 ユーザー指示。PC と同じ）。
+          それまで content だけに入れていたので、車検のカードではクイックメニューが使えなかった。 */}
       <QuickMenuSheet isOpen={quickOpen} onClose={()=>setQuickOpen(false)}
-        items={quickItems} groups={quickGroups} value={form.content||''}
-        onChangeValue={v=>setForm(p=>({...p,content:v}))} onSaveList={onSaveQuick}/>
+        items={quickItems} groups={quickGroups} value={(isInsp?form.note:form.content)||''}
+        onChangeValue={v=>setForm(p=>({...p,[isInsp?'note':'content']:v}))} onSaveList={onSaveQuick}/>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
           <div style={{flex:1,minWidth:0}}>
@@ -4131,8 +4149,14 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
                 );
               })()}
               <div>
-                <label style={LBL}>備考</label>
-                <textarea value={form.note||''} onChange={e=>setForm(p=>({...p,note:e.target.value}))} rows={2} style={{...INP,resize:'none'}}/>
+                {/* ★車検の備考にも ⚡ クイックメニュー（2026-11-04 ユーザー指示。PC は前から両方で使える） */}
+                <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
+                  <label style={{...LBL,marginBottom:0}}>備考</label>
+                  <button type="button" data-quickmenu onClick={()=>setQuickOpen(true)}
+                    style={{marginLeft:'auto',padding:'4px 11px',background:'#e0f2fe',border:'1.5px solid #7dd3fc',borderRadius:7,
+                      fontSize:11.5,color:'#0369a1',fontWeight:800,fontFamily:'inherit'}}>⚡ クイックメニュー</button>
+                </div>
+                <textarea value={form.note||''} onChange={e=>setForm(p=>({...p,note:e.target.value}))} rows={3} style={{...INP,resize:'none'}}/>
               </div>
             </React.Fragment>
           ):(
@@ -4159,8 +4183,10 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
                 <div style={{flex:1.4}}>
                   <label style={LBL}>作業内容 *</label>
                   {/* ★選んだら内容欄が空の時だけ作業名を入れる（A案・2026-10-31）。昔の id も workDef で引ける */}
+                  {/* ★区画は 点検（メンパ／無料点検／有料点検）→ 整備・修理 → その他（PC と同じ・2026-11-04） */}
                   {pickBtn((()=>{const w=workDef(form.work);return w?(w.id+' '+(workFullName(form)||w.name)):'選択';})(),!form.work,'⏰ 作業内容',
-                    WORKS.map(w=>({v:w.id,label:w.name,code:w.id})),
+                    workGroups().reduce((a,g)=>a.concat([{v:'__h_'+g.name,hdr:true,label:g.name,col:g.col}],
+                      g.items.map(w=>({v:w.id,label:w.name,code:w.id}))),[]),
                     form.work||'',v=>setForm(p=>applyWorkPick(p,v)),null,2)}
                 </div>
                 <div style={{flex:1}}>
@@ -4172,10 +4198,11 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
               </div>
               {/* ★点検（メンパ・有料点検・無料点検）は何ヶ月かを選ぶ（2026-11-04 ユーザー決定）。
                   選ばないと保存できない＝バッジ（M1／M6／M12・有12・無1／無6）が決まらないため。 */}
+              {/* ★縁は太く・まわりに輪（2026-11-04 ユーザー指示）。細くしないこと */}
               {!!workSubOf(form.work)&&(()=>{const sub=workSubOf(form.work),cm=workMonOf(form);return(
-                <div data-wkmonrow style={{marginTop:-2,padding:'8px 10px',background:cm?'#f0f9ff':'#fef2f2',
-                  border:'1px solid '+(cm?'#bae6fd':'#fca5a5'),borderRadius:10}}>
-                  <div style={{fontSize:11,fontWeight:800,color:cm?'#0369a1':'#991b1b',marginBottom:6}}>
+                <div data-wkmonrow style={{marginTop:-2,padding:'9px 11px',background:cm?'#f0f9ff':'#fef2f2',
+                  border:'4px solid '+(cm?'#0891b2':'#dc2626'),boxShadow:'0 0 0 4px '+(cm?'#0891b222':'#dc262622'),borderRadius:10}}>
+                  <div style={{fontSize:12.5,fontWeight:900,color:cm?'#0369a1':'#991b1b',marginBottom:6}}>
                     {workName(form.work)}は何ヶ月ですか？{cm?'':'（必ず選んでください）'}
                   </div>
                   <div style={{display:'flex',gap:8}}>

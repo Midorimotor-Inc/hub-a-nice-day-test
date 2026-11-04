@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793768113494';
+    window.__APP_BUILD='build-1793769816289';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.96.0';
+const APP_VERSION = '3.97.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -836,7 +836,8 @@ const TOKUENS = [{id:'①',name:'1ヶ月前予約'},{id:'②',name:'2ヶ月前�
 //     Q を選んだ時だけ出る QKINDS（複数えらべる）で持ち、入庫制限の解除だけを分ける
 const WORKS = [
   {id:'Q',name:'クイック整備・修理'},
-  {id:'メンパ',name:'メンパ'},{id:'有点',name:'有料点検'},{id:'無点',name:'無料点検'},
+  // ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
+  {id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'},
   {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
 ];
 // ★昔の予約がまだ持っている作業項目（2026-10-31 より前の分。本番に92件あった）。
@@ -876,7 +877,7 @@ const workFullName = (row) => { const id = (row && row.work) || '', m = workMonO
 // ★作業内容の並べ方（2026-11-04 ユーザー決定）。この3つの箱に分けて大きく出す。
 //   表に入れ忘れた作業は最後の箱に回るので、WORKS に足しても画面から消えない。
 const WORK_GROUPS = [
-  {name:'点検',      col:'#0891b2', ids:['メンパ','有点','無点']},
+  {name:'点検',      col:'#0891b2', ids:['メンパ','無点','有点']},
   {name:'整備・修理', col:'#9333ea', ids:['Q','B','R']},
   {name:'その他',    col:'#64748b', ids:['商','保','試','納','他']}
 ];
@@ -8654,6 +8655,29 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
     background:on?c:'white',color:on?'white':'#334155',fontSize:15,fontWeight:800,cursor:'pointer',
     fontFamily:'inherit',whiteSpace:'nowrap',userSelect:'none'});
   const FBTN={padding:'10px 0',borderRadius:9,border:'none',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:'inherit'};
+  // ★縁は太く・まわりに輪（2026-11-04 ユーザー指示「青縁をもう少し太く目立つように」）。
+  //   細くしないこと＝点検を押した人に「ここを選ぶ」と分かってもらうための箱。
+  const monRow = !sub ? null : (
+    <div data-wkmonrow="1" style={{border:'4px solid '+col,boxShadow:'0 0 0 4px '+col+'33',borderRadius:12,
+      padding:'11px 13px 13px',background:'#f8fafc',marginBottom:14}}>
+      <div style={{fontSize:13,fontWeight:900,color:col,marginBottom:8}}>
+        {workName(work)}は何ヶ月ですか？{need?'（選ばないと閉じられません）':''}
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:9,alignItems:'center'}}>
+        {sub.map(m=>(
+          <div key={m} data-wkmon={m} onMouseDown={e=>{e.preventDefault();onPickMon(m);}}
+            style={CH(mon===m,col)}>{m}ヶ月</div>
+        ))}
+        {!!mon&&(
+          <span data-wkpreview="1" style={{marginLeft:6,fontSize:12,color:'#475569',display:'inline-flex',alignItems:'center',gap:6}}>
+            バッジ →
+            <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
+              borderRadius:6,background:col,color:'white',fontSize:11,fontWeight:800}}>{workBadgeText({work:work,wkmon:mon})}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
   return(
     <div data-wkmodal="1" onMouseDown={e=>e.preventDefault()} onClick={tryClose}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:4800,display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
@@ -8668,37 +8692,22 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
             style={{width:32,height:26,border:'2px solid rgba(255,255,255,0.9)',background:'transparent',color:'white',borderRadius:7,fontSize:13,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
         </div>
         <div style={{padding:'14px 18px',overflowY:'auto'}}>
+          {/* ★月数の箱は【点検の区画のすぐ下】に割って入れる（2026-11-04 ユーザー指示）。
+              いちばん下だと、点検を押した人の目が追えない。整備・修理の区画より上に出すこと。 */}
           {workGroups().map(g=>(
-            <div key={g.name} data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
-              <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
-              <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
-                {g.items.map(w=>(
-                  <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
-                    style={CH(work===w.id,WORK_COLORS[w.id]||g.col)}>{w.name}</div>
-                ))}
+            <React.Fragment key={g.name}>
+              <div data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
+                  {g.items.map(w=>(
+                    <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
+                      style={CH(work===w.id,WORK_COLORS[w.id]||g.col)}>{w.name}</div>
+                  ))}
+                </div>
               </div>
-            </div>
+              {g.name==='点検'&&monRow}
+            </React.Fragment>
           ))}
-          {sub&&(
-            <div data-wkmonrow="1" style={{border:'2px solid '+col,borderRadius:12,padding:'10px 12px 12px',background:'#f8fafc'}}>
-              <div style={{fontSize:12,fontWeight:900,color:col,marginBottom:8}}>
-                {workName(work)}は何ヶ月ですか？{need?'（選ばないと閉じられません）':''}
-              </div>
-              <div style={{display:'flex',flexWrap:'wrap',gap:9,alignItems:'center'}}>
-                {sub.map(m=>(
-                  <div key={m} data-wkmon={m} onMouseDown={e=>{e.preventDefault();onPickMon(m);}}
-                    style={CH(mon===m,col)}>{m}ヶ月</div>
-                ))}
-                {!!mon&&(
-                  <span data-wkpreview="1" style={{marginLeft:6,fontSize:12,color:'#475569',display:'inline-flex',alignItems:'center',gap:6}}>
-                    バッジ →
-                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
-                      borderRadius:6,background:col,color:'white',fontSize:11,fontWeight:800}}>{workBadgeText({work:work,wkmon:mon})}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
           {warn&&(
             <div data-wkwarn="1" style={{marginTop:10,padding:'9px 12px',background:'#fee2e2',border:'2px solid #fca5a5',borderRadius:10,color:'#991b1b',fontSize:12.5,fontWeight:800}}>
               ⚠ {workName(work)}の月数（{(sub||[]).join('・')}ヶ月）を選んでください。選ばずに閉じるなら「やめる（元に戻す）」を押してください。
