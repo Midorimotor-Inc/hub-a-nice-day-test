@@ -55,6 +55,10 @@ const EMPTY_D = EMPTY.getDate();
 (async () => {
   const seed = {
     [STOR + 'setItems']: [{ id: 'sq1', g: 'g1', label: '1ヶ月', text: '1ヶ月' }, { id: 'sq2', g: 'g1', label: '6ヶ月', text: '6ヶ月' }, { id: 'sq3', g: 'g1', label: '12ヶ月', text: '12ヶ月' }, { id: 'sq4', g: 'g1', label: '18ヶ月', text: '18ヶ月' }, { id: 'si1', g: 'g2', label: 'Eオイル交換', text: 'エンジンオイル交換' }, { id: 'si2', g: 'g3', label: 'レッカー搬入', text: 'レッカー搬入' }],
+    // ★車検の【備考】のクイックは一般整備の【内容】とは別のキー（2026-11-04 ユーザー指示）。
+    //   わざと違う字にしてある＝どちらかに相手の字が出たら、それは連動している。
+    [STOR + 'inspItems']: [{ id: 'iq1', g: 'gI', label: '車検ワイパー', text: 'ワイパー交換' }],
+    [STOR + 'inspGroups']: [{ id: 'gI', name: '車検の区画', col: '#9333ea' }],
     [STOR + 'insp']: { [DK]: [
       { name: '原村', carType: 'シエンタ', no: '3310', course: 2, store: 'honten', seq: 1, time: '09:00', bookingStatus: 'confirmed', note: '' },
       { name: '稲木', carType: 'ワゴンR', no: '3311', course: 3, store: 'honten', seq: 2, time: '09:30', bookingStatus: 'confirmed', note: '' },
@@ -329,18 +333,24 @@ const EMPTY_D = EMPTY.getDate();
     const x = document.querySelector('[data-quickmenusheet]'); if (!x) return null;
     return [...x.querySelectorAll('[data-qi]')].map(e => e.innerText.replace(/\s+/g, ' ').trim());
   });
-  t('★PC で作った定型文が出る', !!qi && qi.length > 0, qi);
+  t('★車検の定型文が出る', !!qi && qi.some(x => x.indexOf('車検ワイパー') >= 0), qi);
+  // ★車検と一般整備は【別の定型文】（2026-11-04 ユーザー指示）。1つに戻したらここが落ちる。
+  t('★一般整備の定型文（Eオイル交換）は出ない', !!qi && !qi.some(x => x.indexOf('Eオイル交換') >= 0), qi);
+  t('★区画も車検の分だけ', await page.evaluate(() => {
+    const x = document.querySelector('[data-quickmenusheet]'); if (!x) return false;
+    return /車検の区画/.test(x.innerText) && !/整備・交換/.test(x.innerText);
+  }), await page.evaluate(() => { const x = document.querySelector('[data-quickmenusheet]'); return x ? x.innerText.slice(0, 200) : null; }));
   // ★本物のマウス操作で押すこと（項目は onPointerDown / onPointerUp で拾っている）
-  const okTap = await tapQuick('Eオイル交換');
+  const okTap = await tapQuick('車検ワイパー');
   t('定型文を押せた（検査の前提）', okTap);
   t('★押すと【備考】に入る', await page.evaluate(() => {
     const ta = [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null);
-    return ta.some(e => (e.value || '').indexOf('エンジンオイル交換') >= 0);
+    return ta.some(e => (e.value || '').indexOf('ワイパー交換') >= 0);
   }), await page.evaluate(() => [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null).map(e => e.value)));
-  await tapQuick('Eオイル交換');
+  await tapQuick('車検ワイパー');
   t('★もう一度押すと外れる', await page.evaluate(() => {
     const ta = [...document.querySelectorAll('textarea')].filter(e => e.offsetParent !== null);
-    return ta.every(e => (e.value || '').indexOf('エンジンオイル交換') < 0);
+    return ta.every(e => (e.value || '').indexOf('ワイパー交換') < 0);
   }));
   await page.evaluate(() => { const x = document.querySelector('[data-quickmenusheet]'); const b = x && [...x.querySelectorAll('button')].find(e => /とじる|やめる/.test(e.innerText)); if (b) b.click(); });
   await page.waitForTimeout(500);

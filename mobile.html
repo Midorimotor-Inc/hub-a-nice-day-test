@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793769816289';
+  window.__APP_BUILD='build-1793772866526';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.97.0';
+const MOBILE_VERSION='3.98.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -192,7 +192,9 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   STOR+'mysched',    // マイスケジュール（公開予定・2026-09-20）
   STOR+'memoItems',   // 備考・メモのクイック項目（PCで作った定型文・2026-10-03）
   STOR+'setItems',    // 整備の【内容】欄のクイック項目（PCで作った定型文・2026-10-20）
-  STOR+'setGroups'];  // ★クイックメニューのグループ（2026-10-31）
+  STOR+'setGroups',   // ★クイックメニューのグループ（2026-10-31）
+  STOR+'inspItems',   // ★車検の【備考】のクイック項目（一般整備とは別・2026-11-04）
+  STOR+'inspGroups']; // ★車検のクイックメニューのグループ（2026-11-04）
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -1082,7 +1084,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
 const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
@@ -3656,7 +3658,7 @@ const QuickMenuSheet=({isOpen,onClose,items,groups,value,onChangeValue,onSaveLis
     </div>
   );
 };
-const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
+const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGroups,onSaveQuickInsp,mode,initial,vsId,currentUser,staffList,loanerCars,rentalCars,loanerRes,rentalRes,lockedBy,isClosedDk,onSave,onDelete,onClose})=>{
   const isInsp=mode.type==='insp';
   // 休業日には入庫・納車を入れられない（選んだ時点で弾き、元の値に戻す）
   const closedDk=dk=>!!(isClosedDk&&isClosedDk(dk));
@@ -3912,9 +3914,12 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
       {pickSheet}
       {/* ★車検は備考（note）・整備は内容（content）に入れる（2026-11-04 ユーザー指示。PC と同じ）。
           それまで content だけに入れていたので、車検のカードではクイックメニューが使えなかった。 */}
+      {/* ★車検の【備考】と一般整備の【内容】で【別の定型文】を持つ（2026-11-04 ユーザー指示）。混ぜないこと。 */}
       <QuickMenuSheet isOpen={quickOpen} onClose={()=>setQuickOpen(false)}
-        items={quickItems} groups={quickGroups} value={(isInsp?form.note:form.content)||''}
-        onChangeValue={v=>setForm(p=>({...p,[isInsp?'note':'content']:v}))} onSaveList={onSaveQuick}/>
+        items={(isInsp?inspQuickItems:quickItems)||[]} groups={(isInsp?inspQuickGroups:quickGroups)||[]}
+        value={(isInsp?form.note:form.content)||''}
+        onChangeValue={v=>setForm(p=>({...p,[isInsp?'note':'content']:v}))}
+        onSaveList={(it,gs)=>{const f=isInsp?onSaveQuickInsp:onSaveQuick;if(f)f(it,gs);}}/>
       <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.25)',animation:'sheetUp .22s ease'}}>
         <div style={{padding:'13px 18px 10px',borderBottom:`3px solid ${sc}`,display:'flex',alignItems:'center',gap:8}}>
           <div style={{flex:1,minWidth:0}}>
@@ -6480,6 +6485,9 @@ const App=()=>{
   const [memoItemsRaw,setMemoItemsRaw]=useState([]);   // 備考のクイック項目（PCで作った定型文・2026-10-03）
   const [setItemsRaw,setSetItemsRaw]=useState([]);     // 整備の【内容】欄のクイック項目（2026-10-20）
   const [setGroupsRaw,setSetGroupsRaw]=useState([]);   // ★クイックメニューのグループ（2026-10-31）
+  // ★車検の【備考】のクイックは一般整備の【内容】とは別のキー（2026-11-04 ユーザー指示）。1つに戻さないこと。
+  const [inspItemsRaw,setInspItemsRaw]=useState([]);   // 車検の【備考】欄のクイック項目
+  const [inspGroupsRaw,setInspGroupsRaw]=useState([]); // 車検のクイックメニューのグループ
   const [memoEdit,setMemoEdit]=useState(null);         // 備考・メモの追加／編集 {dk,idx}（idx=null で新規）
   const [loanerResH,setLoanerResH]=useState({});
   const [rentalCars,setRentalCars]=useState([]);
@@ -6634,7 +6642,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups,iitems,igroups]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -6669,6 +6677,9 @@ const App=()=>{
       if(Array.isArray(mitems))setMemoItemsRaw(mitems);
       if(Array.isArray(sitems))setSetItemsRaw(sitems);
       if(Array.isArray(sgroups))setSetGroupsRaw(sgroups);
+      // ★車検の備考のクイックは一般整備とは別のキー（2026-11-04 ユーザー指示）
+      if(Array.isArray(iitems))setInspItemsRaw(iitems);
+      if(Array.isArray(igroups))setInspGroupsRaw(igroups);
       setGasOk(FB_ON?!(window.__hubGasDown||0):true);   // Firestore では購読の失敗（fbDown）を接続状態に反映
     }catch{setGasOk(false);}
     finally{fetchBusyRef.current=false;}
@@ -6741,17 +6752,21 @@ const App=()=>{
   };
   // ★クイックメニューの保存（2026-10-31）。項目もグループも【配列】なので writeShared は使えない。
   //   配列は useShared／mergeSharedObjects が丸ごと置き換える決まりなので、そのまま入れ替えてよい。
-  const saveQuickMenu=async(items,groups)=>{
+  //   ★車検（insp）と一般整備（sched）で【別のキー】に書く（2026-11-04 ユーザー指示）。1つに戻さないこと。
+  const saveQuickMenuFor=async(forInsp,items,groups)=>{
     guardWrite();
-    setSetItemsRaw(items); setSetGroupsRaw(groups);   // 先に画面へ（楽観）
+    if(forInsp){ setInspItemsRaw(items); setInspGroupsRaw(groups); }   // 先に画面へ（楽観）
+    else { setSetItemsRaw(items); setSetGroupsRaw(groups); }
     const put=async(key,arr)=>{
       if(FB_ON){ const out={}; const r=await fbTxn(key,()=>arr,{out});
         if(r!=='ok'&&r!=='nochange')throw new Error('サーバーへの保存を確認できませんでした'); }
       else await sSet(key,arr);
     };
-    await put(STOR+'setItems',items);
-    await put(STOR+'setGroups',groups);
+    await put(STOR+(forInsp?'inspItems':'setItems'),items);
+    await put(STOR+(forInsp?'inspGroups':'setGroups'),groups);
   };
+  const saveQuickMenu=(items,groups)=>saveQuickMenuFor(false,items,groups);
+  const saveQuickMenuInsp=(items,groups)=>saveQuickMenuFor(true,items,groups);
   //   ★requireBase=true のキー（insp/lres/rres など予約そのもの）は、サーバー値を読めなかった時に
   //     ローカル全文へフォールバックしない。読めない＝GASの一時失敗なので、そこでローカルを書き戻すと
   //     他端末が入れた予約を巻き添えにする（最悪、空とみなして全消し）。書かずに次の試行へ回す。
@@ -7872,6 +7887,9 @@ const App=()=>{
         quickItems={setItemsRaw}
         quickGroups={setGroupsRaw}
         onSaveQuick={saveQuickMenu}
+        inspQuickItems={inspItemsRaw}
+        inspQuickGroups={inspGroupsRaw}
+        onSaveQuickInsp={saveQuickMenuInsp}
         mode={editMode}
         initial={editMode.initial}
         vsId={vsId}

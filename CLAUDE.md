@@ -2034,6 +2034,37 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   `week_view_test`(138) `paper_test`(75) `print_insp_time_test`(34) `adv2y_test`(77)。
 - ★**JSX のコメント（波かっこ＋スラッシュ星）は `return(` の直後に置けない**（ここで一度 真っ白にした）。
   要素の前（子どもの位置）か、`return(` より上の行に書くこと。`smoke_dev_check.js` が拾う。
+### クイックメニューは車検と一般整備で【別々】（v3.98.0・2026-11-04・ユーザー指示）
+- ユーザー指摘「車検の予約カードのクイックメニューと一般のクイックメニューが同じ内容。連動しているなら
+  連動しないようにしてほしい（カスタマイズしたい）」。**本当に連動していた。**
+  それまで車検の【備考】も一般整備の【内容】も `setItems` / `setGroups` という**同じ1組のキー**を見ていたので、
+  片方で足した定型文がもう片方にも出ていた。
+- **キーを2組に分けた。1つに戻さないこと。**
+  ・一般整備の【内容】… `{STOR}setItems` / `{STOR}setGroups`（今までどおり・中身も変えていない）
+  ・車検の【備考】　… **`{STOR}inspItems` / `{STOR}inspGroups`**（新しい）
+  出し分けは **`isInsp`** ひとつ（PC の `QuickMenuModal` とスマホの `QuickMenuSheet` の両方。
+  出す一覧も、保存先（`onSaveQuick` / `onSaveQuickInsp`）も `isInsp` で選ぶ）。
+- ★**1日表示の緑のしるし（行の内容が定型文とぴったり同じ時）も分けてある**：
+  `InspRow`（車検）には **車検の一覧**を、`SchedRow`（整備）には今までどおり一般の一覧を渡す。
+  ★`InspRow` は BLOCK-C なので**プロップ名は `setItems` のまま**にして、**呼ぶ側で `setItems={inspItems}` を渡している**
+  （InspRow の中で `inspItems` と書くと「定義されていない」で画面が真っ白になる。ここで一度踏んだ）。
+- **今まであった中身は消していない**：`node fb_split_quickmenu.js --write`（`--dev` でテスト版）で
+  `setItems` / `setGroups` を `inspItems` / `inspGroups` へ**写してから**配った＝車検側も初日から同じ18〜22件で始まる。
+  ・**写すだけ。元は1文字も変えない。** 先に中身がある時は触らない（上書きしない）。書く前の中身は
+  　`Hub重要書類/quickmenu-before-{prod|dev}-<日時>.json` に自動で控える。
+  ・2026-11-04 に実行済み：テスト版 18件＋区画4／本番 22件＋区画4。
+- `SNAP_KEYS_COMMON`（`index_dev.html` と `mobile.html` の2か所）と `MOBILE_KEYS`、
+  `fb_snap_keycheck.js` の同じ表にも足した（`setGroups` がこの表に抜けていたのも直した）。
+- 検査は **`node quick_split_test.js`（43件・PORT 8435）**。PC・スマホの両方で
+  「相手の定型文が出ないこと」「足した分が相手のキーに入らないこと」を見ている。
+  **直す前のファイルでは18件落ちる**ことを確認済み。
+  `mobile_move_test.js`（54件）の ③ も、車検の種データを別の字（車検ワイパー）にして同じことを見張るようにした。
+  あわせて PASS：`works_quick_test`(64) `insp_badge_test`(68) `card_pop_test`(46) `collapsed_add_test`(19)
+  `mach_restrict_test`(31) `restriction_save_test`(15) `week_view_test`(138) `paper_test`(75)
+  `print_insp_time_test`(34) `adv2y_test`(77) `mobile_cust_test`(34) `mobile_staff_test`(15)
+  `mobile_phone_test`(33) `memo_tip_test`(39) `fb_snap_test`(25) `week4_test`(51) `week_find_test`(89)
+  `dashboard_test`(61) `offline_sheet_test`(35) `search_same_test`(23)。
+- ★**備考・メモのクイック項目（`memoItems`）は別物**（スケジュールの備考欄用）。今回は触っていない。
 ### 【記録】2026-10-31 に本番を v3.88.0 へ（port_to_main.js・作業内容まわりの4つ）
 - 本番は v3.87.1 → **v3.88.0**。`node port_to_main.js` → `node smoke_main.js` PASS を確認して push。
 - **あわせてクイックメニューの中身（`setItems` / `setGroups`）をテスト版から本番へ写した**（ユーザー指示

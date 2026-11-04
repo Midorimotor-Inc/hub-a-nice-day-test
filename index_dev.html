@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793769816289';
+    window.__APP_BUILD='build-1793772866526';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.97.0';
+const APP_VERSION = '3.98.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3521,7 +3521,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops',
   'usrchk'];   // ★車検証の使用者を確認した印（2026-10-29）
@@ -8895,7 +8895,7 @@ const QuickMenuModal=memo(({isOpen,onClose,items,groups,value,onChangeValue,onSa
     </div>
   );
 });
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
   const [form,setForm]=useState(initialData);
   const [showQuickMenu,setShowQuickMenu]=useState(false);   // ⚡ クイックメニュー（2026-10-31）
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
@@ -10015,12 +10015,13 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
         onPickMon={m=>{setForm(p=>({...p,wkmon:m}));wkAfter();}}
         onClose={()=>setShowWkPk(false)}
         onRestore={o=>setForm(p=>({...p,work:o.work,wkmon:o.mon,qkind:(o.qk||[]).slice()}))}/>
-      {/* ⚡ クイックメニュー（2026-10-31）。内容の足し引きはその場で効く */}
+      {/* ⚡ クイックメニュー（2026-10-31）。内容の足し引きはその場で効く。
+          ★車検の【備考】と一般整備の【内容】で【別の定型文】を持つ（2026-11-04 ユーザー指示）。混ぜないこと。 */}
       <QuickMenuModal isOpen={showQuickMenu} onClose={()=>setShowQuickMenu(false)}
-        items={setItems||[]} groups={setGroups||[]}
+        items={(isInsp?inspItems:setItems)||[]} groups={(isInsp?inspGroups:setGroups)||[]}
         value={(isInsp?form.note:form.content)||''}
         onChangeValue={v=>setForm(p=>({...p,[isInsp?'note':'content']:v}))}
-        onSaveList={(it,gs)=>{if(onSaveQuick)onSaveQuick(it,gs);}}/>
+        onSaveList={(it,gs)=>{const f=isInsp?onSaveQuickInsp:onSaveQuick;if(f)f(it,gs);}}/>
     </div>
   );
 });
@@ -10124,6 +10125,7 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
   const blocked=(!isEmpty&&isOverLimit)||limitBlocked||locked||(otherStore&&!canApprove);
   const isCancelled=row.bookingStatus==='cancelled';
 
+  // ★渡ってくる一覧は【車検の備考用】（呼ぶ側で inspItems を渡している・2026-11-04）
   const noteQItems=setItems||[];
 
   // 行背景：優先度 isOverLimit > pending > locked > bookingStatus stripe
@@ -14306,6 +14308,23 @@ function AppInner() {
   const saveQuickMenu = useCallback((items,groups)=>{
     setQuickItemsRaw(items); setSetGroupsRaw(groups);
   },[setQuickItemsRaw,setSetGroupsRaw]);
+  // ★車検の【備考】のクイックメニューは、一般整備の【内容】とは【別のキー】（2026-11-04 ユーザー指示）。
+  //   それまで setItems / setGroups を両方で使い回していたので、片方を直すともう片方も変わった。
+  //   ★1つに戻さないこと＝車検と一般でそれぞれ作り込めるようにするための分けである。
+  //   今まであった中身は `node fb_split_quickmenu.js --write` で inspItems / inspGroups へ写してある。
+  const [inspItemsRaw, setInspItemsRaw] = useShared(STOR+'inspItems', DEFAULT_SET_ITEMS);
+  const inspItems = useMemo(()=>{
+    const raw = Array.isArray(inspItemsRaw)&&inspItemsRaw.length>0 ? inspItemsRaw : DEFAULT_SET_ITEMS;
+    return raw.map(si=>({...si, text: si.text ?? si.content ?? si.label ?? ''}));
+  },[inspItemsRaw]);
+  const [inspGroupsRaw, setInspGroupsRaw] = useShared(STOR+'inspGroups', DEFAULT_SET_GROUPS);
+  const inspGroups = useMemo(()=>{
+    const raw = Array.isArray(inspGroupsRaw)&&inspGroupsRaw.length>0 ? inspGroupsRaw : DEFAULT_SET_GROUPS;
+    return raw.filter(g=>g&&g.id).map(g=>({id:g.id,name:g.name||'（名前なし）',col:g.col||'#64748b'}));
+  },[inspGroupsRaw]);
+  const saveQuickMenuInsp = useCallback((items,groups)=>{
+    setInspItemsRaw(items); setInspGroupsRaw(groups);
+  },[setInspItemsRaw,setInspGroupsRaw]);
   // 備考・メモ用クイックアイテム（スケジュール内容欄とは独立）
   const [memoItemsRaw, setMemoItemsRaw] = useShared(STOR+'memoItems', DEFAULT_MEMO_ITEMS);
   const memoItems = useMemo(()=>{
@@ -17625,7 +17644,7 @@ function AppInner() {
                           const origIdx=row._origIdx??dispIdx;
                           const {_origIdx,...cleanRow}=row;
                           rows.push(
-                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={setItems}/>
+                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={inspItems}/>
                           );
                         });
                         // ② 台数制限超過バナー（7台目以降がある場合）
@@ -17647,14 +17666,14 @@ function AppInner() {
                             ?{...cleanRow,pendingApproval:false}  // 承認済み：承認待ちバッジ消す
                             :{...cleanRow,pendingApproval:true};  // 未承認：承認待ちバッジ表示
                           rows.push(
-                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={setItems}/>
+                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={inspItems}/>
                           );
                         });
                         // ④ 追加行（isNew=trueで開く）。台数制限を掛けた日で上限に達していたら「予約不可」
                         const addDispNo=normalRows.length+waitingRows.length+1;
                         const _limitFull=(inspLimits[dk]!=null&&validRows.length>=dayInspLimit)?dayInspLimit:null;
                         rows.push(
-                          <InspRow key={`add-${addIdx}`} row={{...blankInsp()}} idx={addIdx} dispNo={addDispNo} dk={dk} onOpenModal={(type,dk2,idx2,slot)=>handleOpenModal(type,dk2,idx2,slot,true)} lockInfo={getInspLock(dk,addIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} isOverLimit={false} limitFull={_limitFull} setItems={setItems}/>
+                          <InspRow key={`add-${addIdx}`} row={{...blankInsp()}} idx={addIdx} dispNo={addDispNo} dk={dk} onOpenModal={(type,dk2,idx2,slot)=>handleOpenModal(type,dk2,idx2,slot,true)} lockInfo={getInspLock(dk,addIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} isOverLimit={false} limitFull={_limitFull} setItems={inspItems}/>
                         );
                         return rows;
                       })()}
@@ -18246,6 +18265,9 @@ function AppInner() {
         setItems={setItems}
         setGroups={setGroups}
         onSaveQuick={saveQuickMenu}
+        inspItems={inspItems}
+        inspGroups={inspGroups}
+        onSaveQuickInsp={saveQuickMenuInsp}
         allCars={currentLoaners}
         fromCustList={fromCustList}
         staffHere={currentStaffList}
