@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang=ja><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>モック② 週間カレンダーを畳んだ時の余白</title>
+<style>
+:root{--ink:#1b2129;--ink2:#475569;--line:#64748b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;color:var(--ink);background:#f1f5f9;font-size:13px;line-height:1.5}
+.wrap{max-width:1500px;margin:0 auto;padding:14px 16px 60px}
+.top{background:#fff;border:2px solid #1d4ed8;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.top h1{font-size:17px;font-weight:900}
+.top .sub{font-size:12.5px;color:var(--ink2);margin-top:5px}
+.pick{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:12px}
+.pick .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pick label{font-weight:800;font-size:12.5px}
+.btn{font:inherit;font-weight:800;font-size:13px;padding:8px 15px;border-radius:9px;border:1.5px solid #cbd5e1;cursor:pointer;background:#fff;color:var(--ink2)}
+.btn.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+.desc{font-size:12.5px;color:var(--ink2);margin:8px 0 2px;padding:8px 10px;background:#f8fafc;border-radius:8px}
+/* ── 週表の見た目（本物と同じ決まり） ── */
+.box{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px;margin-bottom:12px}
+.hd{display:flex;align-items:center;gap:10px;padding:4px 6px 8px;font-weight:900;font-size:14px}
+.hd .sp{flex:1}
+.scroll{height:520px;overflow:auto;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
+table{border-collapse:collapse;width:100%;min-width:980px;table-layout:fixed}
+th{padding:5px 4px;font-size:11px;font-weight:800;white-space:nowrap;border:1px solid var(--line);background:#f1f5f9;position:sticky;top:0;z-index:4}
+td{border:1px solid var(--line);padding:1px 3px;font-size:11.5px;vertical-align:middle;height:26px}
+td.tm,th.tm{width:54px;min-width:54px;background:#f8fafc;font-size:11px;font-weight:800;color:#475569;text-align:center;white-space:nowrap}
+tr.band td{background:#e6f6fb}tr.band td.tm{background:#cfeef7}
+tr.ins td{background:#fff7ed}
+tr.stf td{background:#f8fafc;text-align:center;padding:3px;line-height:1;border-bottom:4px double #334155}
+tr.stf td.tm{border-bottom:4px double #334155}
+tr.sp td.tm{background:#047857;color:#fff}
+tr.sp td{background:#f0fdf4}
+.sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+  border-radius:4px;background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px;vertical-align:middle}
+.sb.off{background:#fff;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+.divi{display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle}
+.insgrp{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:wrap;padding:1px 0}
+.inscol{display:grid;grid-template-rows:repeat(2,19px);grid-auto-flow:column;gap:2px}
+.cb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  color:#fff;font-size:11px;font-weight:900;border:none}
+.ent{display:block;border-radius:5px;padding:1px 3px;background:#fff;border:1px solid #cbd5e1;
+  font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;margin:1px 0}
+.ent .ct{color:#64748b;font-weight:500;margin-left:5px}
+.plus{color:#94a3b8;font-size:11px;font-weight:800}
+.foldplus td{background:#f8fafc;text-align:center;color:#1d4ed8;font-weight:800;font-size:12px;padding:7px}
+.empty{outline:3px dashed #dc2626;outline-offset:-3px}
+.mark{position:relative}
+.mark::after{content:"↑ ここが余白";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  color:#dc2626;font-weight:900;font-size:14px;background:#fff;padding:2px 10px;border-radius:8px;border:2px solid #dc2626}
+/* ── 案B・C：字を大きく ── */
+.big td{font-size:14px}
+.big .sb{min-width:22px;height:22px;font-size:13px;border-radius:5px;margin:2px}
+.big .inscol{grid-template-rows:repeat(2,26px)}
+.big .cb{width:26px;height:26px;font-size:14px;border-radius:6px}
+.big .ent{font-size:14px;padding:2px 5px}
+.big td.tm,.big th.tm{font-size:13px}
+.two .ent{white-space:normal}
+.two .ent .ct{display:block;margin-left:0;font-size:12.5px}
+.q{background:#fff;border:2px solid #0891b2;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.q h4{font-size:13.5px;font-weight:900;color:#0e7490;margin-bottom:6px}
+.q ul{margin:0 0 0 18px;font-size:12.5px;color:var(--ink2)}
+.q li{margin:4px 0}
+</style></head><body><div class=wrap>
+
+<div class=top>
+  <h1>モック② 週間カレンダーを畳んだ時 ─ 下の余白をなくして予定を大きく</h1>
+  <div class=sub>
+    ご指示：<b>畳んだ時に限り、余白が出ないように予定を大きく表示</b>。<br>
+    いま（現状）は、畳むと行が減るぶん<b>下に大きな余白</b>が残ります。これは 2026-10-29 に
+    「<b>畳んだ時は高さを伸ばさない</b>（残った数行が間延びするから）」と決めたためで、<b>今回のご指示はその逆向き</b>です。
+    決まりを上書きしてよいか、どのくらい大きくするかを下で選んでください（<b>広げた時の見た目は一切変えません</b>）。
+  </div>
+</div>
+
+<div class=pick>
+  <div class=row>
+    <label>案を切り替え</label>
+    <button class="btn on" data-k=now>いま（余白あり）</button>
+    <button class=btn data-k=a>A案　余白ゼロ・字はそのまま</button>
+    <button class=btn data-k=b>B案　余白ゼロ・字を大きく</button>
+    <button class=btn data-k=c>C案　余白ゼロ・字を大きく＋整備は2段</button>
+  </div>
+  <div class=desc id=desc></div>
+</div>
+
+<div class=box>
+  <div class=hd>
+    <span>📅 週間カレンダー　11/2（月）〜11/8（日）</span>
+    <span class=sp></span>
+    <span style="font-size:12px;font-weight:700;color:#1d4ed8;border:1.5px solid #1d4ed8;border-radius:8px;padding:4px 10px">▲ 時間を畳む（いま畳んでいます）</span>
+  </div>
+  <div class=scroll id=sc>
+    <table id=tb>
+      <thead><tr>
+        <th class=tm></th>
+        <th>11/2<br>月</th><th>11/3<br>火</th><th>11/4<br>水</th><th>11/5<br>木</th>
+        <th>11/6<br>金</th><th>11/7<br>土</th><th>11/8<br>日</th>
+      </tr></thead>
+      <tbody>
+        <tr class=ins>
+          <td class=tm>車検</td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#dc2626">マ</span><span class=cb style="background:#dc2626">マ</span></div><div class=inscol><span class=cb style="background:#0891b2">ク</span></div></div></td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#dc2626">マ</span></div></div></td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#0891b2">ク</span><span class=cb style="background:#0891b2">ク</span></div><div class=inscol><span class=cb style="background:#047857">レ</span></div></div></td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#dc2626">マ</span></div><div class=inscol><span class=cb style="background:#047857">レ</span></div></div></td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#dc2626">マ</span><span class=cb style="background:#dc2626">マ</span></div><div class=inscol><span class=cb style="background:#0891b2">ク</span><span class=cb style="background:#0891b2">ク</span></div></div></td>
+          <td><div class=insgrp><div class=inscol><span class=cb style="background:#0891b2">ク</span></div></div></td>
+          <td></td>
+        </tr>
+        <tr class=stf>
+          <td class=tm>出勤</td>
+          <td><span class=sb>見</span><span class=sb>岡</span><span class=sb>竹</span><span class=sb>幸</span><span class=divi></span><span class="sb off">魚</span></td>
+          <td><span class=sb>見</span><span class=sb>岡</span><span class=sb>魚</span><span class=divi></span><span class="sb off">竹</span><span class="sb off">幸</span></td>
+          <td><span class=sb>見</span><span class=sb>竹</span><span class=sb>幸</span><span class=sb>魚</span><span class=divi></span><span class="sb off">岡</span></td>
+          <td><span class=sb>見</span><span class=sb>岡</span><span class=sb>竹</span><span class=sb>幸</span><span class=sb>魚</span></td>
+          <td><span class=sb>見</span><span class=sb>岡</span><span class=sb>竹</span><span class=sb>魚</span><span class=divi></span><span class="sb off">幸</span></td>
+          <td><span class=sb>岡</span><span class=sb>竹</span><span class=sb>幸</span><span class=divi></span><span class="sb off">見</span><span class="sb off">魚</span></td>
+          <td><span class=divi></span><span class="sb off">見</span><span class="sb off">岡</span><span class="sb off">竹</span></td>
+        </tr>
+        <tr class=sp>
+          <td class=tm>午前<br>入庫</td>
+          <td></td><td></td>
+          <td><span class=ent>相原 様<span class=ct>12ヶ月点検</span></span></td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr class=band>
+          <td class=tm>10:00</td>
+          <td><span class=ent>橋口 大志朗 様<span class=ct>エンジンオイル交換</span></span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=ent>芝田 様<span class=ct>タイヤ組み換え 4本</span></span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=plus>＋</span></td>
+        </tr>
+        <tr>
+          <td class=tm>14:30</td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=ent>藤明建設工業 様<span class=ct>鈑金・塗装の見積り</span></span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=ent>小畠 様<span class=ct>バッテリー交換</span></span></td>
+          <td><span class=plus>＋</span></td>
+          <td><span class=plus>＋</span></td>
+        </tr>
+        <tr class="sp">
+          <td class=tm>午後<br>入庫</td>
+          <td></td><td></td><td></td>
+          <td><span class=ent>山東 様<span class=ct>無料点検</span></span></td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr class=foldplus>
+          <td class=tm>＋</td>
+          <td colspan=7>＋ 予定（時間はカードの中で選びます）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class=q>
+  <h4>決めていただきたいこと（3つ）</h4>
+  <ul>
+    <li><b>① どの案にしますか。</b>　A＝行が伸びて余白が消えるだけ（字は今のまま）／B＝そのうえで字とバッジをひとまわり大きく／
+      C＝さらに整備を「氏名／内容」の2段にして、長い内容も切れずに読めるようにする。</li>
+    <li><b>② 2026-10-29 の決まり（畳んだ時は高さを伸ばさない）を上書きしてよいですか。</b>
+      当時は「残った数行が間延びして読みにくい」という理由でこう決めました。今回の案はその逆なので、
+      <b>進めるなら CLAUDE.md のその記述も書き換えます</b>（同じ所を行ったり来たりしないため）。</li>
+    <li><b>③ 広げた時（畳んでいない時）は、いまのままで変えません。</b>　これでよいですか。</li>
+  </ul>
+</div>
+
+</div>
+<script>
+var DESC={
+ now:'いま … 畳むと行が減って、表の下に大きな余白が残ります（赤い点線の所）。ご指摘のとおりです。',
+ a:'A案 … 表の高さを画面いっぱいに伸ばし、余った高さを残った行に配ります。字の大きさは今のまま。いちばん変化が小さく、見慣れた字で読めます。',
+ b:'B案 … A案に加えて、字とバッジをひとまわり大きくします（車検 19→26px・整備の字 11.5→14px・出勤 17→22px）。離れた所からでも読めます。',
+ c:'C案 … B案に加えて、整備を「氏名」と「内容」の2段にします。長い内容が … で切れなくなりますが、1行が高くなるので入る行数は減ります。'
+};
+function draw(k){
+  var tb=document.getElementById('tb'), sc=document.getElementById('sc');
+  tb.className=(k==='b'?'big':k==='c'?'big two':'');
+  tb.style.height=(k==='now'?'':'100%');
+  sc.className='scroll'+(k==='now'?' mark':'');
+  document.getElementById('desc').textContent=DESC[k];
+}
+[].slice.call(document.querySelectorAll('[data-k]')).forEach(function(b){
+  b.onclick=function(){
+    [].slice.call(document.querySelectorAll('[data-k]')).forEach(function(x){x.className='btn';});
+    b.className='btn on'; draw(b.getAttribute('data-k'));
+  };
+});
+draw('now');
+</script></body></html>

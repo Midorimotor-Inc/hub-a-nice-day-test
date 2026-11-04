@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793772866526';
+    window.__APP_BUILD='build-1793834680698';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.98.0';
+const APP_VERSION = '3.99.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -427,6 +427,20 @@ const CLOSED_LABEL = '休業日';
 // 「休業日」を札（濃い赤に白抜き）で出す時の色。週間カレンダーの車検の欄で使う
 const CLOSED_TAG_BG = '#dc2626';
 const CLOSED_TAG_FG = '#ffffff';
+
+// ── 研修バッジ（v3.99.0・2026-11-04 ユーザー指示・B案）────────────────────
+//   意味は「**出勤しているけれど研修で不在**」。
+//   ★★研修は【休みではない】。休日の日数・繰り越しの計算（mholidays / calcHolidayCarry）には
+//     絶対に入れないこと。入れると月間休日数と有給の残りが狂う。
+//   ★研修の人は「出勤」の側に残し、**いちばん右端に一マス空けて**並べる（ユーザー指示）。
+//     ただし「対応可能」「フロント対応」の人数には数えない（不在だから・2026-11-04 ユーザー了承）。
+//   ・保存先は {店}-training（`{"YYYY-M-D":[氏名]}`＝dayoff とまったく同じ形）
+//   ・入れ方は 休日設定（StaffCalendarModal）の 種類 の3つ目「🎓 研修」
+//   ・色と文字はこの定数を通すこと（画面に直書きしない）。mobile.html にも同じものを置く
+const TRN_COL = '#7e22ce';   // 研修の紫
+const TRN_CH  = '研';        // バッジの1文字
+const TRN_EMO = '🎓';        // 休日設定・カレンダーで使う絵文字
+const TRN_LABEL = '研修';
 
 // ── 「！」の丸（車検カレンダー・ダッシュボード共通）──
 //   2026-10-30 ユーザー指示。17px の白ふち付きでは小さくて見落とすため、
@@ -3525,7 +3539,7 @@ const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tired
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops',
   'usrchk'];   // ★車検証の使用者を確認した印（2026-10-29）
-const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
+const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','training','offnote','cdow','cdow-v2','cdate',
   'staff-v2','cars','schedRestrictions'];
 const fbSnapKeyList = async () => {
   const set = {};
@@ -4710,7 +4724,7 @@ const staffIni = (s) => { const v=String((s&&s.ini)||'').trim(); return v?v.slic
 const courseOrd = (c) => { const i=COURSES.findIndex(x=>x.id===c); return i<0?9:i; };
 
 const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFromToday,storeId,storeName,headColor,
-    inspData,schedData,staffList,dayOffData,paidLeaveData,isClosed,restrictionOf,inspLimits,
+    inspData,schedData,staffList,dayOffData,paidLeaveData,trainingData,isClosed,restrictionOf,inspLimits,
     onOpenInsp,onAddInsp,onAddMach,onOpenSched,onAddSched,onPickDay})=>{
   // ★フックは「早い return」より前に置くこと（React の決まり。後ろに置くと数が合わず画面が落ちる）
   // 据え置きの表（午後入庫・時間未定）は別の表なので、上の表にスクロールバーが出ると
@@ -4789,20 +4803,29 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   // ★日割りの縦線は【ダークグレー】（2026-10-30 ユーザー決定・mock_week_lines.html で5色から選んだ）。
   //   うすい線だと「どの日の列か」を目で追えなかった。罫線はこの1つで決めること。
   const WLINE='#64748b';
-  const TH={padding:'5px 4px',fontSize:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid '+WLINE,
+  // ★★畳んでいる時は【下に余白を出さず、そのぶん大きく出す】（v3.99.0・2026-11-04 ユーザー決定・C案）。
+  //   2026-10-29 には逆に「畳んだ時は高さを伸ばさない（残った数行が間延びするから）」と決めていたが、
+  //   現場から「畳むと下に余白がたくさん出る」との指摘があり、**ユーザー判断でひっくり返した**。
+  //   ★元に戻さないこと。戻すとまた余白が出る。
+  //   C案＝① 表の高さを画面いっぱいに伸ばす ② 字とバッジを大きく ③ 整備は「氏名／内容」の2段。
+  //   ★広げた時（folded=false）の見た目は一切変えない＝BIG を通さない所は触らないこと。
+  const BIG=folded;
+  const TH={padding:'5px 4px',fontSize:BIG?12.5:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid '+WLINE,
     background:'#f1f5f9',position:'sticky',top:0,zIndex:4};
-  const TD={border:'1px solid '+WLINE,padding:'1px 3px',fontSize:11.5,verticalAlign:'middle',height:26};
-  const TM={border:'1px solid '+WLINE,width:54,minWidth:54,background:'#f8fafc',fontSize:11,fontWeight:800,
+  const TD={border:'1px solid '+WLINE,padding:'1px 3px',fontSize:BIG?14:11.5,verticalAlign:'middle',height:26};
+  const TM={border:'1px solid '+WLINE,width:54,minWidth:54,background:'#f8fafc',fontSize:BIG?13:11,fontWeight:800,
     color:'#475569',textAlign:'center',whiteSpace:'nowrap'};
-  const SB={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:17,height:17,padding:'0 2px',
-    borderRadius:4,background:'#475569',color:'white',fontSize:10,fontWeight:900,margin:1,verticalAlign:'middle'};
+  const SBW=BIG?22:17;
+  const SB={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:SBW,height:SBW,padding:'0 2px',
+    borderRadius:BIG?5:4,background:'#475569',color:'white',fontSize:BIG?13:10,fontWeight:900,margin:BIG?2:1,verticalAlign:'middle'};
   const SB_OFF={...SB,background:'white',color:'#e6ebf1',border:'1px solid #f1f5f9',fontWeight:700};
   // ★車検のバッジは2段ずつ積み、コースが変わったら列を変える（2026-10-23 ユーザー指示）
   //   マ3台なら「マ／マ」の列＋「マ／空き」の列 → ひとつ空けて ク → その横に レ。混ざらない。
   const INS_GRP={display:'flex',gap:10,alignItems:'flex-start',justifyContent:'center',flexWrap:'wrap',padding:'1px 0'};
-  const INS_COL={display:'grid',gridTemplateRows:'repeat(2,19px)',gridAutoFlow:'column',gap:2};
-  const CB={display:'inline-flex',alignItems:'center',justifyContent:'center',width:19,height:19,borderRadius:5,
-    color:'white',fontSize:11,fontWeight:900,border:'none',cursor:'pointer',fontFamily:'inherit'};
+  const CBW=BIG?26:19;   // ★畳んでいる時は大きく（上の BIG の項を見ること）
+  const INS_COL={display:'grid',gridTemplateRows:'repeat(2,'+CBW+'px)',gridAutoFlow:'column',gap:2};
+  const CB={display:'inline-flex',alignItems:'center',justifyContent:'center',width:CBW,height:CBW,borderRadius:BIG?6:5,
+    color:'white',fontSize:BIG?14:11,fontWeight:900,border:'none',cursor:'pointer',fontFamily:'inherit'};
   // ★30分ごとの帯（2026-10-23 ユーザー指示）：:00 の行は水色、:30 の行は白
   const BAND_BG='#e6f6fb', BAND_TM='#cfeef7';
   // ★入庫制限の色（2026-10-24 ユーザー決定）：**1日表示と同じ ベタの薄いピンク**。
@@ -5008,12 +5031,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
           {list.map(({k,r},ri)=>(
             <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
               style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
+                /* ★C案：畳んでいる時は「氏名」と「内容」を2段にする（2026-11-04 ユーザー決定）。
+                   折り返せるようにしておき、内容の側に flexBasis:100% を持たせて次の段へ落とす。 */
+                ...(BIG?{flexWrap:'wrap',rowGap:1}:{}),
                 ...(ri>0?{marginTop:2,paddingTop:2,borderTop:'1px dotted #e2e8f0'}:{})}}>
               {/* ★点検は月数までバッジに出す（M1／M6／M12・有12・無1／無6）。
                   バッジのとなりに作業名は出さない（2026-11-04 ユーザー指示：バッジだけで分かる）。 */}
               <span data-wwork={workBadgeText(r)||''} title={workFullName(r)||((WORKS.find(w=>w.id===r.work)||{}).name||'')}
-                style={{flexShrink:0,fontSize:9.5,fontWeight:900,color:'white',borderRadius:3,padding:'0 4px',
-                  lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{workBadgeText(r)||'—'}</span>
+                style={{flexShrink:0,fontSize:BIG?12:9.5,fontWeight:900,color:'white',borderRadius:3,padding:BIG?'0 5px':'0 4px',
+                  lineHeight:BIG?'19px':'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{workBadgeText(r)||'—'}</span>
               {/* ★④ なぞると「いつ・誰が予約を入れたか」（2026-10-29 ユーザー指示）。
                   週表には担当者のバッジが無い（2026-10-23 に内容を出すため外した）ので、お名前をなぞる。 */}
               <span data-wentnm="1"
@@ -5023,7 +5049,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                     left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
                 onMouseLeave={()=>setTip(null)}
                 style={{fontWeight:700,color:'#1e293b',flexShrink:0,cursor:'help'}}>{sama(r.name)}</span>
-              {r.loaner&&<span style={{flexShrink:0,fontSize:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
+              {r.loaner&&<span style={{flexShrink:0,fontSize:BIG?11.5:9.5,color:'#0f766e',background:'#ccfbf1',borderRadius:3,padding:'0 3px'}}>代{String(r.loaner).replace(/🔑/g,'').trim().split(/[  (（]/)[0]}</span>}
               {/* ★担当者バッジは外し、代わりに内容を入る幅だけ出す（2026-10-23 ユーザー指示）。
                   切れたら … 。全文はなぞると出る（1日表示と同じ考え方） */}
               {/* ★なぞると全文（2026-10-24 ユーザー指示：**1日表示（NoteCell）と同じ角丸の吹き出し**にする。
@@ -5032,7 +5058,13 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                 onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
                   setTip({text:String(r.content),left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
                 onMouseLeave={()=>setTip(null)}
-                style={{color:'#475569',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0,flex:1}}>
+                style={BIG
+                  /* ★C案：畳んでいる時は2段目に全幅で出す＝長い内容も … で切れない（2026-11-04） */
+                  /* ★flex は '0 0 100%' とまとめて書くこと。flexBasis と flex:'none' を並べると
+                     後に書いた flex が flex-basis を auto に戻し、2段目へ落ちない（ここで一度踏んだ）。 */
+                  ?{color:'#475569',flex:'0 0 100%',minWidth:0,whiteSpace:'normal',
+                    wordBreak:'break-all',fontSize:12.5,lineHeight:1.35,paddingLeft:2}
+                  :{color:'#475569',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0,flex:1}}>
                 {String(r.content).replace(/[\r\n]+/g,'　')}</span>}
             </div>
           ))}
@@ -5160,9 +5192,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
         <div ref={scRef} style={{flex:1,minHeight:0,overflow:'auto'}}>
           {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
               td の height:26 は最低の高さとして効く */}
-          {/* ★畳んでいる時は高さを伸ばさない。余った高さを行に配ると、残った数行
-              （車検・出勤・09:00 など）が間延びして読みにくくなるため（2026-10-29）。 */}
-          <table style={{borderCollapse:'collapse',width:'100%',height:folded?undefined:'100%',minWidth:980,tableLayout:'fixed'}}>
+          {/* ★畳んでいる時も高さを伸ばす（v3.99.0・2026-11-04 ユーザー決定・C案）。
+              2026-10-29 は「畳んだ時は伸ばさない」としていたが、下に余白が大きく出るとの指摘で逆にした。
+              間延びしないよう、畳んでいる時は BIG で字とバッジも大きくしてある。★元に戻さないこと。 */}
+          <table style={{borderCollapse:'collapse',width:'100%',height:'100%',minWidth:980,tableLayout:'fixed'}}>
             <thead>
               <tr>
                 <th style={{...TH,width:54,minWidth:54}}></th>
@@ -5268,13 +5301,28 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                   if(isClosed(d))return <td key={dk} style={{...TD,background:CLOSED_BG,boxShadow:CLOSED_BAR,...todayCol(dk),borderBottom:STAFF_UNDER,
                     position:'relative'}}><PastOv dk={dk}/>{fDim&&<DimOv/>}</td>;
                   const offs=((dayOffData||{})[dk]||[]).concat((paidLeaveData||{})[dk]||[]);
-                  const on=(staffList||[]).filter(s=>offs.indexOf(s.name)<0);
+                  // ★研修（v3.99.0・2026-11-04 ユーザー指示・B案）＝出勤しているけれど研修で不在。
+                  //   ★休みの側へ入れないこと。出勤の側に残し、いちばん右端に一マス空けて並べる。
+                  const trn=((trainingData||{})[dk]||[]).filter(n=>offs.indexOf(n)<0);   // 休みが勝つ
+                  const on =(staffList||[]).filter(s=>offs.indexOf(s.name)<0&&trn.indexOf(s.name)<0);
+                  const ontrn=(staffList||[]).filter(s=>offs.indexOf(s.name)<0&&trn.indexOf(s.name)>=0);
                   const off=(staffList||[]).filter(s=>offs.indexOf(s.name)>=0);
                   return <td key={dk} data-wstf={dk} style={{...TD,background:'#f8fafc',textAlign:'center',padding:'3px',lineHeight:1,...todayCol(dk),borderBottom:STAFF_UNDER,
                     position:'relative'}}>
                     <PastOv dk={dk}/>
                     {fDim&&<DimOv/>}
                     {on.map(s=><span key={s.uid||s.name} style={SB} title={s.name}>{staffIni(s)}</span>)}
+                    {/* ★研修は出勤の側のいちばん右端に【一マス空けて】（2026-11-04 ユーザー指示）。
+                        B案＝名前のバッジも紫にして、その右に「研」。色と文字は TRN_* を通すこと。 */}
+                    {ontrn.length>0&&<span data-wtrngap="1" style={{display:'inline-block',width:SBW}}/>}
+                    {ontrn.map(s=>(
+                      <React.Fragment key={s.uid||s.name}>
+                        <span data-wtrn={s.name} style={{...SB,background:TRN_COL,marginRight:0}}
+                          title={s.name+'（'+TRN_LABEL+'で不在）'}>{staffIni(s)}</span>
+                        <span style={{...SB,background:TRN_COL,marginLeft:0}}
+                          title={s.name+'（'+TRN_LABEL+'で不在）'}>{TRN_CH}</span>
+                      </React.Fragment>
+                    ))}
                     {off.length>0&&<span style={{display:'inline-block',width:1,height:13,background:'#e2e8f0',margin:'0 5px',verticalAlign:'middle'}}/>}
                     {off.map(s=><span key={s.uid||s.name} style={SB_OFF} title={s.name+'（休み）'}>{staffIni(s)}</span>)}
                   </td>;})}
@@ -7171,6 +7219,10 @@ const OFF_CSS = [
   "th,td{border:1px solid #cbd5e1;padding:5px 6px;font-size:12px;vertical-align:top}",
   "th{background:#f1f5f9;font-weight:800;font-size:11.5px;white-space:nowrap}",
   "td.c{text-align:center;white-space:nowrap}",
+  // ★車検の表で「もう一方の店」を分ける（C案・2026-11-04 ユーザー決定）：一行空け ＋ 見出しの行 ＋ 薄い地色
+  "tr.gap td{height:14px;border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;border-top:none;border-bottom:none;background:#fff;padding:0}",
+  "tr.hdr td{background:#f8fafc;font-weight:900;font-size:11.5px;color:#475569;text-align:center;letter-spacing:2px;padding:4px}",
+  "tr.other td{background:#fafbfc}",
   ".tel{font-variant-numeric:tabular-nums;white-space:nowrap}",
   ".chk{display:inline-block;width:13px;height:13px;border:1.5px solid #64748b;border-radius:3px}",
   ".tag{display:inline-block;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569}",
@@ -7230,20 +7282,30 @@ const OFF_JS = [
 const offSheetHtml = (d) => {
   const J = (o) => JSON.stringify(o).replace(/</g, "\\u003c");   // 中に閉じタグを作らせない
   const cell = (v, cls) => "<td" + (cls ? " class=" + cls : "") + ">" + offEsc(v) + "</td>";
-  const table = (arr, cols) => arr.length
+  // grp を渡すと、at 番目から下を「別の店」として出す（一行空け ＋ 見出しの行 ＋ 薄い地色＝C案・2026-11-04）
+  const table = (arr, cols, grp) => arr.length
     ? "<table><thead><tr>" + cols.map(c => "<th" + (c.w ? " style='width:" + c.w + "px'" : "") + ">" + c.t + "</th>").join("") + "</tr></thead><tbody>"
-      + arr.map(r => "<tr>" + cols.map(c => c.chk ? "<td class=c><span class=chk></span></td>" : cell(c.v(r), c.c ? "c" : (c.tel ? "tel" : ""))).join("") + "</tr>").join("")
+      + arr.map((r, i) =>
+          ((grp && grp.at >= 0 && i === grp.at)
+            ? (grp.at > 0 ? "<tr class=gap><td colspan=" + cols.length + "></td></tr>" : "")   // 先頭なら空ける行は要らない
+              + "<tr class=hdr><td colspan=" + cols.length + ">─　" + offEsc(grp.label) + "　入庫　─</td></tr>"
+            : "")
+          + "<tr" + ((grp && grp.at >= 0 && i >= grp.at) ? " class=other" : "") + ">"
+          + cols.map(c => c.chk ? "<td class=c><span class=chk></span></td>" : cell(c.v(r), c.c ? "c" : (c.tel ? "tel" : ""))).join("") + "</tr>").join("")
       + "</tbody></table>"
     : "<div class=none>（ありません）</div>";
   const dayHtml = (day) =>
     "<div class=sheet data-dk=" + offEsc(day.dk) + ">"
     + "<h2>" + offEsc(day.label) + "　" + offEsc(d.storeName) + (day.closed ? "　<span style='color:#b45309'>【休業日】</span>" : "") + "</h2>"
-    + "<div class=meta>車検 " + day.insp.length + "台 ／ 整備 " + day.sched.length + "件 ／ 代車の貸出 " + day.loan.length + "台　|　この写しは " + offEsc(d.stamp) + " 時点</div>"
-    + "<h3 class=r>🚗 車検（入庫予定）</h3>"
+    + "<div class=meta>車検 " + day.insp.length + "台"
+      + (day.nOther ? "（" + offEsc(d.storeName) + day.nMine + "・" + offEsc(d.otherName) + day.nOther + "）" : "")
+      + " ／ 整備 " + day.sched.length + "件 ／ 代車の貸出 " + day.loan.length + "台　|　この写しは " + offEsc(d.stamp) + " 時点</div>"
+    + "<h3 class=r>🚗 車検（入庫予定・両店舗）</h3>"
     + table(day.insp, [{ t: "入庫", w: 52, c: 1, v: r => r.time || "未定" }, { t: "済", w: 34, chk: 1 },
         { t: "氏名", v: r => sama(r.name) }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 76, c: 1, v: r => plateFull(r) },
         { t: "コース", w: 78, c: 1, v: r => r.course }, { t: "電話", w: 110, tel: 1, v: r => r.phone },
-        { t: "代車", w: 112, v: r => r.loaner }, { t: "担当", w: 60, c: 1, v: r => r.staff }, { t: "備考", v: r => r.note }])
+        { t: "代車", w: 112, v: r => r.loaner }, { t: "担当", w: 60, c: 1, v: r => r.staff }, { t: "備考", v: r => r.note }],
+        day.nOther ? { at: day.nMine, label: d.otherName } : null)
     + "<h3>⏰ 整備（タイムスケジュール）</h3>"
     + table(day.sched, [{ t: "時間", w: 52, c: 1, v: r => r.time }, { t: "済", w: 34, chk: 1 },
         { t: "氏名", v: r => sama(r.name) }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 76, c: 1, v: r => plateFull(r) },
@@ -7889,6 +7951,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
   dynStaffH,dynStaffS,
   dayOffDataH,setDayOffDataH,dayOffDataS,setDayOffDataS,
   paidLeaveDataH,setPaidLeaveDataH,paidLeaveDataS,setPaidLeaveDataS,
+  trainingDataH,setTrainingDataH,trainingDataS,setTrainingDataS,
   offNoteH,setOffNoteH,offNoteS,setOffNoteS,
   closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpenDates,
   monthlyHolidays,onSaveMonthlyHoliday})=>{
@@ -7930,6 +7993,10 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
   const setDayOffData=calStore==='honten'?setDayOffDataH:setDayOffDataS;
   const pleaveData = Object.fromEntries(Object.entries(_rawPleave||{}).map(([k,v])=>[k,Array.isArray(v)?v:[]]));
   const setPleaveData=calStore==='honten'?setPaidLeaveDataH:setPaidLeaveDataS;
+  // ★研修（2026-11-04）：休日・有給とは別のキー。★休日の日数・繰り越しには入れない。
+  const _rawTrn=calStore==='honten'?trainingDataH:trainingDataS;
+  const trnData = Object.fromEntries(Object.entries(_rawTrn||{}).map(([k,v])=>[k,Array.isArray(v)?v:[]]));
+  const setTrnData=calStore==='honten'?setTrainingDataH:setTrainingDataS;
   const offNote=(calStore==='honten'?offNoteH:offNoteS)||{};
   const setOffNote=calStore==='honten'?setOffNoteH:setOffNoteS;
   const noteOf=(dkk,name)=>{const v=offNote[dkk+'::'+name];return typeof v==='string'?v:(v&&v.memo)||'';};
@@ -7960,6 +8027,23 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
     // 一般スタッフは自分の休日しか触れない（画面で絞っているが、念のためここでも）
     if(!adminMode && selStaff!==(currentUser&&currentUser.name))return;
     if(isStoreClosed(year,month,day))return; // 店休日は操作不可
+    // ★研修（2026-11-04 ユーザー指示）：休日・有給とは【別のキー】に入れる。
+    //   ★休日の枠（calcHolidayCarry）は見ない＝研修は休みではないので自動で有給に回さない。
+    //   休日・有給が入っている人を研修にすると、その人は「休み」でなくなるので休日・有給から外す。
+    if(selType==='training'){
+      const cur=trnData[dkk]||[];
+      if(cur.includes(selStaff)){
+        setTrnData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
+      }else{
+        setDayOffData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
+        setPleaveData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
+        saveMemo(dkk,selStaff,''); if(memoEdit&&memoEdit.dkk===dkk)setMemoEdit(null);
+        setTrnData(p=>({...p,[dkk]:[...(p[dkk]||[]).filter(n=>n!==selStaff),selStaff]}));
+      }
+      return;
+    }
+    // ★同じ日に「休み」と「研修」を両方持たせない。休日・有給を触る時は研修を外しておく。
+    setTrnData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
     if(selType==='dayoff'){
       const cur=dayOffData[dkk]||[];
       // ★「休日」のまま、もう一度クリックで解除できる（2026-09-28 ユーザー指示）。
@@ -8004,17 +8088,19 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
 
   // 月次集計（店舗休業日はスタッフ休日にカウント）
   const monthlySummary=staffList.map(s=>{
-    let offs=0,leaves=0,closedN=0;
+    let offs=0,leaves=0,closedN=0,trn=0;
     for(let d=1;d<=daysInMonth;d++){
       const dkk=`${cy}-${cm+1}-${d}`;
       if(isStoreClosed(cy,cm,d)){offs++;closedN++;continue;} // 店休日はスタッフ休日としてカウント
       if((dayOffData[dkk]||[]).includes(s.name))offs++;
       if((pleaveData[dkk]||[]).includes(s.name))leaves++;
+      // ★研修は【休みでない】ので別に数える。offs・leaves・「計○日」には絶対に足さないこと（2026-11-04）
+      if((trnData[dkk]||[]).includes(s.name))trn++;
     }
     const carry=calcHolidayCarry(s.name,cy,cm,dayOffData,isStoreClosed,monthlyHolidays);
     if(carry&&carry.over>0){offs-=carry.over;leaves+=carry.over;}   // 枠を超えた休日は有給に数える
-    return{name:s.name,offs,leaves,closedN,carry};
-  }).filter(s=>s.offs>0||s.leaves>0||(s.carry&&s.carry.quota!=null));
+    return{name:s.name,offs,leaves,trn,closedN,carry};
+  }).filter(s=>s.offs>0||s.leaves>0||s.trn>0||(s.carry&&s.carry.quota!=null));
 
   const today=new Date();
   const selCarry=selStaff?calcHolidayCarry(selStaff,cy,cm,dayOffData,isStoreClosed,monthlyHolidays):null;   // 選んだ人の繰り越し（充てた日の表示用）
@@ -8065,6 +8151,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
             {(adminMode?staffList:staffList.filter(s=>s.name===(currentUser&&currentUser.name))).map(s=>{
               const hasDayoff=Object.values(dayOffData).some(arr=>arr.includes(s.name));
               const hasLeave=Object.values(pleaveData).some(arr=>arr.includes(s.name));
+              const hasTrn=Object.values(trnData).some(arr=>arr.includes(s.name));
               return(
                 <button key={s.id} onClick={()=>setSelStaff(s.name)}
                   style={{padding:'4px 10px',borderRadius:6,border:`2px solid ${selStaff===s.name?storeObj.color:'#d1d5db'}`,
@@ -8073,7 +8160,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                     fontWeight:selStaff===s.name?700:500,fontSize:11,cursor:'pointer',
                     position:'relative'}}>
                   {s.name}
-                  {(hasDayoff||hasLeave)&&<span style={{position:'absolute',top:-3,right:-3,width:7,height:7,borderRadius:'50%',background:hasDayoff?'#f97316':'#10b981'}}/>}
+                  {(hasDayoff||hasLeave||hasTrn)&&<span style={{position:'absolute',top:-3,right:-3,width:7,height:7,borderRadius:'50%',background:hasDayoff?'#f97316':hasLeave?'#10b981':TRN_COL}}/>}
                 </button>
               );
             })}
@@ -8093,7 +8180,18 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                   fontWeight:selType==='leave'?800:500,fontSize:12,cursor:'pointer'}}>
                 📋 有給
               </button>
+              {/* ★3つ目の種類「🎓 研修」（v3.99.0・2026-11-04 ユーザー指示）。
+                  意味は「出勤しているけれど研修で不在」＝**休みではない**。
+                  ★休日の日数・繰り越し（mholidays / calcHolidayCarry）には絶対に入れないこと。 */}
+              <button data-seltrn="1" onClick={()=>setSelType('training')}
+                style={{padding:'5px 14px',borderRadius:7,border:`2px solid ${selType==='training'?TRN_COL:'#d1d5db'}`,
+                  background:selType==='training'?'#f5e8ff':'white',color:selType==='training'?TRN_COL:'#6b7280',
+                  fontWeight:selType==='training'?800:500,fontSize:12,cursor:'pointer'}}>
+                {TRN_EMO} {TRN_LABEL}
+              </button>
               <span style={{fontSize:11,color:'#9ca3af',marginLeft:4}}>日付をクリックで設定・解除。休みの日の ✎ でメモ</span>
+              {selType==='training'&&<span style={{fontSize:11,fontWeight:700,color:TRN_COL}}>
+                ※ {TRN_LABEL}は休みではありません（休日の日数・繰り越しには入りません）</span>}
             </div>
           )}
           {memoEdit&&selStaff&&(
@@ -8140,13 +8238,16 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                   // 店舗休業日は名前非表示
                   const selDayoff=!isCl&&selStaff&&(dayOffData[dkk]||[]).includes(selStaff);
                   const selLeave =!isCl&&selStaff&&(pleaveData[dkk]||[]).includes(selStaff);
+                  // ★研修（2026-11-04）。休みではないので、地色は休日・有給より弱い紫にする
+                  const selTrn   =!isCl&&selStaff&&(trnData[dkk]||[]).includes(selStaff);
                   // 休業日の見た目は車検カレンダーと共通（A案＋左の区切りバー）
-                  const cellBg=isCl?CLOSED_BG:selDayoff?'#fff7ed':selLeave?'#f0fdf4':'white';
-                  const cellBorder=isCl?'1px solid #e5e7eb':selDayoff?'2px solid #f97316':selLeave?'2px solid #10b981':'1px solid #e5e7eb';
+                  const cellBg=isCl?CLOSED_BG:selDayoff?'#fff7ed':selLeave?'#f0fdf4':selTrn?'#f9f0ff':'white';
+                  const cellBorder=isCl?'1px solid #e5e7eb':selDayoff?'2px solid #f97316':selLeave?'2px solid #10b981':selTrn?('2px solid '+TRN_COL):'1px solid #e5e7eb';
 
                   // 他スタッフのアイコン（店休日は非表示）
                   const othersOff =isCl?[]:(dayOffData[dkk]||[]).filter(n=>n!==selStaff);
                   const othersLeave=isCl?[]:(pleaveData[dkk]||[]).filter(n=>n!==selStaff);
+                  const othersTrn =isCl?[]:(trnData[dkk]||[]).filter(n=>n!==selStaff);
 
                   return(
                     <div key={di}
@@ -8168,6 +8269,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                           {selDayoff&&<span style={{fontSize:11}}>🏖</span>}
                           {selDayoff&&selCarry&&selCarry.carried.includes(day)&&<span title="前月の残りの休日をこの日に充てています" style={{fontSize:9,fontWeight:700,color:'#1d4ed8',background:'#dbeafe',borderRadius:3,padding:'0 4px'}}>↩{carriedLabel(selCarry)}</span>}
                           {selLeave&&<span style={{fontSize:11}}>📋</span>}
+                          {selTrn&&<span data-caltrn="1" title={TRN_LABEL+'（出勤しているけれど不在）'} style={{fontSize:11}}>{TRN_EMO}</span>}
                           {(selDayoff||selLeave)&&canEditStaff(selStaff)&&(
                             <span onClick={e=>{e.stopPropagation();setMemoText(noteOf(dkk,selStaff));setMemoEdit({dkk});}} title="メモを書く"
                               style={{fontSize:11,cursor:'pointer',color:noteOf(dkk,selStaff)?'#b45309':'#9ca3af',padding:'0 2px'}}>✎</span>
@@ -8193,7 +8295,14 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                             {name.charAt(0)}
                           </span>
                         ))}
-                        {(othersOff.length+othersLeave.length)>10&&<span style={{fontSize:8,color:'#9ca3af'}}>…</span>}
+                        {/* ★研修の人（2026-11-04）。休みではないので紫で分ける */}
+                        {othersTrn.slice(0,5).map((name,i)=>(
+                          <span key={`t${i}`} title={`${name}（${TRN_LABEL}で不在）`}
+                            style={{width:15,height:15,borderRadius:3,background:TRN_COL,color:'white',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:7,fontWeight:800,lineHeight:1,flexShrink:0}}>
+                            {name.charAt(0)}
+                          </span>
+                        ))}
+                        {(othersOff.length+othersLeave.length+othersTrn.length)>10&&<span style={{fontSize:8,color:'#9ca3af'}}>…</span>}
                       </div>
                     </div>
                   );
@@ -8207,12 +8316,14 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
             <div style={{marginTop:14,padding:'11px 14px',background:'#f8fafc',borderRadius:9,border:'1px solid #e5e7eb'}}>
               <div style={{fontWeight:700,fontSize:12,color:'#374151',marginBottom:8}}>📊 {cy}年{cm+1}月 集計</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
-                {monthlySummary.map(({name,offs,leaves,closedN,carry})=>(
+                {monthlySummary.map(({name,offs,leaves,trn,closedN,carry})=>(
                   <span key={name} style={{display:'inline-flex',alignItems:'center',gap:5,padding:'4px 10px',background:'white',border:'1px solid #e5e7eb',borderRadius:20,fontSize:11}}>
                     <span style={{fontWeight:700,color:'#374151'}}>{name}</span>
                     {offs>0&&<span style={{color:'#ea580c',fontWeight:700,display:'flex',alignItems:'center',gap:2}}><span style={{width:8,height:8,borderRadius:2,background:'#f97316',display:'inline-block'}}/>休{offs}日{offBreakdown(closedN,carry)&&<span style={{fontWeight:500,color:'#9a3412'}}>{offBreakdown(closedN,carry)}</span>}</span>}
                     {leaves>0&&<span style={{color:'#059669',fontWeight:700,display:'flex',alignItems:'center',gap:2}}><span style={{width:8,height:8,borderRadius:2,background:'#10b981',display:'inline-block'}}/>有{leaves}日</span>}
                     <span style={{color:'#c2410c',fontWeight:800,fontSize:10}}>計{offs+leaves}日</span>
+                    {/* ★研修は「計○日」のあとに別扱いで出す（休みの日数には入れない） */}
+                    {trn>0&&<span data-sumtrn={name} style={{color:TRN_COL,fontWeight:700,display:'flex',alignItems:'center',gap:2,borderLeft:'1px solid #e5e7eb',paddingLeft:6}}><span style={{width:8,height:8,borderRadius:2,background:TRN_COL,display:'inline-block'}}/>{TRN_CH}{trn}日</span>}
                     {carryLabel(carry)&&<span title={carryTitle(carry)} style={{fontSize:10,fontWeight:700,color:carry.remain>0?'#1d4ed8':'#dc2626',borderLeft:'1px solid #e5e7eb',paddingLeft:6}}>{carryLabel(carry)}</span>}
                   </span>
                 ))}
@@ -13884,6 +13995,10 @@ function AppInner() {
   const [dayOffDataS, setDayOffDataS] =useShared(storKey('dayoff','sanda'),{},60000);
   const [paidLeaveDataH,setPaidLeaveDataH]=useShared(storKey('pleave','honten'),{},30000);
   const [paidLeaveDataS,setPaidLeaveDataS]=useShared(storKey('pleave','sanda'),{},30000);
+  // ★研修（v3.99.0・2026-11-04 ユーザー指示）：{"YYYY-M-D":[氏名]}＝dayoff と同じ形。
+  //   「出勤しているけれど研修で不在」。★休日の日数・繰り越しには入れないこと（上の TRN_COL の項を見ること）。
+  const [trainingDataH,setTrainingDataH]=useShared(storKey('training','honten'),{},30000);
+  const [trainingDataS,setTrainingDataS]=useShared(storKey('training','sanda'),{},30000);
   // 休日メモ（2026-09-20）：休日・有給を入れた日に、その人のひとことメモ。{"YYYY-M-D::氏名": "メモ"}。dayoff/pleave とは別キー
   const [offNoteH,setOffNoteH]=useShared(storKey('offnote','honten'),{},60000);
   const [offNoteS,setOffNoteS]=useShared(storKey('offnote','sanda'),{},60000);
@@ -13924,6 +14039,7 @@ function AppInner() {
   const dayOffData   = vsId==='honten'?dayOffDataH  :dayOffDataS;
   const setDayOffData= vsId==='honten'?setDayOffDataH:setDayOffDataS;
   const paidLeaveData   = vsId==='honten'?paidLeaveDataH:paidLeaveDataS;
+  const trainingData    = vsId==='honten'?trainingDataH:trainingDataS;
   const setPaidLeaveData= vsId==='honten'?setPaidLeaveDataH:setPaidLeaveDataS;
   // 動的代車リスト（店舗別）・レンタカー
   const [loanerListH,  setLoanerListH]  = useShared(storKey('cars','honten'),DEFAULT_LOANERS_HONTEN,60000);
@@ -14523,7 +14639,7 @@ function AppInner() {
   },[currentUser,inspData,schedData,memoData,loanerRes,closedDays,closedDates]);
 
   // ── 印刷・PDF出力 ──────────────────────────────────────────
-  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData, paidLeaveData, restriction) => {
+  const handlePrint = useCallback((dk, inspData, schedData, dateLabel, vsId, loanerRes, COURSES, LOANERS, TIME_SLOTS, staffList, dayOffData, closedDays, closedDates, memoData, paidLeaveData, restriction, trainingData) => {
     const storeName = vsId==='honten'?'本店':'三田店';
     const storeColor = vsId==='honten'?'#2563eb':'#dc2626';
     // 元配列インデックス(_idx)を保持：代車のbookingKey(insp-${dk}-${idx})照合に必要
@@ -14565,7 +14681,12 @@ function AppInner() {
 
     // ★有給も休みとして扱う（2026-10-19）。印刷だけ出勤者に混ざっていた。
     const dayOff = (dayOffData[dk]||[]).concat((paidLeaveData&&paidLeaveData[dk])||[]);
-    const workStaff = staffList.filter(s=>!dayOff.includes(s.name));
+    // ★研修（v3.99.0・2026-11-04）＝出勤しているけれど研修で不在。
+    //   ★ここも【外のスコープを掲まない】こと（useCallback の依存から外れて古い値になる）。
+    //   必ず引数で渡す（dayOffData・paidLeaveData・restriction と同じ決まり）。
+    //   ★休みの側に入れない。印刷は1日が1枚に收まるのが最優先なので、行を増やさず同じ行に添える。
+    const dayTrn = ((trainingData&&trainingData[dk])||[]).filter(n=>!dayOff.includes(n));
+    const workStaff = staffList.filter(s=>!dayOff.includes(s.name)&&!dayTrn.includes(s.name));
 
     // タイムスケジュール：9:00〜18:00 全枠（空き含む）
     const PRINT_SLOTS = SCHED_SLOTS.filter(s=>{
@@ -14727,6 +14848,7 @@ function AppInner() {
   .chip { padding: 2px 8px; border-radius: 10px; font-weight: 700; }
   .chip-work { background: #e0f2fe; color: #075985; }
   .chip-off { background: #e2e8f0; color: #475569; }
+  .chip-trn { background: #f9f0ff; color: #7e22ce; border: 1px solid #7e22ce; font-weight: 800; }
   .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; border-bottom: 2px solid #1e293b; padding-bottom: 4px; }
   h1 { font-size: 21px; font-weight: 800; }
   .print-info { font-size: 10px; color: #475569; }
@@ -14785,6 +14907,7 @@ function AppInner() {
     <div class="staff-row">
       <span style="font-weight:700;color:#374151">本日の休み：</span>
       ${dayOff.length>0?dayOff.map(n=>`<span class="chip chip-off">${n}</span>`).join(''):'<span style="color:#64748b">なし</span>'}
+      ${dayTrn.length>0?`<span style="font-weight:700;color:#7e22ce;margin-left:10px">研修：</span>`+dayTrn.map(n=>`<span class="chip chip-trn">${n} 研</span>`).join(''):''}
     </div>
 
     <div class="section-box memo-section">
@@ -14909,6 +15032,8 @@ function AppInner() {
     const cars  =(sid==="honten"?loanerListH:loanerListS)||[];
     const dayoff=(sid==="honten"?dayOffDataH:dayOffDataS)||{};
     const pleave=(sid==="honten"?paidLeaveDataH:paidLeaveDataS)||{};
+    // ★研修（2026-11-04）。休みではないので「（研修）」と添えて区別する。
+    const training=(sid==="honten"?trainingDataH:trainingDataS)||{};
     const cDays =(sid==="honten"?closedDaysH:closedDaysS)||[];
     const cDates=(sid==="honten"?closedDatesH:closedDatesS)||[];
     const ov=Array.isArray(overrideOpenDates)?overrideOpenDates:[];
@@ -14922,10 +15047,11 @@ function AppInner() {
     const fromN=toNum(back.getFullYear(),back.getMonth(),back.getDate());
     const keys={};const add=dk=>{if(dk&&dkNum(dk)>=fromN)keys[dk]=1;};
     add(madeDk);
-    Object.keys(inspData||{}).forEach(dk=>{if((inspData[dk]||[]).some(r=>r&&r.name&&(r.store||"honten")===sid))add(dk);});
+    // ★車検は【両店あわせて】出すので、他店にしか予約が無い日も1枚つくる（2026-11-04 ユーザー指示）
+    Object.keys(inspData||{}).forEach(dk=>{if((inspData[dk]||[]).some(r=>r&&r.name))add(dk);});
     Object.keys(sched||{}).forEach(dk=>{if(Object.values(sched[dk]||{}).some(r=>r&&r.name))add(dk);});
     Object.keys(memo||{}).forEach(dk=>{if((memo[dk]||[]).some(m=>m&&m.content))add(dk);});
-    Object.keys(dayoff).forEach(add);Object.keys(pleave).forEach(add);
+    Object.keys(dayoff).forEach(add);Object.keys(pleave).forEach(add);Object.keys(training).forEach(add);
     const dks=Object.keys(keys).sort((a,b)=>dkNum(a)-dkNum(b));
     // 代車・レンタカーの帯（レンタカーは会社共通なので両店に入れる）
     const bars=[];
@@ -14944,9 +15070,18 @@ function AppInner() {
       const ds=q[0]+"-"+p2(q[1])+"-"+p2(q[2]);
       const closed=cDays.includes(dt.getDay())||cDates.includes(ds)||isSecondTuesdayHoliday(q[0],q[1]-1,q[2],ov);
       const wd=WD.charAt(dt.getDay());
-      const insp=(inspData[dk]||[]).filter(r=>r&&r.name&&(r.store||"honten")===sid).map(r=>({
+      // ★車検は【両店あわせて】出す（2026-11-04 ユーザー指示・C案）。
+      //   操作している店が上 → 一行空け＋「─ ◯◯店 入庫 ─」の見出し → もう一方の店。
+      //   insp は両店が1本に入っていて台数制限も両店共通なので、片方だけ出すと紙と画面で数が食い違う。
+      //   ★整備・代車・備考・休日は今までどおり「その店のぶんだけ」。混ぜないこと。
+      const inspRow=(r,other)=>({
         time:r.time||"",name:r.name,carType:r.carType||"",no:r.no||"",course:cName(r.course),
-        phone:r.phone||"",loaner:r.loaner||r.rentalLabel||"",staff:r.staff||"",note:r.note||""}));
+        noChi:r.noChi||"",noBun:r.noBun||"",noKana:r.noKana||"",   // ★フルナンバーを出すのに要る（plateFull）
+        phone:r.phone||"",loaner:r.loaner||r.rentalLabel||"",staff:r.staff||"",note:r.note||"",other:!!other});
+      const inspAll=(inspData[dk]||[]).filter(r=>r&&r.name);
+      const inspMine =inspAll.filter(r=>(r.store||"honten")===sid).map(r=>inspRow(r,false));
+      const inspOther=inspAll.filter(r=>(r.store||"honten")!==sid).map(r=>inspRow(r,true));
+      const insp=inspMine.concat(inspOther);
       const day=sched[dk]||{};
       const schedRows=Object.keys(day).filter(k=>day[k]&&day[k].name)
         .sort((a,b)=>String(getBaseSlot(a)).localeCompare(String(getBaseSlot(b))))
@@ -14955,17 +15090,19 @@ function AppInner() {
       const loan=bars.filter(b=>b.f<=n&&n<=b.t).map(b=>({car:b.car,num:b.num,user:b.user,span:b.span,kind:b.kind}));
       const busy={};bars.forEach(b=>{if(b.kind==="代車"&&b.f<=n&&n<=b.t)busy[b.carId]=1;});
       const free=cars.filter(c=>!busy[String(c.id)]).map(c=>((c.name||"")+" "+(c.num||"")).trim());
-      const offs=[].concat((dayoff[dk]||[]),((pleave[dk]||[]).map(x=>x+"（有給）")));
+      const offs=[].concat((dayoff[dk]||[]),((pleave[dk]||[]).map(x=>x+"（有給）")),
+        ((training[dk]||[]).filter(n=>(dayoff[dk]||[]).indexOf(n)<0&&(pleave[dk]||[]).indexOf(n)<0).map(x=>x+"（研修）")));
       return {dk,label:q[1]+"月"+q[2]+"日（"+wd+"）",short:q[1]+"/"+q[2]+"（"+wd+"）",closed,
-        insp,sched:schedRows,loan,free,memo:(memo[dk]||[]).map(m=>m&&m.content).filter(Boolean),off:offs};
+        insp,nMine:inspMine.length,nOther:inspOther.length,
+        sched:schedRows,loan,free,memo:(memo[dk]||[]).map(m=>m&&m.content).filter(Boolean),off:offs};
     });
     let customers=[];
     try{const cx=await cfxLoad(sGet);
       if(cx&&Array.isArray(cx.rows))customers=cx.rows.map(r=>({n:r.n||"",c:r.c||"",no:r.no||"",p:r.p||"",e:r.e||""}));
     }catch(e){console.warn("[控え] 顧客の索引を読めません",e&&e.message);}
-    return {storeName:sid==="honten"?"本店":"三田店",stamp,madeDk,days,customers};
+    return {storeName:sid==="honten"?"本店":"三田店",otherName:sid==="honten"?"三田店":"本店",stamp,madeDk,days,customers};
   },[inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerListH,loanerListS,
-     dayOffDataH,dayOffDataS,paidLeaveDataH,paidLeaveDataS,closedDaysH,closedDaysS,closedDatesH,closedDatesS,
+     dayOffDataH,dayOffDataS,paidLeaveDataH,paidLeaveDataS,trainingDataH,trainingDataS,closedDaysH,closedDaysS,closedDatesH,closedDatesS,
      overrideOpenDates,rentalResData,rentalCars]);
   const offlineDownload=(name,text)=>{
     try{
@@ -16430,6 +16567,8 @@ function AppInner() {
     const isH=store==='honten';
     const off=isH?dayOffDataH:dayOffDataS, setOff=isH?setDayOffDataH:setDayOffDataS;
     const pl =isH?paidLeaveDataH:paidLeaveDataS, setPl =isH?setPaidLeaveDataH:setPaidLeaveDataS;
+    // ★研修も氏名を文字で持っているので、名簿を直したときに一緒に付け替える（2026-11-04）
+    const tr =isH?trainingDataH:trainingDataS,  setTr =isH?setTrainingDataH:setTrainingDataS;
     const nt =isH?offNoteH:offNoteS,          setNt =isH?setOffNoteH:setOffNoteS;
     const swap=(src)=>{
       let hit=false; const out={...(src||{})};
@@ -16443,14 +16582,16 @@ function AppInner() {
     };
     const o1=swap(off); if(o1)setOff(o1);
     const o2=swap(pl);  if(o2)setPl(o2);
+    const o4=swap(tr);  if(o4)setTr(o4);
     const n0=nt||{}; let hit3=false; const o3={...n0};
     for(const k in n0){ const p=String(k).split('::');
       if(p.length===2&&p[1]===oldName){ o3[p[0]+'::'+newName]=n0[k]; delete o3[k]; hit3=true; } }
     if(hit3)setNt(o3);
     const cnt=(o1?Object.keys(o1).filter(k=>(o1[k]||[]).includes(newName)).length:0);
-    if(o1||o2||hit3)console.info('[staff] 名前の変更にあわせて休日データも直しました',oldName,'→',newName,cnt+'日');
+    if(o1||o2||o4||hit3)console.info('[staff] 名前の変更にあわせて休日・研修のデータも直しました',oldName,'→',newName,cnt+'日');
   },[dayOffDataH,dayOffDataS,setDayOffDataH,setDayOffDataS,
      paidLeaveDataH,paidLeaveDataS,setPaidLeaveDataH,setPaidLeaveDataS,
+     trainingDataH,trainingDataS,setTrainingDataH,setTrainingDataS,
      offNoteH,offNoteS,setOffNoteH,setOffNoteS]);
   const handleUpdateStaff=useCallback((updated)=>{
     const isH=updated.store==='honten';
@@ -17204,6 +17345,8 @@ function AppInner() {
                 const staffList=(vsId==='honten'?dynStaffH:dynStaffS).filter(s=>s.badge!=='president'&&s.myNumber!==0);
                 const dayOffCur=vsId==='honten'?dayOffDataH:dayOffDataS;
                 const pleaveCur=vsId==='honten'?paidLeaveDataH:paidLeaveDataS;
+                // ★研修（2026-11-04）。休みではないので、月間集計の休日・有給の日数には入れない
+                const trnCur=vsId==='honten'?trainingDataH:trainingDataS;
                 const offNoteCur=(vsId==='honten'?offNoteH:offNoteS)||{};
                 const noteOfCur=(dkk,name)=>{const v=offNoteCur[dkk+'::'+name];return typeof v==='string'?v:(v&&v.memo)||'';};
                 // 店舗休業日判定（メインカレンダーのovOpenはすでに定義済み）
@@ -17219,17 +17362,18 @@ function AppInner() {
                 };
                 // 個人選択時の月間集計（店休日はスタッフ休日にカウント）
                 const staffMonthStats=calStaffFilter?(()=>{
-                  let offs=0,leaves=0,closedN=0;
+                  let offs=0,leaves=0,closedN=0,trn=0;
                   const daysInM=new Date(cy,cm+1,0).getDate();
                   for(let d=1;d<=daysInM;d++){
                     const dkk=`${cy}-${cm+1}-${d}`;
                     if(isStoreClosedDay(cy,cm,d)){offs++;closedN++;continue;} // 店休日はスタッフ休日としてカウント
                     if((dayOffCur[dkk]||[]).includes(calStaffFilter))offs++;
                     if((pleaveCur[dkk]||[]).includes(calStaffFilter))leaves++;
+                    if((trnCur[dkk]||[]).includes(calStaffFilter))trn++;   // ★別扱い
                   }
                   const carry=calcHolidayCarry(calStaffFilter,cy,cm,dayOffCur,isStoreClosedDay,monthlyHolidays);
                   if(carry&&carry.over>0){offs-=carry.over;leaves+=carry.over;}   // 枠を超えた休日は有給に数える
-                  return{offs,leaves,closedN,carry};
+                  return{offs,leaves,trn,closedN,carry};
                 })():null;
                 return(
                   <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden',margin:'0 18px 18px',border:'2px solid #e5e7eb',borderRadius:9}}>
@@ -17254,17 +17398,20 @@ function AppInner() {
                             // 店休日は名前非表示
                             const offs=isCl?[]:(dayOffCur[dkk]||[]);
                             const leaves=isCl?[]:(pleaveCur[dkk]||[]);
+                            const trns  =isCl?[]:(trnCur[dkk]||[]);
                             // フィルター中は絞り込み
                             const filteredOffs=calStaffFilter?offs.filter(n=>n===calStaffFilter):offs;
                             const filteredLeaves=calStaffFilter?leaves.filter(n=>n===calStaffFilter):leaves;
-                            const hasAny=filteredOffs.length>0||filteredLeaves.length>0;
+                            const filteredTrns=calStaffFilter?trns.filter(n=>n===calStaffFilter):trns;
+                            const hasAny=filteredOffs.length>0||filteredLeaves.length>0||filteredTrns.length>0;
                             // 個人フィルター時：セル背景ハイライト
                             const cellIsOff=calStaffFilter&&filteredOffs.length>0;
                             const cellIsLeave=calStaffFilter&&filteredLeaves.length>0;
+                            const cellIsTrn=calStaffFilter&&filteredTrns.length>0;
                             // 休業日の見た目は車検カレンダーと共通（A案＋左の区切りバー）
                             const baseBg=isCl?CLOSED_BG:'white';
-                            const highlightBg=cellIsOff?'#fff7ed':cellIsLeave?'#f0fdf4':baseBg;
-                            const highlightOutline=cellIsOff?'2px solid #f97316':cellIsLeave?'2px solid #10b981':'none';
+                            const highlightBg=cellIsOff?'#fff7ed':cellIsLeave?'#f0fdf4':cellIsTrn?'#f9f0ff':baseBg;
+                            const highlightOutline=cellIsOff?'2px solid #f97316':cellIsLeave?'2px solid #10b981':cellIsTrn?('2px solid '+TRN_COL):'none';
                             return(
                               <div key={di} style={{minHeight:120,padding:'5px 4px',borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:0,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
                                 {isCl&&<ClosedMark/>}
@@ -17273,6 +17420,7 @@ function AppInner() {
                                   {isHol&&<span style={{fontSize:8,color:isCl?CLOSED_FG:'#dc2626'}}>祝</span>}
                                   {cellIsOff&&<span style={{marginLeft:'auto',fontSize:13}}>🏖</span>}
                                   {cellIsLeave&&<span style={{marginLeft:'auto',fontSize:13}}>📋</span>}
+                                  {cellIsTrn&&<span style={{marginLeft:'auto',fontSize:13}}>{TRN_EMO}</span>}
                                 </div>
                                 <div style={{display:'flex',flexDirection:'column',gap:2}}>
                                   {filteredOffs.map((name,i)=>{
@@ -17295,6 +17443,17 @@ function AppInner() {
                                         <span style={{fontSize:10,fontWeight:isFiltered?800:600,color:'#065f46',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:56}}>{name}</span>
                                         <span style={{fontSize:8,color:'#059669',flexShrink:0}}>有</span>
                                         {noteOfCur(dkk,name)&&<span title={noteOfCur(dkk,name)} style={{fontSize:9,color:'#047857',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:70}}>📝{noteOfCur(dkk,name)}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                  {/* ★研修（休みではない）。紫で「研」を出す */}
+                                  {filteredTrns.map((name,i)=>{
+                                    const isFiltered=calStaffFilter===name;
+                                    return(
+                                      <div key={`t${i}`} data-tabtrn={name} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 5px',borderRadius:4,background:'#f9f0ff',border:`1px solid ${isFiltered?TRN_COL:'#e9d5ff'}`}}>
+                                        <span style={{width:14,height:14,borderRadius:3,background:TRN_COL,color:'white',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,flexShrink:0}}>{name.charAt(0)}</span>
+                                        <span style={{fontSize:10,fontWeight:isFiltered?800:600,color:'#581c87',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:56}}>{name}</span>
+                                        <span style={{fontSize:8,color:TRN_COL,flexShrink:0}}>{TRN_CH}</span>
                                       </div>
                                     );
                                   })}
@@ -17321,6 +17480,14 @@ function AppInner() {
                             <span style={{width:10,height:10,borderRadius:2,background:'#10b981',display:'inline-block'}}/>
                             📋 有給&nbsp;<span style={{fontSize:18,fontWeight:900}}>{staffMonthStats.leaves}</span>&nbsp;日
                           </span>
+                          {/* ★研修は「合計」に入れない（休みではない） */}
+                          {staffMonthStats.trn>0&&(
+                            <span data-tabsumtrn="1" style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 14px',background:'#f9f0ff',border:`2px solid ${TRN_COL}`,borderRadius:20,fontSize:13,fontWeight:800,color:TRN_COL}}>
+                              <span style={{width:10,height:10,borderRadius:2,background:TRN_COL,display:'inline-block'}}/>
+                              {TRN_EMO} {TRN_LABEL}&nbsp;<span style={{fontSize:18,fontWeight:900}}>{staffMonthStats.trn}</span>&nbsp;日
+                              <span style={{fontSize:10,fontWeight:700}}>（休みではありません）</span>
+                            </span>
+                          )}
                           <span style={{fontSize:12,color:'#c2410c',fontWeight:800,padding:'5px 10px',background:'#eef2ff',border:'1px solid #a5b4fc',borderRadius:16}}>
                             合計 {staffMonthStats.offs+staffMonthStats.leaves} 日
                           </span>
@@ -17407,8 +17574,14 @@ function AppInner() {
                   //   ★休みを数える所は dayoff と pleave の両方を見ること。
                   const manualLeaves=(paidLeaveData[dk]||[]).filter(n=>!manualOffs.includes(n));
                   const awayAll=manualOffs.concat(manualLeaves);
+                  // ★研修（v3.99.0・2026-11-04 ユーザー指示・B案）＝出勤しているけれど研修で不在。
+                  //   ★休みの側（awayAll）には入れない＝休日の日数・繰り越しに混ぜないため。
+                  //   出勤の札に並べるが、いちばん右端に一マス空けて置き、「対応可能」の人数からは外す。
+                  const trainees=storeHoliday?[]:((trainingData[dk]||[]).filter(n=>!awayAll.includes(n)));
                   const offs=storeHoliday?currentStaffList.map(s=>s.name):awayAll;
-                  const working=storeHoliday?[]:currentStaffList.filter(s=>!awayAll.includes(s.name));
+                  const workingAll=storeHoliday?[]:currentStaffList.filter(s=>!awayAll.includes(s.name));
+                  const working=workingAll.filter(s=>!trainees.includes(s.name));
+                  const workTrn=workingAll.filter(s=>trainees.includes(s.name));
                   // ★休日に入っている名前は、名簿に無くても**必ず出す**（2026-10-06 ユーザー報告）。
                   //   名簿を名前で絞り込んでいたため、名前を変えた人の休日が黙って消えていた。
                   //   カレンダーは出る／スケジュールは出ない、の食い違いの正体がこれ。
@@ -17425,7 +17598,7 @@ function AppInner() {
                         <span style={{fontWeight:700,fontSize:11,color:'#374151',whiteSpace:'nowrap'}}>本日</span>
                         {storeHoliday
                           ? <span style={{fontSize:11,color:'#9ca3af',fontStyle:'italic'}}>店休日（全員休み）</span>
-                          : working.length>0
+                          : (working.length>0||workTrn.length>0)
                             ? working.map(s=>(
                                 <span key={s.id} style={{padding:'2px 9px',borderRadius:20,background:vsStore.bg,color:vsStore.accent,fontWeight:700,fontSize:11,border:`1px solid ${vsStore.color}55`,whiteSpace:'nowrap'}}>
                                   {s.name}
@@ -17433,6 +17606,18 @@ function AppInner() {
                               ))
                             : <span style={{fontSize:11,color:'#9ca3af',fontStyle:'italic'}}>—</span>
                         }
+                        {/* ★研修はいちばん右端に【一マス空けて】（2026-11-04 ユーザー指示・B案）。
+                            B案＝札そのものを紫にして、その右に「研」の1文字バッジ（有給の「有」と同じ作り）。 */}
+                        {!storeHoliday&&workTrn.length>0&&<span style={{display:'inline-block',width:18,flexShrink:0}}/>}
+                        {!storeHoliday&&workTrn.map(s=>(
+                          <span key={s.id} data-daytrn={s.name} title={s.name+'（'+TRN_LABEL+'で不在）'}
+                            style={{padding:'2px 9px',borderRadius:20,background:TRN_COL,color:'white',fontWeight:700,fontSize:11,
+                              display:'inline-flex',alignItems:'center',whiteSpace:'nowrap'}}>
+                            {s.name}
+                            <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,borderRadius:4,
+                              background:'white',color:TRN_COL,fontSize:9,fontWeight:900,lineHeight:1,flexShrink:0,marginLeft:4}}>{TRN_CH}</span>
+                          </span>
+                        ))}
                       </div>
                       <div onClick={storeHoliday?undefined:()=>setShowDayOff(true)} title={storeHoliday?'店休日のため全員休み':'クリックして休日スタッフを編集（📋 は有給）'}
                         style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',
@@ -17485,7 +17670,10 @@ function AppInner() {
               {(()=>{
                 const storeHolidayChk=isClosed(new Date(...dk.split('-').map((v,i)=>i===1?Number(v)-1:Number(v))));
                 // ★有給も休みとして数える（2026-10-19）。出勤者の人数がずれていた。
-                const offs=storeHolidayChk?currentStaffList.map(s=>s.name):(dayOffData[dk]||[]).concat(paidLeaveData[dk]||[]);
+                // ★研修の人もここでは外す（2026-11-04 ユーザー了承）。出勤しているが研修で不在なので
+                //   「対応可能」「フロント対応」には数えられない。★休日の日数には入れないこと（別の話）。
+                const offs=storeHolidayChk?currentStaffList.map(s=>s.name)
+                  :(dayOffData[dk]||[]).concat(paidLeaveData[dk]||[]).concat(trainingData[dk]||[]);
                 const workingStaff=storeHolidayChk?[]:currentStaffList.filter(s=>!offs.includes(s.name));
                 if(workingStaff.length===0)return null;
                 // 対応スタッフ＝出勤者のうち対応可能業務で車検/整備いずれかのフロント対応にチェックがある人のみ
@@ -17818,7 +18006,7 @@ function AppInner() {
                     <button onClick={()=>setRestrictionModal(true)} title="入庫制限設定" style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:5,cursor:'pointer',fontSize:10,color:'#dc2626',fontWeight:700}}>
                       🚫 入庫制限
                     </button>
-                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData,paidLeaveData,machMerge(schedRestrictions[dk],machAutoOf(dk)))} title="印刷・PDF出力"
+                    <button onClick={()=>handlePrint(dk,inspData,schedData,dateLabel,vsId,loanerRes,COURSES,LOANERS,TIME_SLOTS,currentStaffList,dayOffData,closedDays,closedDates,memoData,paidLeaveData,machMerge(schedRestrictions[dk],machAutoOf(dk)),trainingData)} title="印刷・PDF出力"
                       style={{display:'flex',alignItems:'center',gap:3,padding:'4px 10px',background:'#f8fafc',border:'2px solid #94a3b8',borderRadius:5,cursor:'pointer',fontSize:10,color:'#475569',fontWeight:700}}>
                       🖨 印刷
                     </button>
@@ -18237,6 +18425,8 @@ function AppInner() {
         dayOffDataH={dayOffDataH}   setDayOffDataH={setDayOffDataH}
         dayOffDataS={dayOffDataS}   setDayOffDataS={setDayOffDataS}
         paidLeaveDataH={paidLeaveDataH} setPaidLeaveDataH={setPaidLeaveDataH}
+        trainingDataH={trainingDataH} setTrainingDataH={setTrainingDataH}
+        trainingDataS={trainingDataS} setTrainingDataS={setTrainingDataS}
         paidLeaveDataS={paidLeaveDataS} setPaidLeaveDataS={setPaidLeaveDataS}
         offNoteH={offNoteH} setOffNoteH={setOffNoteH} offNoteS={offNoteS} setOffNoteS={setOffNoteS}
         closedDaysH={closedDaysH} closedDaysS={closedDaysS}
@@ -18404,7 +18594,7 @@ function AppInner() {
         headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         inspData={inspData} schedData={schedData}
         staffList={currentStaffList}
-        dayOffData={dayOffData} paidLeaveData={paidLeaveData}
+        dayOffData={dayOffData} paidLeaveData={paidLeaveData} trainingData={trainingData}
         isClosed={isClosed}
         restrictionOf={restrictionOf} inspLimits={inspLimits}
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setWeekOpen(false);}}

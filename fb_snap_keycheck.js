@@ -14,7 +14,7 @@ const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tired
   'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
-const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
+const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','training','offnote','cdow','cdow-v2','cdate',
   'staff-v2','cars','schedRestrictions'];
 
 const readJson = async k => { const s = await db.collection('kv').doc(k).get(); if (!s.exists) return null;

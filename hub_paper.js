@@ -124,13 +124,15 @@ const sama = (n) => { const s = String(n == null ? '' : n).trim(); return (!s ||
 // ── ① 予定表（日ごと）─────────────────────────────────
 const insp = P('insp') || {};
 const inspArch = P('insp-arch') || {};
-const sched = {}, lres = {}, cars = {}, dayoff = {}, pleave = {}, memo = {}, closed = {}, staff = {};
+const sched = {}, lres = {}, cars = {}, dayoff = {}, pleave = {}, training = {}, memo = {}, closed = {}, staff = {};
 STORES.forEach(s => {
   sched[s.id] = P(s.id + '-sched') || {};
   lres[s.id] = P(s.id + '-lres') || {};
   cars[s.id] = P(s.id + '-cars') || [];
   dayoff[s.id] = P(s.id + '-dayoff') || {};
   pleave[s.id] = P(s.id + '-pleave') || {};
+  // ★研修（2026-11-04）＝出勤しているけれど研修で不在。**休みではない**ので休・有に数えない。
+  training[s.id] = P(s.id + '-training') || {};
   memo[s.id] = P(s.id + '-memo') || {};
   staff[s.id] = (P(s.id + '-staff-v2') || P(s.id + '-staff') || []).filter(x => x && x.name).map(x => x.name);
   closed[s.id] = { dates: (P(s.id + '-cdate') || []).map(norm), dow: (P(s.id + '-cdow-v2') || P(s.id + '-cdow') || []).map(Number) };
@@ -170,23 +172,32 @@ const dayKeys = (sid) => {
   const from = addDays(madeDk, -7);
   const set = {};
   const add = dk => { if (okDk(dk) && norm(dk) >= from) set[norm(dk)] = 1; };
-  Object.keys(insp).forEach(dk => { if ((insp[dk] || []).some(r => (r.store || 'honten') === sid)) add(dk); });
+  // ★車検は【両店あわせて】出すので、他店にしか予約が無い日も1枚つくる（2026-11-04 ユーザー指示）
+  Object.keys(insp).forEach(dk => { if ((insp[dk] || []).some(r => r && r.name)) add(dk); });
   Object.keys(sched[sid]).forEach(add);
   Object.keys(memo[sid]).forEach(dk => { if ((pick2(memo[sid], dk) || []).length) add(dk); });
   Object.keys(dayoff[sid]).forEach(dk => { if ((pick2(dayoff[sid], dk) || []).length) add(dk); });
+  Object.keys(training[sid]).forEach(dk => { if ((pick2(training[sid], dk) || []).length) add(dk); });
   LOANS[sid].concat(LOANS.rental).forEach(r => { if (r.t >= from) { add(r.f); add(r.t); } });
   for (let i = -7; i <= 30; i++) add(addDays(madeDk, i));
   return Object.keys(set).sort();
 };
 
 const dayOf = (sid, dk) => {
-  const il = (pick2(insp, dk) || []).filter(r => (r.store || 'honten') === sid)
-    .sort((a, b) => cmp(a.time || a.bookingTime || 'zz', b.time || b.bookingTime || 'zz'))
-    .map(r => ({
-      time: r.time || r.bookingTime || '', name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
-      course: COURSES[r.course] || '', phone: r.phone || '', loaner: r.loaner || r.rentalLabel || '',
-      staff: r.staff || '', note: [r.note, r.entryDate ? '前日入庫 ' + r.entryDate : '', r.deliveryDate ? '納車 ' + r.deliveryDate + ' ' + (r.deliveryTime || '') : ''].filter(Boolean).join(' / ')
-    }));
+  // ★車検は【両店あわせて】（2026-11-04 ユーザー指示・C案）。この店が上 → 一行空け＋見出し → もう一方の店。
+  //   オフライン予定表の控え（index_dev.html の offlineCollect）と同じ決まり。片方だけ変えないこと。
+  //   ★整備・代車・備考・休日は今までどおり「その店のぶんだけ」。
+  const inspRow = (r, other) => ({
+    time: r.time || r.bookingTime || '', name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
+    course: COURSES[r.course] || '', phone: r.phone || '', loaner: r.loaner || r.rentalLabel || '',
+    staff: r.staff || '', other: !!other,
+    note: [r.note, r.entryDate ? '前日入庫 ' + r.entryDate : '', r.deliveryDate ? '納車 ' + r.deliveryDate + ' ' + (r.deliveryTime || '') : ''].filter(Boolean).join(' / ')
+  });
+  const byTime = (a, b) => cmp(a.time || a.bookingTime || 'zz', b.time || b.bookingTime || 'zz');
+  const iAll = (pick2(insp, dk) || []).filter(r => r && r.name);
+  const iMine = iAll.filter(r => (r.store || 'honten') === sid).sort(byTime).map(r => inspRow(r, false));
+  const iOther = iAll.filter(r => (r.store || 'honten') !== sid).sort(byTime).map(r => inspRow(r, true));
+  const il = iMine.concat(iOther);
   const sd = pick2(sched[sid], dk) || {};
   const sl = Object.keys(sd).sort().map(k => {
     const r = sd[k] || {};
@@ -204,10 +215,14 @@ const dayOf = (sid, dk) => {
   const mm = (pick2(memo[sid], dk) || []).map(x => (typeof x === 'string' ? x : (x && x.content) || '')).filter(Boolean);
   const off = (pick2(dayoff[sid], dk) || []).slice();
   const paid = (pick2(pleave[sid], dk) || []).slice();
+  // ★研修は休みの列に「（研修）」と添えて区別する（休みではない）。
+  //   オフライン予定表の控え（offlineCollect）と同じ出し方。片方だけ変えないこと。
+  const trn = (pick2(training[sid], dk) || []).filter(n => off.indexOf(n) < 0 && paid.indexOf(n) < 0);
   return {
     dk: norm(dk), label: label(dk), short: short(dk), closed: isClosed(sid, dk),
-    insp: il, sched: sl, loan: lent, free: free, memo: mm,
+    insp: il, nMine: iMine.length, nOther: iOther.length, sched: sl, loan: lent, free: free, memo: mm,
     off: off.map(n => (paid.indexOf(n) >= 0 ? n + '（有給）' : n)).concat(paid.filter(n => off.indexOf(n) < 0).map(n => n + '（有給）'))
+      .concat(trn.map(n => n + '（研修）'))
   };
 };
 
@@ -289,8 +304,9 @@ const CARS = {
 const OFF = {};
 STORES.forEach(s => {
   const o = {};
-  Object.keys(dayoff[s.id]).forEach(dk => { if (okDk(dk)) { o[norm(dk)] = o[norm(dk)] || { off: [], paid: [] }; o[norm(dk)].off = (dayoff[s.id][dk] || []).slice(); } });
-  Object.keys(pleave[s.id]).forEach(dk => { if (okDk(dk)) { o[norm(dk)] = o[norm(dk)] || { off: [], paid: [] }; o[norm(dk)].paid = (pleave[s.id][dk] || []).slice(); } });
+  Object.keys(dayoff[s.id]).forEach(dk => { if (okDk(dk)) { o[norm(dk)] = o[norm(dk)] || { off: [], paid: [], trn: [] }; o[norm(dk)].off = (dayoff[s.id][dk] || []).slice(); } });
+  Object.keys(pleave[s.id]).forEach(dk => { if (okDk(dk)) { o[norm(dk)] = o[norm(dk)] || { off: [], paid: [], trn: [] }; o[norm(dk)].paid = (pleave[s.id][dk] || []).slice(); } });
+  Object.keys(training[s.id]).forEach(dk => { if (okDk(dk)) { o[norm(dk)] = o[norm(dk)] || { off: [], paid: [], trn: [] }; o[norm(dk)].trn = (training[s.id][dk] || []).slice(); } });
   OFF[s.id] = o;
 });
 const offMonths = (() => {
@@ -346,6 +362,10 @@ const CSS = [
   "th{background:#f1f5f9;font-weight:800;font-size:11.5px;white-space:nowrap}",
   "thead{display:table-header-group}tr{break-inside:avoid}",
   "td.c{text-align:center;white-space:nowrap}",
+  // ★車検の表で「もう一方の店」を分ける（C案・2026-11-04 ユーザー決定）：一行空け ＋ 見出しの行 ＋ 薄い地色
+  "tr.gap td{height:14px;border-left:1px solid #cbd5e1;border-right:1px solid #cbd5e1;border-top:none;border-bottom:none;background:#fff;padding:0}",
+  "tr.hdr td{background:#f8fafc;font-weight:900;font-size:11.5px;color:#475569;text-align:center;letter-spacing:2px;padding:4px}",
+  "tr.other td{background:#fafbfc}",
   ".tel{font-variant-numeric:tabular-nums;white-space:nowrap}",
   ".chk{display:inline-block;width:13px;height:13px;border:1.5px solid #64748b;border-radius:3px}",
   ".tag{display:inline-block;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569}",
@@ -366,6 +386,7 @@ const CSS = [
   // 休日表
   ".offg td.o{background:#fee2e2;font-weight:800;color:#991b1b}",
   ".offg td.y{background:#fef3c7;font-weight:800;color:#92400e}",
+  ".offg td.t{background:#f9f0ff;font-weight:800;color:#7e22ce}",   /* ★研修（休みではない） */
   "@page{size:A4 portrait;margin:11mm 10mm}",
   "@page land{size:A4 landscape;margin:8mm 8mm}",
   "@media print{",
@@ -405,12 +426,18 @@ var curStore = 'honten', curDk = '';
 function days(){ return D.days[curStore] || []; }
 function dayBy(dk){ var a=days(); for(var i=0;i<a.length;i++) if(a[i].dk===dk) return a[i]; return null; }
 
-function tbl(rows, cols){
+// grp を渡すと、at 番目から下を「別の店」として出す（一行空け ＋ 見出しの行 ＋ 薄い地色＝C案・2026-11-04）
+function tbl(rows, cols, grp){
   if(!rows.length) return '<div class=none>（ありません）</div>';
   var h = '<table><thead><tr>' + cols.map(function(c){
     return '<th'+(c.w?" style='width:"+c.w+"px'":'')+'>'+c.t+'</th>'; }).join('') + '</tr></thead><tbody>';
-  h += rows.map(function(r){
-    return '<tr>' + cols.map(function(c){
+  h += rows.map(function(r,i){
+    var pre = '';
+    if(grp && grp.at>=0 && i===grp.at){
+      if(grp.at>0) pre += '<tr class=gap><td colspan='+cols.length+'></td></tr>';   // 先頭なら空ける行は要らない
+      pre += '<tr class=hdr><td colspan='+cols.length+'>─　'+E(grp.label)+'　入庫　─</td></tr>';
+    }
+    return pre + '<tr'+((grp && grp.at>=0 && i>=grp.at)?' class=other':'')+'>' + cols.map(function(c){
       if(c.chk) return '<td class=c><span class=chk></span></td>';
       return '<td'+(c.c?' class=c':(c.tel?' class=tel':''))+'>'+E(c.v(r))+'</td>';
     }).join('') + '</tr>';
@@ -422,12 +449,16 @@ function daySheet(d){
   var store = curStore==='honten' ? '本店' : '三田店';
   var h = '<div class=sheet>';
   h += '<h2>'+E(d.label)+'　'+E(store)+(d.closed?" <span style='color:#b45309'>【休業日】</span>":'')+'</h2>';
-  h += '<div class=meta>車検 '+d.insp.length+'台 ／ 整備 '+d.sched.length+'件 ／ 代車の貸出 '+d.loan.length+'台　|　この写しは '+E(D.stamp)+' 時点</div>';
-  h += '<h3 class=r>🚗 車検（入庫予定）</h3>';
+  var other = curStore==='honten' ? '三田店' : '本店';
+  h += '<div class=meta>車検 '+d.insp.length+'台'
+     + (d.nOther ? '（'+E(store)+d.nMine+'・'+E(other)+d.nOther+'）' : '')
+     + ' ／ 整備 '+d.sched.length+'件 ／ 代車の貸出 '+d.loan.length+'台　|　この写しは '+E(D.stamp)+' 時点</div>';
+  h += '<h3 class=r>🚗 車検（入庫予定・両店舗）</h3>';
   h += tbl(d.insp, [{t:'入庫',w:52,c:1,v:function(r){return r.time||'未定';}},{t:'済',w:34,chk:1},
     {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:76,c:1,v:function(r){return r.no;}},
     {t:'コース',w:70,c:1,v:function(r){return r.course;}},{t:'電話',w:104,tel:1,v:function(r){return r.phone;}},
-    {t:'代車',w:110,v:function(r){return r.loaner;}},{t:'担当',w:58,c:1,v:function(r){return r.staff;}},{t:'備考',v:function(r){return r.note;}}]);
+    {t:'代車',w:110,v:function(r){return r.loaner;}},{t:'担当',w:58,c:1,v:function(r){return r.staff;}},{t:'備考',v:function(r){return r.note;}}],
+    d.nOther ? {at:d.nMine, label:other} : null);
   h += '<h3>⏰ 整備（タイムスケジュール）</h3>';
   h += tbl(d.sched, [{t:'時間',w:52,c:1,v:function(r){return r.time;}},{t:'済',w:34,chk:1},
     {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:76,c:1,v:function(r){return r.no;}},
@@ -641,26 +672,27 @@ function offg(){
   var book = D.off[sid] || {};
   for(var i=1;i<=last;i++){
     var o = book[y+'-'+pad(m)+'-'+pad(i)];
-    if(o) (o.off||[]).concat(o.paid||[]).forEach(function(n){ if(names.indexOf(n)<0) names.push(n); });
+    if(o) (o.off||[]).concat(o.paid||[]).concat(o.trn||[]).forEach(function(n){ if(names.indexOf(n)<0) names.push(n); });
   }
   var head = '<tr><th class=car>スタッフ</th>';
   for(var i=1;i<=last;i++){ var w=new Date(y,m-1,i).getDay(); head += '<th class="'+(w===0?'sun':w===6?'sat':'')+'">'+i+'<br>'+DOW[w]+'</th>'; }
-  head += '<th style="width:44px">休</th><th style="width:44px">有</th></tr>';
+  head += '<th style="width:44px">休</th><th style="width:44px">有</th><th style="width:44px">研</th></tr>';
   var body = names.map(function(n){
-    var row = '<td class=car>'+E(n)+'</td>', c1=0, c2=0;
+    var row = '<td class=car>'+E(n)+'</td>', c1=0, c2=0, c3=0;
     for(var i=1;i<=last;i++){
       var o = book[y+'-'+pad(m)+'-'+pad(i)] || {};
       var w = new Date(y,m-1,i).getDay(), base = (w===0?'sun':w===6?'sat':'');
-      var paid = (o.paid||[]).indexOf(n)>=0, off = (o.off||[]).indexOf(n)>=0;
+      var paid = (o.paid||[]).indexOf(n)>=0, off = (o.off||[]).indexOf(n)>=0, trn = (o.trn||[]).indexOf(n)>=0;
       if(paid){ c2++; row += '<td class="y '+base+'">有</td>'; }
       else if(off){ c1++; row += '<td class="o '+base+'">休</td>'; }
+      else if(trn){ c3++; row += '<td class="t '+base+'">研</td>'; }   /* ★研修は休・有に数えない */
       else row += '<td class="'+base+'"></td>';
     }
-    return '<tr>'+row+'<td>'+c1+'</td><td>'+c2+'</td></tr>';
+    return '<tr>'+row+'<td>'+c1+'</td><td>'+c2+'</td><td>'+c3+'</td></tr>';
   }).join('');
   var mh = D.mholidays[y+'-'+m];
   $('oout').innerHTML = '<div class="sheet land"><h2>'+(sid==='honten'?'本店':'三田店')+'　'+y+'年'+m+'月　スタッフ休日表</h2>'
-    + '<div class=meta>休＝公休　有＝有給'+(mh?'　|　この月の公休日数は '+mh+'日':'')+'　|　この写しは '+E(D.stamp)+' 時点</div>'
+    + '<div class=meta>休＝公休　有＝有給　研＝研修（休みではありません）'+(mh?'　|　この月の公休日数は '+mh+'日':'')+'　|　この写しは '+E(D.stamp)+' 時点</div>'
     + (names.length ? '<table class="grid offg"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>' : '<div class=none>（スタッフがいません）</div>')
     + '</div>';
 }

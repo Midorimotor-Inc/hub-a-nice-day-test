@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang=ja><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>モック③ 出勤者欄に研修バッジ</title>
+<style>
+:root{--ink:#1b2129;--ink2:#475569;--line:#64748b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Yu Gothic","Hiragino Sans",Meiryo,sans-serif;color:var(--ink);background:#f1f5f9;font-size:13px;line-height:1.5}
+.wrap{max-width:1400px;margin:0 auto;padding:14px 16px 60px}
+.top{background:#fff;border:2px solid #1d4ed8;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.top h1{font-size:17px;font-weight:900}
+.top .sub{font-size:12.5px;color:var(--ink2);margin-top:5px}
+.pick{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;margin-bottom:12px}
+.pick .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pick label{font-weight:800;font-size:12.5px}
+.btn{font:inherit;font-weight:800;font-size:13px;padding:8px 15px;border-radius:9px;border:1.5px solid #cbd5e1;cursor:pointer;background:#fff;color:var(--ink2)}
+.btn.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+.desc{font-size:12.5px;color:var(--ink2);margin:8px 0 2px;padding:8px 10px;background:#f8fafc;border-radius:8px}
+.box{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.box h3{font-size:13.5px;font-weight:900;margin-bottom:8px;padding-left:8px;border-left:4px solid #1d4ed8}
+/* ── 週表の出勤行 ── */
+table.wk{border-collapse:collapse;width:100%;table-layout:fixed}
+table.wk th{padding:5px 4px;font-size:11px;font-weight:800;white-space:nowrap;border:1px solid var(--line);background:#f1f5f9}
+table.wk td{border:1px solid var(--line);padding:3px;font-size:11.5px;height:30px;background:#f8fafc;text-align:center;line-height:1;
+  border-bottom:4px double #334155}
+table.wk td.tm,table.wk th.tm{width:54px;min-width:54px;font-size:11px;font-weight:800;color:#475569;white-space:nowrap}
+.sb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+  border-radius:4px;background:#475569;color:#fff;font-size:10px;font-weight:900;margin:1px;vertical-align:middle}
+.sb.off{background:#fff;color:#e6ebf1;border:1px solid #f1f5f9;font-weight:700}
+.divi{display:inline-block;width:1px;height:13px;background:#e2e8f0;margin:0 5px;vertical-align:middle}
+/* ★「一マス開ける」＝バッジ1つぶんの空き */
+.gap1{display:inline-block;width:19px}
+/* 研修バッジ 3案 */
+.sb.trn{background:#7e22ce}                               /* B案：名前バッジ自体を紫 */
+.bdg{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+  border-radius:4px;background:#7e22ce;color:#fff;font-size:10px;font-weight:900;margin:1px 1px 1px 0;vertical-align:middle}
+.pair{display:inline-flex;vertical-align:middle;margin:1px}
+.pair .l{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 2px;
+  background:#475569;color:#fff;font-size:10px;font-weight:900;border-radius:4px 0 0 4px}
+.pair .r{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:17px;padding:0 2px;
+  background:#7e22ce;color:#fff;font-size:10px;font-weight:900;border-radius:0 4px 4px 0;border-left:1px solid #fff}
+/* ── 1日表示のスタッフ帯 ── */
+.band{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;
+  border-radius:9px;padding:8px 10px;font-size:12.5px}
+.band .ttl{font-weight:900;color:#475569;margin-right:4px}
+.pill{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #cbd5e1;border-radius:7px;
+  padding:3px 8px;font-size:12.5px;font-weight:700}
+.one{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;
+  font-size:10px;font-weight:900;color:#fff}
+.one.y{background:#0f766e}
+.one.t{background:#7e22ce}
+/* ── 休日設定の種類ボタン ── */
+.kinds{display:flex;gap:7px;flex-wrap:wrap}
+.kind{font:inherit;font-weight:800;font-size:13px;padding:9px 16px;border-radius:10px;border:2px solid #cbd5e1;background:#fff;color:#475569;cursor:pointer}
+.kind.on1{background:#64748b;border-color:#64748b;color:#fff}
+.kind.on2{background:#0f766e;border-color:#0f766e;color:#fff}
+.kind.on3{background:#7e22ce;border-color:#7e22ce;color:#fff}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-width:620px;margin-top:10px}
+.cal .d{border:1px solid #cbd5e1;border-radius:7px;min-height:52px;padding:3px 4px;font-size:11px;background:#fff}
+.cal .d b{font-size:12px}
+.cal .d .t{display:block;margin-top:2px;font-size:10px;font-weight:900;border-radius:4px;padding:1px 3px;color:#fff}
+.q{background:#fff;border:2px solid #0891b2;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.q h4{font-size:13.5px;font-weight:900;color:#0e7490;margin-bottom:6px}
+.q ul{margin:0 0 0 18px;font-size:12.5px;color:var(--ink2)}
+.q li{margin:5px 0}
+.warn{background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;font-size:12.5px;color:#92400e;margin-top:10px}
+code{background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:12px}
+</style></head><body><div class=wrap>
+
+<div class=top>
+  <h1>モック③ 出勤者欄に「研修」バッジ ─ 出勤しているけれど研修で不在</h1>
+  <div class=sub>
+    ご指示：<b>出勤者欄に研修バッジ／休日設定のところに研修を追加／スタッフ名の隣に「研」のバッジ／出勤者の名前のいちばん右端に、一マス開けて</b>。<br>
+    ★ お話の中では「<b>県</b>というバッジ」と聞こえましたが、<b>研修の「研」</b>のことだと思い、このモックは「研」で作っています。
+    違っていたら文字を教えてください（1文字なら何でも入ります）。
+  </div>
+</div>
+
+<div class=pick>
+  <div class=row>
+    <label>バッジの形</label>
+    <button class="btn on" data-k=a>A案　名前の右に「研」を別のバッジで</button>
+    <button class=btn data-k=b>B案　名前バッジも紫にして「研」</button>
+    <button class=btn data-k=c>C案　名前と「研」をつないで1つに</button>
+  </div>
+  <div class=desc id=desc></div>
+</div>
+
+<div class=box>
+  <h3>① 週間カレンダーの「出勤」の行</h3>
+  <table class=wk>
+    <thead><tr>
+      <th class=tm></th>
+      <th>11/2<br>月</th><th>11/3<br>火</th><th>11/4<br>水</th><th>11/5<br>木</th>
+      <th>11/6<br>金</th><th>11/7<br>土</th><th>11/8<br>日</th>
+    </tr></thead>
+    <tbody><tr id=wkrow>
+      <td class=tm>出勤</td>
+    </tr></tbody>
+  </table>
+  <div class=desc style="margin-top:10px">
+    並びは <b>出勤の人 → 一マスの空き → 研修の人 → 細い区切り線 → 休みの人</b>。
+    研修の人も「出勤」の側に残ります（出勤しているけれど不在、という意味なので）。
+  </div>
+</div>
+
+<div class=box>
+  <h3>② スケジュール画面（1日表示）のスタッフ帯</h3>
+  <div class=band id=band1></div>
+  <div class=desc style="margin-top:10px">
+    有給の「<span class="one y">有</span>」と同じ作り（16px・角丸・白抜き）で、研修は <span class="one t">研</span>（紫）にしています。
+  </div>
+</div>
+
+<div class=box>
+  <h3>③ 休日設定（スタッフ休日・有給カレンダー）に「研修」を足す</h3>
+  <div class=kinds>
+    <button class="kind on1">🏖 休日</button>
+    <button class="kind on2">📋 有給</button>
+    <button class="kind on3">🎓 研修</button>
+  </div>
+  <div class=desc style="margin-top:10px">
+    いまの「🏖 休日 ／ 📋 有給」の<b>3つ目</b>として足すご提案です。入れ方・消し方は今の2つとまったく同じ（日を押して付ける／もう一度押して外す）。
+  </div>
+  <div class=cal>
+    <div class=d><b>2</b><span class=t style="background:#64748b">🏖 魚住</span></div>
+    <div class=d><b>3</b><span class=t style="background:#64748b">🏖 竹林</span><span class=t style="background:#0f766e">📋 幸田</span></div>
+    <div class=d><b>4</b><span class=t style="background:#7e22ce">🎓 幸田</span></div>
+    <div class=d><b>5</b><span class=t style="background:#7e22ce">🎓 幸田</span></div>
+    <div class=d><b>6</b><span class=t style="background:#0f766e">📋 幸田</span></div>
+    <div class=d><b>7</b><span class=t style="background:#64748b">🏖 見取</span></div>
+    <div class=d style="background:#fecaca"><b>8</b><span style="font-size:10px;font-weight:900;color:#991b1b">休業日</span></div>
+  </div>
+  <div class=warn>
+    <b>研修は「休み」ではないので、休日の日数・繰り越しの計算（<code>mholidays</code>）には一切入れません。</b>
+    月間休日数も有給の残りも、いままでどおりです。
+  </div>
+</div>
+
+<div class=q>
+  <h4>決めていただきたいこと（4つ）</h4>
+  <ul>
+    <li><b>① バッジの文字は「研」でよいですか。</b>（お話では「県」と聞こえました。研修の「研」だと思っています）</li>
+    <li><b>② 上の A・B・C どの形にしますか。</b>　A＝名前は今の色のまま、右に小さく「研」／B＝名前バッジも紫にして目立たせる／C＝名前と「研」をくっつけて1つに。</li>
+    <li><b>③ 研修の人を「対応可能」「フロント対応」の人数に数えますか。</b>
+      いまは休日・有給の人を外して数えています。<b>研修で不在なら外す</b>のが筋だと思いますが、
+      「出勤には違いないので数える」というお考えならそのようにします。<b>外す前提で進めます。</b></li>
+    <li><b>④ 置き場所は「休日設定の中の3つ目」でよいですか。</b>
+      別の入口（スタッフ管理の中など）にする案もありますが、<b>休日と同じ場所で付け外しできるほうが迷わない</b>と思います。</li>
+  </ul>
+</div>
+
+<div class=q style="border-color:#94a3b8">
+  <h4 style="color:#475569">作るうえでの中身（ご参考・ここは私が決めてよい所です）</h4>
+  <ul>
+    <li>保存先は <code>{店}-training</code>（<code>{"2026-11-4":["幸田桂紀"]}</code>）＝<b>休日 <code>dayoff</code> とまったく同じ形</b>。
+      氏名を文字で持つので、<b>スタッフ名を変えた時の付け替え</b>（<code>renameStaffInOff</code>）と
+      <b>退職の抹消</b>（<code>fb_fix_staff_names.js --retire</code>）にも一緒に入れます。</li>
+    <li>毎朝の控え・時点保存・復旧の表（<code>SNAP_KEYS_STORE</code>・<code>fb_backup</code>・<code>fb_restore</code> の <code>shapeOf</code>・<code>fb_drill</code>）にも足します。
+      ここを忘れると<b>研修だけ控えに入らない</b>ので、必ずセットで入れます。</li>
+    <li>出す所は <b>週間カレンダー・1日表示・スマホ・カレンダー・印刷・オフライン予定表の控え・紙の控え</b>。
+      「休みを数える所は必ず休日と有給の両方を見る」という既存の決まり（2026-10-19 のバグの教訓）と同じように、
+      <b>研修も1か所ずつ取りこぼさないよう検査を足します</b>。</li>
+  </ul>
+</div>
+
+</div>
+<script>
+var DESC={
+ a:'A案 … 名前のバッジは今までの濃いグレーのまま、その右に小さな紫の「研」を足します。いちばん今の見た目を変えません。',
+ b:'B案 … 研修の人は名前のバッジも紫にして、その右に「研」。遠目にも「この人は違う」とすぐ分かりますが、紫が2つ並びます。',
+ c:'C案 … 名前と「研」をくっつけて1つのバッジにします。幅がいちばん狭く、1マスに多く入りますが、文字は小さめになります。'
+};
+// 月〜日：出勤の人／研修の人／休みの人
+var DAYS=[
+ {on:['見','岡','竹'],       trn:['幸'], off:['魚']},
+ {on:['見','岡','魚'],       trn:[],     off:['竹','幸']},
+ {on:['見','竹','魚'],       trn:['幸'], off:['岡']},
+ {on:['見','岡','竹','魚'],  trn:['幸'], off:[]},
+ {on:['見','岡','竹','魚'],  trn:[],     off:['幸']},
+ {on:['岡','竹','幸'],       trn:[],     off:['見','魚']},
+ {on:[],                     trn:[],     off:['見','岡','竹']}
+];
+var NM={'見':'見取大介','岡':'岡本','竹':'竹林','幸':'幸田桂紀','魚':'魚住'};
+function trnHtml(k,i){
+  if(k==='a')return '<span class=sb title="'+NM[i]+'">'+i+'</span><span class=bdg title="'+NM[i]+'（研修で不在）">研</span>';
+  if(k==='b')return '<span class="sb trn" title="'+NM[i]+'">'+i+'</span><span class=bdg title="'+NM[i]+'（研修で不在）">研</span>';
+  return '<span class=pair title="'+NM[i]+'（研修で不在）"><span class=l>'+i+'</span><span class=r>研</span></span>';
+}
+function draw(k){
+  var h='<td class=tm>出勤</td>';
+  DAYS.forEach(function(d){
+    var c='';
+    d.on.forEach(function(i){c+='<span class=sb title="'+NM[i]+'">'+i+'</span>';});
+    if(d.trn.length){
+      c+='<span class=gap1></span>';                 /* ★一マス開ける */
+      d.trn.forEach(function(i){c+=trnHtml(k,i);});
+    }
+    if(d.off.length){
+      c+='<span class=divi></span>';
+      d.off.forEach(function(i){c+='<span class="sb off" title="'+NM[i]+'（休み）">'+i+'</span>';});
+    }
+    h+='<td>'+c+'</td>';
+  });
+  document.getElementById('wkrow').innerHTML=h;
+
+  var b='<span class=ttl>👤 出勤 4名</span>'
+    +'<span class=pill>見取大介</span><span class=pill>岡本</span><span class=pill>竹林</span>'
+    +'<span class=pill>幸田桂紀 <span class="one t">研</span></span>'
+    +'<span style="width:1px;height:18px;background:#cbd5e1;margin:0 4px"></span>'
+    +'<span class=ttl>🏖 休み 1名</span>'
+    +'<span class=pill style="color:#94a3b8">魚住</span>';
+  document.getElementById('band1').innerHTML=b;
+  document.getElementById('desc').textContent=DESC[k];
+}
+[].slice.call(document.querySelectorAll('[data-k]')).forEach(function(bt){
+  bt.onclick=function(){
+    [].slice.call(document.querySelectorAll('[data-k]')).forEach(function(x){x.className='btn';});
+    bt.className='btn on'; draw(bt.getAttribute('data-k'));
+  };
+});
+draw('a');
+</script></body></html>

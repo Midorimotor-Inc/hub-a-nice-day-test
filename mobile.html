@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793772866526';
+  window.__APP_BUILD='build-1793834680698';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.98.0';
+const MOBILE_VERSION='3.99.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -194,7 +194,8 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   STOR+'setItems',    // 整備の【内容】欄のクイック項目（PCで作った定型文・2026-10-20）
   STOR+'setGroups',   // ★クイックメニューのグループ（2026-10-31）
   STOR+'inspItems',   // ★車検の【備考】のクイック項目（一般整備とは別・2026-11-04）
-  STOR+'inspGroups']; // ★車検のクイックメニューのグループ（2026-11-04）
+  STOR+'inspGroups', // ★車検のクイックメニューのグループ（2026-11-04）
+  storKey('training','honten'),storKey('training','sanda')];  // ★研修（2026-11-04）。休みではないが出勤で不在
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -548,6 +549,16 @@ const getDefaultCapabilities=(badge)=>{
 // ★配色は【赤】（2026-10-30 ユーザー決定・PC版と同値）。オレンジだとスタッフ休日と地続きに見えた。
 const CLOSED_BG='#fecaca', CLOSED_FG='#991b1b', CLOSED_BAR='inset 4px 0 0 #b91c1c', CLOSED_LABEL='休業日';
 const CLOSED_TAG_BG='#dc2626', CLOSED_TAG_FG='#ffffff';
+// ── 研修バッジ（v3.99.0・2026-11-04 ユーザー指示・B案）─────────────────
+//   意味は「**出勤しているけれど研修で不在**」。index_dev.html と同じものを置くこと。
+//   ★★研修は【休みではない】。休日の日数・繰り越しの計算には絶対に入れないこと。
+//   ★研修の人は「出勤」の側に残し、**いちばん右端に一マス空けて**並べる。
+//   ・保存先は {店}-training（`{"YYYY-M-D":[氏名]}`＝dayoff とまったく同じ形）
+//   ・入れ方は PC の休日設定（StaffCalendarModal）の 種類 の3つ目「🎓 研修」
+const TRN_COL = '#7e22ce';   // 研修の紫
+const TRN_CH  = '研';        // バッジの1文字
+const TRN_EMO = '🎓';       // 休日設定・カレンダーで使う絵文字
+const TRN_LABEL = '研修';
 // 休業日判定（PC版 AppInner の isClosed と同一）: 店舗別の定休曜日(cdow) → 店舗別の個別休業日(cdate)
 // → 第2火曜（両店共通・override-openで通常営業に戻せる）。日付文字列はゼロ詰め（PC版の保存形式）。
 const calIsClosed=(date,cDays=[],cDates=[],ovOpen=[])=>{
@@ -1087,7 +1098,7 @@ const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tired
   'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
-const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','offnote','cdow','cdow-v2','cdate',
+const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','training','offnote','cdow','cdow-v2','cdate',
   'staff-v2','cars','schedRestrictions'];
 const fbSnapKeyList = async () => {
   const set = {};
@@ -4409,7 +4420,7 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGro
   );
 };
 
-const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
+const ScheduleView=({pleaveData,trainingData,onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
   const today=new Date();
   const [ds,setDs]=useState({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()});
   useEffect(()=>{if(initDate)setDs(initDate);},[initDate]);
@@ -4527,19 +4538,33 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
           const offsOnly=(dayOffData||{})[dk]||[];
           const leavesOnly=((pleaveData||{})[dk]||[]).filter(n=>!offsOnly.includes(n));
           const away=offsOnly.concat(leavesOnly);
-          const working=(staffList||[]).filter(s=>s&&s.name&&!away.includes(s.name));
-          if(!working.length&&!away.length)return null;
+          // ★研修（2026-11-04 ユーザー指示・B案）＝出勤しているけれど研修で不在。
+          //   ★休みの側へ入れないこと。出勤の側に残し、**いちばん右端に一マス空けて**並べる。
+          const trnOnly=((trainingData||{})[dk]||[]).filter(n=>!away.includes(n));   // 休みが勝つ
+          const workAll=(staffList||[]).filter(s=>s&&s.name&&!away.includes(s.name));
+          const working=workAll.filter(s=>!trnOnly.includes(s.name));
+          const workTrn=workAll.filter(s=>trnOnly.includes(s.name));
+          if(!workAll.length&&!away.length)return null;
           const LV={display:'inline-flex',alignItems:'center',justifyContent:'center',width:15,height:15,borderRadius:4,
             background:'white',color:'#0f766e',fontSize:9,fontWeight:900,lineHeight:1,flexShrink:0,marginRight:3};
+          const TV={display:'inline-flex',alignItems:'center',justifyContent:'center',width:15,height:15,borderRadius:4,
+            background:'white',color:TRN_COL,fontSize:9,fontWeight:900,lineHeight:1,flexShrink:0,marginLeft:3};
           return(
             <div style={{margin:'10px 12px 0',border:'1px solid #e2e8f0',borderRadius:10,overflow:'hidden',background:'white'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',padding:'7px 10px'}}>
                 <span style={{fontSize:13}}>👤</span>
                 <span style={{fontSize:10.5,fontWeight:800,color:'#475569',flexShrink:0}}>出勤</span>
-                {working.length
+                {(working.length||workTrn.length)
                   ?working.map(st=>(
                     <span key={st.uid||st.name} style={{padding:'2px 8px',borderRadius:20,background:'#f1f5f9',color:'#334155',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>{st.name}</span>))
                   :<span style={{fontSize:11,color:'#9ca3af'}}>—</span>}
+                {/* ★研修はいちばん右端。前に一マス空ける */}
+                {workTrn.length>0&&<span data-mtrngap="1" style={{display:'inline-block',width:14,flexShrink:0}}/>}
+                {workTrn.map(st=>(
+                  <span key={st.uid||st.name} data-mtrn={st.name} title={st.name+'（'+TRN_LABEL+'で不在）'}
+                    style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:20,background:TRN_COL,color:'white',fontWeight:700,fontSize:11,whiteSpace:'nowrap'}}>
+                    {st.name}<span style={TV}>{TRN_CH}</span>
+                  </span>))}
               </div>
               {away.length>0&&(
                 <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',padding:'7px 10px',borderTop:'1px dashed #e2e8f0',
@@ -4567,7 +4592,9 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
           //   有給の人を出勤に数えていた（PC と同じ取りこぼし）。
           const offsOnly=(dayOffData||{})[dk]||[];
           const leavesOnly=((pleaveData||{})[dk]||[]).filter(n=>!offsOnly.includes(n));
-          const offs=offsOnly.concat(leavesOnly);
+          // ★研修の人もここでは外す（2026-11-04）。出勤しているが不在なので
+          //   「対応可能」「フロント対応」には数えられない。★休日の日数には入れないこと。
+          const offs=offsOnly.concat(leavesOnly).concat((trainingData||{})[dk]||[]);
           const working=(staffList||[]).filter(s=>s&&s.name&&!offs.includes(s.name));
           if(working.length===0)return null;
           const capOf=s=>s.capabilities||getDefaultCapabilities(s.badge||'mechanic');
@@ -5693,7 +5720,7 @@ const carryLabel=(c,long)=>{
 const offBreakdown=(closedN,c)=>{const p=[];if(closedN>0)p.push(`店休日 ${closedN}`);if(c&&c.carriedN>0)p.push(`繰り越し休日 ${c.carriedN}`);return p.length?`（うち${p.join('＋')}）`:'';};
 const carriedLabel=c=>c?`${c.fromM}月繰り越し分`:'';
 const carryTitle=c=>c&&c.quota!=null?`会社の休日数 ${c.company}日 ＋ 前月からの繰り越し ${c.carryIn}日 ＝ ${c.quota}日。取得 ${c.taken}日（店休日を含む・有給は数えない）。繰り越し分は今月の一番早い休日から充てます。使い切った後の休日は自動で有給になります`:'';
-const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pleaveS,
+const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,pleaveH,pleaveS,trainingH,trainingS,
   closedDaysH,closedDaysS,closedDatesH,closedDatesS,overrideOpen,monthlyHolidays,onToggle,offNoteH,offNoteS,onSaveNote})=>{
   const today=new Date();
   // ★表示する店はヘッダーの帯に合わせる（2026-10-02）。ボタンが2つ並んで紛らわしかったため
@@ -5711,6 +5738,9 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
   const norm=o=>Object.fromEntries(Object.entries(o||{}).map(([k,v])=>[k,Array.isArray(v)?v:[]]));
   const offs=norm(store==='honten'?dayOffH:dayOffS);
   const leaves=norm(store==='honten'?pleaveH:pleaveS);
+  // ★研修（2026-11-04）。休みではないので休日・有給の日数には入れない。
+  //   ★スマホでは【見るだけ】。入れ方は PC の休日設定の3つ目「🎓 研修」だけ（ユーザー指示）。
+  const trns=norm(store==='honten'?trainingH:trainingS);
   const cDays=Array.isArray(store==='honten'?closedDaysH:closedDaysS)?(store==='honten'?closedDaysH:closedDaysS):[];
   const cDates=Array.isArray(store==='honten'?closedDatesH:closedDatesS)?(store==='honten'?closedDatesH:closedDatesS):[];
   const closedOn=d=>calIsClosed(new Date(cy,cm,d),cDays,cDates,overrideOpen);
@@ -5719,7 +5749,7 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
   const target=adminMode?who:user.name;           // 誰の休日を入れるか
   const targetInStore=staff.some(s=>s.name===target);
   // 月の集計（PC版と同じく店休日はスタッフ休日に数える）
-  const mine=useMemo(()=>{let o=0,l=0,cN=0;for(let d=1;d<=dim;d++){if(closedOn(d)){o++;cN++;continue;}if((offs[dkOf(d)]||[]).includes(target))o++;if((leaves[dkOf(d)]||[]).includes(target))l++;}const c=calcHolidayCarry(target,cy,cm,offs,(y,m,d)=>calIsClosed(new Date(y,m,d),cDays,cDates,overrideOpen),monthlyHolidays);if(c&&c.over>0){o-=c.over;l+=c.over;}return{o,l,cN};},[offs,leaves,cy,cm,target,cDays,cDates,overrideOpen]);
+  const mine=useMemo(()=>{let o=0,l=0,cN=0;let t2=0;for(let d=1;d<=dim;d++){if(closedOn(d)){o++;cN++;continue;}if((offs[dkOf(d)]||[]).includes(target))o++;if((leaves[dkOf(d)]||[]).includes(target))l++;if((trns[dkOf(d)]||[]).includes(target))t2++;}const c=calcHolidayCarry(target,cy,cm,offs,(y,m,d)=>calIsClosed(new Date(y,m,d),cDays,cDates,overrideOpen),monthlyHolidays);if(c&&c.over>0){o-=c.over;l+=c.over;}return{o,l,cN,t:t2};},[offs,leaves,trns,cy,cm,target,cDays,cDates,overrideOpen]);
   const mhol=monthlyHolidays&&monthlyHolidays[`${cy}-${cm+1}`];
   const offNote=(store==='honten'?offNoteH:offNoteS)||{};
   const noteOf=(dk,name)=>{const v=offNote[dk+'::'+name];return typeof v==='string'?v:(v&&v.memo)||'';};
@@ -5733,7 +5763,8 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
   const selDk=selDay?dkOf(selDay):null;
   const selClosed=selDay?closedOn(selDay):false;
   const selOffs=selDk?(offs[selDk]||[]):[], selLeaves=selDk?(leaves[selDk]||[]):[];
-  const selWorking=selClosed?[]:staff.filter(s=>!selOffs.includes(s.name)&&!selLeaves.includes(s.name));
+  const selTrns=selDk?((trns[selDk]||[]).filter(n=>!selOffs.includes(n)&&!selLeaves.includes(n))):[];
+  const selWorking=selClosed?[]:staff.filter(s=>!selOffs.includes(s.name)&&!selLeaves.includes(s.name)&&!selTrns.includes(s.name));
   const myState=selDk?(selOffs.includes(target)?'dayoff':selLeaves.includes(target)?'leave':''):'';
   // 休日・有給の入力は「入力モード」でまとめて（2026-09-22 ユーザー要望：タップ1つで確定は誤操作しやすい／1日ずつ確定は面倒）
   //   ✏ 休日を入力する → 種類（休日／有給／解除）を選ぶ → 日をいくつでもタップ（もう一度で取り消し）→ ✅ 確定 で一括保存
@@ -5822,7 +5853,7 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
           🏪 {store==='sanda'?'三田店':'本店'}{store===vsId?'':'（閲覧）'}
         </span>
         <div style={{marginLeft:'auto',textAlign:'right',fontSize:10.5,color:'#475569',lineHeight:1.5}}>
-          <div><b style={{color:'#ea580c'}}>{target}</b>：🏖 {mine.o}日{offBreakdown(mine.cN,carry)?<span style={{fontWeight:500,color:'#9a3412'}}>{offBreakdown(mine.cN,carry)}</span>:null}{mine.l?`・📋 有給 ${mine.l}日`:''}</div>
+          <div><b style={{color:'#ea580c'}}>{target}</b>：🏖 {mine.o}日{offBreakdown(mine.cN,carry)?<span style={{fontWeight:500,color:'#9a3412'}}>{offBreakdown(mine.cN,carry)}</span>:null}{mine.l?`・📋 有給 ${mine.l}日`:''}{mine.t?<span data-mtabtrn="1" style={{color:TRN_COL,fontWeight:800}}>{'・'+TRN_EMO+' '+TRN_LABEL+' '+mine.t+'日'}</span>:null}</div>
           {mhol!=null&&mhol!==''&&<div style={{color:'#94a3b8'}}>会社の{cm+1}月の休日 {mhol}日</div>}
         </div>
       </div>
@@ -5877,11 +5908,12 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
               const isSel=d===selDay;
               const isSun=di===0,isSat=di===6,isHol=isHoliday(cy,cm,d);
               const o=offs[dk]||[],l=leaves[dk]||[];
-              const meOff=o.includes(target),meLeave=l.includes(target);
-              const working=closed?0:staff.filter(s=>!o.includes(s.name)&&!l.includes(s.name)).length;
+              const tr=(trns[dk]||[]).filter(n=>!o.includes(n)&&!l.includes(n));   // ★研修（休みが勝つ）
+              const meOff=o.includes(target),meLeave=l.includes(target),meTrn=tr.includes(target);
+              const working=closed?0:staff.filter(s=>!o.includes(s.name)&&!l.includes(s.name)&&!tr.includes(s.name)).length;
               const pendT=pendDays[dk];   // 未確定の選択
-              const bg=closed?CLOSED_BG:meOff?'#fff7ed':meLeave?'#d1fae5':'white';
-              const bd=pendT?'2px dashed #1d4ed8':isSel?'2px solid #1d4ed8':meOff?'2px solid #f97316':meLeave?'2px solid #10b981':isToday?'2px solid #93c5fd':'2px solid #f1f5f9';
+              const bg=closed?CLOSED_BG:meOff?'#fff7ed':meLeave?'#d1fae5':meTrn?'#f9f0ff':'white';
+              const bd=pendT?'2px dashed #1d4ed8':isSel?'2px solid #1d4ed8':meOff?'2px solid #f97316':meLeave?'2px solid #10b981':meTrn?('2px solid '+TRN_COL):isToday?'2px solid #93c5fd':'2px solid #f1f5f9';
               return(
                 <div key={di} onClick={()=>{setSelDay(d);setMemoOpen(false);if(editMode&&!closed&&!busy)togglePend(dk);}}
                   style={{borderRadius:10,background:pendT?'#dbeafe':bg,border:bd,boxShadow:closed?CLOSED_BAR:'none',minHeight:54,padding:'4px 2px',cursor:'pointer',position:'relative'}}>
@@ -5892,7 +5924,9 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
                     ?<div style={{textAlign:'center',marginTop:6}}><span style={{fontSize:10,fontWeight:900,color:'white',background:'#1d4ed8',borderRadius:5,padding:'1px 6px',whiteSpace:'nowrap'}}>{pendT==='dayoff'?'＋休日':pendT==='leave'?'＋有給':'解除'}</span></div>
                     :<div style={{textAlign:'center',marginTop:2,lineHeight:1.2}}>
                       {(meOff||meLeave)&&<div style={{fontSize:9,fontWeight:900,color:meOff?'#ea580c':'#059669'}}>{meOff?(carry&&carry.carried.includes(d)?'🏖繰越':'🏖休'):'📋有'}</div>}
-                      {(o.length+l.length)>0&&<div style={{fontSize:9,fontWeight:700,color:working<=Math.max(1,Math.floor(staff.length/2))?'#dc2626':'#64748b'}}>休み{o.length+l.length}人</div>}   {/* A案（2026-09-22）：休みの人数だけ。誰も休まない日は出さない。内訳は日をタップ。人手が半数以下なら赤 */}
+                      {!meOff&&!meLeave&&meTrn&&<div data-mcaltrn="1" style={{fontSize:9,fontWeight:900,color:TRN_COL}}>{TRN_EMO+TRN_CH}</div>}
+                      {(o.length+l.length)>0&&<div style={{fontSize:9,fontWeight:700,color:working<=Math.max(1,Math.floor(staff.length/2))?'#dc2626':'#64748b'}}>休み{o.length+l.length}人</div>}
+                      {tr.length>0&&<div style={{fontSize:9,fontWeight:700,color:TRN_COL}}>{TRN_LABEL+tr.length+'人'}</div>}   {/* A案（2026-09-22）：休みの人数だけ。誰も休まない日は出さない。内訳は日をタップ。人手が半数以下なら赤 */}
                     </div>}
                 </div>
               );
@@ -5919,6 +5953,11 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
               {selLeaves.length>0&&<div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
                 <span style={{flexShrink:0,color:'#059669',fontWeight:800}}>📋 有給</span>
                 {selLeaves.map(n=><span key={n} style={{padding:'2px 8px',borderRadius:6,background:'#d1fae5',border:'1px solid #6ee7b7',color:'#065f46',fontWeight:700}}>{n}{noteOf(selDk,n)&&<span style={{fontWeight:400,fontSize:10.5}}>（{noteOf(selDk,n)}）</span>}</span>)}
+              </div>}
+              {selTrns.length>0&&<div data-mtabtrnrow="1" style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                <span style={{flexShrink:0,color:TRN_COL,fontWeight:800}}>{TRN_EMO} {TRN_LABEL}</span>
+                {selTrns.map(n=><span key={n} style={{padding:'2px 8px',borderRadius:6,background:'#f9f0ff',border:`1px solid ${TRN_COL}`,color:'#581c87',fontWeight:700}}>{n} {TRN_CH}</span>)}
+                <span style={{fontSize:10,color:TRN_COL,fontWeight:700}}>※ 休みではありません</span>
               </div>}
               <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
                 <span style={{flexShrink:0,color:'#475569',fontWeight:800}}>出勤</span>
@@ -6509,6 +6548,8 @@ const App=()=>{
   const [dayOffS,setDayOffS]=useState({});
   const [pleaveH,setPleaveH]=useState({});          // 有給（PC版 pleave-honten / pleave-sanda）
   const [pleaveS,setPleaveS]=useState({});
+  const [trainingH,setTrainingH]=useState({});      // ★研修（{店}-training。休みではない）
+  const [trainingS,setTrainingS]=useState({});
   const [monthlyHolidays,setMonthlyHolidays]=useState({}); // 会社が決めた月間休日数 {"2026-6":10}（表示のみ）
   const [offNoteH,setOffNoteH]=useState({});        // 休日メモ {"YYYY-M-D::氏名":"メモ"}（PC版と同じキー {店}-offnote）
   const [offNoteS,setOffNoteS]=useState({});
@@ -6642,7 +6683,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups,iitems,igroups]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups,iitems,igroups,trnH,trnS]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -6680,6 +6721,9 @@ const App=()=>{
       // ★車検の備考のクイックは一般整備とは別のキー（2026-11-04 ユーザー指示）
       if(Array.isArray(iitems))setInspItemsRaw(iitems);
       if(Array.isArray(igroups))setInspGroupsRaw(igroups);
+      // ★研修（2026-11-04）
+      if(isPlainObj(trnH))setTrainingH(trnH);
+      if(isPlainObj(trnS))setTrainingS(trnS);
       setGasOk(FB_ON?!(window.__hubGasDown||0):true);   // Firestore では購読の失敗（fbDown）を接続状態に反映
     }catch{setGasOk(false);}
     finally{fetchBusyRef.current=false;}
@@ -7836,6 +7880,7 @@ const App=()=>{
           staffList={staffPick(vsId,staffH,staffS)}
           dayOffData={vsId==='honten'?dayOffH:dayOffS}
           pleaveData={vsId==='honten'?pleaveH:pleaveS}
+          trainingData={vsId==='honten'?trainingH:trainingS}
           closedDays={cDays} closedDates={cDates} overrideOpen={overrideOpen} inspLimits={inspLimits}/>}
         {tab==='cal'&&<CalendarView inspData={inspData} closedDays={cDays} closedDates={cDates} overrideOpen={overrideOpen} vsId={vsId}
           mySched={mySched} privItems={myPriv.items} uid={user.uid}
@@ -7851,7 +7896,7 @@ const App=()=>{
           onBook={bookFromCust} onTemp={tempFromCust} onReload={()=>loadCf(true)}/>}
         {tab==='off'&&<HolidayView user={user} vsId={myStore} viewStore={vsId} adminMode={canRestore(user)}
           staffH={staffOf('honten',staffH,staffS)} staffS={staffOf('sanda',staffH,staffS)}
-          dayOffH={dayOffH} dayOffS={dayOffS} pleaveH={pleaveH} pleaveS={pleaveS}
+          dayOffH={dayOffH} dayOffS={dayOffS} pleaveH={pleaveH} pleaveS={pleaveS} trainingH={trainingH} trainingS={trainingS}
           closedDaysH={closedDaysH} closedDaysS={closedDaysS} closedDatesH={closedDatesH} closedDatesS={closedDatesS} overrideOpen={overrideOpen}
           monthlyHolidays={monthlyHolidays} onToggle={toggleDayOff}
           offNoteH={offNoteH} offNoteS={offNoteS} onSaveNote={saveOffNote}/>}

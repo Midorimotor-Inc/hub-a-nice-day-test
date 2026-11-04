@@ -49,10 +49,12 @@ const seiOf = n => { const t = String(n || '').replace(/[\s\u3000]+/g, ''); retu
       }
       const off = (await get(P + store + '-dayoff')) || {};
       const pl = (await get(P + store + '-pleave')) || {};
+      const tr = (await get(P + store + '-training')) || {};   // ★研修（2026-11-04）。休みではないが氏名を文字で持っている
       const nt = (await get(P + store + '-offnote')) || {};
-      snap[store] = { dayoff: off, pleave: pl, offnote: nt };
+      snap[store] = { dayoff: off, pleave: pl, training: tr, offnote: nt };
       for (const k in off) if ((off[k] || []).includes(RETIRE)) hits.push([store, 'dayoff', k]);
       for (const k in pl) if ((pl[k] || []).includes(RETIRE)) hits.push([store, 'pleave', k]);
+      for (const k in tr) if ((tr[k] || []).includes(RETIRE)) hits.push([store, 'training', k]);
       for (const k in nt) if (String(k).endsWith('::' + RETIRE)) hits.push([store, 'offnote', k]);
     }
     if (hits.length === 0) { console.log('  見つかりませんでした（すでに消えています）'); process.exit(0); }
@@ -76,9 +78,11 @@ const seiOf = n => { const t = String(n || '').replace(/[\s\u3000]+/g, ''); retu
       };
       const off = (await get(P + store + '-dayoff')) || {};
       const pl = (await get(P + store + '-pleave')) || {};
+      const tr = (await get(P + store + '-training')) || {};
       const nt = (await get(P + store + '-offnote')) || {};
       await set(P + store + '-dayoff', strip(off));
       await set(P + store + '-pleave', strip(pl));
+      await set(P + store + '-training', strip(tr));   // ★研修も一緒に消す
       const nt2 = {}; for (const k in nt) if (!String(k).endsWith('::' + RETIRE)) nt2[k] = nt[k];
       await set(P + store + '-offnote', nt2);
     }
@@ -96,14 +100,16 @@ const seiOf = n => { const t = String(n || '').replace(/[\s\u3000]+/g, ''); retu
     const known = new Set(names);
     const off = (await get(P + store + '-dayoff')) || {};
     const pl = (await get(P + store + '-pleave')) || {};
+    const tr = (await get(P + store + '-training')) || {};
     const nt = (await get(P + store + '-offnote')) || {};
-    snapshot[store] = { staff, dayoff: off, pleave: pl, offnote: nt };
+    snapshot[store] = { staff, dayoff: off, pleave: pl, training: tr, offnote: nt };
 
     // 名簿に無い名前を集める
     const orphan = {};
     const add = n => { if (n && !known.has(n)) orphan[n] = (orphan[n] || 0) + 1; };
     for (const k in off) (off[k] || []).forEach(add);
     for (const k in pl) (pl[k] || []).forEach(add);
+    for (const k in tr) (tr[k] || []).forEach(add);   // ★研修
     for (const k in nt) { const p = String(k).split('::'); if (p.length === 2) add(p[1]); }
 
     console.log('');
@@ -156,9 +162,11 @@ const seiOf = n => { const t = String(n || '').replace(/[\s\u3000]+/g, ''); retu
     };
     const off = await get(P + store + '-dayoff') || {};
     const pl = await get(P + store + '-pleave') || {};
+    const tr = await get(P + store + '-training') || {};
     const nt = await get(P + store + '-offnote') || {};
     await set(P + store + '-dayoff', swapArr(off));
     await set(P + store + '-pleave', swapArr(pl));
+    await set(P + store + '-training', swapArr(tr));   // ★研修も名前を付け替える
     const nt2 = {};
     for (const k in nt) {
       const p = String(k).split('::');

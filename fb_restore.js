@@ -78,7 +78,7 @@ const dkNorm = s => {
 const shapeOf = base => {
   if (base === 'insp' || base === 'insp-arch' || base === 'inspLimits') return 'topday';
   if (base === 'usrchk') return 'topday';   // 車検証の使用者を確認した印（2026-10-29）
-  if (/^(honten|sanda)-(sched|memo|dayoff|pleave|schedRestrictions)$/.test(base)) return 'topday';
+  if (/^(honten|sanda)-(sched|memo|dayoff|pleave|training|schedRestrictions)$/.test(base)) return 'topday';
   if (base === 'schedRestrictions') return 'topday';
   if (/^(honten|sanda)-offnote$/.test(base)) return 'daynamekey';   // "YYYY-M-D::氏名"
   if (base === 'custbk') return 'namedaykey';                       // "氏名::YYYY-M-D"
@@ -111,7 +111,7 @@ const countBranch = (base, v) => {
   if (base === 'insp' || base === 'insp-arch') return Array.isArray(v) ? v.filter(r => r && r.name).length : 0;
   if (/-sched$/.test(base)) return typeof v === 'object' ? Object.values(v).filter(r => r && r.name).length : 0;
   if (/-memo$/.test(base)) return Array.isArray(v) ? v.filter(m => m && m.content).length : 0;
-  if (/-(dayoff|pleave)$/.test(base)) return Array.isArray(v) ? v.length : 0;
+  if (/-(dayoff|pleave|training)$/.test(base)) return Array.isArray(v) ? v.length : 0;
   if (base === 'usrchk') return typeof v === 'object' ? Object.keys(v).length : 0;
   return 1;
 };

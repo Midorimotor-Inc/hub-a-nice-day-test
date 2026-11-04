@@ -201,6 +201,45 @@ const seed = {
     return f ? [...f.querySelectorAll('tr')].map(r => r.children[0].innerText.trim()) : null; });
   t('★下に据え置く帯も、予定のある「午後入庫」だけになる', JSON.stringify(foot) === JSON.stringify(['午後入庫']), foot);
   t('★行がちゃんと減っている', after.length < before.length, { before: before.length, after: after.length });
+
+  // ★★畳んだ時は【下に余白を出さず、そのぶん大きく】（v3.99.0・2026-11-04 ユーザー決定・C案）。
+  //   2026-10-29 の「畳んだ時は高さを伸ばさない」をユーザー判断でひっくり返した見張り。
+  //   直す前のファイル（height:folded?undefined:'100%'）では、余白の検査と大きさの検査が落ちる。
+  console.log('\n■ ①-2 畳んだ時は余白を出さず大きく出す（C案）');
+  const mz = () => page.evaluate(() => {
+    const tb = document.querySelector('[data-weekview] table');
+    const sc = tb ? tb.parentElement : null;
+    const td = document.querySelector('[data-weekview] tbody tr td:nth-child(2)');
+    const ent = document.querySelector('[data-went]');
+    const nm = ent ? ent.querySelector('[data-wentnm]') : null;
+    const ct = ent ? ent.querySelector('[data-wct]') : null;
+    const sb = document.querySelector('[data-wstf] span');
+    return {
+      hStyle: tb ? (tb.style.height || '') : '',
+      slack: (sc && tb) ? (sc.clientHeight - tb.offsetHeight) : null,
+      tdFs: td ? parseFloat(getComputedStyle(td).fontSize) : null,
+      sbH: sb ? Math.round(sb.getBoundingClientRect().height) : null,
+      drop: (nm && ct) ? Math.round(ct.getBoundingClientRect().top - nm.getBoundingClientRect().top) : null,
+      ctWrap: ct ? getComputedStyle(ct).whiteSpace : ''
+    };
+  });
+  const mFold = await mz();
+  t('★★畳んでいる時は下に余白が出ない（表が画面いっぱい）', mFold.slack !== null && mFold.slack <= 2, mFold);
+  t('★表の高さが 100% になっている', mFold.hStyle === '100%', mFold.hStyle);
+  t('★字が大きい（14px）', mFold.tdFs >= 14, mFold.tdFs);
+  t('★出勤の1文字バッジも大きい（22px）', mFold.sbH >= 21, mFold.sbH);
+  t('★C案：整備の内容は2段目に落ちる', mFold.drop !== null && mFold.drop > 5, mFold);
+  t('★C案：内容は折り返す（… で切らない）', mFold.ctWrap === 'normal', mFold.ctWrap);
+  // 広げた時は今までどおり＝ここは一切変えていない
+  await page.evaluate(() => document.querySelector('[data-wfold]').click());
+  await page.waitForTimeout(700);
+  const mOpen = await mz();
+  t('★広げた時の字は今までどおり（11.5px）', mOpen.tdFs < 13, mOpen.tdFs);
+  t('★広げた時の出勤バッジも今までどおり（17px）', mOpen.sbH <= 18, mOpen.sbH);
+  t('★広げた時は1段のまま（内容は同じ行）', mOpen.drop !== null && mOpen.drop <= 3, mOpen);
+  t('★広げた時も余白は出ない（前からの決まり）', mOpen.slack !== null && mOpen.slack <= 2, mOpen);
+  await page.evaluate(() => document.querySelector('[data-wfold]').click());
+  await page.waitForTimeout(700);
   t('★ボタンの名前が「▼ 開く」に変わる', await page.evaluate(() => /▼ 開く/.test(document.querySelector('[data-wfold]').innerText)));
   // ★畳むと空いている枠（＋）も消えるので、下に「予定を足す」行を出す（2026-10-29 ユーザー指示）
   const plus = await page.evaluate(() => [...document.querySelectorAll('[data-wfoldplus]')].map(b => ({

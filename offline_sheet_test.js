@@ -118,8 +118,19 @@ const LF = d(0), LT = d(3);
 
   head('② 中身（本店の控え）');
   t('本店の車検が入っている', hon.html.indexOf('前村　和子') > 0);
-  t('★三田店の車検は入っていない（店が混ざらない）', hon.html.indexOf('三田　太郎') < 0);
-  t('★三田店の整備も入っていない', hon.html.indexOf('西浦　三田') < 0);
+  // ★車検だけは【両店あわせて】出す（2026-11-04 ユーザー指示・C案）。
+  //   insp は両店が1本・台数制限も両店共通なので、片方だけ出すと紙と画面で数が食い違う。
+  //   ★整備・代車・備考・休日は今までどおり「その店のぶんだけ」＝ここを混ぜないこと。
+  t('★三田店の車検も入っている（車検は両店あわせて）', hon.html.indexOf('三田　太郎') > 0);
+  t('★あいだに「三田店 入庫」の見出しの行がある', /class=hdr><td colspan=10>─　三田店　入庫　─/.test(hon.html),
+    (hon.html.match(/<tr class=hdr>[\s\S]{0,60}/) || [])[0]);
+  t('★見出しの前に一行空ける行がある', /<tr class=gap>[\s\S]{0,40}<tr class=hdr>/.test(hon.html));
+  t('★自店が先・他店が後（三田店の見出しより前に本店のお客様が出る）',
+    hon.html.indexOf('前村　和子') < hon.html.indexOf('─　三田店　入庫'));
+  t('★他店の行は薄い地色（class=other）', /<tr class=other>/.test(hon.html));
+  t('★上の台数は合算＋内訳', /車検 \d+台（本店\d+・三田店\d+）/.test(hon.html),
+    (hon.html.match(/車検 [^<]{0,40}/) || [])[0]);
+  t('★三田店の整備は入っていない（整備は混ぜない）', hon.html.indexOf('西浦　三田') < 0);
   t('整備が入っている', hon.html.indexOf('桑田　陽子') > 0);
   t('電話番号が入っている', hon.html.indexOf('090-1234-5678') > 0);
   t('代車の貸出が入っている', hon.html.indexOf('ハスラー') > 0);
@@ -135,8 +146,12 @@ const LF = d(0), LT = d(3);
   const san = await grab('🏪 三田店の分');
   t('三田店の控えが保存される', /予定表_三田店_/.test(san.name), san.name);
   t('★三田店の車検が入っている', san.html.indexOf('三田　太郎') > 0);
-  t('★本店の車検は入っていない', san.html.indexOf('前村　和子') < 0);
-  t('★本店の整備も入っていない', san.html.indexOf('桑田　陽子') < 0);
+  // ★三田店の控えでは「三田店が上・本店が下」＝操作している店がいつも上に来る
+  t('★本店の車検も入っている（車検は両店あわせて）', san.html.indexOf('前村　和子') > 0);
+  t('★見出しは「本店 入庫」になる', /class=hdr><td colspan=10>─　本店　入庫　─/.test(san.html),
+    (san.html.match(/<tr class=hdr>[\s\S]{0,60}/) || [])[0]);
+  t('★三田店が先・本店が後', san.html.indexOf('三田　太郎') < san.html.indexOf('─　本店　入庫'));
+  t('★本店の整備は入っていない（整備は混ぜない）', san.html.indexOf('桑田　陽子') < 0);
   t('三田店の整備が入っている', san.html.indexOf('西浦　三田') > 0);
 
   head('④ ネットが無くても開ける（file:// で開いて確かめる）');
