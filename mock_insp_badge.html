@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>点検のバッジと、作業内容のポップ（見本）</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef2f6;color:#1b2129;padding:16px 16px 60px;line-height:1.6}
+  h1{font-size:19px;margin-bottom:6px}
+  .lead{font-size:13px;color:#475569;margin-bottom:16px}
+  .panel{background:#fff;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);max-width:1180px}
+  .ttl{font-size:15px;font-weight:900;color:#0f172a;margin-bottom:4px}
+  .sub{font-size:12px;color:#64748b;margin-bottom:11px}
+  .pick{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+  .pick button{border:2px solid #e5e7eb;background:#fff;border-radius:9px;padding:9px 13px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;color:#475569}
+  .pick button.on{border-color:#0891b2;background:#ecfeff;color:#0e7490}
+  .note{font-size:11.5px;color:#64748b}
+  .hl{background:#fef9c3;padding:0 3px;border-radius:3px;font-weight:700}
+
+  /* 予約カード（本物に寄せた） */
+  .card{width:430px;max-width:100%;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.10)}
+  .card .hd{background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;padding:10px 14px;border-radius:12px 12px 0 0;font-weight:800;font-size:14px}
+  .card .bd{padding:14px}
+  .lbl{display:block;font-size:11px;font-weight:700;color:#6b7280;margin-bottom:4px}
+  .fld{width:100%;padding:9px 12px;border:2px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .fld.focus{border-color:#0891b2;background:#f0fdff}
+  .fld .ph{color:#9ca3af}
+  .mini{width:100%;padding:9px 12px;border:2px solid #e5e7eb;border-radius:8px;font-size:14px;color:#9ca3af;margin-bottom:10px;background:#fff}
+
+  /* いまのポップ（小さい・見にくい方） */
+  .popnow{border:2px solid #0891b2;border-radius:8px;margin-top:4px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:6px;display:grid;gap:4px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .popnow div{padding:8px 10px;font-size:13px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;white-space:nowrap}
+  .popnow div.sel{border-color:#0891b2;background:#e0f2fe;font-weight:800;color:#0891b2}
+
+  /* A案＝クイックメニューと同じ中央の大きな窓 */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:center;justify-content:center;padding:12px}
+  .big{background:#fff;border-radius:16px;width:min(760px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  .big .bhd{padding:14px 18px;background:linear-gradient(135deg,#0e7490,#0891b2);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .big .bhd .t{color:#fff;font-weight:900;font-size:16px}
+  .big .bhd .s{color:rgba(255,255,255,.85);font-size:11.5px}
+  .big .bhd .x{margin-left:auto;background:rgba(255,255,255,.2);border:none;border-radius:50%;width:30px;height:30px;color:#fff;font-size:15px;cursor:pointer;font-family:inherit}
+  .big .bbd{padding:14px 18px;overflow-y:auto}
+  .grp{border-radius:12px;padding:9px 11px 12px;margin-bottom:10px}
+  .gname{display:inline-block;padding:2px 11px;border-radius:14px;color:#fff;font-size:11.5px;font-weight:900;margin-bottom:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:7px;padding:11px 17px;border-radius:24px;border:2px solid #e5e7eb;background:#fff;font-size:15px;font-weight:800;cursor:pointer;color:#334155;font-family:inherit}
+  .chip .cd{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:21px;border-radius:6px;color:#fff;font-size:11.5px;font-weight:900;padding:0 5px}
+  .step2{margin-top:2px;border:2px dashed #7c3aed;background:#faf5ff;border-radius:12px;padding:11px 13px}
+  .s2t{font-size:13px;font-weight:900;color:#6d28d9;margin-bottom:8px}
+  .mchip{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border-radius:24px;border:2px solid #ddd6fe;background:#fff;font-size:15px;font-weight:800;cursor:pointer;color:#5b21b6;font-family:inherit}
+  .mchip.on{border-color:#6d28d9;background:#ede9fe}
+  .done{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#ecfeff;border:2px solid #a5f3fc;border-radius:10px;padding:10px 12px}
+  .okbtn{margin-left:auto;border:none;background:#0891b2;color:#fff;border-radius:9px;padding:9px 20px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
+
+  /* バッジ（本物と同じ寸法） */
+  .bDay{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:20px;padding:0 5px;border-radius:6px;color:#fff;font-size:11px;font-weight:800;white-space:nowrap}
+  .bWeek{display:inline-block;font-size:9.5px;font-weight:900;color:#fff;border-radius:3px;padding:0 4px;line-height:15px;white-space:nowrap}
+
+  /* 週間カレンダー */
+  table.wk{border-collapse:collapse;width:100%;max-width:1140px;font-size:12px}
+  table.wk th,table.wk td{border:1px solid #64748b;padding:2px 4px;vertical-align:top}
+  table.wk th{background:#f8fafc;font-size:11.5px;height:26px}
+  table.wk td{height:26px}
+  table.wk td.tm{background:#e6f6fb;color:#0e5a6b;font-weight:800;text-align:center;width:52px;font-size:11px}
+  .went{display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+  .wnm{font-weight:700;color:#1e293b}
+  .wct{color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .today{box-shadow:inset 3px 0 0 #fb923c,inset -3px 0 0 #fb923c}
+
+  /* 1日表示 */
+  table.day{border-collapse:collapse;width:100%;max-width:1000px;font-size:13px}
+  table.day th,table.day td{border-bottom:1px solid #e2e8f0;padding:7px 9px;text-align:left}
+  table.day th{background:#f1f5f9;font-size:11.5px;color:#475569}
+  .ql{margin-left:5px;font-size:10px;font-weight:800;color:#7c3aed}
+
+  .list{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .one{text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:9px 12px;min-width:104px}
+  .one .nm{font-size:11px;color:#64748b;margin-top:5px;line-height:1.4}
+  ol{margin:6px 0 0 20px;font-size:13px}
+  ol li{margin-bottom:7px}
+  code{font-family:Consolas,monospace;background:#eef2f6;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>点検のバッジと、作業内容のポップ（見本）</h1>
+<p class="lead">
+  下の①で作業内容を選ぶと、②の週間カレンダーと③のスケジュール画面の<b>バッジが一緒に変わります</b>。実際に押して確かめてください。
+</p>
+
+<div class="panel">
+  <div class="ttl">① 予約カード（一般整備）の「作業内容」</div>
+  <div class="sub">いまは欄の下に小さく出ていて読みにくい、というご指摘。クイックメニューのように大きく開く形にしました。</div>
+  <div class="pick" id="pm"></div>
+  <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
+    <div>
+      <div class="card">
+        <div class="hd">予約カード（一般整備）　10:00</div>
+        <div class="bd">
+          <label class="lbl">お客様のお名前</label>
+          <div class="mini">田中太郎</div>
+          <label class="lbl">作業内容</label>
+          <div class="fld" id="fld" data-act="open"><span id="fldtx" class="ph">選択してください（Enterで開く）</span><span style="font-size:10px;color:#6b7280">▼</span></div>
+          <div id="inlinepop"></div>
+          <label class="lbl" style="margin-top:11px">内容</label>
+          <div class="mini">　</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px">
+      <div class="ttl" style="font-size:13px">いま選んでいるもの</div>
+      <div id="cur" style="font-size:14px;margin-top:6px"></div>
+      <div class="note" style="margin-top:12px">
+        ★点検の3つ（メンパ／有料点検／無料点検）を選ぶと、<b>つづけて「何ヶ月か」を選ぶ段</b>が出ます。<br>
+        ・メンパ … 1ヶ月／6ヶ月／12ヶ月 →　<span class="bDay" style="background:#4f46e5">M1</span>
+        <span class="bDay" style="background:#4f46e5">M6</span> <span class="bDay" style="background:#4f46e5">M12</span><br>
+        ・有料点検 … 12ヶ月だけ →　<span class="bDay" style="background:#7c3aed">有12</span><br>
+        ・無料点検 … 1ヶ月／6ヶ月 →　<span class="bDay" style="background:#2563eb">無1</span>
+        <span class="bDay" style="background:#2563eb">無6</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="ttl">② 週間カレンダー　<span style="font-size:12px;font-weight:600;color:#64748b">（ひと目で何の点検か分かるように）</span></div>
+  <div class="sub">木曜 10:00 の行が、①で選んだものに変わります。</div>
+  <table class="wk" id="wk"></table>
+</div>
+
+<div class="panel">
+  <div class="ttl">③ スケジュール画面（1日表示）</div>
+  <div class="sub">「作業」の欄のバッジが、①で選んだものに変わります。</div>
+  <table class="day" id="day"></table>
+</div>
+
+<div class="panel">
+  <div class="ttl">④ バッジ一覧</div>
+  <div class="sub">上＝1日表示の大きさ／下＝週間カレンダーの大きさ（本物と同じ寸法です）</div>
+  <div class="list" id="all"></div>
+</div>
+
+<div class="panel">
+  <div class="ttl">⑤ 決めていただきたいこと</div>
+  <ol>
+    <li><b>ポップの開き方</b>　… A案（クイックメニューと同じ中央の大きな窓）／B案（欄のすぐ下に大きく開く）／いまのまま、のどれがよいですか。<span class="hl">おすすめは A案</span></li>
+    <li><b>並べ方</b>　… 「点検」「整備・修理」「その他」の3つに分けました。この分け方・この順番でよいですか。</li>
+    <li><b>有料点検</b>　… 12ヶ月しかないので、<b>選んだ時点で自動で「有12」</b>にしてあります。それとも1つだけのボタンを押して決めますか。</li>
+    <li><b>月数を選ばなかった時</b>　… いまは「メンパ」「有点」「無点」のままのバッジにしています。<b>月数を必ず選ばせる</b>（選ぶまで保存できない）ようにもできます。</li>
+    <li><b>色</b>　… メンパ＝青むらさき／有料＝むらさき／無料＝青 のままでよいですか。</li>
+    <li><b>昔の予約</b>　… 2026-10-31 より前の <code>M1 M6 M12</code> の予約は、そのまま同じ字で出ます（データは書き換えません）。</li>
+  </ol>
+</div>
+
+<div id="ovwrap"></div>
+
+<script>
+var COL={'Q':'#0891b2','メンパ':'#4f46e5','有点':'#7c3aed','無点':'#2563eb','B':'#9333ea','R':'#be123c','商':'#b45309','保':'#b45309','試':'#b45309','納':'#047857','他':'#64748b'};
+var NAME={'Q':'クイック整備・修理','メンパ':'メンパ','有点':'有料点検','無点':'無料点検','B':'鈑金塗装','R':'リコール','商':'商談','保':'保険','試':'試乗','納':'納車','他':'その他'};
+var GROUPS=[
+  {name:'点検',col:'#0891b2',ids:['メンパ','有点','無点']},
+  {name:'整備・修理',col:'#9333ea',ids:['Q','B','R']},
+  {name:'その他',col:'#64748b',ids:['商','保','試','納','他']}
+];
+var SUB={'メンパ':['1','6','12'],'有点':['12'],'無点':['1','6']};
+var ALL=['Q','メンパ','有点','無点','B','R','商','保','試','納','他'];
+var S={mode:'A',open:false,work:'',mon:''};
+
+function badge(w,m){
+  if(!w)return '—';
+  if(w==='メンパ')return m?('M'+m):'メンパ';
+  if(w==='有点')return m?('有'+m):'有点';
+  if(w==='無点')return m?('無'+m):'無点';
+  return w;
+}
+function col(w){return COL[w]||'#64748b';}
+function monName(m){return m+'ヶ月';}
+function esc(s){return String(s);}
+
+document.addEventListener('click',function(e){
+  var el=e.target.closest ? e.target.closest('[data-act]') : null;
+  if(!el)return;
+  var a=el.getAttribute('data-act'), v=el.getAttribute('data-v');
+  if(a==='open'){S.open=!S.open;}
+  else if(a==='close'){S.open=false;}
+  else if(a==='mode'){S.mode=v;S.open=false;}
+  else if(a==='work'){S.work=v;S.mon=(v==='有点')?'12':'';if(!SUB[v])S.open=false;}
+  else if(a==='mon'){S.mon=v;}
+  else if(a==='stop'){e.stopPropagation();return;}
+  draw();
+});
+
+function chipsHtml(){
+  var h='';
+  GROUPS.forEach(function(g){
+    h+='<div class="grp" style="border:2px solid '+g.col+'55">';
+    h+='<span class="gname" style="background:'+g.col+'">'+g.name+'</span>';
+    h+='<div class="chips">';
+    g.ids.forEach(function(id){
+      var on=(S.work===id);
+      var sty=on?('border-color:'+col(id)+';background:'+col(id)+'18;color:'+col(id)):'';
+      h+='<button class="chip" style="'+sty+'" data-act="work" data-v="'+id+'">'
+       +'<span class="cd" style="background:'+col(id)+'">'+id+'</span>'+NAME[id]+(on?' ✓':'')+'</button>';
+    });
+    h+='</div></div>';
+  });
+  if(SUB[S.work]){
+    h+='<div class="step2"><div class="s2t">つづけて選んでください：'+NAME[S.work]+'は何ヶ月ですか</div><div class="chips">';
+    SUB[S.work].forEach(function(m){
+      h+='<button class="mchip'+(S.mon===m?' on':'')+'" data-act="mon" data-v="'+m+'">'
+       +'<span class="cd" style="background:'+col(S.work)+'">'+badge(S.work,m)+'</span>'+monName(m)+(S.mon===m?' ✓':'')+'</button>';
+    });
+    h+='</div><div class="done"><span style="font-size:13px;font-weight:700">この予約のバッジ：</span>'
+     +'<span class="bDay" style="background:'+col(S.work)+';transform:scale(1.25);transform-origin:left">'+badge(S.work,S.mon)+'</span>'
+     +'<button class="okbtn" data-act="close">✓ これで決める</button></div></div>';
+  }
+  if(S.work==='Q'){
+    h+='<div class="step2" style="border-color:#0891b2;background:#ecfeff"><div class="s2t" style="color:#0e7490">どこで作業しますか（両方えらべます）</div><div class="chips">'
+     +'<button class="mchip" style="border-color:#a5f3fc;color:#0e7490" data-act="close">リフト作業</button>'
+     +'<button class="mchip" style="border-color:#a5f3fc;color:#0e7490" data-act="close">ピット作業</button></div></div>';
+  }
+  return h;
+}
+
+function draw(){
+  var modes=[['A','A案 クイックメニューと同じ大きな窓'],['B','B案 欄のすぐ下に大きく開く'],['N','いまのまま（小さい）']];
+  document.getElementById('pm').innerHTML=modes.map(function(m){
+    return '<button class="'+(S.mode===m[0]?'on':'')+'" data-act="mode" data-v="'+m[0]+'">'+m[1]+'</button>';
+  }).join('');
+
+  var f=document.getElementById('fld'), tx=document.getElementById('fldtx');
+  f.className='fld'+(S.open?' focus':'');
+  if(S.work){
+    tx.className='';
+    tx.innerHTML='<span class="bDay" style="background:'+col(S.work)+'">'+badge(S.work,S.mon)+'</span> <span style="font-size:14px">'+NAME[S.work]+(S.mon?('（'+monName(S.mon)+'）'):'')+'</span>';
+  }else{
+    tx.className='ph';
+    tx.textContent='選択してください（Enterで開く）';
+  }
+
+  var inl=document.getElementById('inlinepop'), ov=document.getElementById('ovwrap');
+  inl.innerHTML=''; ov.innerHTML='';
+  if(S.open){
+    if(S.mode==='A'){
+      ov.innerHTML='<div class="ov" data-act="close"><div class="big" data-act="stop">'
+        +'<div class="bhd"><div><div class="t">🔧 作業内容をえらぶ</div><div class="s">押すと決まります。点検は、つづけて「何ヶ月か」を選びます。</div></div>'
+        +'<button class="x" data-act="close">✕</button></div>'
+        +'<div class="bbd">'+chipsHtml()+'</div></div></div>';
+    }else if(S.mode==='B'){
+      inl.innerHTML='<div style="border:2px solid #0891b2;border-radius:12px;margin-top:5px;padding:10px;box-shadow:0 8px 20px rgba(0,0,0,.16)">'+chipsHtml()+'</div>';
+    }else{
+      var h='<div class="popnow">';
+      ALL.forEach(function(id){
+        h+='<div class="'+(S.work===id?'sel':'')+'" data-act="work" data-v="'+id+'">'+id+' '+NAME[id]+'</div>';
+      });
+      h+='</div>';
+      if(SUB[S.work]){
+        h+='<div style="margin-top:7px;display:flex;gap:6px">'+SUB[S.work].map(function(m){
+          return '<button style="flex:1;padding:8px 0;border-radius:9px;border:2px solid '+(S.mon===m?'#7c3aed':'#e5e7eb')+';background:'+(S.mon===m?'#f5f3ff':'#fff')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit" data-act="mon" data-v="'+m+'">'+(S.mon===m?'✓ ':'')+monName(m)+'</button>';
+        }).join('')+'</div>';
+      }
+      inl.innerHTML=h;
+    }
+  }
+
+  document.getElementById('cur').innerHTML = S.work
+    ? '<span class="bDay" style="background:'+col(S.work)+';transform:scale(1.4);transform-origin:left;margin-right:14px">'+badge(S.work,S.mon)+'</span>'
+      +'<b>'+NAME[S.work]+(S.mon?('（'+monName(S.mon)+'）'):'')+'</b>'
+      +((SUB[S.work]&&!S.mon)?'<div style="color:#b45309;font-size:12px;font-weight:700;margin-top:6px">※ まだ月数を選んでいません（バッジは「'+S.work+'」のまま）</div>':'')
+    : '<span style="color:#94a3b8">まだ選んでいません。左の「作業内容」を押してください。</span>';
+
+  var days=['11/2(月)','11/3(火)','11/4(水)','11/5(木)','11/6(金)','11/7(土)'];
+  var rows=[['09:00',[[0,'メンパ','6','山本','オイル交換']]],
+            ['09:30',[]],
+            ['10:00',[[3,null,null,'田中','']]],
+            ['10:30',[[1,'無点','1','森','']]],
+            ['11:00',[[4,'B',null,'川口','右リアパネル']]]];
+  var h='<tr><th style="width:52px"></th>';
+  days.forEach(function(d,i){h+='<th'+(i===3?' class="today"':'')+'>'+d+'</th>';});
+  h+='</tr>';
+  rows.forEach(function(r){
+    h+='<tr><td class="tm">'+r[0]+'</td>';
+    for(var c=0;c<6;c++){
+      var e=r[1].filter(function(x){return x[0]===c;})[0];
+      var cls=(c===3?' class="today"':'');
+      if(!e){h+='<td'+cls+' style="text-align:center;color:#cbd5e1;font-size:11px">＋</td>';continue;}
+      var live=(e[1]===null);
+      var bw=live?(S.work?badge(S.work,S.mon):'—'):badge(e[1],e[2]);
+      var bc=live?(S.work?col(S.work):'#64748b'):col(e[1]);
+      var ct=live?(S.work?NAME[S.work]+(S.mon?('（'+monName(S.mon)+'）'):''):''):e[4];
+      h+='<td'+cls+'><div class="went"><span class="bWeek" style="background:'+bc+'">'+bw+'</span>'
+       +'<span class="wnm">'+e[3]+' 様</span><span class="wct">'+ct+'</span></div></td>';
+    }
+    h+='</tr>';
+  });
+  document.getElementById('wk').innerHTML=h;
+
+  var d='<tr><th style="width:62px">時間</th><th>お客様</th><th style="width:110px">車種</th><th style="width:170px">作業</th><th>内容</th></tr>';
+  var dr=[['09:00','山本花子 様','タント',['メンパ','6'],'オイル交換'],
+          ['10:00','田中太郎 様','ワゴンR',null,''],
+          ['10:30','森次郎 様','スペーシア',['無点','1'],''],
+          ['11:00','川口三郎 様','ハスラー',['B',null],'右リアパネル']];
+  dr.forEach(function(r){
+    var live=(r[3]===null);
+    var bw=live?(S.work?badge(S.work,S.mon):'—'):badge(r[3][0],r[3][1]);
+    var bc=live?(S.work?col(S.work):'#64748b'):col(r[3][0]);
+    var nm=live?(S.work?NAME[S.work]+(S.mon?('（'+monName(S.mon)+'）'):''):''):'';
+    d+='<tr'+(live?' style="background:#fffbeb"':'')+'><td style="font-weight:800">'+r[0]+'</td><td style="font-weight:700">'+r[1]+'</td><td>'+r[2]+'</td>'
+     +'<td><span class="bDay" style="background:'+bc+'">'+bw+'</span>'+(nm?'<span class="ql">'+nm+'</span>':'')+'</td><td style="color:#475569">'+r[4]+'</td></tr>';
+  });
+  document.getElementById('day').innerHTML=d;
+
+  var list=[['メンパ','1'],['メンパ','6'],['メンパ','12'],['有点','12'],['無点','1'],['無点','6']];
+  document.getElementById('all').innerHTML=list.map(function(x){
+    return '<div class="one"><div><span class="bDay" style="background:'+col(x[0])+'">'+badge(x[0],x[1])+'</span></div>'
+     +'<div style="margin-top:6px"><span class="bWeek" style="background:'+col(x[0])+'">'+badge(x[0],x[1])+'</span></div>'
+     +'<div class="nm">'+NAME[x[0]]+'<br>'+monName(x[1])+'</div></div>';
+  }).join('');
+}
+draw();
+</script>
+</body>
+</html>
