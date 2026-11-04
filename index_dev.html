@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793761645956';
+    window.__APP_BUILD='build-1793762870042';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -82,6 +82,15 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    /* ★ナンバーの4つの枠（2026-11-04 ユーザー指示）：
+       まだ入れていない枠の案内（神戸／582／は／3182）は【うんとうすく】、
+       入れた字は【太く】する＝入っている枠と入っていない枠の差がはっきり分かる。
+       濃さは見本 mock_plate_weight.html で見比べて決めた値（案内 #dde1e6／入れた字 800）。
+       ★色を変える時はこの1か所だけ（index_dev.html と mobile.html の2ファイルに同じものを置く）。 */
+    [data-nochi], [data-nobun], [data-nokana], [data-nofour] { font-weight: 800; }
+    [data-nochi]::placeholder, [data-nobun]::placeholder, [data-nokana]::placeholder, [data-nofour]::placeholder {
+      color: #dde1e6; opacity: 1; font-weight: 500;
+    }
     @media print {
       body * { visibility: hidden; }
       #print-area, #print-area * { visibility: visible; }
@@ -123,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.95.0';
+const APP_VERSION = '3.95.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。

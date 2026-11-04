@@ -52,7 +52,7 @@ const boxInfo = page => page.evaluate(() => {
 const plateInfo = page => page.evaluate(() => {
   const g = ['nochi', 'nobun', 'nokana', 'nofour'].map(k => document.querySelector('[data-' + k + ']'));
   if (g.some(e => !e)) return null;
-  return g.map(e => ({ v: e.value, ph: e.placeholder, im: e.getAttribute('inputmode'), ty: e.type, x: Math.round(e.getBoundingClientRect().left) }));
+  return g.map(e => ({ v: e.value, ph: e.placeholder, im: e.getAttribute('inputmode'), ty: e.type, x: Math.round(e.getBoundingClientRect().left), fw: getComputedStyle(e).fontWeight }));
 });
 const activeKey = page => page.evaluate(() => {
   const a = document.activeElement; if (!a) return null;
@@ -214,6 +214,21 @@ const route = ctx => {
   t('★4桁には元の値が入ったまま（5678）', !!pf && pf[3].v === '5678', pf && pf[3].v);
   t('★PC なので inputMode を付けない（日本語入力が解除されるため）', !!pf && pf.every(x => !x.im), pf && pf.map(x => x.im));
   t('★type=number でもない', !!pf && pf.every(x => x.ty !== 'number'), pf && pf.map(x => x.ty));
+  t('★入れた字は太い（入っている枠と入っていない枠の差を出す・2026-11-04 ユーザー指示）',
+    !!pf && pf.every(x => Number(x.fw) >= 700), pf && pf.map(x => x.fw));
+  const phCss = page => page.evaluate(() => {
+    let hit = null;
+    for (const s of document.styleSheets) {
+      let rr = []; try { rr = [...s.cssRules]; } catch (e) { continue; }
+      for (const r of rr) if (r.selectorText && /data-nofour]::placeholder/.test(r.selectorText)) hit = r.style.color;
+    }
+    return hit;
+  });
+  const ph = await phCss(page);
+  t('★まだ入れていない枠の案内は【うんとうすい】灰色', !!ph, ph);
+  // 正規表現にバックスラッシュを書かない（この書き方の決まり）。rgb(221, 225, 230) のかっこの中を読む。
+  const lum = c => { const p = String(c || '').split('('); if (p.length < 2) return 0; const a = p[1].split(')')[0].split(',').map(x => Number(x.trim())); return (a[0] + a[1] + a[2]) / 3; };
+  t('★うすさの目安（200より明るい灰色）', lum(ph) >= 200, ph);
 
   head('② Enter で次の枠へ移る');
   await page.focus('[data-nochi]');
@@ -291,6 +306,16 @@ const route = ctx => {
   t('★4桁だけ数字キーパッド（地名・分類・かなは付けない）', !!mpf && !mpf[0].im && !mpf[1].im && !mpf[2].im && mpf[3].im === 'numeric', mpf && mpf.map(x => x.im));
   t('★入力欄は16px以上（iPhoneが勝手に拡大しない）', await mp.evaluate(() =>
     ['nochi', 'nobun', 'nokana', 'nofour'].every(k => { const e = document.querySelector('[data-' + k + ']'); return e && parseFloat(getComputedStyle(e).fontSize) >= 16; })));
+  t('★スマホも入れた字は太い', !!mpf && mpf.every(x => Number(x.fw) >= 700), mpf && mpf.map(x => x.fw));
+  const mph = await mp.evaluate(() => {
+    let hit = null;
+    for (const s of document.styleSheets) {
+      let rr = []; try { rr = [...s.cssRules]; } catch (e) { continue; }
+      for (const r of rr) if (r.selectorText && r.selectorText.indexOf('[data-nofour]::placeholder') >= 0) hit = r.style.color;
+    }
+    return hit;
+  });
+  t('★スマホの案内の字も同じうすさ', lum(mph) >= 200, mph);
   await mp.click('[data-adv2ybtn]'); await mp.waitForTimeout(350);
   const mb2 = await boxInfo(mp);
   t('★2年前予約を外すと連絡方法も確定も消える', !!mb2 && !mb2.tel && !mb2.fix, mb2);

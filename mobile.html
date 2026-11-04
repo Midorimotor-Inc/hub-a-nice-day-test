@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793761645956';
+  window.__APP_BUILD='build-1793762870042';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -85,6 +85,15 @@ button{cursor:pointer;font-family:inherit;}
 /* ★iPhone の自動拡大よけ：入力欄の文字は必ず16px以上にする（2026-10-02）。
    16px未満だと触った時に画面が拡大され、そのまま戻らない。インラインで小さく指定しても効かないよう !important */
 input,select,textarea{font-family:inherit;font-size:16px !important;}
+/* ★ナンバーの4つの枠（2026-11-04 ユーザー指示）：
+   まだ入れていない枠の案内（神戸／582／は／3182）は【うんとうすく】、
+   入れた字は【太く】する＝入っている枠と入っていない枠の差がはっきり分かる。
+   濃さは見本 mock_plate_weight.html で見比べて決めた値（案内 #dde1e6／入れた字 800）。
+   ★色を変える時はこの1か所だけ（index_dev.html と mobile.html の2ファイルに同じものを置く）。 */
+[data-nochi], [data-nobun], [data-nokana], [data-nofour] { font-weight: 800; }
+[data-nochi]::placeholder, [data-nobun]::placeholder, [data-nokana]::placeholder, [data-nofour]::placeholder {
+  color: #dde1e6; opacity: 1; font-weight: 500;
+}
 /* ★代車の表は文字を選べないようにする（2026-10-07 ユーザー報告）。
    iPhone は帯を押し続けると「コピー」の吹き出しと文字選択（虫めがね）を出し、
    そのせいで長押しドラッグが取り消されて入れ替えができなかった。
@@ -97,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.95.0';
+const MOBILE_VERSION='3.95.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）

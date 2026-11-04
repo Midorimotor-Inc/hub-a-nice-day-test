@@ -1954,7 +1954,15 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   ★検査で保存ボタンを押す時は `/予約確定|保存/` ではなく**保存ボタンの字**で探すこと。
 - 4ファイルのうち触ったのは `index_dev.html` と `mobile.html`。**`customers.html` は版だけ上げた**
   （顧客リストの予約カードにはナンバー欄が無く、細かい設定はスケジュールの予約カードでする＝ユーザーの判断）。
+- ★**ナンバーの4つの枠の見え方（v3.95.1・2026-11-04 ユーザー指示）**：
+  「まだ入れていない枠の案内（神戸／582／は／3182）が濃いのでもっと薄く。入れた字はもっと太く」。
+  **案内＝`#dde1e6`（font-weight 500）／入れた字＝font-weight 800**。
+  ★**決めているのは head の `<style>` の1か所だけ**（`[data-nochi],[data-nobun],[data-nokana],[data-nofour]`）。
+  **`index_dev.html` と `mobile.html` の2ファイルに同じものを置くこと。** 画面に直書きしない。
+  濃さを変える時は見本 `mock_plate_weight.html`（うすさ3案×太さ4段を実際に押して見比べられる）で選ぶ。
+  見張りは `adv2y_test.js`（入れた字が700以上／案内の灰色が明るいか＝PCとスマホの両方）。
 - モック：`mock_2y_number.html`（テスト版サイトで公開。3か所×3案を実際に押して試せる）。
+  `mock_plate_weight.html`（ナンバーの枠の見え方）。
 - 検査は **`node adv2y_test.js`（72件・PORT 8431）**。`carno_test.js`（31件）と
   `mobile_phone_test.js`（33件）は**欄の見つけ方を `[data-nofour]` に直した**（中身の見張りは同じ）。
   印刷は `print_insp_time_test.js`（34件）の ⑧（札が出る・行も列も増えない・7台で dense・6台では dense にしない）。
