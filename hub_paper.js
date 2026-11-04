@@ -786,7 +786,19 @@ tidy(OUT_DIR);
 if (MIRRORS.length) {
   MIRRORS.forEach(m => {
     try {
-      fs.mkdirSync(m.dir, { recursive: true });
+      // ★共有フォルダ（\\PC名\共有名）に mkdir してはいけない（2026-11-02）。
+      //   そこは「共有の根っこ」なので、recursive の mkdir が \\PC名 まで作ろうとして落ちる。
+      //   届いていない時の見え方がまぎらわしいので、直す順番を覚えておくこと：
+      //   ・UNKNOWN（mkdir で落ちる）… 共有PCに届いていない。ほぼ入り口の許可の話
+      //     → 共有PCの「パスワード保護共有」をオフにする（設定→ネットワークとインターネット
+      //       →ネットワークの詳細設定→共有の詳細設定→すべてのネットワーク）
+      //   ・ENOENT … 届いてはいるが、その名前の共有が無い
+      //     → 共有名を確かめる（\\PC名 を一覧で見る）。★大文字小文字まで同じに書くこと。
+      //       2026-11-02 の実例：共有名は「HUB控え」で、メモに「Hub控え」と書くと ENOENT になった
+      //   ・EPERM … 共有はあるが、そのフォルダの許可が出ていない
+      //     → 共有PCでフォルダを右クリック→その他のオプションを確認→アクセスを許可する
+      //       →特定のユーザー→Everyone を追加→「読み取り/書き込み」
+      if (!fs.existsSync(m.dir)) fs.mkdirSync(m.dir, { recursive: true });
       fs.copyFileSync(out, path.join(m.dir, name));
       tidy(m.dir, true);
       console.log('■ ' + m.why + 'にも写しました：' + path.join(m.dir, name));

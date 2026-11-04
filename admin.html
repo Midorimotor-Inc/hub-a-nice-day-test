@@ -325,6 +325,34 @@ function sendInvite(mail, info){
 //   既にある人は users（合言葉の控え。管理者も読める）でその人としてサインインし直してから付け替える。控えが無い人はリンクを送る。
 function hubRandom(n){ var a = new Uint8Array(n); try { crypto.getRandomValues(a); } catch (e) { for (var i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256); } return Array.prototype.map.call(a, function(b){ return ('0' + b.toString(16)).slice(-2); }).join(''); }
 function secondaryApp(){ try { return firebase.app('hub-invite'); } catch (e) { return firebase.initializeApp(HUB_FIREBASE_CONFIG, 'hub-invite'); } }
+// ★メールのリンクで入ると、Firebase はそのアカウントの【合言葉を消す】（2026-11-03 に本番で実際に起きた）。
+//   控え（users/{uid}.pw）には6桁が残るので「そろっている」ように見えるが、実際はどの6桁でも通らない。
+//   リンクで入った直後に、控えを合言葉として入れ直す（3つの画面に置いてある hubRelinkPw と同じもの）。
+//   ★入れ直す前に「本当に消えているか」を別のアプリで試すこと（消えていないのに updatePassword を
+//     呼ぶと、その人の他の端末のサインインが全部切れる）。
+function relinkPw(){
+  var u = fbAuth && fbAuth.currentUser;
+  if (!u || !fbDb) return Promise.resolve(false);
+  var mail = u.email || '', pw = '';
+  return fbDb.collection('users').doc(u.uid).get().then(function(s){
+    pw = String(((s.exists ? (s.data() || {}) : {}).pw) || '');
+    if (!pw || !mail) return true;                      // 控えが無い＝長い合言葉を作る
+    var a2 = secondaryApp().auth();
+    var done = function(gone){ return a2.signOut().catch(function(){}).then(function(){ return gone; }); };
+    return a2.signInWithEmailAndPassword(mail, pw).then(function(){ return done(false); }, function(e){
+      var c = fbErrCode(e);
+      var gone = /wrong-password|invalid-credential|user-not-found|invalid-login/.test(c);
+      if (!gone) console.warn('[FB] 合言葉が残っているか確かめられません（今回だけ）', c);
+      return done(gone);
+    });
+  }).then(function(need){
+    if (!need) return false;
+    var np = pw || hubRandom(24);
+    return u.updatePassword(np).then(function(){
+      return fbDb.collection('users').doc(u.uid).set({ email: mail, pw: np, at: Date.now(), relinkAt: Date.now() }, { merge: true });
+    }).then(function(){ return true; });
+  }).catch(function(e){ console.warn('[FB] リンクの後に合言葉を入れ直せません', fbErrCode(e)); return false; });
+}
 function gasMailInvite(mail, code, info){
   var q = new URLSearchParams({ action:'mailInvite', email: mail, code: code, prefix: STOR, apiKey: GAS_API_KEY,
     name: String((info && info.name) || ''), kind: String((info && info.kind) || 'staff') });   // GAS のシートに無い人にも送れるように（2026-09-20）
@@ -1012,8 +1040,10 @@ function bind(){
     var rest = allStaff().filter(function(s){ return !isListed(s); });
     var target = existing || null;
     var plan = (target && target.devPlan instanceof Array) ? target.devPlan.slice() : ['own'];
+    // いま割り当てられている共有端末（開き直した時に先頭へ移らないよう selected を付ける）
+    var curDev = plan.filter(function(x){ return x !== 'own'; })[0] || '';
     var devOpts = S.devnames.map(function(d){
-      return '<option value="' + esc(d.name) + '">' + esc(d.name)
+      return '<option value="' + esc(d.name) + '"' + (d.name === curDev ? ' selected' : '') + '>' + esc(d.name)
         + '（' + (d.store === 'sanda' ? '三田店' : '本店') + '）</option>'; }).join('');
 
     var whatPicker = target ? '' : (
@@ -1086,10 +1116,18 @@ function bind(){
         + '<input type="checkbox" id="planshared"' + (plan.some(function(x){ return x !== 'own'; }) ? ' checked' : '') + ' style="width:auto;margin-right:8px">'
         + '<b>共有端末</b><span style="font-size:12px;color:var(--ink-2)">　店のPC・タブレット</span></label>'
         + '<div id="sharedwrap" style="margin-top:8px;padding-left:24px"' + (plan.some(function(x){ return x !== 'own'; }) ? '' : ' hidden') + '>'
-        + (devOpts
-            ? '<select id="planname">' + devOpts + '</select>'
-            : '<p style="font-size:12px;color:var(--wait);line-height:1.8">'
-              + '共有端末がまだ登録されていません。先に「共有端末」を追加してください。</p>')
+        // ★一覧が空でも行き止まりにしないこと（2026-11-02）。本番には auth-devnames が無く、
+        //   「変更する」を押しても pick が空で黙って引き返していた＝「変更できない」の正体。
+        + '<select id="planname">' + devOpts
+        + '<option value="__new__"' + (devOpts ? '' : ' selected') + '>＋ 一覧にない（新しく登録する）…</option></select>'
+        + '<div id="plannewwrap" style="margin-top:10px"' + (devOpts ? ' hidden' : '') + '>'
+        + '<label class="f" for="plannewname">共有端末の名前</label>'
+        + '<input type="text" id="plannewname" placeholder="例：本店PC2" autocomplete="off" maxlength="40">'
+        + '<label class="f" for="plannewstore" style="margin-top:10px">置いてある店舗</label>'
+        + '<select id="plannewstore"><option value="honten">本店</option><option value="sanda">三田店</option></select>'
+        + '<p style="font-size:12px;color:var(--ink-3);margin-top:8px;line-height:1.8">'
+        + 'ここで名前を決めると「登録端末」の一覧にも入ります。'
+        + '登録用メールは、あとで「登録端末」のタブで入れられます。</p></div>'
         + '</div>'
         + '<label class="f" for="newmail" style="margin-top:16px">ログイン用メール（あとからでも可）</label>'
         + '<input type="email" id="newmail" placeholder="例：okaue@midori-m.com" autocomplete="off" inputmode="email"'
@@ -1115,6 +1153,10 @@ function bind(){
     var syncShared = function(){
       if ($$('sharedwrap')) $$('sharedwrap').hidden = !($$('planshared') && $$('planshared').checked);
     };
+    var syncPlanNew = function(){
+      var isNewDev = $$('planname') && $$('planname').value === '__new__';
+      if ($$('plannewwrap')) $$('plannewwrap').hidden = !isNewDev;
+    };
     var syncNewStaff = function(){
       var isNew = $$('newuid') && $$('newuid').value === '__new__';
       if ($$('newstaffwrap')) $$('newstaffwrap').hidden = !isNew;
@@ -1122,8 +1164,9 @@ function bind(){
     Array.prototype.forEach.call(document.querySelectorAll('input[name="addwhat"]'), function(r){ r.onchange = syncWhat; });
     Array.prototype.forEach.call(document.querySelectorAll('input[name="newrole"]'), function(r){ r.onchange = syncRole; });
     if ($$('planshared')) $$('planshared').onchange = syncShared;
+    if ($$('planname')) $$('planname').onchange = syncPlanNew;
     if ($$('newuid')) $$('newuid').onchange = syncNewStaff;
-    syncWhat(); syncRole(); syncShared(); syncNewStaff();
+    syncWhat(); syncRole(); syncShared(); syncPlanNew(); syncNewStaff();
 
     var okBtn = document.querySelector('[data-dlg="ok"]');
     if (okBtn) okBtn.onclick = function(){
@@ -1166,12 +1209,21 @@ function bind(){
       // --- スタッフ ---
       var role = ((document.querySelector('input[name="newrole"]:checked')||{}).value) || 'use';
       var mail = (($$('newmail')||{}).value||'').trim().toLowerCase();
-      var newPlan = [];
+      var newPlan = [], newDev = null;   // newDev … その場で決めた共有端末（先に名簿へ足す）
       if (role === 'use') {
         if ($$('planown') && $$('planown').checked) newPlan.push('own');
         if ($$('planshared') && $$('planshared').checked) {
           var pick = ($$('planname')||{}).value || '';
-          if (!pick) { toast('保存しませんでした', '先に「共有端末」を追加してください。'); return; }
+          if (pick === '__new__' || !pick) {
+            // その場で決めた名前。保存の前に auth-devnames へ足す（下の prep）
+            var nn2 = (($$('plannewname')||{}).value||'').trim().slice(0,40);
+            if (!nn2) { toast('保存しませんでした', '共有端末の名前を入れてください。'); return; }
+            if (S.devnames.some(function(d){ return d.name === nn2; })) {
+              toast('保存しませんでした', 'その名前はすでにあります。一覧から選んでください。'); return;
+            }
+            newDev = { name: nn2, store: ($$('plannewstore')||{}).value || 'honten' };
+            pick = nn2;
+          }
           newPlan.push(pick);
         }
         if (!newPlan.length) { toast('保存しませんでした', '使う端末を1つ以上選んでください。'); return; }
@@ -1184,6 +1236,16 @@ function bind(){
       var patch = (role === 'none')
         ? { noLogin: true, sysUse: undefined, loginEmail: undefined, devPlan: undefined }
         : { noLogin: undefined, sysUse: true, loginEmail: mail || undefined, devPlan: newPlan };
+
+      // その場で決めた共有端末を、スタッフを保存する前に名簿へ足しておく。
+      // ★足せなかったら保存に進まないこと（名簿に無い端末名が devPlan に残ると、次に開いた時に選べない）
+      var prep = newDev
+        ? gasRead(STOR + 'auth-devnames').then(function(latest){
+            var base = (latest instanceof Array) ? latest.filter(function(x){ return x && x.name; }) : [];
+            if (base.some(function(d){ return d.name === newDev.name; })) { S.devnames = base; return true; }
+            return saveDevNames(base.concat([newDev]));
+          })
+        : Promise.resolve(true);
 
       // 新しいスタッフを作る場合
       var isNew = !target && $$('newuid') && $$('newuid').value === '__new__';
@@ -1198,7 +1260,11 @@ function bind(){
                                   badge:'mechanic', store:nsStore }, patch);
         Object.keys(rec).forEach(function(k){ if (rec[k] === undefined) delete rec[k]; });
         S.dialog = null; render();
-        saveNewStaff(nsStore, rec).then(function(res){
+        prep.then(function(okd){
+          if (!okd) { toast('追加できませんでした', '共有端末の名前を保存できませんでした。通信の状態をご確認ください。'); return null; }
+          return saveNewStaff(nsStore, rec);
+        }).then(function(res){
+          if (!res) return;
           if (!res.ok) { toast('追加できませんでした', res.why + '。'); return; }
           render();
           toast(nsName + ' さんをスタッフ表に追加しました',
@@ -1213,7 +1279,11 @@ function bind(){
       var toStore = (target && $$('edstore')) ? ($$('edstore').value === 'sanda' ? 'sanda' : 'honten') : s2.store;
       var moving = toStore !== s2.store;
       S.dialog = null; render();
-      (moving ? moveStaff(uid, s2.store, toStore, patch) : saveStaffField(uid, s2.store, patch)).then(function(res){
+      prep.then(function(okd){
+        if (!okd) { toast('保存できませんでした', '共有端末の名前を保存できませんでした。通信の状態をご確認ください。'); return null; }
+        return (moving ? moveStaff(uid, s2.store, toStore, patch) : saveStaffField(uid, s2.store, patch));
+      }).then(function(res){
+        if (!res) return;
         if (moving && res.ok) {
           render();
           toast(s2.name + ' さんを' + (toStore === 'sanda' ? '三田店' : '本店') + 'に移しました',
@@ -1599,7 +1669,7 @@ function afterSignIn(){
     fbAuth.signInWithEmailLink(mail, location.href).then(function(){
       try { localStorage.removeItem('hub-admin-link-email'); } catch (e) {}
       try { history.replaceState(null, '', location.pathname + (ENV_PROD ? '?env=prod' : '')); } catch (e) {}
-      afterSignIn();
+      relinkPw().then(afterSignIn, afterSignIn);   // ★リンクで消えた合言葉を入れ直してから入る
     }, function(e){
       var c = fbErrCode(e);
       S.step = 'mail'; S.mail = mail;

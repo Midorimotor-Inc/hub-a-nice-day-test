@@ -384,6 +384,46 @@ const SEED = {
       await ctx.close();
     }
   }
+  // ── 12. ★メールのリンクで入っても、その人の6桁が死なない（2026-11-03 の締め出しの再現）──
+  //   本番で起きたこと：竹林さんがメールのリンクから入った瞬間に、Firebase がそのアカウントの
+  //   合言葉を消した。控え（users/{uid}.pw）には 654083 が残っていたので画面も点検も気づけず、
+  //   ホーム画面のアイコンから何度 654083 を入れても通らない＝完全な締め出しになった。
+  {
+    const LINK_PW = '654083', MAIL = 'tikurin@midori-m.com', UID = 'uid_tikurin_midori_m_com';
+    for (const file of ['index_dev.html', 'mobile.html']) {
+      const nm = file === 'mobile.html' ? 'スマホ' : 'PC';
+      const ctx = await newCtx(); const page = await ctx.newPage(); const errs = watch(page);
+      await page.addInitScript(a => {
+        const st = JSON.parse(localStorage.getItem('__fakeFbStore') || '{}');
+        st['__acct/' + a.mail] = { at: 1 };
+        st['__pw/' + a.mail] = { pw: a.pw };                               // 本当の合言葉
+        st['users/' + a.uid] = { email: a.mail, pw: a.pw, inviteAt: 1 };   // 控え
+        localStorage.setItem('__fakeFbStore', JSON.stringify(st));
+      }, { mail: MAIL, pw: LINK_PW, uid: UID });
+      await page.goto(U(file + '?inv=1&e=' + encodeURIComponent(MAIL) + '&mode=signIn&oobCode=good'), { waitUntil: 'domcontentloaded' });
+      t(nm + '：リンクから入れる', await seeText(page, '竹林直行', 20000), await bodyText(page).then(x => x.slice(0, 200)));
+      await page.waitForTimeout(1500);
+      const pwNow = await page.evaluate(m => window.__fakeFb.pwOf(m), MAIL);
+      t(nm + '：★リンクで入った後も6桁の合言葉が通る（消えたままにしない）', pwNow === LINK_PW, pwNow || '(合言葉が無い)');
+      const udoc = await page.evaluate(u => window.__fakeFb.get(u, 'users'), UID);
+      t(nm + '：控えは6桁のまま（招待し直しがそのまま効く）', !!udoc && udoc.pw === LINK_PW, udoc);
+      const keep = await page.evaluate(k => JSON.parse(localStorage.getItem(k + 'auth-keep') || 'null'), STOR);
+      t(nm + '：端末の控えも6桁＋「通った」の印', !!keep && keep.p === LINK_PW && keep.v === 1, keep);
+      t(nm + '：JSエラーなし', errs.length === 0, errs.slice(0, 3));
+      await ctx.close();
+    }
+    {   // 控えが無い人（ずっとリンクで登録していた人）は長い合言葉を作る＝合言葉が無い状態で放り出さない
+      const ctx = await newCtx(); const page = await ctx.newPage();
+      await page.goto(U('index_dev.html?inv=1&e=' + encodeURIComponent(MAIL) + '&mode=signIn&oobCode=good'), { waitUntil: 'domcontentloaded' });
+      await seeText(page, '竹林直行', 20000);
+      await page.waitForTimeout(1500);
+      const pwNow = await page.evaluate(m => window.__fakeFb.pwOf(m), MAIL);
+      const udoc = await page.evaluate(u => window.__fakeFb.get(u, 'users'), UID);
+      t('控えが無い人：合言葉を作る（空のままにしない）', !!pwNow && pwNow.length > 6, pwNow);
+      t('控えが無い人：控えも同じものになる', !!udoc && udoc.pw === pwNow, udoc);
+      await ctx.close();
+    }
+  }
   await browser.close(); server.close();
   console.log(fail ? `\n${fail}件 不合格 / ${pass}件 合格` : `\n全${pass}件 PASS`);
   process.exit(fail ? 1 : 0);

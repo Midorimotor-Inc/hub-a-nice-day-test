@@ -87,6 +87,9 @@
         const code = new URL(href).searchParams.get('oobCode');
         if (code !== 'good') throw Object.assign(new Error('bad code'), { code: 'auth/invalid-action-code' });
         if (!store['__acct/' + email]) { store['__acct/' + email] = { at: Date.now() }; save(); }
+        // ★本物と同じく、メールのリンクで入ると【そのアカウントの合言葉が消える】（2026-11-03 に本番で実際に起きた）。
+        //   消えないことにすると、「リンクで入った人の6桁が二度と通らない」不具合を検査で踏めない。
+        delete store['__pw/' + email]; save();
         auth._set({ email, uid: uidOf(email) });
       },
       createUserWithEmailAndPassword: async (email, pw) => {

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793600598897';
+    window.__APP_BUILD='build-1793753540993';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -123,7 +123,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.94.1';
+const APP_VERSION = '3.94.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3166,14 +3166,51 @@ const hubSendLink = async (email) => {
     return { ok: true };
   } catch (e) { return { ok: false, err: hubAuthErr(e), raw: String((e && e.code) || '') }; }
 };
+// ★メールのリンクで入ると、Firebase はそのアカウントの【合言葉を消す】（2026-11-03 に本番で実際に起きた）。
+//   控え（users/{uid}.pw）には6桁が残るので、画面も fb_auth_check.js も「そろっている」と言うのに、
+//   実際にはどの6桁でも通らない。その人は招待のやり直しも QR の引き継ぎも効かず（どちらも控えで
+//   サインインし直す作り）、江川さんが node fb_seed_allowed.js --code で作り直すまで誰も入れられない。
+//   そこでリンクで入った直後に、控えを合言葉として入れ直しておく。
+//   ★入れ直す前に【本当に消えているか】を別のアプリ（招待用）で試すこと。消えていないのに
+//     updatePassword を呼ぶと、その人の他の端末のサインインが全部切れる（合言葉を変えると起きる仕様）。
+//   ★控えが無い人（ずっとリンクで登録していた人）は長い合言葉を作って控えも置く（hubHandoffSecret と同じ）。
+const hubRelinkPw = async (user) => {
+  const u = user || (fbAuth && fbAuth.currentUser) || fbUser;
+  if (!u || !fbDb) return false;
+  const mail = u.email || '';
+  let pw = '';
+  try { const s = await fbDb.collection('users').doc(u.uid).get(); pw = String((s.exists ? (s.data() || {}) : {}).pw || ''); }
+  catch (e) { console.warn('[FB] 合言葉の控えを読めません', e && e.message); return false; }
+  if (pw && mail) {
+    let gone = false;
+    const a2 = fbSecondaryApp().auth();
+    try { await a2.signInWithEmailAndPassword(mail, pw); }
+    catch (e) {
+      const c = String((e && e.code) || '');
+      gone = /wrong-password|invalid-credential|user-not-found|invalid-login/.test(c);
+      if (!gone) console.warn('[FB] 合言葉が残っているか確かめられません（今回だけ）', c);
+    }
+    try { await a2.signOut(); } catch (e) {}
+    if (!gone) return false;   // 残っている（か確かめられなかった）＝触らない
+  }
+  try {
+    const np = pw || hubRandom(24);
+    await u.updatePassword(np);
+    await fbDb.collection('users').doc(u.uid).set({ email: mail, pw: np, at: Date.now(), relinkAt: Date.now() }, { merge: true });
+    hubKeepSave(mail, np, true);
+    return true;
+  } catch (e) { console.warn('[FB] リンクの後に合言葉を入れ直せません', e && e.message); return false; }
+};
 // リンクから開いた：サインインを完了する。URL からリンクの印は外す（残すと開き直すたびにやり直しになる）
 const hubCompleteLink = async (emailTyped) => {
   if (!hubIsLinkOpen()) return { ok: false, err: 'no_link' };
   let mail = String(emailTyped || '').trim() || hubLinkEmailFromUrl();
   if (!mail) { try { mail = localStorage.getItem(HUB_LINK_EMAIL_KEY) || ''; } catch (e) {} }
   if (!mail) return { ok: false, err: 'need_email' };
-  try { await fbAuth.signInWithEmailLink(mail, location.href); }
+  let linked = null;
+  try { const cr = await fbAuth.signInWithEmailLink(mail, location.href); linked = (cr && cr.user) || (fbAuth && fbAuth.currentUser) || null; }
   catch (e) { return { ok: false, err: hubAuthErr(e), raw: String((e && e.code) || '') }; }
+  await hubRelinkPw(linked);   // ★リンクで入ると合言葉が消される。消えていたら控えから入れ直す（上の注意）
   try { localStorage.removeItem(HUB_LINK_EMAIL_KEY); } catch (e) {}
   try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
   return { ok: true };
@@ -3202,7 +3239,13 @@ const hubRandom = n => { const a = new Uint8Array(n); try { crypto.getRandomValu
 const hubHandoffSecret = async () => {
   const ref = fbDb.collection('users').doc(fbUser.uid);
   const s = await ref.get(); const d = s.exists ? s.data() : null;
-  if (d && d.pw) { hubKeepSave(fbUser.email, d.pw, false); return d.pw; }   // サーバーの控えを配るだけ＝本物とは言えない
+  if (d && d.pw) {
+    // ★すでに【通った】と分かっている同じ合言葉なら、印（v=1）を落とさないこと。
+    //   落とすと、控えのズレを自分で直す道（hubCheckDevice の書き戻し）が使えなくなる。
+    const k0 = hubKeepLoad();
+    if (!(k0 && k0.v && k0.p === d.pw)) hubKeepSave(fbUser.email, d.pw, false);   // サーバーの控えを配るだけ＝本物とは言えない
+    return d.pw;
+  }
   const pw = hubRandom(24);
   await fbUser.updatePassword(pw);
   await ref.set({ email: fbUser.email || '', pw, at: Date.now() }, { merge: true });
