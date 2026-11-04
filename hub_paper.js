@@ -111,6 +111,9 @@ const COURSES = { 1: 'マッハ', 2: 'クイック', 3: 'レギュラー' };
 // ★昔の予約は保存されている字のまま出す（2026-10-31）。古い id も残しておくこと
 const WORKS = { Q: 'クイック整備・修理', 'メンパ': 'メンパ', '有点': '有料点検', '無点': '無料点検', '⑫': '12ヶ月点検', M12: 'メンパ12ヶ月', M6: 'メンパ6ヶ月', M1: 'メンパ1ヶ月', N1: '新車1ヶ月', N6: '新車6ヶ月', B: '鈑金塗装', R: 'リコール', 商: '商談', 保: '保険', 試: '試乗', 納: '納車', 他: 'その他' };
 const STORES = [{ id: 'honten', name: '本店' }, { id: 'sanda', name: '三田店' }];
+// ★フルナンバー（2026-11-04）。地名＋分類番号＋かな＋4桁。無ければ4桁のまま（Hub の画面と同じ決まり）。
+const plateFullP = (r) => { const n = String((r && r.no) == null ? '' : r.no);
+  const h = String((r && r.noChi) || '') + String((r && r.noBun) || '') + String((r && r.noKana) || ''); return h ? h + n : n; };
 const sama = (n) => { const s = String(n == null ? '' : n).trim(); return (!s || /様|さん|御中|店$|社$|会社/.test(s)) ? s : s + ' 様'; };
 
 // ── ① 予定表（日ごと）─────────────────────────────────
@@ -175,7 +178,7 @@ const dayOf = (sid, dk) => {
   const il = (pick2(insp, dk) || []).filter(r => (r.store || 'honten') === sid)
     .sort((a, b) => cmp(a.time || a.bookingTime || 'zz', b.time || b.bookingTime || 'zz'))
     .map(r => ({
-      time: r.time || r.bookingTime || '', name: sama(r.name), carType: r.carType || '', no: String(r.no || ''),
+      time: r.time || r.bookingTime || '', name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
       course: COURSES[r.course] || '', phone: r.phone || '', loaner: r.loaner || r.rentalLabel || '',
       staff: r.staff || '', note: [r.note, r.entryDate ? '前日入庫 ' + r.entryDate : '', r.deliveryDate ? '納車 ' + r.deliveryDate + ' ' + (r.deliveryTime || '') : ''].filter(Boolean).join(' / ')
     }));
@@ -183,7 +186,7 @@ const dayOf = (sid, dk) => {
   const sl = Object.keys(sd).sort().map(k => {
     const r = sd[k] || {};
     return {
-      time: k.split('__')[0], name: sama(r.name), carType: r.carType || '', no: String(r.no || ''),
+      time: k.split('__')[0], name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
       phone: r.phone || '', work: WORKS[r.work] || r.work || '', content: r.content || '',
       loaner: r.loaner || r.rentalLabel || '', staff: r.staff || ''
     };
@@ -417,12 +420,12 @@ function daySheet(d){
   h += '<div class=meta>車検 '+d.insp.length+'台 ／ 整備 '+d.sched.length+'件 ／ 代車の貸出 '+d.loan.length+'台　|　この写しは '+E(D.stamp)+' 時点</div>';
   h += '<h3 class=r>🚗 車検（入庫予定）</h3>';
   h += tbl(d.insp, [{t:'入庫',w:52,c:1,v:function(r){return r.time||'未定';}},{t:'済',w:34,chk:1},
-    {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:60,c:1,v:function(r){return r.no;}},
+    {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:76,c:1,v:function(r){return r.no;}},
     {t:'コース',w:70,c:1,v:function(r){return r.course;}},{t:'電話',w:104,tel:1,v:function(r){return r.phone;}},
     {t:'代車',w:110,v:function(r){return r.loaner;}},{t:'担当',w:58,c:1,v:function(r){return r.staff;}},{t:'備考',v:function(r){return r.note;}}]);
   h += '<h3>⏰ 整備（タイムスケジュール）</h3>';
   h += tbl(d.sched, [{t:'時間',w:52,c:1,v:function(r){return r.time;}},{t:'済',w:34,chk:1},
-    {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:60,c:1,v:function(r){return r.no;}},
+    {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:76,c:1,v:function(r){return r.no;}},
     {t:'電話',w:104,tel:1,v:function(r){return r.phone;}},{t:'区分',w:90,v:function(r){return r.work;}},
     {t:'内容',v:function(r){return r.content;}},{t:'代車',w:100,v:function(r){return r.loaner;}},{t:'担当',w:58,c:1,v:function(r){return r.staff;}}]);
   h += '<h3 class=g>🚙 代車・レンタカー（この日に貸している分）</h3>';

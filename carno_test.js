@@ -34,6 +34,13 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 // 予約カードの中の入力欄を、その上のラベルの文字で探す
 const fieldByLabel = (page, label) => page.evaluate(lb => {
   const box = document.querySelector('.booking-modal-inner'); if (!box) return null;
+  // ★ナンバーは4つに分かれた（2026-11-04・C案）。見るのは【4桁の枠】。
+  if (lb === 'ナンバー') {
+    const i4 = box.querySelector('[data-nofour]'); if (!i4) return null;
+    const r4 = i4.getBoundingClientRect();
+    return { value: i4.value, x: Math.round(r4.x), y: Math.round(r4.y), w: Math.round(r4.width), max: i4.maxLength,
+             inputmode: i4.getAttribute('inputmode') || '', type: i4.getAttribute('type') || 'text' };
+  }
   const wrap = [...box.querySelectorAll('div')].find(d => {
     const l = d.querySelector(':scope > label');
     return l && l.innerText.replace(/\s/g, '').startsWith(lb) && d.querySelector(':scope > input');
@@ -100,19 +107,22 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('整備：電話が作業内容と同じマスに出る', !!schedCells && schedCells.some(c => /079-560-0000/.test(c) && !/ワゴンR/.test(c)), schedCells);
 
   // ── ② 予約カードの欄 ──
-  console.log('\n■ ② 予約カード：車種の右横にナンバー4桁');
+  console.log('\n■ ② 予約カード：車種の下にフルナンバー（地名／分類番号／かな／4桁）');
   await page.click('td:has-text("原村")', { timeout: 8000 }).catch(() => {});
   t('予約カードが開く', await seeText(page, '車検予約カード', 8000));
   const car = await fieldByLabel(page, '車種');
   const no = await fieldByLabel(page, 'ナンバー');
   t('ナンバーの欄がある', !!no, { car, no });
   t('既に入っているナンバーが出ている', !!no && no.value === '3310', no);
-  t('車種と同じ行の、右横にある', !!car && !!no && Math.abs(car.y - no.y) <= 4 && no.x > car.x, { car, no });
-  t('車種の欄より狭い', !!car && !!no && no.w < car.w, { carW: car && car.w, noW: no && no.w });
+  // ★2026-11-04 からナンバーは【車種の下に1行】で、地名／分類番号／かな／4桁の4つに分かれている（C案）。
+  t('★車種の下にある（2026-11-04 からフルナンバーの1行）', !!car && !!no && no.y > car.y, { car, no });
+  t('★4つの枠がある（地名／分類番号／かな／4桁）', await page.evaluate(() =>
+    ['nochi', 'nobun', 'nokana', 'nofour'].every(k => !!document.querySelector('[data-' + k + ']'))));
+  t('★4桁の枠は車種の欄より狭い', !!car && !!no && no.w < car.w, { carW: car && car.w, noW: no && no.w });
   // 数字だけ・4桁まで
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     setter.call(inp, 'あ12-345x9');
@@ -128,7 +138,8 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   const imeAttrs = await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
     const pick = (label) => {
-      const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith(label) && d.querySelector(':scope > input'); });
+      const wrap = (label === 'ナンバー') ? { querySelector: () => box.querySelector('[data-nofour]') }
+        : [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith(label) && d.querySelector(':scope > input'); });
       const i = wrap && wrap.querySelector(':scope > input');
       return i ? { inputmode: i.getAttribute('inputmode') || '', type: i.getAttribute('type') || 'text' } : null;
     };
@@ -146,13 +157,13 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   const cdp = await ctx.newCDPSession(page);
   const noInput = () => page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const i = wrap && wrap.querySelector(':scope > input'); if (!i) return null; i.focus(); return i.value;
   });
   // いったん空にする
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const i = wrap.querySelector(':scope > input');
     const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     st.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true }));
@@ -172,14 +183,14 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('★変換で打った後も number 型や inputmode は付いていない', !!fixed && !fixed.inputmode && fixed.type !== 'number', fixed);
   t('★maxLength は付けない（変換中の文字が切られて壊れるため）', await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const i = wrap.querySelector(':scope > input'); return !i.hasAttribute('maxlength');
   }));
 
   // 全角で打っても半角4桁になる（ひらがなのまま打てる）
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     setter.call(inp, '３３１０');
@@ -191,7 +202,7 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   // 元に戻してから保存へ進む
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith('ナンバー') && d.querySelector(':scope > input'); });
+    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     setter.call(inp, '1234');
@@ -219,6 +230,8 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('リストから予約する時に no を渡している', /no:\s*cust\.no/.test(src));
   t('新しい予約の初期値に no がある（車検・整備とも）',
     /blankInsp\s*=\s*\(\)\s*=>\s*\(\{[^)]*no:''/.test(src) && /blankSched\s*=\s*\(\)\s*=>\s*\(\{[^)]*no:''/.test(src));
+  t('★フルナンバーの入れ物（noChi／noBun／noKana）も初期値にある',
+    /blankInsp\s*=\s*\(\)\s*=>\s*\(\{[^)]*noChi:''[^)]*noBun:''[^)]*noKana:''/.test(src), '');
 
   // ★PC には「日本語入力を解除する欄」をひとつも置かない（2026-10-15 ユーザー報告：予定や備考も英数になる）
   //   type="date" / "time" / "number" も inputMode と同じく Windows の IME を英数にし、次の欄で ひらがな に戻さない。

@@ -174,7 +174,7 @@ const hasLabel = (page, re) => page.evaluate(r =>
   const noInfo = await page.evaluate(() => {
     const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
     if (!lab) return null;
-    const inp = lab.parentElement && lab.parentElement.querySelector('input');
+    const inp = document.querySelector('[data-nofour]');   // ★2026-11-04 から4分割。4桁の枠を見る
     if (!inp) return null;
     const labs = [...document.querySelectorAll('label')].filter(e => e.offsetParent !== null).map(e => e.innerText.trim().split(' ')[0]);
     return { ph: inp.placeholder || '', im: inp.getAttribute('inputmode') || '', fs: parseFloat(getComputedStyle(inp).fontSize),
@@ -185,14 +185,12 @@ const hasLabel = (page, re) => page.evaluate(r =>
   t('数字キーパッドが出る（スマホはそのまま）', !!noInfo && noInfo.im === 'numeric', noInfo);
   t('16px以上（iPhoneが勝手に拡大しない）', !!noInfo && noInfo.fs >= 16, noInfo);
   t('★全角で打っても半角4桁になる', await page.evaluate(() => {
-    const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
-    const inp = lab.parentElement.querySelector('input');
+    const inp = document.querySelector('[data-nofour]');
     const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     st.call(inp, '３３１０'); inp.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }) && await (async () => { await page.waitForTimeout(400); return page.evaluate(() => {
-    const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
-    return lab.parentElement.querySelector('input').value === '3310';
+    return document.querySelector('[data-nofour]').value === '3310';
   }); })());
 
   t('電話番号を入れられる', await typePhone(page, '090-1234-5678'));

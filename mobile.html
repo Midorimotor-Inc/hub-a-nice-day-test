@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793754905981';
+  window.__APP_BUILD='build-1793761645956';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -97,7 +97,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.94.3';
+const MOBILE_VERSION='3.95.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1482,7 +1482,31 @@ const removePendingStore=pid=>savePendingStore(loadPending().filter(p=>p.pid!==p
 // ══ 予約データのコアロジック（PC版と同一。挙動を変えないこと）══
 // 全角数字→半角（PC の toHankakuNum と同じ）。ひらがなのまま ３３１０ と打っても 3310 になる。
 const toHankakuNum=(v)=>String(v==null?'':v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',user:'',staff:'',carType:'',no:'',course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
+// ★フルナンバー（2026-11-04 ユーザー決定・C案）。PC（index_dev.html）と同じもの。
+//   【4桁（no）はこれまでどおり残す】＝顧客リストとの突き合わせ・重複さがし・車両管理との紐づけが下4桁のため。
+const plateFull=(r)=>{ if(!r)return''; const n=String(r.no==null?'':r.no);
+  const h=String(r.noChi||'')+String(r.noBun||'')+String(r.noKana||''); return h?h+n:n; };
+// ★マッハの「2年前予約」まわり（2026-11-04）。adv2y／contact／fixed（＋fixedAt・fixedBy）。
+//   ★★bookingStatus（顧客リストの 仮予約／本予約／キャンセル）とは【別物】。ここでは絶対にさわらないこと。
+const ADV2Y={y2:'#6d28d9',y2bg:'#ede9fe',sms:'#0891b2',smsbg:'#cffafe',tel:'#047857',telbg:'#d1fae5',
+             ok:'#15803d',okbg:'#dcfce7',wait:'#b45309',waitbg:'#fef3c7'};
+const contactName=(c)=>c==='sms'?'SMS':c==='tel'?'電話':'';
+const adv2yWho=(r)=>{ const t=Number(r&&r.fixedAt),d=(isFinite(t)&&t)?new Date(t):null;
+  return ((d?(d.getMonth()+1)+'/'+d.getDate():'')+' '+String((r&&r.fixedBy)||'')).trim(); };
+const ADV2Y_TAG=(bg,fg,bd)=>({display:'inline-flex',alignItems:'center',gap:3,padding:'1px 6px',borderRadius:10,
+  fontSize:10,fontWeight:800,whiteSpace:'nowrap',flexShrink:0,background:bg,color:fg,border:'1.5px solid '+(bd||bg)});
+const Adv2yTags=({row})=>{
+  if(!row||!row.adv2y)return null;
+  return(<>
+    <span data-adv2y="1" style={ADV2Y_TAG(ADV2Y.y2,'white')}>🗓 2年前</span>
+    {row.contact==='sms'&&<span data-adv2yc="sms" style={ADV2Y_TAG(ADV2Y.smsbg,ADV2Y.sms,ADV2Y.sms)}>📱 SMS</span>}
+    {row.contact==='tel'&&<span data-adv2yc="tel" style={ADV2Y_TAG(ADV2Y.telbg,ADV2Y.tel,ADV2Y.tel)}>☎ 電話</span>}
+    {row.fixed
+      ?<span data-adv2yfixed="1" style={ADV2Y_TAG(ADV2Y.ok,'white')}>✅ 確定</span>
+      :<span data-adv2ywait="1" style={ADV2Y_TAG(ADV2Y.waitbg,ADV2Y.wait,ADV2Y.wait)}>未確定</span>}
+  </>);
+};
+const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',user:'',staff:'',carType:'',no:'',noChi:'',noBun:'',noKana:'',adv2y:false,contact:'',fixed:false,course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
 
 // ── この予約の「受け付け」の記録（2026-10-29 ユーザー指示。PC版と同じ形・同じ言葉）──
 //   rcvAt / rcvBy … 最初に受け付けた日時と、受け付けた人
@@ -3616,7 +3640,7 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
   const sc=isInsp?'#3730a3':'#0e7490';
   const [form,setForm]=useState(()=>{
     const base={
-      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',work:'',qkind:[],loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
+      ...(isInsp?blankInsp():{name:'',staff:'',carType:'',no:'',noChi:'',noBun:'',noKana:'',work:'',qkind:[],loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false}),
       staff:currentUser?.name||'',
       ...(initial||{}),
     };
@@ -3901,16 +3925,32 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
                 form.staff||'',v=>setForm(p=>({...p,staff:v})),null,2)}
             </div>
           </div>
-          {/* ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）。
-              スマホは inputMode を付けたまま（iPhone は欄ごとに切り替わるので巻き添えが無く、数字キーパッドが出る利点が大きい）。
-              それでも変換が走る端末があるので、変換中は数字に削らない（PC と同じ守り）。 */}
+          {/* ★ナンバーはフルナンバーを4つに分けて（2026-11-04 ユーザー決定・C案。PC と同じ形）。
+              地名／分類番号／かな／4桁。**4桁（no）はこれまでどおり残す**（照合に使っているため）。
+              スマホは 4桁だけ inputMode を付けたまま（数字キーパッドが出る）。地名・分類・かなは日本語を打つので付けない。
+              それでも変換が走る端末があるので、変換中は数字に削らない（PC と同じ守り）。
+              ★入力欄は16px以上にすること（iPhone が勝手に拡大するため）。 */}
           <div>
-            <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>4桁・任意</span></label>
-            <input value={form.no==null?'':String(form.no)} inputMode="numeric" placeholder="例：3310" style={INP}
-              onChange={e=>{const ime=!!(e.nativeEvent&&e.nativeEvent.isComposing);
-                const v=ime?e.target.value:toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);
-                setForm(p=>({...p,no:v}));}}
-              onCompositionEnd={e=>{const v=toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);setForm(p=>({...p,no:v}));}}/>
+            <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>地名／分類／かな／4桁・任意</span></label>
+            <div style={{display:'grid',gridTemplateColumns:'1.15fr .85fr .7fr 1.05fr',gap:5}}>
+              <input data-nochi="1" value={form.noChi||''} placeholder="神戸"
+                style={{...INP,padding:'10px 4px',textAlign:'center'}}
+                onChange={e=>setForm(p=>({...p,noChi:e.target.value}))}/>
+              <input data-nobun="1" value={form.noBun||''} placeholder="582"
+                style={{...INP,padding:'10px 4px',textAlign:'center'}}
+                onChange={e=>{const ime=!!(e.nativeEvent&&e.nativeEvent.isComposing);
+                  const v=ime?e.target.value:String(e.target.value).replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\s+/g,'').slice(0,3).toUpperCase();
+                  setForm(p=>({...p,noBun:v}));}}/>
+              <input data-nokana="1" value={form.noKana||''} placeholder="は"
+                style={{...INP,padding:'10px 2px',textAlign:'center'}}
+                onChange={e=>setForm(p=>({...p,noKana:e.target.value.replace(/\s+/g,'').slice(0,2)}))}/>
+              <input data-nofour="1" value={form.no==null?'':String(form.no)} inputMode="numeric" placeholder="3182"
+                style={{...INP,padding:'10px 4px',textAlign:'center'}}
+                onChange={e=>{const ime=!!(e.nativeEvent&&e.nativeEvent.isComposing);
+                  const v=ime?e.target.value:toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);
+                  setForm(p=>({...p,no:v}));}}
+                onCompositionEnd={e=>{const v=toHankakuNum(e.target.value).replace(/[^0-9]/g,'').slice(0,4);setForm(p=>({...p,no:v}));}}/>
+            </div>
           </div>
           {/* ★電話（任意・2026-10-06 ユーザー要望）。車検・一般とも。PC版と同じ form.phone。
               リストから予約した時はリストの番号が入っている。入っていれば 📞 でそのままかけられる。
@@ -3975,6 +4015,56 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,mode,initial,vsId,currentUs
                   ))}
                 </div>
               </div>
+              {/* ★マッハの「2年前予約」（2026-11-04 ユーザー決定・C案。PC と同じ）。
+                  押した時だけ「案内の仕方」と「予約確定」が出る。
+                  ★bookingStatus（仮予約／本予約）とは別物。ここでは絶対にさわらないこと。 */}
+              {(()=>{
+                const B2Y=(on,color,bg)=>({width:'100%',padding:'11px 4px',borderRadius:10,boxSizing:'border-box',
+                  border:'2px solid '+(on?color:'#e2e8f0'),background:on?bg:'white',color:on?color:'#64748b',
+                  fontWeight:800,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:4,fontFamily:'inherit'});
+                return(
+                <div data-adv2ybox="1">
+                  <label style={LBL}>2年前予約 <span style={{fontWeight:400,color:'#9ca3af',fontSize:11}}>2年後の予約をその場で取った時</span></label>
+                  <button type="button" data-adv2ybtn="1"
+                    onClick={()=>setForm(p=>p.adv2y?{...p,adv2y:false,contact:'',fixed:false}:{...p,adv2y:true})}
+                    style={B2Y(!!form.adv2y,ADV2Y.y2,ADV2Y.y2bg)}>
+                    {form.adv2y&&<span style={{fontWeight:900}}>✓</span>}🗓 2年前予約
+                  </button>
+                  {form.adv2y&&(<>
+                    <div style={{marginTop:7,fontSize:11,color:'#64748b',fontWeight:700}}>車検が近づいた時の案内の仕方</div>
+                    <div style={{display:'flex',gap:7,marginTop:4}}>
+                      <button type="button" data-contact="sms" onClick={()=>setForm(p=>({...p,contact:p.contact==='sms'?'':'sms',...(p.contact==='sms'?{fixed:false}:{})}))}
+                        style={{...B2Y(form.contact==='sms',ADV2Y.sms,ADV2Y.smsbg),flex:1}}>
+                        {form.contact==='sms'&&<span style={{fontWeight:900}}>✓</span>}📱 SMS
+                      </button>
+                      <button type="button" data-contact="tel" onClick={()=>setForm(p=>({...p,contact:p.contact==='tel'?'':'tel',...(p.contact==='tel'?{fixed:false}:{})}))}
+                        style={{...B2Y(form.contact==='tel',ADV2Y.tel,ADV2Y.telbg),flex:1}}>
+                        {form.contact==='tel'&&<span style={{fontWeight:900}}>✓</span>}☎ 電話
+                      </button>
+                    </div>
+                    {/* ★★連絡の仕方を選ぶまでは押せない（2026-11-04 ユーザー指示。PC と同じ） */}
+                    <button type="button" data-adv2yfix="1" disabled={!form.contact} style={{...(form.fixed
+                        ?{...B2Y(false),border:'2px solid '+ADV2Y.ok,background:ADV2Y.ok,color:'white'}
+                        :B2Y(false)),marginTop:7,...(form.contact?{}:{opacity:.45})}}
+                      onClick={()=>{ if(!form.contact)return; setForm(p=>p.fixed?{...p,fixed:false}
+                        :{...p,fixed:true,fixedAt:Date.now(),fixedBy:((currentUser&&currentUser.name)||'')}); }}>
+                      {/* ★スマホは一番下の【保存】ボタンが元から「✅ 予約確定」なので、同じ名前が2つ並ばないよう
+                          ここだけ「（返事あり）」を付ける（2026-11-04）。PC は保存が「確定して登録／内容を保存する」なので「✅ 予約確定」のまま。 */}
+                      {form.fixed&&<span style={{fontWeight:900}}>✓</span>}✅ 予約確定（返事あり）
+                    </button>
+                    {!form.contact&&(
+                      <div data-adv2yneed="1" style={{fontSize:11,color:'#b45309',fontWeight:800,marginTop:4}}>
+                        ※ 先に「SMS」か「電話」を選んでください
+                      </div>
+                    )}
+                    {form.fixed&&(
+                      <div data-adv2ystamp="1" style={{fontSize:11.5,color:ADV2Y.ok,fontWeight:800,marginTop:5}}>
+                        ✅ {contactName(form.contact)?contactName(form.contact)+'で':''}予約確定{adv2yWho(form)?'（'+adv2yWho(form)+'）':''}
+                      </div>
+                    )}
+                  </>)}
+                </div>);
+              })()}
               <div style={{display:'flex',gap:10}}>
                 <div style={{flex:1}}>
                   <label style={LBL}>入庫時間 *</label>
@@ -4473,6 +4563,8 @@ const ScheduleView=({pleaveData,onEditMemo,onToggleMemo,otherView,inspData,sched
                     <span style={{fontWeight:800,fontSize:15,flex:1}}>{sama(r.name)}</span>
                     {r.pendingApproval&&<span style={{padding:'2px 7px',borderRadius:10,background:'#fef3c7',color:'#b45309',fontSize:10,fontWeight:800}}>⏳ 承認待ち</span>}
                     {c&&<span style={{padding:'2px 8px',borderRadius:10,background:c.bg,color:c.color,fontSize:10,fontWeight:700}}>{c.name}</span>}
+                    {/* ★2年前予約の札（2026-11-04。PC の1日表示と同じ並び） */}
+                    <Adv2yTags row={r}/>
                     {isOther&&<span style={{fontSize:10,color:'#94a3b8',padding:'1px 5px',background:'#f1f5f9',borderRadius:6}}>{normStore(r.store)==='honten'?'本店':'三田店'}</span>}
                     {!isOther&&<span style={{fontSize:13,color:'#cbd5e1'}}>›</span>}
                   </div>

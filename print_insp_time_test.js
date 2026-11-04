@@ -57,6 +57,10 @@ const printRows = async (page) => {
     const colTd = tb.querySelector('tbody td[colspan]');
     return {
       head: [...tb.querySelectorAll('thead th')].map(cell),
+      dense: /dense/.test(tb.className),          // ★台数が多い日は詰めて刷る（1枚に収める）
+      chips: [...tb.querySelectorAll('tbody .adv2y-p')].map(cell),   // ★2年前予約の札
+      hasDenseCss: String(window.__printed || '').indexOf('.insp-table.dense') >= 0,
+      hasChipCss: String(window.__printed || '').indexOf('.adv2y-p') >= 0,
       rows: [...tb.querySelectorAll('tbody tr')].map(tr => [...tr.querySelectorAll('td')].map(cell)),
       colspan: colTd ? colTd.getAttribute('colspan') : null,
       timeCells: [...tb.querySelectorAll('tbody td.insp-time')].map(cell),
@@ -166,6 +170,31 @@ const printRows = async (page) => {
   const r2 = await printRows(page);
   t('★colspan が 8', !!r2 && r2.colspan === '8', r2 && r2.colspan);
   t('「予約なし」と出る', !!r2 && JSON.stringify(r2.rows).indexOf('予約なし') >= 0, r2 && r2.rows);
+
+  head('⑧ 2年前予約の印も紙に出す。ただし【1日が1枚に収まる】こと（2026-11-04 ユーザー指示）');
+  // ★⑥ で insp を空にしているので、ここで7台ぶんを入れ直す（6台＋2年前予約の1台）。
+  await page.evaluate(([k, dk]) => {
+    const mk = (n, tm) => ({ name: n, carType: 'ワゴンR', course: 2, store: 'honten', tokuten: '-', time: tm, bookingStatus: 'confirmed', seq: Date.now() });
+    const rows = ['紙一郎', '紙二郎', '紙三郎', '紙四郎', '紙五郎', '紙六郎'].map((n, i) => mk(n, '0' + (9 + i) + ':00'));
+    rows.push({ name: '二年太郎', carType: 'アルト', course: 2, store: 'honten', tokuten: '-', time: '15:00',
+      bookingStatus: 'confirmed', seq: Date.now() + 1,
+      adv2y: true, contact: 'sms', fixed: true, fixedBy: '江川京志', fixedAt: Date.now() });
+    window.__fakeFb.set(k, { [dk]: rows });
+  }, [STOR + 'insp', DK]);
+  await page.waitForTimeout(2200);
+  const r4 = await printRows(page);
+  t('印刷の HTML を受け取れた（7台）', !!r4 && r4.rows.length === 7, r4 && r4.rows.length);
+  t('★列は8つのまま（印のために列を増やさない）', !!r4 && r4.head.length === 8, r4 && r4.head);
+  t('★どの行も8つの欄のまま（印のために行や欄を増やさない）', !!r4 && r4.rows.every(c => c.length === 8), r4 && r4.rows.map(c => c.length));
+  const nn = r4 && r4.rows.find(c => c.some(x => x.indexOf('二年太郎') >= 0));
+  t('★2年前予約の人の行に「2年前SMS」の印が出る', !!nn && /2年前SMS/.test(nn.join(' ')), nn);
+  t('★予約確定なので ✓ も付く', !!nn && nn.join(' ').indexOf('✓') >= 0, nn);
+  t('★印は【氏名の欄】の中（2列目の入庫時間ではない）', !!nn && nn[1] === '15:00' && /2年前/.test(nn[2]), nn && nn.slice(0, 3));
+  t('★2年前予約でない人の行には印が出ない', !!r4 && r4.chips.length === 1, r4 && r4.chips);
+  t('★紙で色が出ない時のために枠付きの印の決まりがある', !!r4 && r4.hasChipCss);
+  t('★7台以上の日は詰めて刷る（dense）', !!r4 && r4.dense, r4 && r4.dense);
+  t('★詰め方の決まりが印刷の CSS に入っている', !!r4 && r4.hasDenseCss);
+  t('★6台までは詰めない（ふだんの大きさ）', !!r3 && r3.dense === false, r3 && r3.dense);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
