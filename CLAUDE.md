@@ -1966,6 +1966,45 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - 検査は **`node adv2y_test.js`（72件・PORT 8431）**。`carno_test.js`（31件）と
   `mobile_phone_test.js`（33件）は**欄の見つけ方を `[data-nofour]` に直した**（中身の見張りは同じ）。
   印刷は `print_insp_time_test.js`（34件）の ⑧（札が出る・行も列も増えない・7台で dense・6台では dense にしない）。
+### 点検のバッジ（M1／M6／M12・有12・無1／無6）と作業内容の大きな窓（v3.96.0・2026-11-04）
+- **なぜ**：現場の声2つ。「**予約カードの作業内容のポップが小さくて字が見にくい**」と、
+  「**週間カレンダーを見たときに、バッジで一目で何の点検が入っているか分かるようにしたい**」。
+- **決めごと（2026-11-04 ユーザー決定・モック `mock_insp_badge.html` で確認）**：
+  ① ポップは **A案＝クイックメニューと同じ大きさの中央の窓**（`WorkPickModal`。幅 `min(820px,96vw)`）。
+  ② 並べ方は **点検（メンパ／有料点検／無料点検）→ 整備・修理（Q／B／R）→ その他**（`WORK_GROUPS`）。
+  ③ 点検を選ぶと**月数**を聞く。メンパ＝1／6／12・無料点検＝1／6・**有料点検は12しかないので自動**。
+  ④ バッジの字そのものを **M1／M6／M12・有12・無1／無6** にする。
+  ⑤ ★**説明文はいらない＝バッジだけ**。週間カレンダーもスケジュール画面も、
+     **お名前のとなりに「メンパ12」のような作業名を出さないこと**（バッジを見れば分かる）。
+     なぞると `title` に「メンパ（6ヶ月）」と出るので、知りたい時はそれで足りる。
+  ⑥ ★**月数を選ばないと窓を閉じられない**（✕・覆い・Escape・「これで決める」のどれでも閉じない）。
+     逃げ道は **「やめる（元に戻す）」** 1つだけ＝窓を開いた時の値に戻して閉じる。
+  ⑦ **昔の予約は書き換えない**（`M12` などはそのまま。`WORKS_OLD` と `workDef` で今までどおり出る）。
+- **持ち物は `wkmon`（'1'／'6'／'12'）1つだけ。`work` は メンパ／有点／無点 のまま。**
+  ★ここを変えないこと＝**入庫制限の解除（`restrPasses`）とマッハの自動制限（`MACH_BLOCK_WORKS`）が
+  work の id を見ている**ので、`work` に月数を混ぜると両方とも通らなくなる。
+- **出す所は必ず `workBadgeText(row)` を通す**（1日表示・週間カレンダー・印刷・オフライン予定表の控え・
+  検索の結果・スマホの一覧）。作業名まで出したい所（予約カードの欄・なぞり書き）は `workFullName(row)`。
+  道具は **`WORK_SUB` / `workSubOf` / `workMonOf` / `workBadgeText` / `workFullName`**（BLOCK-A）。
+  **`index_dev.html` と `mobile.html` の2ファイルに同じものを置くこと。**
+  紙の控え（`hub_paper.js`）は `workNameP(r)`＝「メンパ（6ヶ月）」と言葉で出す（紙は略号より言葉）。
+- ★**窓は予約カードの【外】に置く**（`QuickMenuModal` のとなり）。カードの中は `.slide-in` の
+  transform が残っているので、`position:fixed` がカードの中に閉じ込められる。
+- ★**`data-wkid` と `onMouseDown` は残すこと。** `works_quick_test` / `mach_restrict_test` /
+  `restriction_save_test` / `collapsed_add_test` が項目を mousedown で押している。
+  ★**欄の `onBlur` でポップを閉じないこと**（窓を押した時に欄の focus が外れて閉じてしまう）。
+- ★**スマホは窓にしていない**（元から下から出るシート＝大きく開く）。
+  作業内容の下に**月数の段**（`data-wkmonrow`）を出し、**選ばないと保存させない**。
+- 印は `data-wkmodal` / `data-wkgrp` / `data-wkid` / `data-wkmonrow` / `data-wkmon` /
+  `data-wkclose` / `data-wkdone` / `data-wkgiveup` / `data-wkwarn` / **`data-wwork`（週表のバッジ）**。
+- 検査は **`node insp_badge_test.js`（56件・PORT 8433）**。
+  既存の検査も直した：`card_pop_test.js`（46件・②を大きな窓に）／`works_quick_test.js`（64件・並びを区画順に）／
+  `collapsed_add_test.js`（19件・作業の選び方をカードの外から）。
+  あわせて PASS を確認：`mach_restrict_test`(31) `restriction_save_test`(15) `carno_test`(31)
+  `print_insp_time_test`(34) `paper_test`(75) `mobile_move_test`(44) `week_view_test`(138)
+  `week4_test`(51) `week_find_test`(89) `adv2y_test`(77) `offline_sheet_test`(35)
+  `search_same_test`(23) `staff_pick_test`(38)。
+- モック：`mock_insp_badge.html`（予約カード・週間カレンダー・1日表示の3か所を実際に押して試せる）。
 ### 【記録】2026-10-31 に本番を v3.88.0 へ（port_to_main.js・作業内容まわりの4つ）
 - 本番は v3.87.1 → **v3.88.0**。`node port_to_main.js` → `node smoke_main.js` PASS を確認して push。
 - **あわせてクイックメニューの中身（`setItems` / `setGroups`）をテスト版から本番へ写した**（ユーザー指示

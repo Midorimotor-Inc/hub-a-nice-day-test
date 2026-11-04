@@ -166,8 +166,10 @@ const GONE = ['12ヶ月点検', 'メンパ12ヶ月点検', 'メンパ6ヶ月点�
   await openWorkPop();
   const wk = await page.evaluate(() => [...document.querySelectorAll('[data-wkid]')].map(e => ({ id: e.getAttribute('data-wkid'), txt: (e.innerText || '').trim() })));
   t('★11 個だけ出る', wk.length === 11, wk.map(x => x.id));
-  t('★並びは Q / メンパ / 有点 / 無点 / B / R / 商 / 保 / 試 / 納 / 他',
-    wk.map(x => x.id).join(',') === 'Q,メンパ,有点,無点,B,R,商,保,試,納,他', wk.map(x => x.id));
+  // ★2026-11-04：大きな窓にして【点検／整備・修理／その他】の区画に並べ替えた（ユーザー決定）。
+  //   それまでは WORKS の順（Q が先頭）。11個ぜんぶ出ることは上で見ている。
+  t('★並びは 点検（メンパ/有点/無点）→ 整備・修理（Q/B/R）→ その他',
+    wk.map(x => x.id).join(',') === 'メンパ,有点,無点,Q,B,R,商,保,試,納,他', wk.map(x => x.id));
   t('★「メンパ」がある', wk.some(x => x.id === 'メンパ' && /メンパ/.test(x.txt)));
   t('★「有点 有料点検」がある', wk.some(x => x.id === '有点' && /有料点検/.test(x.txt)));
   t('★「無点 無料点検」がある', wk.some(x => x.id === '無点' && /無料点検/.test(x.txt)));

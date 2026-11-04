@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793762870042';
+    window.__APP_BUILD='build-1793768113494';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.95.1';
+const APP_VERSION = '3.96.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -350,13 +350,16 @@ const WORK_COLORS = {
   '他':'#64748b',
 };
 // 略号スクエアのみ（作業名は幅を取るので出さない。マウスを乗せると名称がツールチップで出る）
-const WorkBadge = ({id, dim}) => {
+const WorkBadge = ({id, mon, dim}) => {
   const w = workDef(id);
   if (!w) return <span style={{fontSize:13,color:'#374151'}}>{id||'—'}</span>;
   const c = WORK_COLORS[id] || '#64748b';
+  // ★点検は「何ヶ月か」までバッジに出す（M1／M6／M12・有12・無1／無6）。
+  //   なぞると「メンパ（6ヶ月）」のように出るので、バッジのとなりに作業名は出さない。
+  const row = {work:id, wkmon:mon};
   return (
-    <span title={w.name} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
-      borderRadius:6,background:c,color:'white',fontSize:11,fontWeight:800,whiteSpace:'nowrap',opacity:dim?0.6:1}}>{w.id}</span>
+    <span title={workFullName(row)||w.name} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
+      borderRadius:6,background:c,color:'white',fontSize:11,fontWeight:800,whiteSpace:'nowrap',opacity:dim?0.6:1}}>{workBadgeText(row)||w.id}</span>
   );
 };
 
@@ -851,6 +854,36 @@ const QKINDS = [{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業
 const qkindOf = (row) => Array.isArray(row && row.qkind) ? row.qkind.filter(k => QKINDS.some(x => x.k === k)) : [];
 const qkindLabel = (row) => QKINDS.filter(x => qkindOf(row).indexOf(x.k) >= 0).map(x => x.name).join('・');
 const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >= 0 ? a.filter(x => x !== k) : a.concat([k]); };
+// ★点検の「何ヶ月か」（2026-11-04 ユーザー決定）。週間カレンダーや1日表示で
+//   【バッジを見ただけで何の点検か分かる】ようにするため、バッジの字そのものを
+//   M1／M6／M12（メンパ）・有12（有料点検）・無1／無6（無料点検）にする。
+//   ★持ち物は wkmon（'1'／'6'／'12'）だけ。work は メンパ／有点／無点 のまま＝
+//     入庫制限の解除（restrPasses）とマッハの自動制限（MACH_BLOCK_WORKS）は今までどおり動く。
+//   ★昔の予約（work が M12／M6／M1 など）は【書き換えない】。保存されている字のまま出る。
+//   ★バッジのとなりに作業名を出さないこと（2026-11-04 ユーザー指示：バッジだけで分かる）。
+const WORK_SUB = {'メンパ':['1','6','12'],'有点':['12'],'無点':['1','6']};
+const workSubOf = (id) => WORK_SUB[id] || null;
+const workMonOf = (row) => { const s = workSubOf(row && row.work); const m = String((row && row.wkmon) || '');
+  return (s && s.indexOf(m) >= 0) ? m : ''; };
+const workBadgeText = (row) => { const id = (row && row.work) || '', m = workMonOf(row);
+  if (!m) return id;
+  if (id === 'メンパ') return 'M' + m;
+  if (id === '有点') return '有' + m;
+  if (id === '無点') return '無' + m;
+  return id; };
+const workFullName = (row) => { const id = (row && row.work) || '', m = workMonOf(row);
+  return id ? (workName(id) + (m ? '（' + m + 'ヶ月）' : '')) : ''; };
+// ★作業内容の並べ方（2026-11-04 ユーザー決定）。この3つの箱に分けて大きく出す。
+//   表に入れ忘れた作業は最後の箱に回るので、WORKS に足しても画面から消えない。
+const WORK_GROUPS = [
+  {name:'点検',      col:'#0891b2', ids:['メンパ','有点','無点']},
+  {name:'整備・修理', col:'#9333ea', ids:['Q','B','R']},
+  {name:'その他',    col:'#64748b', ids:['商','保','試','納','他']}
+];
+const workGroups = () => { const g = WORK_GROUPS.map(x => ({...x, items: x.ids.map(id => WORKS.find(w => w.id === id)).filter(Boolean)}));
+  const rest = WORKS.filter(w => !WORK_GROUPS.some(x => x.ids.indexOf(w.id) >= 0));
+  if (rest.length) g[g.length - 1].items = g[g.length - 1].items.concat(rest);
+  return g; };
 // ★作業項目を選んだ時の決まり
 //   ・★内容（整備）／備考（車検）には【入れない】（2026-11-04 ユーザー指示で見直し）。
 //     2026-10-31 は「空のときだけ作業名を入れる」にしていたが、**1行増えるぶん印刷が2枚になる**日が出た。
@@ -860,6 +893,9 @@ const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >=
 const applyWorkPick = (form, id) => {
   const next = { ...form, work: id };
   if (id !== 'Q') next.qkind = [];
+  // ★有料点検は12ヶ月しかないので自動で決める（2026-11-04 ユーザー決定）。
+  //   メンパ・無料点検は【選ぶまでポップを閉じられない】＝空のままにしない。
+  next.wkmon = (id === '有点') ? '12' : '';
   return next;
 };
 const SHIMIS = [{id:'',name:'なし'},{id:'指',name:'指示書'},{id:'見',name:'見積'},{id:'両',name:'両方'}];
@@ -2456,7 +2492,7 @@ const BOOKING_STATUS_STRIPE = {
 };
 const BOOKING_STATUS_COLOR  = {new:'#166534',provisional:'#166534',confirmed:'#075985',cancelled:'#991b1b'};
 const BOOKING_STATUS_BORDER = {new:'#4ade80',provisional:'#4ade80',confirmed:'#38bdf8',cancelled:'#f87171'};
-const blankSched = () => ({name:'',staff:'',carType:'',no:'',phone:'',work:'',qkind:[],loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
+const blankSched = () => ({name:'',staff:'',carType:'',no:'',phone:'',work:'',qkind:[],wkmon:'',loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,shimi:'',content:'',entryDate:'',deliveryDate:'',deliveryTime:'',deliveryNote:'',noteToDelivery:false});
 const blankMemo  = () => ({content:''});
 const dateKey    = (y,m,d) => `${y}-${m+1}-${d}`;
 const toNum      = (y,m,d) => y*10000+(m+1)*100+d;
@@ -4972,9 +5008,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
             <div key={k} data-went={dk+'/'+k} onClick={()=>onOpenSched(dk,k)}
               style={{display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer',
                 ...(ri>0?{marginTop:2,paddingTop:2,borderTop:'1px dotted #e2e8f0'}:{})}}>
-              <span title={(WORKS.find(w=>w.id===r.work)||{}).name||''}
+              {/* ★点検は月数までバッジに出す（M1／M6／M12・有12・無1／無6）。
+                  バッジのとなりに作業名は出さない（2026-11-04 ユーザー指示：バッジだけで分かる）。 */}
+              <span data-wwork={workBadgeText(r)||''} title={workFullName(r)||((WORKS.find(w=>w.id===r.work)||{}).name||'')}
                 style={{flexShrink:0,fontSize:9.5,fontWeight:900,color:'white',borderRadius:3,padding:'0 4px',
-                  lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{r.work||'—'}</span>
+                  lineHeight:'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{workBadgeText(r)||'—'}</span>
               {/* ★④ なぞると「いつ・誰が予約を入れたか」（2026-10-29 ユーザー指示）。
                   週表には担当者のバッジが無い（2026-10-23 に内容を出すため外した）ので、お名前をなぞる。 */}
               <span data-wentnm="1"
@@ -7414,7 +7452,7 @@ const FindModal=memo(({isOpen,onClose,inspData,schedDataH,schedDataS,onGo,onGoCu
               <span style={{fontWeight:800,color:'#1d4ed8',width:92,flexShrink:0}}>{dkLabel(h.dk)}</span>
               <Pill c="#0e7490">整備</Pill>
               <span style={{fontWeight:800}}>{mark(h.r.name)}{SAMA_RE.test(String(h.r.name||'').trim())?'':SAMA_GAP+'様'}</span>
-              <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.store)}{' ・ '+getBaseSlot(h.sk)}{h.r.work?' ・ '+h.r.work:''}</span>
+              <span style={{color:'#64748b',fontSize:12,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mark(h.r.carType||'')}{h.r.carType?' ・ ':''}{storeName(h.store)}{' ・ '+getBaseSlot(h.sk)}{h.r.work?' ・ '+workBadgeText(h.r):''}</span>
             </Row>
           ))}
           {all3.slice(0,120).map(g=>(
@@ -8591,6 +8629,90 @@ const withDeliveryNote = (entry, dk, isInsp) => {
 //   ★グループは setGroups（項目とは別のキー）。項目の g がどのグループに居るか
 //   ★内容の足し引きはその場で効く。やめる＝バッジの直しだけを元に戻す
 // ============================================
+// ============================================
+// 作業内容のポップ＝クイックメニューと同じ大きさの窓（A案・2026-11-04 ユーザー決定）
+//   ・それまでは欄のすぐ下に出る小さな並びで「字が小さくて見にくい」と現場から声があった
+//   ・並べ方は【点検／整備・修理／その他】の3つの区画（WORK_GROUPS）
+//   ★点検（メンパ・有料点検・無料点検）は【月数を選ばないと閉じられない】
+//     ＝バッジが M1／M6／M12・有12・無1／無6 になるので、月数が空のままだと役に立たない。
+//     逃げ道は「やめる（元に戻す）」1つだけ（開いた時の値に戻して閉じる）。
+//   ★有料点検は12ヶ月しかないので applyWorkPick が自動で入れる＝そのまま閉じる。
+//   ★`data-wkid` と onMouseDown は残すこと（works_quick_test ほか既存の検査が押している）。
+//   ★この窓は予約カードの外（QuickMenuModal のとなり）に置く。カードの中だと transform で
+//     position:fixed が閉じ込められる。
+// ============================================
+const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore})=>{
+  const [warn,setWarn]=useState(false);
+  const orig=useRef({work:'',mon:'',qk:[]});
+  useEffect(()=>{if(isOpen){orig.current={work:work||'',mon:mon||'',qk:(qk||[]).slice()};setWarn(false);}},[isOpen]);
+  if(!isOpen)return null;
+  const sub=workSubOf(work), need=!!(sub&&!mon);
+  const col=WORK_COLORS[work]||'#0891b2';
+  const tryClose=()=>{if(need){setWarn(true);return;}onClose();};
+  const giveUp=()=>{if(onRestore)onRestore(orig.current);onClose();};
+  const CH=(on,c)=>({padding:'10px 18px',borderRadius:22,border:'2px solid '+(on?c:'#e5e7eb'),
+    background:on?c:'white',color:on?'white':'#334155',fontSize:15,fontWeight:800,cursor:'pointer',
+    fontFamily:'inherit',whiteSpace:'nowrap',userSelect:'none'});
+  const FBTN={padding:'10px 0',borderRadius:9,border:'none',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:'inherit'};
+  return(
+    <div data-wkmodal="1" onMouseDown={e=>e.preventDefault()} onClick={tryClose}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:4800,display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
+      <div onClick={e=>e.stopPropagation()} className="modal-box"
+        style={{background:'white',borderRadius:16,width:'min(820px,96vw)',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
+        <div style={{padding:'14px 18px',background:'linear-gradient(135deg,#0e7490,#0891b2)',borderRadius:'16px 16px 0 0',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <div style={{flex:1}}>
+            <div style={{color:'white',fontWeight:900,fontSize:15}}>🔧 作業内容</div>
+            <div style={{color:'rgba(255,255,255,0.8)',fontSize:11}}>押すとその作業になります。点検は「何ヶ月か」まで選んでください。</div>
+          </div>
+          <button data-wkclose="1" onClick={tryClose} title="とじる"
+            style={{width:32,height:26,border:'2px solid rgba(255,255,255,0.9)',background:'transparent',color:'white',borderRadius:7,fontSize:13,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+        </div>
+        <div style={{padding:'14px 18px',overflowY:'auto'}}>
+          {workGroups().map(g=>(
+            <div key={g.name} data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
+                {g.items.map(w=>(
+                  <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
+                    style={CH(work===w.id,WORK_COLORS[w.id]||g.col)}>{w.name}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {sub&&(
+            <div data-wkmonrow="1" style={{border:'2px solid '+col,borderRadius:12,padding:'10px 12px 12px',background:'#f8fafc'}}>
+              <div style={{fontSize:12,fontWeight:900,color:col,marginBottom:8}}>
+                {workName(work)}は何ヶ月ですか？{need?'（選ばないと閉じられません）':''}
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:9,alignItems:'center'}}>
+                {sub.map(m=>(
+                  <div key={m} data-wkmon={m} onMouseDown={e=>{e.preventDefault();onPickMon(m);}}
+                    style={CH(mon===m,col)}>{m}ヶ月</div>
+                ))}
+                {!!mon&&(
+                  <span data-wkpreview="1" style={{marginLeft:6,fontSize:12,color:'#475569',display:'inline-flex',alignItems:'center',gap:6}}>
+                    バッジ →
+                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
+                      borderRadius:6,background:col,color:'white',fontSize:11,fontWeight:800}}>{workBadgeText({work:work,wkmon:mon})}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          {warn&&(
+            <div data-wkwarn="1" style={{marginTop:10,padding:'9px 12px',background:'#fee2e2',border:'2px solid #fca5a5',borderRadius:10,color:'#991b1b',fontSize:12.5,fontWeight:800}}>
+              ⚠ {workName(work)}の月数（{(sub||[]).join('・')}ヶ月）を選んでください。選ばずに閉じるなら「やめる（元に戻す）」を押してください。
+            </div>
+          )}
+        </div>
+        <div style={{padding:'10px 18px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
+          <button data-wkgiveup="1" onClick={giveUp} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる（元に戻す）</button>
+          <button data-wkdone="1" onClick={tryClose} style={{...FBTN,flex:2,background:need?'#cbd5e1':'#0891b2',color:'white'}}>✓ これで決める</button>
+        </div>
+      </div>
+    </div>
+  );
+});
 const QM_FALLBACK={id:'g_etc',name:'その他',col:'#64748b'};
 const qmTint=(hex,on)=>on?{background:hex,borderColor:hex,color:'white'}
   :{background:'#f8fafc',borderColor:hex+'66',color:hex};
@@ -9013,6 +9135,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     else if(e.key==='ArrowUp'){e.preventDefault();const nv=SCHED_SLOTS[Math.max(cur-1,0)];setForm(p=>({...p,_slot:nv}));intoView(nv);}
     else if(e.key==='Enter'||e.key==='Escape'){e.preventDefault();setShowSlotPk(false);if(e.key==='Enter')goNext('slot');}
   };
+  // ★点検（メンパ・有料点検・無料点検）で月数がまだ空か
+  const wkNeedMon=!!(workSubOf(form.work)&&!workMonOf(form));
+  const wkAfter=()=>{setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);};
   const WIDS=WORKS.map(w=>w.id);
   const onWorkKb=(e)=>{
     if(!showWkPk){if(e.key==='Enter'){e.preventDefault();setShowWkPk(true);}
@@ -9024,8 +9149,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     const scrollWkIntoView=(id)=>{const el=document.querySelector('[data-wkid="'+id+'"]');if(el)el.scrollIntoView({block:'nearest'});};
     if(e.key==='ArrowDown'){e.preventDefault();const ni=cur<0?0:Math.min(cur+1,WIDS.length-1);setForm(p=>applyWorkPick(p,WIDS[ni]));scrollWkIntoView(WIDS[ni]);}
     else if(e.key==='ArrowUp'){e.preventDefault();const ni=Math.max(cur-1,0);setForm(p=>applyWorkPick(p,WIDS[ni]));scrollWkIntoView(WIDS[ni]);}
-    else if(e.key==='Enter'){e.preventDefault();setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);}
-    else if(e.key==='Escape'){e.preventDefault();setShowWkPk(false);}
+    // ★点検で月数が空の時は Enter／Escape で閉じない（窓の中で選ぶか「やめる」を押す）
+    else if(e.key==='Enter'){e.preventDefault();if(wkNeedMon)return;setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);}
+    else if(e.key==='Escape'){e.preventDefault();if(wkNeedMon)return;setShowWkPk(false);}
   };
   const SHIDS=[...SHIMIS.map(s=>s.id)];
   const onShimiKb=(e)=>{
@@ -9559,26 +9685,17 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           {!isInsp&&(
             <div>
               <label style={LBL}>作業内容</label>
+              {/* ★ポップは大きな窓（WorkPickModal）。カードの外に出してあるので、ここは欄だけ。
+                  ★onBlur で勝手に閉じないこと（窓を押した時に欄の focus が外れて閉じてしまう）。 */}
               <div data-kbkey="work" tabIndex={0}
-                onFocus={()=>setKbField('work')} onBlur={()=>{setKbField('');setTimeout(()=>setShowWkPk(false),150);}}
+                onFocus={()=>setKbField('work')} onBlur={()=>setKbField('')}
                 onKeyDown={onWorkKb} onClick={()=>setShowWkPk(p=>!p)}
                 style={{...INP,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',...KB('work')}}>
                 <span style={{color:form.work?'#111':'#9ca3af'}}>
-                  {form.work?workName(form.work):'選択してください（Enterで開く）'}
+                  {form.work?(workFullName(form)||workName(form.work)):'選択してください（Enterで開く）'}
                 </span>
                 <span style={{fontSize:10,color:'#6b7280'}}>{showWkPk?'▲':'▼'}</span>
               </div>
-              {showWkPk&&(
-                <div data-popgrid="work" style={POPBOX('#0891b2',2)}>
-                  {WORKS.map((w,i)=>(
-                    <div key={i} data-wkid={w.id}
-                      onMouseDown={e=>{e.preventDefault();setForm(p=>applyWorkPick(p,w.id));setShowWkPk(false);setKbField('shimi');}}
-                      style={POPIT(form.work===w.id,'#0891b2','#e0f2fe',{left:true})}>
-                      {w.id} {w.name}
-                    </div>
-                  ))}
-                </div>
-              )}
               {/* ★Q を選んだ時だけ「どこで作業する」。両方えらべる（2026-10-31 ユーザー指示） */}
               {form.work==='Q'&&(
                 <div style={{marginTop:7}}>
@@ -9883,6 +10000,12 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           </div>
         </div>
       </div>
+      {/* 🔧 作業内容の大きな窓（2026-11-04）。点検は月数を選ぶまで閉じられない */}
+      <WorkPickModal isOpen={showWkPk} work={form.work} mon={workMonOf(form)} qk={qkindOf(form)}
+        onPick={id=>{setForm(p=>applyWorkPick(p,id));const s=workSubOf(id);if(!s||id==='有点')wkAfter();}}
+        onPickMon={m=>{setForm(p=>({...p,wkmon:m}));wkAfter();}}
+        onClose={()=>setShowWkPk(false)}
+        onRestore={o=>setForm(p=>({...p,work:o.work,wkmon:o.mon,qkind:(o.qk||[]).slice()}))}/>
       {/* ⚡ クイックメニュー（2026-10-31）。内容の足し引きはその場で効く */}
       <QuickMenuModal isOpen={showQuickMenu} onClose={()=>setShowQuickMenu(false)}
         items={setItems||[]} groups={setGroups||[]}
@@ -10241,7 +10364,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
       {/* ★車種の下にナンバー4桁、電話は作業内容のバッジの下（2026-09-30 ユーザー指示・A案） */}
       <td style={TD}><span style={{color:'#374151',fontSize:13,fontWeight:700}}>{row.carType||'—'}</span>
         {plateFull(row)!==''&&<div style={{fontSize:12,fontWeight:800,letterSpacing:'.06em',color:'#0f172a',whiteSpace:'nowrap'}}>ナンバー {plateFull(row)}</div>}</td>
-      <td style={TD}>{row.work?<><WorkBadge id={row.work} dim={locked||otherStore}/>{qkindLabel(row)&&<span data-qklab title={'クイック整備・修理の'+qkindLabel(row)} style={{marginLeft:4,fontSize:10,fontWeight:800,color:'#7c3aed',whiteSpace:'nowrap'}}>{qkindLabel(row)}</span>}</>:<span style={{fontSize:13,color:'#374151'}}>—</span>}
+      <td style={TD}>{row.work?<><WorkBadge id={row.work} mon={workMonOf(row)} dim={locked||otherStore}/>{qkindLabel(row)&&<span data-qklab title={'クイック整備・修理の'+qkindLabel(row)} style={{marginLeft:4,fontSize:10,fontWeight:800,color:'#7c3aed',whiteSpace:'nowrap'}}>{qkindLabel(row)}</span>}</>:<span style={{fontSize:13,color:'#374151'}}>—</span>}
         {row.phone&&<div style={{fontSize:11,marginTop:3,color:'#0369a1',fontWeight:600,whiteSpace:'nowrap'}}>📞{row.phone}</div>}</td>
       <td style={TD}><span style={{fontSize:12,color:row.rentalLabel?'#065f46':'#374151',fontWeight:400}}>
         {/* ★限定（この車でないとダメ）の代車は鍵マークを付ける。最適化で動かない印 */}
@@ -14482,7 +14605,7 @@ function AppInner() {
         let first=true;
         dataKeys.forEach(k=>{
           const r=schedData[dk][k];
-          schedRows.push({slot:first?slot:'', name:r.name||'', carType:r.carType||'', work:r.work||'', loaner:schedLoaner(r), note:r.content||'', isEmpty:false});
+          schedRows.push({slot:first?slot:'', name:r.name||'', carType:r.carType||'', work:workBadgeText(r)||'', loaner:schedLoaner(r), note:r.content||'', isEmpty:false});
           first=false;
         });
         derived.forEach(d=>{
@@ -14800,7 +14923,7 @@ function AppInner() {
       const schedRows=Object.keys(day).filter(k=>day[k]&&day[k].name)
         .sort((a,b)=>String(getBaseSlot(a)).localeCompare(String(getBaseSlot(b))))
         .map(k=>({time:specialSlotLabel(getBaseSlot(k)),name:day[k].name,carType:day[k].carType||"",no:day[k].no||"",
-          phone:day[k].phone||"",content:[day[k].work,day[k].content].filter(Boolean).join(" ／ "),staff:day[k].staff||""}));
+          phone:day[k].phone||"",content:[workBadgeText(day[k]),day[k].content].filter(Boolean).join(" ／ "),staff:day[k].staff||""}));
       const loan=bars.filter(b=>b.f<=n&&n<=b.t).map(b=>({car:b.car,num:b.num,user:b.user,span:b.span,kind:b.kind}));
       const busy={};bars.forEach(b=>{if(b.kind==="代車"&&b.f<=n&&n<=b.t)busy[b.carId]=1;});
       const free=cars.filter(c=>!busy[String(c.id)]).map(c=>((c.name||"")+" "+(c.num||"")).trim());

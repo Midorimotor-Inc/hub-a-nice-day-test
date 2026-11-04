@@ -144,21 +144,35 @@ const seed = {
   t('★選ぶと欄に入る（11:00）', await page.evaluate(() => (document.querySelector('[data-kbkey="slot"]') || {}).innerText || '').then(x => /11:00/.test(x)));
   t('★選ぶとポップは閉じる', await page.evaluate(() => !document.querySelector('[data-popgrid="slot"]')));
 
-  console.log('\n■ ② 整備の「作業内容」は13項目ぜんぶ見える');
+  // ★2026-11-04：作業内容は「欄の下の小さな並び」から【クイックメニューと同じ大きさの窓】に変えた。
+  //   ここを小さな並びに戻さないこと（現場から「字が小さくて見にくい」と声があった）。
+  console.log('\n■ ② 整備の「作業内容」は大きな窓で開く（11項目・3つの区画）');
   await openField('[data-kbkey="work"]');
-  m = await measure('work');
-  t('ポップが出る', !!m, m);
-  t('★11項目ぜんぶ出る', !!m && m.n === 11, m && m.n);
-  t('★縦にスクロールしない', !!m && !m.vScroll, m);
-  t('★横にスクロールしない', !!m && !m.hScroll, m);
-  t('★高さの上限を付けていない', !!m && m.maxH === 'none', m && m.maxH);
-  t('★2列', !!m && m.cols === 2, m && m.cols);
-  t('★どの項目も字が切れていない（クイック整備・修理まで）', !!m && m.clipped === 0, m && m.clipped);
-  t('★先頭は「Q クイック整備・修理」', !!m && /クイック整備/.test(m.first), m && m.first);
-  t('★最後は「他 その他」', !!m && /その他/.test(m.last), m && m.last);
+  const wm = await page.evaluate(() => {
+    const ov = document.querySelector('[data-wkmodal]'); if (!ov) return null;
+    const box = ov.querySelector('.modal-box');
+    const chips = [...ov.querySelectorAll('[data-wkid]')];
+    return {
+      w: Math.round(box.getBoundingClientRect().width),
+      grps: [...ov.querySelectorAll('[data-wkgrp]')].map(e => e.getAttribute('data-wkgrp')),
+      n: chips.length,
+      fs: chips.length ? parseFloat(getComputedStyle(chips[0]).fontSize) : 0,
+      clipped: chips.filter(e => e.scrollWidth > e.clientWidth + 1).length,
+      ids: chips.map(e => e.getAttribute('data-wkid')),
+    };
+  });
+  t('大きな窓が出る', !!wm, wm);
+  t('★窓の幅が760px以上（クイックメニューと同じ大きさ）', !!wm && wm.w >= 760, wm && wm.w);
+  t('★11項目ぜんぶ出る', !!wm && wm.n === 11, wm && wm.n);
+  t('★区画は 点検／整備・修理／その他 の3つ', !!wm && wm.grps.join('/') === '点検/整備・修理/その他', wm && wm.grps);
+  t('★点検が先頭の区画', !!wm && wm.ids[0] === 'メンパ', wm && wm.ids[0]);
+  t('★字は15px以上（小さくしない）', !!wm && wm.fs >= 15, wm && wm.fs);
+  t('★どの項目も字が切れていない', !!wm && wm.clipped === 0, wm && wm.clipped);
+  t('★欄の下の小さな並び（popgrid work）は出さない', await page.evaluate(() => !document.querySelector('[data-popgrid="work"]')));
   await page.evaluate(() => { const e = document.querySelector('[data-wkid="B"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
   await page.waitForTimeout(500);
   t('★選ぶと欄に入る（鈑金塗装）', await page.evaluate(() => (document.querySelector('[data-kbkey="work"]') || {}).innerText || '').then(x => /鈑金塗装/.test(x)));
+  t('★点検でなければそのまま閉じる', await page.evaluate(() => !document.querySelector('[data-wkmodal]')));
 
   console.log('\n■ ③ 整備の「指・見」は4項目ぜんぶ見える');
   await openField('[data-kbkey="shimi"]');

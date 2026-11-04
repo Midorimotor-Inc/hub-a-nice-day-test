@@ -110,6 +110,11 @@ const stamp = book.作成日時_表示 || madeAt.toLocaleString('ja-JP');
 const COURSES = { 1: 'マッハ', 2: 'クイック', 3: 'レギュラー' };
 // ★昔の予約は保存されている字のまま出す（2026-10-31）。古い id も残しておくこと
 const WORKS = { Q: 'クイック整備・修理', 'メンパ': 'メンパ', '有点': '有料点検', '無点': '無料点検', '⑫': '12ヶ月点検', M12: 'メンパ12ヶ月', M6: 'メンパ6ヶ月', M1: 'メンパ1ヶ月', N1: '新車1ヶ月', N6: '新車6ヶ月', B: '鈑金塗装', R: 'リコール', 商: '商談', 保: '保険', 試: '試乗', 納: '納車', 他: 'その他' };
+const WORK_SUB_P = { 'メンパ': ['1', '6', '12'], '有点': ['12'], '無点': ['1', '6'] };
+// ★点検は「何ヶ月か」まで出す（2026-11-04）。画面のバッジは M1／M6／M12・有12・無1／無6、紙は言葉で出す。
+const workNameP = (r) => { const id = String((r && r.work) || ''); if (!id) return '';
+  const nm = WORKS[id] || id; const sub = WORK_SUB_P[id]; const m = String((r && r.wkmon) || '');
+  return (sub && sub.indexOf(m) >= 0) ? (nm + '（' + m + 'ヶ月）') : nm; };
 const STORES = [{ id: 'honten', name: '本店' }, { id: 'sanda', name: '三田店' }];
 // ★フルナンバー（2026-11-04）。地名＋分類番号＋かな＋4桁。無ければ4桁のまま（Hub の画面と同じ決まり）。
 const plateFullP = (r) => { const n = String((r && r.no) == null ? '' : r.no);
@@ -187,7 +192,7 @@ const dayOf = (sid, dk) => {
     const r = sd[k] || {};
     return {
       time: k.split('__')[0], name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
-      phone: r.phone || '', work: WORKS[r.work] || r.work || '', content: r.content || '',
+      phone: r.phone || '', work: workNameP(r), content: r.content || '',
       loaner: r.loaner || r.rentalLabel || '', staff: r.staff || ''
     };
   });

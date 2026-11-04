@@ -152,39 +152,17 @@ const DK = `${Y}-${M + 1}-${D}`;
     const car = inps[2] || inps[1];
     if (car) { setter.call(car, 'ワゴンR'); car.dispatchEvent(new Event('input', { bubbles: true })); }
   });
-  // 作業内容は「クリックで開くリスト」から選ぶ（項目は mousedown で決まる）
+  // 作業内容は【大きな窓（WorkPickModal）】から選ぶ。2026-11-04 からカードの外に出したので、
+  // .booking-modal-inner の中を探さないこと。点検は月数も要るので「他 その他」を選ぶ。
   const pickWork = async () => {
-    await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const d = box && box.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+    await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
     await page.waitForTimeout(500);
-    const okMd = await page.evaluate(() => {
-      const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
-      const el = box.querySelector('[data-wkid]'); if (!el) return false;
-      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      const trig = box.querySelector('[data-kbkey="work"]');
-      return !!(trig && !/選択してください/.test(trig.innerText));
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-wkid="他"]') || document.querySelector('[data-wkid]');
+      if (el) el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     });
-    if (okMd) return true;
-    // キーボードで選ぶ（作業欄にフォーカス → Enter で開く → ↓ → Enter）
-    await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const d = box && box.querySelector('[data-kbkey="work"]'); if (d) d.focus(); });
-    await page.waitForTimeout(200);
-    await page.keyboard.press('Enter'); await page.waitForTimeout(250);
-    await page.keyboard.press('ArrowDown'); await page.waitForTimeout(150);
-    await page.keyboard.press('Enter'); await page.waitForTimeout(300);
-    const okKb = await page.evaluate(() => { const b = document.querySelector('.booking-modal-inner'); const trig = b && b.querySelector('[data-kbkey="work"]'); return !!(trig && !/選択してください/.test(trig.innerText)); });
-    if (okKb) return true;
-    await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const d = box && box.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
     await page.waitForTimeout(400);
-    return page.evaluate(() => {
-      const box = document.querySelector('.booking-modal-inner'); if (!box) return false;
-      const names = ['その他', 'メンパ', '有料点検', '鈑金塗装'];
-      const all = [...box.querySelectorAll('div,button')];
-      for (const nm of names) {
-        const item = all.find(e => e.innerText.trim() === nm);
-        if (item) { item.click(); break; }
-      }
-      const trig = box.querySelector('[data-kbkey="work"]');
-      return !!(trig && !/選択してください/.test(trig.innerText));
-    });
+    return page.evaluate(() => { const trig = document.querySelector('[data-kbkey="work"]'); return !!(trig && !/選択してください/.test(trig.innerText)); });
   };
   t('② 作業を選べた（検査の前提）', await pickWork());
   await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const b = [...box.querySelectorAll('button')].find(x => /確定|保存/.test(x.innerText)); if (b) b.click(); });
