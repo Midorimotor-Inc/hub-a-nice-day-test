@@ -3,13 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>見本：2年前予約・連絡方法・フルナンバー</title>
+<title>見本：2年前予約・連絡方法・予約確定・フルナンバー</title>
 <style>
   :root{
     --ink:#1b2129; --ink2:#374151; --ink3:#6b7280; --line:#e5e7eb;
     --y2:#6d28d9; --y2bg:#ede9fe;          /* 2年前予約 */
     --sms:#0891b2; --smsbg:#cffafe;        /* ショートメール */
     --tel:#047857; --telbg:#d1fae5;        /* 電話連絡 */
+    --ok:#15803d;  --okbg:#dcfce7;         /* 予約確定 */
+    --wait:#b45309; --waitbg:#fef3c7;      /* まだ確定していない */
   }
   *{box-sizing:border-box}
   body{margin:0;background:#f1f5f9;color:var(--ink);
@@ -17,6 +19,8 @@
   header{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:14px 16px}
   header h1{margin:0;font-size:17px;font-weight:800}
   header p{margin:5px 0 0;font-size:12.5px;opacity:.92;line-height:1.7}
+  .v2{display:inline-block;background:#facc15;color:#78350f;font-size:11px;font-weight:800;
+    border-radius:20px;padding:2px 9px;margin-left:6px;vertical-align:2px}
   .wrap{max-width:1120px;margin:0 auto;padding:16px}
   section{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:18px;overflow:hidden}
   .shead{background:#f8fafc;border-bottom:2px solid var(--line);padding:11px 14px}
@@ -25,7 +29,7 @@
   .sbody{padding:14px}
   .picks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
   .pick{border:2px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;
-    font-size:13px;font-weight:700;color:var(--ink2);text-align:left;line-height:1.5}
+    font-size:13px;font-weight:700;color:var(--ink2);text-align:left;line-height:1.5;font-family:inherit}
   .pick small{display:block;font-weight:500;font-size:11.5px;color:var(--ink3);margin-top:2px}
   .pick.on{border-color:#1d4ed8;background:#eff6ff;color:#1d4ed8}
   .stage{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:14px;overflow-x:auto}
@@ -33,7 +37,7 @@
     border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:10px 12px}
   .note b{color:#92400e}
 
-  /* ── 予約カードの見た目（本物に合わせてある） ── */
+  /* ── 予約カード（本物に合わせてある） ── */
   .card{width:420px;max-width:100%;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);overflow:hidden}
   .ctitle{background:#7c2d12;color:#fff;padding:9px 12px;font-size:13.5px;font-weight:800;display:flex;justify-content:space-between}
   .cbody{padding:12px}
@@ -41,20 +45,23 @@
   .lbl{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:5px}
   .lbl .sub{font-weight:400;color:#9ca3af;font-size:10px}
   .inp{width:100%;padding:9px 12px;border:2px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit}
-  .row2{display:grid;grid-template-columns:1fr 118px;gap:8px}
   .btns{display:grid;gap:7px}
   .btn{padding:10px 6px;border-radius:9px;border:2px solid var(--line);background:#fff;color:var(--ink3);
     font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;
     font-family:inherit;transition:all .12s}
+  .btn.sm{font-size:12px;padding:9px 4px}
   .btn .ck{font-weight:900}
   .btn.on{border-color:currentColor}
   .btn.y2.on{color:var(--y2);background:var(--y2bg)}
   .btn.sms.on{color:var(--sms);background:var(--smsbg)}
   .btn.tel.on{color:var(--tel);background:var(--telbg)}
+  .btn.ok.on{color:#fff;background:var(--ok);border-color:var(--ok)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
   .hint{font-size:11.5px;color:var(--ink3);margin-top:5px;line-height:1.7}
+  .okstamp{font-size:11.5px;color:var(--ok);font-weight:700;margin-top:5px}
 
   /* ── スケジュール画面（1日表示）の車検の表 ── */
-  table.sched{border-collapse:collapse;background:#fff;font-size:13px;min-width:860px}
+  table.sched{border-collapse:collapse;background:#fff;font-size:13px;min-width:880px}
   table.sched th{background:#334155;color:#fff;font-size:11px;font-weight:700;padding:6px 8px;text-align:left;white-space:nowrap}
   table.sched td{padding:7px 9px;border-bottom:1px solid #f3f4f6;border-right:1px solid #f3f4f6;vertical-align:middle}
   .no{text-align:center;font-weight:700;color:#2563eb;border-left:3px solid #2563eb !important}
@@ -66,10 +73,17 @@
   .cdot{width:16px;height:16px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900}
   .tag{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:800;white-space:nowrap}
   .tag.y2{background:var(--y2);color:#fff}
-  .tag.y2o{background:var(--y2bg);color:var(--y2);border:1.5px solid var(--y2)}
   .tag.sms{background:var(--smsbg);color:var(--sms);border:1.5px solid var(--sms)}
   .tag.tel{background:var(--telbg);color:var(--tel);border:1.5px solid var(--tel)}
+  .tag.ok{background:var(--ok);color:#fff}
+  .tag.wait{background:var(--waitbg);color:var(--wait);border:1.5px solid var(--wait)}
   .tag.store{background:#2563eb;color:#fff}
+  /* ひとつながりの帯（A案） */
+  .strip{display:inline-flex;align-items:stretch;border-radius:20px;overflow:hidden;font-size:10px;font-weight:800;white-space:nowrap;vertical-align:middle}
+  .strip span{display:inline-flex;align-items:center;gap:3px;padding:2px 7px}
+  .strip .s1{background:var(--y2);color:#fff}
+  .strip .s2{background:var(--ok);color:#fff}
+  .strip .s2w{background:var(--waitbg);color:var(--wait)}
   .sub2{font-size:11px;color:var(--ink3);margin-top:2px}
   .foot{font-size:12.5px;color:var(--ink3);line-height:1.9;padding:0 16px 24px}
   .foot ul{margin:6px 0 0;padding-left:1.2em}
@@ -78,19 +92,20 @@
 </head>
 <body>
 <header>
-  <h1>見本：マッハ車検の「2年前予約」・連絡方法・フルナンバー</h1>
+  <h1>見本：マッハ車検の「2年前予約」・連絡方法・予約確定・フルナンバー<span class="v2">v2 予約確定を追加</span></h1>
   <p>これは<b>見本（モック）</b>です。本物の Hub ではありません（押しても予約は動きません）。
-     ①②③それぞれで、どの案がよいかお選びください。この画面の中のボタンは実際に押して試せます。</p>
+     ①②③それぞれで、どの案がよいかお選びください。画面の中のボタンは実際に押して試せます。</p>
 </header>
 
 <div class="wrap">
 
-<!-- ① 予約カードの中 -->
 <section>
   <div class="shead">
-    <h2>① 予約カードの中（2年前予約 と 連絡方法）</h2>
-    <p class="ask">「2年前予約」のボタンと、車検が近づいた時の案内方法（ショートメール／電話連絡）の選択。
-       選んだ方は<b>色が変わってチェックが付きます</b>。置き方を3案つくりました。</p>
+    <h2>① 予約カードの中（2年前予約 ／ 連絡方法 ／ 予約確定）</h2>
+    <p class="ask">
+      流れ：<b>2年前予約</b>で受ける → 車検が近づいたら<b>ショートメール or 電話</b>で案内する →
+      お客様の返事がもらえたら<b>予約確定</b>を押す。押した方は<b>色が変わってチェックが付きます</b>。
+      置き方を3案つくりました。</p>
   </div>
   <div class="sbody">
     <div class="picks" id="p1"></div>
@@ -99,7 +114,6 @@
   </div>
 </section>
 
-<!-- ② ナンバー -->
 <section>
   <div class="shead">
     <h2>② ナンバーをフルナンバーで</h2>
@@ -112,12 +126,12 @@
   </div>
 </section>
 
-<!-- ③ スケジュール画面 -->
 <section>
   <div class="shead">
-    <h2>③ スケジュール画面（1日表示）での出方</h2>
-    <p class="ask">カードで選んだ「2年前予約」と「連絡方法」が、車検の表にどう出るか。3案つくりました。
-       ナンバーは②で選んだ形で出ます。</p>
+    <h2>③ スケジュール画面（1日表示）のバッジ</h2>
+    <p class="ask">
+      「2年前予約／SMS または 電話で予約確定」のバッジ。<b>確定する前</b>と<b>確定した後</b>で変わります。
+      ①のカードのボタンを押すと、この表もその場で変わるので見比べてください。</p>
   </div>
   <div class="sbody">
     <div class="picks" id="p3"></div>
@@ -131,14 +145,17 @@
   <div class="sbody" style="font-size:13px;line-height:1.95;color:var(--ink2)">
     <ul style="margin:0;padding-left:1.3em">
       <li>①②③で<b>それぞれどの案か</b>（例：①A・②B・③A）。</li>
-      <li><b>「2年前予約」の呼び名</b>はこのままでよいか（他に「2年前受付」「前回受付」など）。</li>
-      <li><b>連絡方法は1つだけ選ぶ</b>形にしています。両方選べた方がよいですか。</li>
-      <li>連絡方法を<b>はじめから「ショートメール」にしておく</b>（既定）のがよいか、
-          <b>未選択から始める</b>のがよいか。</li>
+      <li>★<b>「予約確定」と、いまの「仮予約／本予約」は別物でよいですか。</b>
+          Hub にはすでに 仮予約（緑）・本予約（水色）・キャンセル（赤）の区別があり、行の色が変わります。
+          今回の「予約確定」は<b>2年前予約のお客様に連絡がついた印</b>として、それとは別に持つつもりです。
+          （同じものにしたい場合はおっしゃってください）</li>
+      <li><b>連絡方法を選ばずに「予約確定」</b>を押せてよいですか。
+          （押せなくする＝必ずどちらか選んでから、にもできます。いまの見本は押せる形です）</li>
+      <li><b>確定した日と押した人</b>を残しますか（なぞると「11/4 江川京志」と出る形にできます）。</li>
       <li>「2年前予約」は<b>マッハ車検だけ</b>に出しますか、<b>どのコースでも</b>出しますか。</li>
-      <li>ナンバーについて：いまの予約326件・顧客ファイル全件とも<b>中身は数字だけ</b>です
-          （フルナンバーはどこにも入っていません）。つまり<b>これから入れた分だけ</b>フルで出ます。
-          古い分は4桁のまま出します（それでよいか）。</li>
+      <li>印刷にも出しますか（<b>出すと行が増えます</b>。1枚に収めたいなら出さない方が安全です）。</li>
+      <li>ナンバー：いまの予約326件・顧客ファイル全件とも<b>中身は数字だけ</b>で、
+          フルナンバーはどこにも入っていません。<b>これから入れた分だけ</b>フルで出て、古い分は4桁のままです。</li>
     </ul>
   </div>
 </section>
@@ -146,86 +163,93 @@
 <p class="foot">
   中の持ち方（ご参考・画面には出ません）：
   <ul>
-    <li>2年前予約＝<code>adv2y</code>（はい／いいえ）、連絡方法＝<code>contact</code>（sms／tel／空）。
-        どちらも<b>予約の1行に足すだけ</b>で、いまのデータは変わりません。</li>
+    <li>予約の1行に <code>adv2y</code>（2年前予約）・<code>contact</code>（sms／tel／空）・
+        <code>fixed</code>（予約確定）を足すだけ。いまのデータは変わりません。</li>
     <li>ナンバーは、照合（顧客リストとの突き合わせ・同じ車の重複さがし・車両管理との紐づけ）に
-        <b>下4桁を使っています</b>。そのため<b>4桁は今のまま残し</b>、フルナンバーは別に持ちます。
+        <b>下4桁を使っています</b>。<b>4桁は今のまま残し</b>、フルナンバーは別に持ちます。
         画面にはフルがあればフル、無ければ4桁を出します。</li>
   </ul>
 </p>
 </div>
 
 <script>
-// ───────── 見本の中身（架空のお客様） ─────────
 var S = {
   p1:'A', p2:'A', p3:'A',
-  adv2y:true, contact:'sms',
-  pre:'神戸582は', four:'3182',
-  chi:'神戸', bun:'582', kana:'は'
+  adv2y:true, contact:'sms', fixed:false,
+  pre:'神戸582は', four:'3182', chi:'神戸', bun:'582', kana:'は'
 };
 var full = function(){
-  if (S.p2==='A') return S.pre + S.four;                      // 1つの欄に全部
-  if (S.p2==='B') return S.pre + S.four;                      // 「神戸582は」＋「3182」
-  return (S.chi||'') + (S.bun||'') + (S.kana||'') + S.four;   // 4つに分ける
+  if (S.p2==='C') return (S.chi||'') + (S.bun||'') + (S.kana||'') + S.four;
+  return S.pre + S.four;
 };
 var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+var cName = function(){ return S.contact==='sms' ? 'SMS' : S.contact==='tel' ? '電話' : ''; };
+var cIcon = function(){ return S.contact==='sms' ? '📱' : S.contact==='tel' ? '☎' : ''; };
 
-// ───────── 選ぶボタン ─────────
 var OPTS = {
   p1:[
-    {k:'A',t:'A案：2行に分ける',s:'ご指示どおり。2年前予約の次の行に連絡方法'},
-    {k:'B',t:'B案：1行にまとめる',s:'3つを横に並べる。カードが短くなる'},
-    {k:'C',t:'C案：押した時だけ出す',s:'2年前予約を入れた時だけ連絡方法の行が出る'}
+    {k:'A',t:'A案：3行に分ける',s:'2年前予約／連絡方法／予約確定を上から順に'},
+    {k:'B',t:'B案：2行',s:'1行目に 2年前予約＋予約確定、2行目に連絡方法'},
+    {k:'C',t:'C案：押した時だけ出す',s:'2年前予約を入れた時だけ、連絡方法と予約確定が出る'}
   ],
   p2:[
     {k:'A',t:'A案：1つの欄にフルで',s:'「神戸582は3182」をそのまま打つ'},
     {k:'B',t:'B案：2つに分ける',s:'「神戸582は」＋「3182」。4桁の欄は今のまま'},
-    {k:'C',t:'C案：4つに分ける',s:'地名／分類番号／かな／4桁。きれいに揃う'}
+    {k:'C',t:'C案：4つに分ける',s:'地名／分類番号／かな／4桁'}
   ],
   p3:[
-    {k:'A',t:'A案：氏名の右に札',s:'「2年前」と連絡方法の印を氏名の横に'},
-    {k:'B',t:'B案：車種の下に出す',s:'ナンバーの下に小さく1行足す'},
-    {k:'C',t:'C案：列を1つ足す',s:'特典のとなりに「2年前・連絡」の列'}
+    {k:'A',t:'A案：ひとつながりの帯',s:'「2年前予約 ▸ SMSで予約確定」を1枚で'},
+    {k:'B',t:'B案：小さな札を並べる',s:'「2年前」「SMS」「確定」を3つ'},
+    {k:'C',t:'C案：確定したら1枚だけ',s:'確定前は「未確定」の札、確定後は緑の札1枚'}
   ]
 };
 var NOTES = {
   p1:{
-    A:'<b>A案</b>＝ご指示どおりの形です。カードが2行ぶん長くなります（下の備考までの距離が少し増えます）。',
-    B:'<b>B案</b>＝1行で済むのでカードが短く、下の備考・代車まで早く着きます。ボタンは小さくなります。',
-    C:'<b>C案</b>＝ふだんは1行。2年前予約を入れた時だけ連絡方法が出ます。関係ない予約では邪魔になりません。'
+    A:'<b>A案</b>＝流れのとおり上から3行。いちばん分かりやすい代わりに、カードが3行ぶん長くなります。',
+    B:'<b>B案</b>＝「受けた印」と「確定の印」を同じ行に並べ、連絡方法を下に。2行で収まります。',
+    C:'<b>C案</b>＝ふだんは1行だけ。2年前予約を入れた時に連絡方法と予約確定が出ます。関係ない予約では邪魔になりません。'
   },
   p2:{
-    A:'<b>A案</b>＝打つのは一番楽ですが、人によって「神戸582は3182」「神戸 582 は 3182」など書き方が揃いません。'+
+    A:'<b>A案</b>＝打つのは一番楽ですが、書き方（空白の有無など）が人によって揃いません。'+
       '（照合に使う下4桁は、打った中の数字の末尾4桁から自動で取ります）',
     B:'<b>B案</b>＝<b>4桁の欄は今のまま</b>なので、顧客リストから入った予約はこれまでどおり自動で入ります。'+
       '足すのは左の「神戸582は」だけ。照合も今のまま確実です。',
     C:'<b>C案</b>＝一番きれいに揃いますが、欄が4つになり、顧客リストから入った予約でも3つ打ち足すことになります。'
   },
   p3:{
-    A:'<b>A案</b>＝氏名のすぐ横なので一番目に入ります。お名前が長い方だと札が下に回り込みます。',
-    B:'<b>B案</b>＝表の幅が変わりません。縦に少し伸びます。',
-    C:'<b>C案</b>＝列が揃うので見比べやすいですが、表が横に広がります（備考の幅が少し減ります）。'
+    A:'<b>A案</b>＝「2年前予約」と「どうやって確定したか」が1枚でつながって読めます。少し横に長くなります。',
+    B:'<b>B案</b>＝札が3つ。狭い所では折り返しますが、必要な分だけ出る（確定していなければ札も出ない）作りです。',
+    C:'<b>C案</b>＝確定したら緑1枚、まだなら黄色の「未確定」1枚。<b>連絡がまだのお客様が一番目立ちます</b>。'
   }
 };
 function picks(id){
-  var box = document.getElementById(id), out = '';
+  var out = '';
   OPTS[id].forEach(function(o){
     out += '<button class="pick'+(S[id]===o.k?' on':'')+'" data-p="'+id+'" data-k="'+o.k+'">'+o.t+'<small>'+o.s+'</small></button>';
   });
-  box.innerHTML = out;
+  document.getElementById(id).innerHTML = out;
   document.getElementById('n'+id.slice(1)).innerHTML = NOTES[id][S[id]];
 }
 
-// ───────── ① 予約カード ─────────
-function y2btn(){
-  return '<button class="btn y2'+(S.adv2y?' on':'')+'" data-t="adv2y">'+
+// ── カードのボタン ──
+function y2btn(sm){
+  return '<button class="btn y2'+(sm?' sm':'')+(S.adv2y?' on':'')+'" data-t="adv2y">'+
     (S.adv2y?'<span class="ck">✓</span>':'')+'🗓 2年前予約</button>';
 }
-function cbtns(){
-  return '<button class="btn sms'+(S.contact==='sms'?' on':'')+'" data-c="sms">'+
+function okbtn(sm){
+  return '<button class="btn ok'+(sm?' sm':'')+(S.fixed?' on':'')+'" data-t="fixed">'+
+    (S.fixed?'<span class="ck">✓</span>':'')+'✅ 予約確定</button>';
+}
+function cbtns(sm){
+  var c = sm?' sm':'';
+  return '<button class="btn sms'+c+(S.contact==='sms'?' on':'')+'" data-c="sms">'+
       (S.contact==='sms'?'<span class="ck">✓</span>':'')+'📱 ショートメール</button>'+
-    '<button class="btn tel'+(S.contact==='tel'?' on':'')+'" data-c="tel">'+
+    '<button class="btn tel'+c+(S.contact==='tel'?' on':'')+'" data-c="tel">'+
       (S.contact==='tel'?'<span class="ck">✓</span>':'')+'☎ 電話連絡</button>';
+}
+function stamp(){
+  if (!S.fixed) return '';
+  return '<div class="okstamp">✅ '+(cName()?cName()+'で':'')+'予約確定（11/4 江川京志）</div>';
 }
 function numFields(){
   if (S.p2==='A') return '<div class="fld"><label class="lbl">ナンバー <span class="sub">フルナンバー</span></label>'+
@@ -243,81 +267,96 @@ function numFields(){
       '<input class="inp" id="i-four" value="'+esc(S.four)+'" placeholder="3182" style="padding:9px 6px;text-align:center;letter-spacing:.06em"></div>'+
       '<div class="hint">地名／分類番号／かな／4桁</div></div>';
 }
-function cardHtml(){
-  var blk = '';
+function blockHtml(){
   if (S.p1==='A') {
-    blk = '<div class="fld"><label class="lbl">マッハ車検の受付</label><div class="btns">'+y2btn()+'</div></div>'+
-          '<div class="fld"><label class="lbl">車検が近づいた時の案内 <span class="sub">どちらか</span></label>'+
-          '<div class="btns" style="grid-template-columns:1fr 1fr">'+cbtns()+'</div></div>';
-  } else if (S.p1==='B') {
-    blk = '<div class="fld"><label class="lbl">2年前予約と、近づいた時の案内</label>'+
-          '<div class="btns" style="grid-template-columns:1.1fr 1fr 1fr">'+y2btn()+cbtns()+'</div></div>';
-  } else {
-    blk = '<div class="fld"><label class="lbl">マッハ車検の受付</label><div class="btns">'+y2btn()+'</div></div>'+
-          (S.adv2y
-            ? '<div class="fld"><label class="lbl">車検が近づいた時の案内 <span class="sub">どちらか</span></label>'+
-              '<div class="btns" style="grid-template-columns:1fr 1fr">'+cbtns()+'</div></div>'
-            : '<div class="hint" style="margin:-4px 0 11px">※「2年前予約」を入れると、案内方法の行が出ます。</div>');
+    return '<div class="fld"><label class="lbl">マッハ車検の受付</label><div class="btns">'+y2btn()+'</div></div>'+
+      '<div class="fld"><label class="lbl">車検が近づいた時の案内 <span class="sub">どちらか</span></label>'+
+      '<div class="btns" style="grid-template-columns:1fr 1fr">'+cbtns()+'</div></div>'+
+      '<div class="fld"><label class="lbl">お客様の返事がもらえたら</label><div class="btns">'+okbtn()+'</div>'+stamp()+'</div>';
   }
+  if (S.p1==='B') {
+    return '<div class="fld"><label class="lbl">マッハ車検の受付と確定</label>'+
+      '<div class="btns" style="grid-template-columns:1fr 1fr">'+y2btn()+okbtn()+'</div>'+stamp()+'</div>'+
+      '<div class="fld"><label class="lbl">車検が近づいた時の案内 <span class="sub">どちらか</span></label>'+
+      '<div class="btns" style="grid-template-columns:1fr 1fr">'+cbtns()+'</div></div>';
+  }
+  return '<div class="fld"><label class="lbl">マッハ車検の受付</label><div class="btns">'+y2btn()+'</div></div>'+
+    (S.adv2y
+      ? '<div class="fld"><label class="lbl">案内の仕方と、確定</label>'+
+        '<div class="btns" style="grid-template-columns:1fr 1fr">'+cbtns(true)+'</div>'+
+        '<div class="btns" style="margin-top:7px">'+okbtn()+'</div>'+stamp()+'</div>'
+      : '<div class="hint" style="margin:-4px 0 11px">※「2年前予約」を入れると、案内の仕方と「予約確定」が出ます。</div>');
+}
+function cardHtml(){
   return '<div class="ctitle"><span>🔧 車検の予約（見本）</span><span>10/15（水）</span></div>'+
     '<div class="cbody">'+
       '<div class="fld"><label class="lbl">お客様の氏名 *</label><input class="inp" value="架空　太郎"></div>'+
       '<div class="fld"><label class="lbl">担当</label><input class="inp" value="竹林直行"></div>'+
-      '<div class="row2"><div class="fld" style="margin:0"><label class="lbl">車種</label>'+
-        '<input class="inp" value="スペーシア"></div><div></div></div>'+
-      '<div style="height:11px"></div>'+ numFields() +
+      '<div class="fld"><label class="lbl">車種</label><input class="inp" value="スペーシア"></div>'+
+      numFields()+
       '<div class="fld"><label class="lbl">コース *</label>'+
         '<div class="btns" style="grid-template-columns:1fr 1fr 1fr">'+
         '<button class="btn on" style="color:#b91c1c;background:#fca5a5;border-color:#b91c1c">マッハ車検</button>'+
         '<button class="btn">クイック</button><button class="btn">レギュラー</button></div></div>'+
-      blk +
+      blockHtml()+
       '<div class="fld"><label class="lbl">備考</label><input class="inp" value="" placeholder="（ここは今のまま）"></div>'+
     '</div>';
 }
 
-// ───────── ③ スケジュールの表 ─────────
-function plateCell(){
-  return '<span class="car">スペーシア</span><div class="plate">ナンバー '+esc(full())+'</div>';
-}
-function y2tag(){ return '<span class="tag y2">🗓 2年前</span>'; }
-function ctag(){
-  if (S.contact==='sms') return '<span class="tag sms">📱 SMS</span>';
-  if (S.contact==='tel') return '<span class="tag tel">☎ 電話</span>';
-  return '';
-}
-function schedHtml(){
-  var head = ['No','氏名','車種・ナンバー','コース','代車','特典','入庫','備考'];
-  if (S.p3==='C') head = ['No','氏名','車種・ナンバー','コース','代車','特典','2年前・連絡','入庫','備考'];
-  var th = head.map(function(h){ return '<th>'+h+'</th>'; }).join('');
-
-  // 1行目＝見本のお客様（2年前予約あり）／2行目＝ふつうの予約（比べるため）
-  function row(one){
-    var tags = one ? (S.adv2y?y2tag():'') + (S.adv2y?ctag():'') : '';
-    var nameCell = '<span class="nm">'+(one?'架空　太郎 様':'見本　花子 様')+'</span><span class="tag store">本店</span>';
-    if (S.p3==='A' && one) nameCell += ' ' + tags;
-    var carCell = one ? plateCell() : '<span class="car">タント</span><div class="plate">ナンバー 1234</div>';
-    if (S.p3==='B' && one && tags) carCell += '<div class="sub2">'+tags+'</div>';
-    var out = '<tr>'+
-      '<td class="no">'+(one?1:2)+'</td>'+
-      '<td>'+nameCell+'<div class="stf">'+(one?'竹林直行':'魚住圭')+'</div></td>'+
-      '<td>'+carCell+'</td>'+
-      '<td><span class="cbadge" style="background:'+(one?'#fca5a5':'#bfdbfe')+';color:'+(one?'#b91c1c':'#1d4ed8')+'">'+
-        '<span class="cdot" style="background:'+(one?'#b91c1c':'#1d4ed8')+'">'+(one?'マ':'ク')+'</span>'+(one?'マッハ車検':'クイック車検')+'</span>'+
-        '<div class="sub2" style="color:#0369a1;font-weight:600">📞090-0000-0000</div></td>'+
-      '<td style="font-size:12px">'+(one?'ワゴンR (3182)':'—')+'</td>'+
-      '<td style="font-size:13px">'+(one?'DM':'—')+'</td>'+
-      (S.p3==='C' ? '<td>'+(one?(tags||'<span style="color:#9ca3af">—</span>'):'<span style="color:#9ca3af">—</span>')+'</td>' : '')+
-      '<td style="font-weight:600">'+(one?'09:00':'10:30')+'</td>'+
-      '<td style="font-size:12.5px;color:#374151">'+(one?'2年前にご予約':'')+'</td>'+
-    '</tr>';
+// ── スケジュールのバッジ ──
+function badges(){
+  if (!S.adv2y) return '';
+  var cn = cName(), ci = cIcon();
+  if (S.p3==='A') {
+    return '<span class="strip"><span class="s1">🗓 2年前予約</span>'+
+      (S.fixed
+        ? '<span class="s2">▸ '+(cn?ci+' '+cn+'で':'')+'予約確定</span>'
+        : '<span class="s2w">▸ '+(cn?ci+' '+cn+'で案内':'案内の仕方 未定')+'・未確定</span>')+'</span>';
+  }
+  if (S.p3==='B') {
+    var out = '<span class="tag y2">🗓 2年前</span>';
+    if (S.contact==='sms') out += ' <span class="tag sms">📱 SMS</span>';
+    if (S.contact==='tel') out += ' <span class="tag tel">☎ 電話</span>';
+    out += S.fixed ? ' <span class="tag ok">✅ 確定</span>' : ' <span class="tag wait">未確定</span>';
     return out;
   }
-  return '<table class="sched"><thead><tr>'+th+'</tr></thead><tbody>'+row(true)+row(false)+'</tbody></table>'+
-    '<div class="hint" style="margin-top:8px">上が見本のお客様（2年前予約あり）、下はふつうの予約です。'+
-    (S.adv2y?'':'※いまカードの「2年前予約」が外れているので、札は出ていません。')+'</div>';
+  return S.fixed
+    ? '<span class="tag ok">✅ '+(cn?ci+' '+cn+'で':'')+'予約確定</span> <span class="tag" style="background:#ede9fe;color:#6d28d9">2年前</span>'
+    : '<span class="tag wait">🗓 2年前予約・未確定</span>';
+}
+function schedHtml(){
+  var tags = badges();
+  var row1 =
+    '<tr>'+
+      '<td class="no">1</td>'+
+      '<td><span class="nm">架空　太郎 様</span> <span class="tag store">本店</span>'+
+        (tags?'<div style="margin-top:3px">'+tags+'</div>':'')+
+        '<div class="stf">竹林直行</div></td>'+
+      '<td><span class="car">スペーシア</span><div class="plate">ナンバー '+esc(full())+'</div></td>'+
+      '<td><span class="cbadge" style="background:#fca5a5;color:#b91c1c"><span class="cdot" style="background:#b91c1c">マ</span>マッハ車検</span>'+
+        '<div class="sub2" style="color:#0369a1;font-weight:600">📞090-0000-0000</div></td>'+
+      '<td style="font-size:12px">ワゴンR (3182)</td>'+
+      '<td style="font-size:13px">DM</td>'+
+      '<td style="font-weight:600">09:00</td>'+
+      '<td style="font-size:12.5px;color:#374151">2年前にご予約</td>'+
+    '</tr>';
+  var row2 =
+    '<tr>'+
+      '<td class="no">2</td>'+
+      '<td><span class="nm">見本　花子 様</span> <span class="tag store">本店</span><div class="stf">魚住圭</div></td>'+
+      '<td><span class="car">タント</span><div class="plate">ナンバー 1234</div></td>'+
+      '<td><span class="cbadge" style="background:#bfdbfe;color:#1d4ed8"><span class="cdot" style="background:#1d4ed8">ク</span>クイック車検</span>'+
+        '<div class="sub2" style="color:#0369a1;font-weight:600">📞090-0000-0000</div></td>'+
+      '<td style="font-size:12px">—</td><td style="font-size:13px">—</td>'+
+      '<td style="font-weight:600">10:30</td><td></td>'+
+    '</tr>';
+  return '<table class="sched"><thead><tr>'+
+      ['No','氏名','車種・ナンバー','コース','代車','特典','入庫','備考'].map(function(h){return '<th>'+h+'</th>';}).join('')+
+    '</tr></thead><tbody>'+row1+row2+'</tbody></table>'+
+    '<div class="hint" style="margin-top:8px">上が見本のお客様（2年前予約）、下はふつうの予約です。'+
+      (S.adv2y?'①のカードで「予約確定」を押すと、ここが変わります。':'※いまカードの「2年前予約」が外れているので、バッジは出ていません。')+'</div>';
 }
 
-// ───────── 描き直し ─────────
 function render(){
   picks('p1'); picks('p2'); picks('p3');
   document.getElementById('card').innerHTML = cardHtml();
@@ -327,11 +366,16 @@ function render(){
   document.getElementById('schedbox').innerHTML = schedHtml();
 }
 document.addEventListener('click', function(e){
-  var p = e.target.closest ? e.target.closest('[data-p]') : null;
-  if (p) { S[p.getAttribute('data-p')] = p.getAttribute('data-k'); render(); return; }
-  var t = e.target.closest ? e.target.closest('[data-t]') : null;
-  if (t) { S.adv2y = !S.adv2y; render(); return; }
-  var c = e.target.closest ? e.target.closest('[data-c]') : null;
+  var el = e.target.closest ? e.target : null; if (!el) return;
+  var p = el.closest('[data-p]'); if (p) { S[p.getAttribute('data-p')] = p.getAttribute('data-k'); render(); return; }
+  var t = el.closest('[data-t]');
+  if (t) {
+    var k = t.getAttribute('data-t');
+    S[k] = !S[k];
+    if (k==='adv2y' && !S.adv2y) S.fixed = false;   // 2年前予約を外したら確定も外れる
+    render(); return;
+  }
+  var c = el.closest('[data-c]');
   if (c) { var v = c.getAttribute('data-c'); S.contact = (S.contact===v ? '' : v); render(); return; }
 });
 document.addEventListener('input', function(e){
