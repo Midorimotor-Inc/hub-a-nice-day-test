@@ -202,7 +202,8 @@ const seed = {
   t('★★日付のバッジより右にある', !!cnt[1] && cnt[1].right, cnt);
   t('なぞると「両店あわせて」と出る', !!cnt[1] && /両店/.test(cnt[1].title), cnt);
   const tip = await page.evaluate(d => { const b = document.querySelector('[data-wins="' + d + '"] [data-wcb]'); return b ? b.getAttribute('title') : ''; }, TUE);
-  t('なぞると「時間・氏名・コース」が出る', /09:00/.test(tip) && /マ一/.test(tip) && /マッハ車検/.test(tip), tip);
+  // ★コース名は 2026-11-05 に短くした（マッハ車検 → マッハ）。「車検」で探さないこと。
+  t('なぞると「時間・氏名・コース」が出る', /09:00/.test(tip) && /マ一/.test(tip) && /マッハ/.test(tip), tip);
 
   // ── ②-2 車検のバッジは2段ずつ・コースが変わったら列を変える（2026-10-23 ユーザー指示）──
   console.log('\n■ ②-2 車検のバッジは2段ずつ積み、コースが変わったら列を変える');

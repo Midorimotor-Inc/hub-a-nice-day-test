@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マッハ札・部品注文・印刷1枚化</title>
+<style>
+  :root{--ink:#1b2129;--sub:#64748b;--line:#64748b;--bg:#f1f5f9}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--ink)}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:20px;margin:0 0 4px}
+  .lead{font-size:13px;color:var(--sub);margin:0 0 18px;line-height:1.7}
+  h2{font-size:16px;margin:26px 0 8px;padding:7px 11px;background:#0f172a;color:#fff;border-radius:6px}
+  h3{font-size:14px;margin:16px 0 6px}
+  .card{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin-bottom:12px}
+  .note{font-size:12px;color:var(--sub);line-height:1.7;margin:6px 0 0}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tab{padding:7px 14px;border:2px solid #cbd5e1;background:#fff;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+  .tab.on{background:#0f172a;color:#fff;border-color:#0f172a}
+  table.demo{border-collapse:collapse;width:100%;font-size:13px}
+  table.demo th{background:#ede9fe;color:#4c1d95;font-size:11px;padding:5px 6px;text-align:left;border-bottom:2px solid #a78bfa}
+  table.demo td{padding:5px 6px;border-bottom:1px solid #e2e8f0;vertical-align:middle}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-weight:700;font-size:11px}
+  .badge .ini{width:16px;height:16px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900}
+  /* ---- 部品注文ボタン 3案 ---- */
+  .pb{cursor:pointer;border:none;background:none;padding:0;margin-left:5px;vertical-align:middle;flex-shrink:0}
+  /* A案：丸に「部」→ 緑の丸に白い✓ */
+  .pbA{width:20px;height:20px;border-radius:50%;border:2px solid #b45309;background:#fff;color:#b45309;
+       font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+  .pbA.on{border-color:#15803d;background:#15803d;color:#fff;font-size:13px}
+  /* B案：四角に「部」→ 緑地に白い✓（入庫チェックと同じ形） */
+  .pbB{width:20px;height:20px;border-radius:5px;border:2px solid #b45309;background:#fff;color:#b45309;
+       font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+  .pbB.on{border-color:#15803d;background:#15803d;color:#fff;font-size:13px}
+  /* C案：丸に「部」→ 緑の丸に「部」＋小さい✓（何の印か残る） */
+  .pbC{width:20px;height:20px;border-radius:50%;border:2px solid #b45309;background:#fff;color:#b45309;
+       font-size:11px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;line-height:1;position:relative}
+  .pbC.on{border-color:#15803d;background:#dcfce7;color:#15803d}
+  .pbC.on::after{content:"✓";position:absolute;right:-5px;bottom:-4px;width:12px;height:12px;border-radius:50%;
+       background:#15803d;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:900}
+  .nm{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .stag{padding:1px 6px;border-radius:20px;font-size:10px;font-weight:800;background:#2563eb;color:#fff}
+  /* ---- 印刷プレビュー ---- */
+  .pv{background:#fff;border:1px solid #94a3b8;border-radius:6px;overflow:hidden}
+  .pvhd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:9px 12px;background:#0e7490;color:#fff;font-size:13px;font-weight:700}
+  .pvhd .ok{background:#86efac;color:#064e3b;padding:2px 9px;border-radius:20px;font-weight:900}
+  .pvhd .ng{background:#fecaca;color:#7f1d1d;padding:2px 9px;border-radius:20px;font-weight:900}
+  .pvbox{position:relative;overflow:auto;background:#e2e8f0;padding:10px}
+  .pvscale{transform-origin:top left}
+  iframe.sheet{width:1077px;border:0;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);display:block}
+  .lim{position:absolute;left:10px;right:10px;border-top:3px dashed #dc2626;pointer-events:none;z-index:5}
+  .lim span{position:absolute;right:0;top:-18px;background:#dc2626;color:#fff;font-size:11px;font-weight:800;padding:1px 6px;border-radius:3px}
+  .tbl{border-collapse:collapse;font-size:12px;margin-top:8px;width:100%}
+  .tbl th,.tbl td{border:1px solid #94a3b8;padding:4px 7px;text-align:center}
+  .tbl th{background:#f1f5f9;font-size:11px}
+  .tbl td.l{text-align:left}
+  .good{color:#15803d;font-weight:800}
+  .bad{color:#b91c1c;font-weight:800}
+</style></head><body>
+<div class="wrap">
+<h1>マッハの札・部品注文のチェック・印刷をA4 1枚に</h1>
+<p class="lead">
+2026-11-05。<b>勘ではなく実測で決めています。</b>本番の控え（11/5 朝）から氏名・車種・備考の長さと1日の件数を数え、
+印刷HTMLをA4横の実寸（1077×748px）で測りました。<br>
+<b>分かったこと①</b>　<b>マッハ車検が入っている日は、ふつうの日でも2枚になります</b>（車検5台・整備7件で <b>213mm</b>／紙の枠 196mm）。
+実データの最大（車検7台・整備13件）だと <b>263mm</b>。本物のアプリを動かして測った値も <b>250.8mm</b> でした。<br>
+<b>分かったこと②</b>　「氏名の枠が広すぎる」の正体は<b>氏名そのものではありませんでした</b>。
+<b>11/2 に足したマッハの札「🚫 入庫制限　🚗 マッハ車検　◯◯ 様」（21文字・折り返さない指定）が氏名の列にいる</b>ため、
+その1行のために<b>氏名の列が全行 206px に広がり、内容欄が 77px に潰れていました</b>（内容は 322px 要る＝3〜4行に折り返し）。
+現場から声が出たのも、ちょうどこの直後からのはずです。
+</p>
+
+<h2>① マッハの札と、部品注文のチェック（スケジュール画面の1日表示）</h2>
+<div class="card">
+  <p class="note" style="margin-top:0">
+    コース名は「マッハ」「クイック」「レギュラー」に短くします（ご指示どおり3つとも）。<br>
+    <b>部品注文のチェックはマッハ車検の行だけ</b>。押すと付き、もう一度押すと外れます。<b>見た目を1つ選んでください。</b>
+  </p>
+  <div class="tabs" id="pbtabs">
+    <button class="tab on" data-pb="A">A案　丸に「部」→ 緑の丸に ✓</button>
+    <button class="tab" data-pb="B">B案　四角に「部」→ 緑に ✓</button>
+    <button class="tab" data-pb="C">C案　「部」を残して ✓ を添える</button>
+  </div>
+  <table class="demo" id="demo"></table>
+  <p class="note" id="pbnote"></p>
+</div>
+
+<h2>② 印刷（A4横）を1枚に収める</h2>
+<div class="card">
+  <p class="note" style="margin-top:0">
+    <b>どの案にも共通で入れる直し（これが本体）</b>：<br>
+    ・マッハの札を<b>行いっぱい（colspan）</b>に出す＝氏名の列を押し広げなくなる。<b>行も列も増えません。</b><br>
+    ・両方の表を <b>幅の指定がそのまま効く作り（table-layout:fixed）</b>にする＝1つの長い中身が列を奪えなくなる。<br>
+    そのうえで、<b>氏名を詰めて備考・内容に回す度合い</b>を3案から選んでください。
+  </p>
+  <div class="tabs" id="pvtabs">
+    <button class="tab on" data-pv="now">いまのまま</button>
+    <button class="tab" data-pv="A">A案　最小限</button>
+    <button class="tab" data-pv="B">B案　しっかり</button>
+    <button class="tab" data-pv="C">C案　B案＋字を1段小さく</button>
+  </div>
+  <div class="tabs" id="daytabs" style="margin:-4px 0 10px">
+    <button class="tab on" data-day="n" style="border-color:#0891b2">ふつうの日（車検5台・整備7件）</button>
+    <button class="tab" data-day="b" style="border-color:#0891b2">混んだ日（車検7台・整備13件＝実データの最大）</button>
+  </div>
+  <table class="tbl" id="wtbl"></table>
+  <p class="note" id="pvnote"></p>
+  <div class="pv" style="margin-top:10px">
+    <div class="pvhd"><span id="pvt">—</span><span id="pvh">—</span><span id="pvp">—</span></div>
+    <div class="pvbox" id="pvbox">
+      <div class="pvscale" id="pvscale"><iframe class="sheet" id="sheet"></iframe></div>
+      <iframe id="ghost" style="position:absolute;left:-9999px;top:0;width:1077px;height:1600px;border:0"></iframe>
+      <div class="lim" id="lim"><span>ここが1枚の底（196mm）</span></div>
+    </div>
+  </div>
+  <p class="note">※ プレビューは A4横の実寸（1077px 幅）を縮めて出しています。赤い点線が「1枚の底」。<b>点線より下に中身があれば2枚になります。</b></p>
+</div>
+</div>
+
+<script type="text/plain" id="pcss">
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; height: 100%; }
+  body { font-family: -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif; font-size: 13px; color: #000; background: white; }
+  @page { size: A4 landscape; margin: 6mm; }
+  .page { width: 100%; height: 196mm; display: flex; gap: 8px; }
+  .left { width: 46%; display: flex; flex-direction: column; gap: 7px; }
+  .right { width: 54%; display: flex; flex-direction: column; }
+  .right .section-box { flex: 1; display: flex; flex-direction: column; overflow: visible; }
+  h2 { font-size: 14px; font-weight: 800; padding: 5px 9px; border-radius: 4px; color: white; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 5px 6px; font-weight: 800; font-size: 11px; text-align: left; color: white; }
+  td { padding: 5px 6px; border-bottom: 1px solid #94a3b8; vertical-align: middle; font-size: 12px; font-weight: 500; }
+  /* 車検：タイムスケジュールの文字に合わせて拡大 */
+  .insp-table td { font-size: 14px; padding: 7px 6px; }
+  .insp-table th { font-size: 12px; }
+  /* ★台数が多い日は詰めて刷る（2026-11-04 ユーザー指示「1枚印刷で1日表示できるよう設計してほしい」）。
+     車検が7台以上の日は字と余白を小さくして、1日が1枚に収まるようにする。 */
+  .insp-table.dense td { font-size: 12px; padding: 4px 5px; }
+  .insp-table.dense td.insp-time { font-size: 11px; }
+  .insp-table.dense .course-badge { width: 18px; height: 18px; font-size: 11px; }
+  /* 2年前予約の印（紙では色が出ないこともあるので枠付き） */
+  .adv2y-p { font-size: 8.5px; font-weight: 800; background: #6d28d9; color: #fff; padding: 1px 3px;
+             border-radius: 2px; margin-left: 3px; white-space: nowrap; }
+  @media print and (monochrome){ .adv2y-p { background: #fff !important; color: #000 !important; border: 1px solid #000; } }
+  /* 車検の入庫時間（2026-11-02 ユーザー要望：印刷に入庫時間を出す） */
+  .insp-table td.insp-time { font-size: 12.5px; font-weight: 800; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
+  .insp-table th.insp-time { text-align: center; padding-left: 2px; padding-right: 2px; }
+  /* 入庫制限の枠（2026-11-02 ユーザー要望：紙にも出す）。画面の1日表示と同じ ベタの薄い赤 */
+  .sched-table tr.slot-restr td { background: #fee2e2; }
+  .restr-lab { font-weight: 800; color: #b91c1c; white-space: nowrap; font-size: 11px; }
+  @media print and (monochrome){ .sched-table tr.slot-restr td { background: #e5e5e5; } .restr-lab { color: #000 !important; } }
+  /* 車検コース：一文字を〇バッジで（マ＝赤丸白字／他は丸枠のみ） */
+  .course-badge { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; font-weight:800; font-size:12px; line-height:1; }
+  .course-ma { background:#b91c1c; color:#fff; }
+  .course-other { border:1.5px solid currentColor; background:transparent; }
+  @media print and (monochrome){
+    .course-ma { background:#000; color:#fff; }
+    .course-other { border-color:#000 !important; color:#000 !important; }
+  }
+  /* タイムスケジュール：1予約=1行・用紙1枚に収める（行高は控えめ） */
+  .right .section-box > table { flex: 1; }
+  .sched-table td { font-size: 13px; padding: 5px 6px; line-height: 1.2; }
+  .sched-table th { font-size: 12px; }
+  /* 氏名・車種は折り返さず1行表示 */
+  .sched-table td:nth-child(2), .sched-table td:nth-child(3) { white-space: nowrap; }
+  /* 代車（車検・一般共通）：車種名（番号）を1行表示・長さで段階縮小（emで各表の文字に追従、最長は折返し許可） */
+  td.loaner-fit { white-space: nowrap; }
+  td.loaner-fit.f1 { font-size: 0.82em; }
+  td.loaner-fit.f2 { font-size: 0.68em; }
+  td.loaner-fit.f3 { font-size: 0.56em; white-space: normal; line-height: 1.15; word-break: break-all; }
+  /* 内容が長い枠は枠内に収まるよう段階縮小・折返し */
+  .sched-table td.note-sm { font-size: 11px; white-space: normal; }
+  .sched-table td.note-xs { font-size: 9px;  white-space: normal; line-height: 1.15; }
+  .insp-head { background: #9a3412; }
+  .sched-head { background: #0e7490; }
+  .memo-head { background: #7c3aed; }
+  .store-my { border-left: 3px solid #2563eb; }
+  .store-other { border-left: 3px solid #64748b; }
+  .slot-empty td { color: #94a3b8; background: #f1f5f9; }
+  .slot-empty td:first-child { color: #334155; font-weight: 700; }
+  .has-data td { background: white; }
+  /* ★事前入庫・納車の派生行。当日の作業ではないので地色で区別する（白黒印刷でも濃さで分かる） */
+  .d-pre td { background: #fff1e2; }
+  .d-pre td:nth-child(4) { color: #9a3412; }
+  .d-dlv td { background: #e6f7ef; }
+  .d-dlv td:nth-child(4) { color: #047857; }
+  .staff-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+  .chip { padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+  .chip-work { background: #e0f2fe; color: #075985; }
+  .chip-off { background: #e2e8f0; color: #475569; }
+  .chip-trn { background: #f9f0ff; color: #7e22ce; border: 1px solid #7e22ce; font-weight: 800; }
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; border-bottom: 2px solid #1e293b; padding-bottom: 4px; }
+  h1 { font-size: 21px; font-weight: 800; }
+  .print-info { font-size: 10px; color: #475569; }
+  .section-box { border: 1px solid #94a3b8; border-radius: 5px; overflow: hidden; }
+  /* メモ欄：左カラムの余白を埋めて枠いっぱい使う・文字量で段階縮小 */
+  .memo-section { flex: 1; display: flex; flex-direction: column; }
+  .memo-body { flex: 1; padding: 6px 9px; font-size: 12px; }
+  .memo-body.m-sm { font-size: 11px; }
+  .memo-body.m-xs { font-size: 10px; line-height: 1.3; }
+
+  .parts-p { font-size: 8.5px; font-weight: 900; background: #15803d; color: #fff; padding: 1px 3px; border-radius: 3px; margin-left: 3px; white-space: nowrap; }
+</script>
+<script>
+/* ===== ① 1日表示の行 ===== */
+var COURSES=[{id:1,name:'マッハ',color:'#b91c1c',bg:'#fca5a5',ini:'マ'},
+             {id:2,name:'クイック',color:'#1d4ed8',bg:'#bfdbfe',ini:'ク'},
+             {id:3,name:'レギュラー',color:'#d97706',bg:'#fde68a',ini:'レ'}];
+var ROWS=[{no:1,name:'岸本',car:'ワゴンR',plate:'神戸 582 は 3182',course:1,parts:false,time:'10:00'},
+          {no:2,name:'山谷',car:'ハスラー',plate:'3505',course:1,parts:true,time:'14:00'},
+          {no:3,name:'芝田',car:'スペーシア',plate:'1155',course:2,parts:false,time:'09:30'},
+          {no:4,name:'藤明建設工業',car:'ハイエース',plate:'1386',course:3,parts:false,time:'11:00'}];
+var pbKind='A';
+var PBNOTE={
+ A:'<b>A案</b>：ご指示どおり「丸に部」がそのまま緑の丸い ✓ に変わります。いちばん分かりやすい反面、<b>付いた後は「何の確認だったか」が印から読めません</b>（なぞると「部品を注文しました」と出ます）。',
+ B:'<b>B案</b>：形が四角なので、<b>No. 欄の入庫済みチェックと同じ仲間</b>に見えます。丸と四角で役目を分けたい時はこちら。',
+ C:'<b>C案</b>：「部」の字を残したまま、右下に小さな緑の ✓ を添えます。<b>付いた後も何の印か分かる</b>のが利点。印が少し細かくなります。'};
+function drawDemo(){
+  var h='<thead><tr><th style="width:34px">No</th><th>氏名</th><th>車種</th><th>コース</th><th style="width:48px">入庫</th></tr></thead><tbody>';
+  ROWS.forEach(function(r,i){
+    var c=COURSES.filter(function(x){return x.id===r.course})[0];
+    var pb='';
+    if(r.course===1){
+      pb='<button class="pb pb'+pbKind+(r.parts?' on':'')+'" data-i="'+i+'" title="'+(r.parts?'部品を注文しました（押すと外れます）':'部品を注文したら押す')+'">'+
+         (r.parts?(pbKind==='C'?'部':'✓'):'部')+'</button>';
+    }
+    h+='<tr><td style="text-align:center;font-weight:700;color:#6366f1">'+r.no+'</td>'+
+       '<td><div class="nm"><span style="font-weight:700;color:#7c2d12">'+r.name+' 様</span><span class="stag">本店</span></div></td>'+
+       '<td><span style="font-weight:700">'+r.car+'</span><div style="font-size:12px;font-weight:800;letter-spacing:.06em">ナンバー '+r.plate+'</div></td>'+
+       '<td><span style="display:inline-flex;align-items:center"><span class="badge" style="background:'+c.bg+';color:'+c.color+'">'+
+         '<span class="ini" style="background:'+c.color+'">'+c.ini+'</span>'+c.name+'</span>'+pb+'</span></td>'+
+       '<td style="font-weight:600">'+r.time+'</td></tr>';
+  });
+  document.getElementById('demo').innerHTML=h+'</tbody>';
+  document.getElementById('pbnote').innerHTML=PBNOTE[pbKind];
+}
+document.getElementById('pbtabs').addEventListener('click',function(e){
+  var b=e.target.closest('.tab'); if(!b)return;
+  [].forEach.call(this.querySelectorAll('.tab'),function(x){x.classList.remove('on')});
+  b.classList.add('on'); pbKind=b.dataset.pb; drawDemo();
+});
+document.getElementById('demo').addEventListener('click',function(e){
+  var b=e.target.closest('.pb'); if(!b)return;
+  ROWS[+b.dataset.i].parts=!ROWS[+b.dataset.i].parts; drawDemo();
+});
+drawDemo();
+
+/* ===== ② 印刷プレビュー ===== */
+/* 実測した本番の長さに合わせた「混んだ日」（車検10台・整備13件） */
+var NM=['岸本','山谷','芝田','小畠','橋口大志','藤明建設工業','辻井','魚住','両澤ちよう','栗﨑'];
+var CAR=['ワゴンR','ハスラー','スペーシア','アルトラパン','ジムニーシエラ','ハイエース','タント'];
+var NOTE=['','タイヤ交換','バッテリー要確認','ワイパーゴム交換・オイル交換','代車は軽でお願いします','エアコンから異音あり要点検',''];
+var CONT=['オイル交換','エンジンオイル・エレメント交換','タイヤ4本交換（夏→冬）','12ヶ月点検・ブレーキパッド交換','バッテリー交換とワイパーゴム交換、エアコンフィルタも','鈑金見積り'];
+var LOAN=['ワゴンR (3310)','','アルト (88)','スペーシア (8612)','',''];
+var TIMED=['09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+var ALLSLOTS=['午前'].concat(TIMED).concat(['午後','時間未定']);
+var ITIMES=TIMED;
+
+/* 案ごとの幅と字の大きさ */
+var OPT={
+ now:{label:'いまのまま',fix:false,colspan:false,
+   insp:[16,32,68,54,40,60,24],sched:[34,92,78,42,84],ifs:null,sfs:null,ipad:null,spad:null,
+   desc:'11/2 のままの印刷。マッハの札が氏名の列を 206px に広げ、内容が 77px に潰れています。'},
+ A:{label:'A案 最小限',fix:true,colspan:true,
+   insp:[20,34,76,70,38,62,28],sched:[34,88,76,40,80],ifs:null,sfs:null,ipad:null,spad:[3,6],
+   desc:'<b>幅を配り直すだけ。</b>コース欄（40→26px・丸い札は21pxしかない）と特典の余りを備考へ、整備は氏名 92→88px。あわせて<b>整備の行の上下の余白を 5→3px</b>。字の大きさは変えません。見た目の変化がいちばん小さい案。'},
+ B:{label:'B案 しっかり',fix:true,colspan:true,
+   insp:[20,34,72,66,38,60,28],sched:[34,70,66,38,76],ifs:null,sfs:null,ipad:[3,5],spad:[3,6],
+   desc:'A案に加えて<b>氏名を実測に合わせて詰め</b>（整備の氏名70px＝5文字ぶん。本店は中央値2文字・95%が5文字以内）、<b>車検側の余白も 4→3px</b>に詰めます。字の大きさは変えません。混んだ日に余裕が出ます。'},
+ C:{label:'C案 B案＋字を1段小さく',fix:true,colspan:true,
+   insp:[20,34,72,66,38,60,28],sched:[34,70,66,38,76],ifs:[13,11],sfs:12,ipad:[3,5],spad:[3,6],
+   desc:'B案と同じ幅・余白で、<b>字を1段だけ小さく</b>します（車検 14→13px・詰めた日は12→11px／整備 13→12px）。入る文字数が1割増えるので<b>どんなに混んだ日でも確実に1枚</b>。そのぶん字は小さくなります。'}
+};
+/* ふつうの日 / 混んだ日 */
+var BUSY=false;
+var DAY={ふつう:{insp:5,sched:7},混んだ:{insp:7,sched:13}};
+
+function sheetHtml(o){
+  var NI=BUSY?DAY.混んだ.insp:DAY.ふつう.insp;
+  var NS=BUSY?DAY.混んだ.sched:DAY.ふつう.sched;
+  var insp='',i,c,b,ln;
+  for(i=0;i<NI;i++){
+    c=COURSES.filter(function(x){return x.id===(i%3)+1})[0];
+    ln=LOAN[i%LOAN.length];
+    // ★代車は字を縮めず2行で折り返す（縮めると特典の欄にはみ出す・2026-11-05 ユーザー指摘）
+    var fit=o.fix?'loaner-wrap':(ln.length>11?'loaner-fit f2':ln.length>8?'loaner-fit f1':'');
+    // ★「部」はお名前のすぐ隣（2年前の札より前）。後ろに置くと3行になる（同日ユーザー指摘）
+    //   マッハ車検（course 1）の行だけに出す
+    var parts=(c.id===1)?'<span class="parts-p">部</span>':'';     // マッハの行だけ
+    insp+='<tr><td style="font-weight:700;color:#4c1d95">'+(i+1)+'</td>'+
+      '<td class="insp-time">'+ITIMES[i]+'</td>'+
+      '<td style="font-weight:700">'+NM[i]+(i===3?'<span style="font-size:9px;background:#dc2626;color:#fff;padding:1px 4px;border-radius:2px;margin-left:3px">三</span>':'')+
+        parts+((i===0||i===1)?'<span class="adv2y-p">2年前SMS✓</span>':'')+'</td>'+
+      '<td>'+CAR[i%CAR.length]+'</td>'+
+      '<td><span class="course-badge" style="background:'+c.bg+';color:'+c.color+'">'+c.ini+'</span></td>'+
+      '<td class="'+fit+'">'+ln+'</td>'+
+      '<td style="text-align:center">'+(i%2?'○':'-')+'</td>'+
+      '<td>'+NOTE[i%NOTE.length]+'</td></tr>';
+  }
+  // ★マッハ車検（10:00）の自動入庫制限が掛かる 10:00・10:30 は空けておく
+  //   （制限の札が出るのは空き枠だけ。埋めてしまうと直しの効き目が見えない）
+  var sched='',k=0, STIMES=TIMED.filter(function(x){return x!=='10:00'&&x!=='10:30'}).slice(0,NS);
+  ALLSLOTS.forEach(function(sl){
+    var si=STIMES.indexOf(sl);
+    // マッハ車検（10:00）の自動入庫制限＝10:00 と 10:30
+    var restr=(sl==='10:00'||sl==='10:30');
+    if(si>=0){
+      var nn=CONT[si%CONT.length], cls=nn.length>34?'note-xs':nn.length>22?'note-sm':'';
+      var ln2=LOAN[si%LOAN.length];
+      sched+='<tr class="has-data'+(restr?' slot-restr':'')+'">'+
+        '<td style="font-weight:700;color:#0e7490;white-space:nowrap">'+sl+'</td>'+
+        '<td style="font-weight:700">'+NM[(si+2)%NM.length]+'</td>'+
+        '<td>'+CAR[(si+1)%CAR.length]+'</td>'+
+        '<td style="text-align:center">'+['Q','メンパ','有点','B','R'][si%5]+'</td>'+
+        '<td>'+ln2+'</td><td class="'+cls+'">'+nn+'</td></tr>';
+    } else if(restr){
+      // 入庫制限（マッハ）の空き枠
+      if(o.colspan){
+        sched+='<tr class="slot-empty slot-restr"><td style="font-weight:700;color:#0e7490;white-space:nowrap">'+sl+'</td>'+
+          '<td colspan="5"><span class="restr-lab">🚫 入庫制限　🚗 マッハ車検　辻井 様</span></td></tr>';
+      } else {
+        sched+='<tr class="slot-empty slot-restr"><td style="font-weight:700;color:#0e7490;white-space:nowrap">'+sl+'</td>'+
+          '<td><span class="restr-lab">🚫 入庫制限　🚗 マッハ車検　辻井 様</span></td>'+
+          '<td></td><td></td><td></td><td></td></tr>';
+      }
+    } else {
+      sched+='<tr class="slot-empty"><td style="font-weight:700;color:#0e7490;white-space:nowrap">'+sl+'</td>'+
+        '<td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+  });
+  var iw=o.insp, sw=o.sched;
+  var over=''+
+    /* ★見出しの字が折り返すと見出し行だけで90px になる（12px の「コース」は 48px 要る）。
+       字を10px・余白4px にして、どの見出しも1行で入る幅を確保する。 */
+    (o.fix?'.insp-table,.sched-table{table-layout:fixed}.insp-table th,.sched-table th{font-size:10px;padding:4px 4px}'+
+      /* ★見出しの帯が太すぎる（14px＋上下5px＝31px）。12px＋上下2px＝22px に細くする。
+         帯は3本（車検・備考メモ・タイムスケジュール）あるので約27px ぶん空く。 */
+      'h2{font-size:12px;padding:2px 9px;margin-bottom:3px}'+
+      /* ★代車は字を縮めない。2行で折り返す（縮めると特典の欄にはみ出す） */
+      '.insp-table td.loaner-wrap{white-space:normal;line-height:1.2;font-size:.9em;word-break:break-word}'
+     :'')+
+    (o.ifs?'.insp-table td{font-size:'+o.ifs[0]+'px}.insp-table.dense td{font-size:'+o.ifs[1]+'px}':'')+
+    (o.sfs?'.sched-table td{font-size:'+o.sfs+'px}.sched-table td.note-sm{font-size:'+(o.sfs-2)+'px}.sched-table td.note-xs{font-size:'+(o.sfs-3)+'px}':'')+
+    (o.ipad?'.insp-table.dense td{padding:'+o.ipad[0]+'px '+o.ipad[1]+'px}':'')+
+    (o.spad?'.sched-table td{padding:'+o.spad[0]+'px '+o.spad[1]+'px}.sched-table tr.slot-empty td{padding:'+Math.max(1,o.spad[0]-1)+'px '+o.spad[1]+'px}':'')+
+    /* 幅の指定をそのまま効かせる案では、氏名・車種・マッハの札の「折り返さない」を外す */
+    (o.fix?'.sched-table td:nth-child(2),.sched-table td:nth-child(3){white-space:normal}.restr-lab{white-space:normal}':'');
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+PCSS+over+'</style></head><body><div class="page">'+
+    '<div class="left">'+
+      '<div class="header"><h1>🚗 11月5日（木）　本店</h1><span class="print-info">印刷：11/5 09:12</span></div>'+
+      '<div class="section-box"><h2 class="insp-head">🚗 車検（'+NI+'台）</h2>'+
+      '<table class="insp-table dense"><thead><tr class="insp-head">'+
+        '<th style="width:'+iw[0]+'px">No</th><th class="insp-time" style="width:'+iw[1]+'px">入庫</th>'+
+        '<th style="width:'+iw[2]+'px">氏名</th><th style="width:'+iw[3]+'px">車種</th>'+
+        '<th style="width:'+iw[4]+'px">コース</th><th style="width:'+iw[5]+'px">代車</th>'+
+        '<th style="width:'+iw[6]+'px">特典</th><th>備考</th></tr></thead><tbody>'+insp+'</tbody></table></div>'+
+      '<div class="staff-row"><span style="font-weight:700;color:#374151">本日の休み：</span><span class="chip chip-off">見取大介</span>'+
+        '<span style="font-weight:700;color:#7e22ce;margin-left:10px">研修：</span><span class="chip chip-trn">岡本大地 研</span></div>'+
+      '<div class="section-box memo-section"><h2 class="memo-head">📝 備考・メモ</h2>'+
+      '<div class="memo-body">本日15時に部品入荷予定。岸本様の分です。</div></div>'+
+    '</div>'+
+    '<div class="right"><div style="margin-top:14px"></div>'+
+      '<div class="section-box"><h2 class="sched-head">⏰ タイムスケジュール（9:00〜18:00）</h2>'+
+      '<table class="sched-table"><thead><tr class="sched-head">'+
+        '<th style="width:'+sw[0]+'px">時間</th><th style="width:'+sw[1]+'px">氏名</th>'+
+        '<th style="width:'+sw[2]+'px">車種</th><th style="width:'+sw[3]+'px">作業</th>'+
+        '<th style="width:'+sw[4]+'px">代車</th><th>内容</th></tr></thead><tbody>'+sched+'</tbody></table></div>'+
+    '</div></div></body></html>';
+}
+
+var PCSS=document.getElementById('pcss').textContent;
+var cur='now';
+
+/* ★列の幅は【実際に描かれたもの】を測る。
+   指定した数字の引き算では出せない（「いまのまま」は幅の指定がそのまま効かない作りなので、
+   代車 60px の指定が実際には 84px になる、といったことが起きる）。 */
+function measureCols(html,cb){
+  var f=document.getElementById('ghost');
+  f.onload=function(){
+    var d=f.contentDocument;
+    var rd=function(sel){var tb=d.querySelector(sel);if(!tb)return[];
+      return [].map.call(tb.querySelectorAll('thead th'),function(th,i){
+        var td=tb.querySelector('tbody tr td:nth-child('+(i+1)+')');
+        return {h:(th.textContent||'').trim(),w:Math.round((td||th).getBoundingClientRect().width)};});};
+    cb({insp:rd('table.insp-table'),sched:rd('table.sched-table')});
+  };
+  f.srcdoc=html;
+}
+function widthTableFrom(now,opt){
+  var o=OPT[cur];
+  var h='<thead><tr><th class="l">表</th><th class="l">列</th><th>いまのまま</th><th>'+o.label+'</th><th>差</th></tr></thead><tbody>';
+  var row=function(tag,a,b){
+    if(!a||!b)return'';
+    return a.map(function(c,i){
+      var d=(b[i]?b[i].w:0)-c.w, big=/備考|内容/.test(c.h);
+      return '<tr'+(big?' style="background:#dcfce7"':'')+'><td class="l">'+(i?'':tag)+'</td><td class="l">'+(big?'<b>'+c.h+'</b>':c.h)+'</td>'+
+        '<td>'+(big?'<b>'+c.w+'</b>':c.w)+'</td><td>'+(big?'<b>'+(b[i]?b[i].w:'-')+'</b>':(b[i]?b[i].w:'-'))+'</td>'+
+        '<td class="'+(big?(d>0?'good':'bad'):(d<0?'good':''))+'">'+(d>0?'+':'')+(d||'±0')+'</td></tr>';}).join('');
+  };
+  h+=row('車検',now.insp,opt.insp)+row('整備',now.sched,opt.sched);
+  document.getElementById('wtbl').innerHTML=h+'</tbody>';
+  document.getElementById('pvnote').innerHTML=o.desc;
+}
+function widthTableOld(){
+  var o=OPT[cur], n=OPT.now;
+  var mm=96/25.4, W=Math.round(285*mm);
+  var iTot=403, sTot=505; // 余白を引いた中身の幅（実測）
+  var isum=o.insp.reduce(function(a,b){return a+b},0), ssum=o.sched.reduce(function(a,b){return a+b},0);
+  var nisum=n.insp.reduce(function(a,b){return a+b},0), nssum=n.sched.reduce(function(a,b){return a+b},0);
+  var h='<thead><tr><th class="l">表</th><th class="l">列</th><th>いまのまま</th><th>'+o.label+'</th><th>差</th></tr></thead><tbody>';
+  var iN=['No','入庫','氏名','車種','コース','代車','特典'], sN=['時間','氏名','車種','作業','代車'];
+  iN.forEach(function(nm,i){
+    var d=o.insp[i]-n.insp[i];
+    h+='<tr><td class="l">'+(i?'':'車検')+'</td><td class="l">'+nm+'</td><td>'+n.insp[i]+'</td><td>'+o.insp[i]+'</td><td class="'+(d<0?'good':'')+'">'+(d>0?'+':'')+(d||'±0')+'</td></tr>';
+  });
+  var ib=iTot-isum, nib=iTot-nisum, idb=ib-nib;
+  h+='<tr style="background:#dcfce7"><td class="l"></td><td class="l"><b>備考</b></td><td><b>'+nib+'</b></td><td><b>'+ib+'</b></td><td class="'+(idb>0?'good':'bad')+'"><b>'+(idb>0?'+':'')+(idb||'±0')+'</b></td></tr>';
+  sN.forEach(function(nm,i){
+    var d=o.sched[i]-n.sched[i];
+    h+='<tr><td class="l">'+(i?'':'整備')+'</td><td class="l">'+nm+'</td><td>'+n.sched[i]+'</td><td>'+o.sched[i]+'</td><td class="'+(d<0?'good':'')+'">'+(d>0?'+':'')+(d||'±0')+'</td></tr>';
+  });
+  var sb=sTot-ssum, nsb=sTot-nssum, sdb=sb-nsb;
+  h+='<tr style="background:#dcfce7"><td class="l"></td><td class="l"><b>内容</b></td><td><b>'+nsb+'</b>※実際は96</td><td><b>'+sb+'</b></td><td class="'+(sdb>=0?'good':'bad')+'"><b>'+(sdb>0?'+':'')+(sdb||'±0')+'</b></td></tr>';
+  document.getElementById('wtbl').innerHTML=h+'</tbody>';
+  document.getElementById('pvnote').innerHTML=o.desc;
+}
+function render(){
+  var o=OPT[cur];
+  measureCols(sheetHtml(OPT.now),function(nowC){
+    measureCols(sheetHtml(o),function(optC){ widthTableFrom(nowC,optC); });
+  });
+  var f=document.getElementById('sheet');
+  f.srcdoc=sheetHtml(o);
+  f.style.height='1600px';            // ★先に十分な高さを与える。狭いままだと紙の枠に切られた値を読む
+  f.onload=function(){
+    var d=f.contentDocument;
+    var mm=96/25.4;
+    var H=Math.round(198*mm);           // A4横の中身の高さ 198mm
+    // ★「いちばん下にある中身」の位置で測る。.page は height:196mm 固定なので
+    //   scrollHeight を読むとどの案も 741px になり、はみ出しが見えない。
+    var pg=d.querySelector('.page'), top=pg.getBoundingClientRect().top, bot=top;
+    [].forEach.call(pg.querySelectorAll('*'),function(el){
+      var r=el.getBoundingClientRect(); if(r.height&&r.bottom>bot)bot=r.bottom; });
+    var hh=Math.round(bot-top);
+    f.style.height=(hh+20)+'px';
+    var box=document.getElementById('pvbox');
+    var sc=Math.min(1,(box.clientWidth-24)/1077);
+    document.getElementById('pvscale').style.transform='scale('+sc+')';
+    document.getElementById('pvscale').style.height=(hh+20)*sc+'px';
+    document.getElementById('lim').style.top=(10+Math.round(196*mm)*sc)+'px';
+    var FR=Math.round(196*mm);                       // 紙の枠 196mm
+    var mmH=Math.round(hh/mm*10)/10, pages=hh>FR?2:1;
+    // ★「余裕」は高さの引き算では出せない（備考・メモの欄が flex:1 で底まで伸びるため、
+    //   収まっている時はどの案も必ず 196.1mm になる）。タイムスケジュールの表が
+    //   あと何行ぶん伸ばせるかで出す。
+    var st=d.querySelector('table.sched-table'), box=d.querySelector('.right .section-box');
+    var avail=st.getBoundingClientRect().height;      // 伸ばされた後の高さ＝使える高さ
+    // ★表には flex:1 が掛かっていて底まで伸びる。素の高さを知るには一度 flex を外して測る。
+    st.style.flex='none'; void st.offsetHeight;
+    var natural=st.getBoundingClientRect().height;
+    var rows=st.querySelectorAll('tbody tr');
+    var rowH=rows.length?(natural-st.querySelector('thead').getBoundingClientRect().height)/rows.length:24;
+    st.style.flex='';
+    var slack=Math.floor((avail-natural)/rowH);
+    document.getElementById('pvt').textContent=o.label;
+    document.getElementById('pvh').innerHTML='中身の高さ <b>'+mmH+'mm</b>（紙の枠 196mm）';
+    document.getElementById('pvp').innerHTML=pages===1
+      ? '<span class="ok">1枚に収まる</span>　<span style="font-weight:400">タイムスケジュールにあと約 '+Math.max(0,slack)+' 行ぶんの余裕</span>'
+      : '<span class="ng">2枚になる</span>　<span style="font-weight:400">'+Math.round((hh-FR)/mm*10)/10+'mm はみ出し</span>';
+  };
+}
+document.getElementById('pvtabs').addEventListener('click',function(e){
+  var b=e.target.closest('.tab'); if(!b)return;
+  [].forEach.call(this.querySelectorAll('.tab'),function(x){x.classList.remove('on')});
+  b.classList.add('on'); cur=b.dataset.pv; render();
+});
+document.getElementById('daytabs').addEventListener('click',function(e){
+  var b=e.target.closest('.tab'); if(!b)return;
+  [].forEach.call(this.querySelectorAll('.tab'),function(x){x.classList.remove('on')});
+  b.classList.add('on'); BUSY=(b.dataset.day==='b'); render();
+});
+window.addEventListener('resize',render);
+render();
+</script>
+</body></html>

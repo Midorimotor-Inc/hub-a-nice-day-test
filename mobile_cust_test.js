@@ -192,7 +192,7 @@ const cust = (i, o) => Object.assign({
   await page.fill('input[type="date"]', BIN);
   await clickText(page, '本予約');
   t('いつもの車検の入力画面が、名前・車種入りで開く', await seeText(page, '井上花子', 8000) && await page.evaluate(() => !![...document.querySelectorAll('input')].find(e => e.value === 'ハスラー')));
-  await clickText(page, 'クイック車検');
+  await clickText(page, 'クイック');  // ★2026-11-05 にコース名を短くした（クイック車検→クイック）
   // ★入庫時間は <select> をやめてボタン＋シートになった（2026-10-20）
   await page.evaluate(() => {
     const l = [...document.querySelectorAll('label')].find(e => /^入庫時間/.test(e.innerText.trim()));

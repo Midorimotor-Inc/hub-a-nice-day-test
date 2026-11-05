@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793834680698';
+    window.__APP_BUILD='build-1793853003759';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.99.0';
+const APP_VERSION = '3.100.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -363,11 +363,33 @@ const WorkBadge = ({id, mon, dim}) => {
   );
 };
 
+// ★コース名は【短い呼び名】で持つ（2026-11-05 ユーザー決定）。
+//   スケジュール画面のバッジが「マ マッハ車検」と二度出しになって幅を食っていたため、
+//   3つとも「車検」を外した。**判定はすべて id（1/2/3）で行っているので、名前を短くしても
+//   どこの動きも変わらない**（名前を見ているのは画面に出す所だけ）。
+//   ★顧客リスト（customers.html）の COURSES は Excel の「コース」列の字と突き合わせるので別物。触らないこと。
 const COURSES = [
-  {id:1,name:'マッハ車検',  color:'#b91c1c',bg:'#fca5a5',initial:'マ'},
-  {id:2,name:'クイック車検',color:'#1d4ed8',bg:'#bfdbfe',initial:'ク'},
-  {id:3,name:'レギュラー車検',color:'#d97706',bg:'#fde68a',initial:'レ'}
+  {id:1,name:'マッハ',    color:'#b91c1c',bg:'#fca5a5',initial:'マ'},
+  {id:2,name:'クイック',  color:'#1d4ed8',bg:'#bfdbfe',initial:'ク'},
+  {id:3,name:'レギュラー',color:'#d97706',bg:'#fde68a',initial:'レ'}
 ];
+
+// ★部品注文チェック（2026-11-05 ユーザー決定・A案）
+//   マッハ車検は部品を先に注文しておく必要があるので、「注文したか」をその行で押せるようにする。
+//   ・出すのは【マッハ車検（course===1）の行だけ】。
+//   ・未注文＝白地にこはく色の丸「部」／注文済み＝緑の丸に白い ✓。押すたびに入れ替わる。
+//   ・予約の1行に parts:true を持つだけ（入庫済み arrived と同じ作り・独立した印）。
+//   ★色と大きさはこの定数で決める。画面に直書きしないこと。
+const PARTS_SIZE=22;              // 丸の直径
+const PARTS_OFF_BG='#ffffff';     // 未注文＝白地
+const PARTS_OFF_FG='#b45309';     // 未注文＝こはく色の字と枠
+const PARTS_ON_BG='#15803d';      // 注文済み＝緑の丸
+const PARTS_ON_FG='#ffffff';      // 注文済み＝白い ✓
+// ★紙（オフライン予定表の控え・紙の控え）に出す部品注文の印。
+//   画面と印刷は丸のバッジだが、紙は【字】で出す（色が出ない紙でも分かるように）。
+//   マッハ車検の行だけ。注文済み＝「(部)✓」／未注文＝「(部)」／ほかのコースは空。
+//   ★同じものが hub_paper.js にもある（紙の控えは Node の別スクリプト）。片方だけ変えないこと。
+const partsTextMark = (r) => (Number(r && r.course) === 1) ? (r && r.parts ? '(部)✓' : '(部)') : '';
 // ── 今日の枠（全カレンダー共通・2026-09-24 ユーザー要望）──
 //   以前は日付の数字を赤丸で囲っていたが、パッと見て分かるようにセルごと太線で囲う。
 //   outlineOffset を内側にして、枠線が隣のセルと重なっても崩れないようにする。
@@ -7303,7 +7325,7 @@ const offSheetHtml = (d) => {
     + "<h3 class=r>🚗 車検（入庫予定・両店舗）</h3>"
     + table(day.insp, [{ t: "入庫", w: 52, c: 1, v: r => r.time || "未定" }, { t: "済", w: 34, chk: 1 },
         { t: "氏名", v: r => sama(r.name) }, { t: "車種", v: r => r.carType }, { t: "ナンバー", w: 76, c: 1, v: r => plateFull(r) },
-        { t: "コース", w: 78, c: 1, v: r => r.course }, { t: "電話", w: 110, tel: 1, v: r => r.phone },
+        { t: "コース", w: 96, c: 1, v: r => r.course }, { t: "電話", w: 110, tel: 1, v: r => r.phone },
         { t: "代車", w: 112, v: r => r.loaner }, { t: "担当", w: 60, c: 1, v: r => r.staff }, { t: "備考", v: r => r.note }],
         day.nOther ? { at: day.nMine, label: d.otherName } : null)
     + "<h3>⏰ 整備（タイムスケジュール）</h3>"
@@ -10179,6 +10201,28 @@ const EntryName=({row,style,children})=>{
   );
 };
 
+// ★部品注文チェックの丸（2026-11-05 ユーザー決定・A案）。
+//   マッハ車検の行だけ、コースのバッジのとなりに出す。
+//   未注文＝白地にこはく色の丸「部」／注文済み＝緑の丸に白い ✓。押すたびに入れ替わる。
+//   ★BLOCK-C（InspRow）には <PartsChip/> を1つ置くだけにして、見た目はこの外の部品で持つ
+//     （sama() ・ EntryName ・ Adv2yTags と同じ扱い）。判定・並び・保存には触っていない。
+//   行のクリック（予約カードを開く）と取り違えないよう、押した時は伝播を止める。
+const PartsChip=({on,onToggle,size=PARTS_SIZE})=>(
+  <span role="checkbox" aria-checked={!!on} tabIndex={0} data-partschip={on?'1':'0'}
+    title={on?'部品：注文済み（クリックで取り消し）':'部品を注文したらクリック'}
+    onClick={e=>{e.preventDefault();e.stopPropagation();onToggle&&onToggle();}}
+    onMouseDown={e=>{e.preventDefault();e.stopPropagation();}}
+    onKeyDown={e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();e.stopPropagation();onToggle&&onToggle();}}}
+    style={{width:size,height:size,flexShrink:0,borderRadius:'50%',cursor:'pointer',marginLeft:5,
+      display:'inline-flex',alignItems:'center',justifyContent:'center',verticalAlign:'middle',
+      border:`2px solid ${on?PARTS_ON_BG:PARTS_OFF_FG}`,
+      background:on?PARTS_ON_BG:PARTS_OFF_BG,
+      color:on?PARTS_ON_FG:PARTS_OFF_FG,
+      fontWeight:900,fontSize:on?size-8:size-9,lineHeight:1,
+      boxShadow:on?'0 0 0 2px rgba(21,128,61,.25)':'none',
+      transition:'background .12s, border-color .12s, color .12s'}}>{on?'✓':'部'}</span>
+);
+
 // ╔══════════════════════════════════════════════════════════════════╗
 // ║  BLOCK-C: コアロジック・行表示                                  ║
 // ║  【変更禁止】7台目承認・店舗判定・ロック処理が含まれる          ║
@@ -10211,7 +10255,7 @@ const ArrivedCheck=({on,onToggle,size=17})=>(
       transition:'background .12s, border-color .12s'}}>{on?'✓':''}</span>
 );
 
-const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH,loanerResS,vsId,onApprove,onToggleArrived,isOverLimit,limitFull,setItems})=>{
+const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH,loanerResS,vsId,onApprove,onToggleArrived,onToggleParts,isOverLimit,limitFull,setItems})=>{
   const cObj=row.course?COURSES.find(c=>c.id===row.course):null;
   const isEmpty=!row.name&&!row.staff&&!row.carType&&!row.course;
   const locked=lockInfo?.lockedBy;
@@ -10299,6 +10343,8 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
       <td style={TD}><span style={{color:pending||isOverLimit||isCancelled?'#6b7280':'#374151',fontSize:13,fontWeight:700}}>{row.carType||'—'}</span>
         {plateFull(row)!==''&&<div style={{fontSize:12,fontWeight:800,letterSpacing:'.06em',color:pending||isOverLimit||isCancelled?'#9ca3af':'#0f172a',whiteSpace:'nowrap'}}>ナンバー {plateFull(row)}</div>}</td>
       <td style={TD}>{cObj&&<span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',borderRadius:20,background:cObj.bg,color:cObj.color,fontWeight:700,fontSize:11,opacity:pending||isOverLimit||isCancelled?0.4:1}}><span style={{width:16,height:16,borderRadius:'50%',background:cObj.color,color:'white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900}}>{cObj.initial}</span>{cObj.name}</span>}
+        {/* ★部品注文チェック（マッハ車検の行だけ・2026-11-05 ユーザー決定・A案）。見た目は PartsChip（BLOCK-C の外）が持つ */}
+        {cObj&&cObj.id===1&&!!row.name&&!isCancelled&&<PartsChip on={!!row.parts} onToggle={()=>onToggleParts&&onToggleParts(dk,idx)}/>}
         {row.phone&&<div style={{fontSize:11,marginTop:3,color:pending||isOverLimit||isCancelled?'#9ca3af':'#0369a1',fontWeight:600,whiteSpace:'nowrap'}}>📞{row.phone}</div>}</td>
       <td style={TD}><span style={{fontSize:12,color:row.rentalLabel?(pending||isOverLimit||isCancelled?'#6b7280':'#065f46'):(pending||isOverLimit||isCancelled?'#6b7280':'#374151'),fontWeight:400}}>
         {/* ★限定（この車でないとダメ）の代車は鍵マークを付ける。最適化で動かない印 */}
@@ -14655,6 +14701,11 @@ function AppInner() {
     // 代車表記：車種名（番号）。文字量で段階縮小（fitクラスは各表の文字サイズにem追従）
     const fmtLoaner = (nm, num) => num?`${nm}（${num}）`:(nm||'');
     const loanerFitCls = s => {const n=(s||'').length; return 'loaner-fit'+(n>13?' f3':n>9?' f2':n>6?' f1':'');};
+    // ★部品注文の印（2026-11-05 ユーザー決定）。マッハ車検（course===1）の行だけ出す。
+    //   丸の「部」＋【注文済み（parts）の行だけ】隣に ✓。行も列も増やさない。
+    const partsMark = r => (Number(r.course)===1)
+      ? `<span class="parts-p${r.parts?' on':''}" title="${r.parts?'部品 注文済み':'部品 未注文'}"><i>部</i>${r.parts?'<b>✓</b>':''}</span>`
+      : '';
     // 本体(getLoanerLabel/1409行)と同一判定: bookingKey一致(氏名ガード付き)を最優先、なければ「この日付を含む期間×氏名一致」。
     // 旧実装は氏名のみで全期間照合し、別日の代車を誤表示していた（本番印刷で実害）。dkはhandlePrint引数を使用。
     const getLoanerLabel = (name, bookingKey) => {
@@ -14786,28 +14837,46 @@ function AppInner() {
   .left { width: 46%; display: flex; flex-direction: column; gap: 7px; }
   .right { width: 54%; display: flex; flex-direction: column; }
   .right .section-box { flex: 1; display: flex; flex-direction: column; overflow: visible; }
-  h2 { font-size: 14px; font-weight: 800; padding: 5px 9px; border-radius: 4px; color: white; margin-bottom: 4px; }
+  h2 { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 4px; color: white; margin-bottom: 3px; }
   table { width: 100%; border-collapse: collapse; }
-  th { padding: 5px 6px; font-weight: 800; font-size: 11px; text-align: left; color: white; }
+  /* ★【重要】幅は th の指定どおりに固定する（2026-11-05 ユーザー決定・C案）。
+     自動割り当てのままだと、入庫制限の長い札や会社名が1つあるだけでその列が広がり、
+     備考・内容が2〜3行に折り返して1枚に収まらなくなる。ここを auto に戻さないこと。 */
+  .insp-table, .sched-table { table-layout: fixed; }
+  th { padding: 4px 4px; font-weight: 800; font-size: 10px; text-align: left; color: white; }
   td { padding: 5px 6px; border-bottom: 1px solid #94a3b8; vertical-align: middle; font-size: 12px; font-weight: 500; }
   /* 車検：タイムスケジュールの文字に合わせて拡大 */
-  .insp-table td { font-size: 14px; padding: 7px 6px; }
-  .insp-table th { font-size: 12px; }
+  .insp-table td { font-size: 13px; padding: 7px 6px; }
+  .insp-table th { font-size: 10px; }
   /* ★台数が多い日は詰めて刷る（2026-11-04 ユーザー指示「1枚印刷で1日表示できるよう設計してほしい」）。
      車検が7台以上の日は字と余白を小さくして、1日が1枚に収まるようにする。 */
-  .insp-table.dense td { font-size: 12px; padding: 4px 5px; }
+  .insp-table.dense td { font-size: 11px; padding: 3px 5px; }
   .insp-table.dense td.insp-time { font-size: 11px; }
   .insp-table.dense .course-badge { width: 18px; height: 18px; font-size: 11px; }
   /* 2年前予約の印（紙では色が出ないこともあるので枠付き） */
   .adv2y-p { font-size: 8.5px; font-weight: 800; background: #6d28d9; color: #fff; padding: 1px 3px;
              border-radius: 2px; margin-left: 3px; white-space: nowrap; }
   @media print and (monochrome){ .adv2y-p { background: #fff !important; color: #000 !important; border: 1px solid #000; } }
+  /* ★部品注文の印（2026-11-05 ユーザー決定）。マッハ車検の行だけ、お名前のとなりに出す。
+     丸の「部」＋【注文済みの行だけ】隣に緑の ✓。画面の丸ボタンと同じ見た目にそろえてある。
+     ★行も列も増やさないこと（増やすと1枚に収まらない日が出る）。 */
+  .parts-p { display: inline-flex; align-items: center; gap: 1px; margin-left: 4px; vertical-align: middle; white-space: nowrap; }
+  .parts-p i { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px;
+               border-radius: 50%; border: 1.5px solid #b45309; color: #b45309; background: #fff;
+               font-size: 9px; font-weight: 900; font-style: normal; line-height: 1; }
+  .parts-p b { color: #15803d; font-size: 12px; font-weight: 900; line-height: 1; }
+  .parts-p.on i { background: #15803d; border-color: #15803d; color: #fff; }
+  @media print and (monochrome){
+    .parts-p i { background: #fff !important; border-color: #000 !important; color: #000 !important; }
+    .parts-p.on i { background: #000 !important; color: #fff !important; }
+    .parts-p b { color: #000 !important; }
+  }
   /* 車検の入庫時間（2026-11-02 ユーザー要望：印刷に入庫時間を出す） */
   .insp-table td.insp-time { font-size: 12.5px; font-weight: 800; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
   .insp-table th.insp-time { text-align: center; padding-left: 2px; padding-right: 2px; }
   /* 入庫制限の枠（2026-11-02 ユーザー要望：紙にも出す）。画面の1日表示と同じ ベタの薄い赤 */
   .sched-table tr.slot-restr td { background: #fee2e2; }
-  .restr-lab { font-weight: 800; color: #b91c1c; white-space: nowrap; font-size: 11px; }
+  .restr-lab { font-weight: 800; color: #b91c1c; white-space: normal; font-size: 11px; }
   @media print and (monochrome){ .sched-table tr.slot-restr td { background: #e5e5e5; } .restr-lab { color: #000 !important; } }
   /* 車検コース：一文字を〇バッジで（マ＝赤丸白字／他は丸枠のみ） */
   .course-badge { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; font-weight:800; font-size:12px; line-height:1; }
@@ -14819,17 +14888,22 @@ function AppInner() {
   }
   /* タイムスケジュール：1予約=1行・用紙1枚に収める（行高は控えめ） */
   .right .section-box > table { flex: 1; }
-  .sched-table td { font-size: 13px; padding: 5px 6px; line-height: 1.2; }
-  .sched-table th { font-size: 12px; }
-  /* 氏名・車種は折り返さず1行表示 */
-  .sched-table td:nth-child(2), .sched-table td:nth-child(3) { white-space: nowrap; }
+  .sched-table td { font-size: 12px; padding: 3px 6px; line-height: 1.2; }
+  .sched-table tr.slot-empty td { padding: 2px 6px; }
+  .sched-table th { font-size: 10px; }
+  /* ★氏名・車種は折り返してよい（2026-11-05）。幅を固定したので、折り返させる方が列を奪わない。
+     nowrap に戻すと、長い会社名で氏名の列が広がって内容欄が潰れる。 */
+  .sched-table td:nth-child(2), .sched-table td:nth-child(3) { white-space: normal; word-break: break-word; }
   /* 代車（車検・一般共通）：車種名（番号）を1行表示・長さで段階縮小（emで各表の文字に追従、最長は折返し許可） */
+  /* ★車検の代車は字を縮めず2行で折り返す（2026-11-05 ユーザー指示）。
+     縮めると「ワゴンR (3310)」が特典の欄にはみ出して重なっていた。 */
+  .insp-table td.loaner-wrap { white-space: normal; line-height: 1.2; font-size: .9em; word-break: break-word; }
   td.loaner-fit { white-space: nowrap; }
   td.loaner-fit.f1 { font-size: 0.82em; }
   td.loaner-fit.f2 { font-size: 0.68em; }
   td.loaner-fit.f3 { font-size: 0.56em; white-space: normal; line-height: 1.15; word-break: break-all; }
   /* 内容が長い枠は枠内に収まるよう段階縮小・折返し */
-  .sched-table td.note-sm { font-size: 11px; white-space: normal; }
+  .sched-table td.note-sm { font-size: 10px; white-space: normal; }
   .sched-table td.note-xs { font-size: 9px;  white-space: normal; line-height: 1.15; }
   .insp-head { background: #9a3412; }
   .sched-head { background: #0e7490; }
@@ -14872,13 +14946,13 @@ function AppInner() {
       <h2 class="insp-head">🚗 車検（${sortedInsp.length}台）</h2>
       <table class="insp-table${sortedInsp.length>=7?' dense':''}">
         <thead><tr class="insp-head">
-          <th style="width:16px">No</th>
-          <th class="insp-time" style="width:32px">入庫</th>
-          <th style="width:68px">氏名</th>
-          <th style="width:54px">車種</th>
-          <th style="width:40px">コース</th>
+          <th style="width:20px">No</th>
+          <th class="insp-time" style="width:34px">入庫</th>
+          <th style="width:72px">氏名</th>
+          <th style="width:66px">車種</th>
+          <th style="width:38px">コース</th>
           <th style="width:60px">代車</th>
-          <th style="width:24px">特典</th>
+          <th style="width:28px">特典</th>
           <th>備考</th>
         </tr></thead>
         <tbody>
@@ -14891,10 +14965,10 @@ function AppInner() {
               return `<tr class="${isOther?'store-other':'store-my'}">
                 <td style="font-weight:700;color:${isOther?'#94a3b8':storeColor}">${i+1}</td>
                 <td class="insp-time">${printInspTime(r.time)}</td>
-                <td style="font-weight:700">${r.name||''}${storeTag?`<span style="font-size:9px;background:${tagColor};color:white;padding:1px 4px;border-radius:2px;margin-left:3px">${storeTag}</span>`:''}${r.adv2y?`<span class="adv2y-p">2年前${r.contact==='sms'?'SMS':r.contact==='tel'?'電話':''}${r.fixed?'✓':''}</span>`:''}</td>
+                <td style="font-weight:700">${r.name||''}${storeTag?`<span style="font-size:9px;background:${tagColor};color:white;padding:1px 4px;border-radius:2px;margin-left:3px">${storeTag}</span>`:''}${partsMark(r)}${r.adv2y?`<span class="adv2y-p">2年前${r.contact==='sms'?'SMS':r.contact==='tel'?'電話':''}${r.fixed?'✓':''}</span>`:''}</td>
                 <td>${r.carType||''}</td>
                 <td>${courseBadge(r.course)}</td>
-                <td class="${loanerFitCls(loaner)}">${loaner}</td>
+                <td class="loaner-wrap">${loaner}</td>
                 <td style="text-align:center">${r.tokuten||'-'}</td>
                 <td>${r.note||''}</td>
               </tr>`;
@@ -14923,16 +14997,25 @@ function AppInner() {
       <table class="sched-table">
         <thead><tr class="sched-head">
           <th style="width:34px">時間</th>
-          <th style="width:92px">氏名</th>
-          <th style="width:78px">車種</th>
-          <th style="width:42px">作業</th>
-          <th style="width:84px">代車</th>
+          <th style="width:70px">氏名</th>
+          <th style="width:66px">車種</th>
+          <th style="width:38px">作業</th>
+          <th style="width:76px">代車</th>
           <th>内容</th>
         </tr></thead>
         <tbody>
           ${schedRows.map(r=>{
             const nn=(r.note||'').length;
             const nCls=nn>34?'note-xs':nn>22?'note-sm':'';
+            // ★入庫制限の札は【氏名から内容まで ひとマス（colspan）にまとめて】出す（2026-11-05）。
+            //   氏名の列に置くと「🚫 入庫制限　🚗 マッハ車検　◯◯ 様」の21文字がその列の幅を決めてしまい、
+            //   【全部の行】の氏名が広がって内容欄が潰れていた。ここを氏名の td に戻さないこと。
+            if(!r.name&&r.rstLab){
+              return `<tr class="slot-empty slot-restr">
+                <td style="font-weight:700;color:#0e7490;white-space:nowrap">${r.slot||''}</td>
+                <td colspan="5"><span class="restr-lab">${r.rstLab}</span></td>
+              </tr>`;
+            }
             return `<tr class="${r.isEmpty?'slot-empty':'has-data'}${r.cls?' '+r.cls:''}${r.rst?' slot-restr':''}">
               <td style="font-weight:700;color:#0e7490;white-space:nowrap">${r.slot||''}</td>
               <td style="font-weight:${r.name?'700':'400'}">${r.name||(r.rstLab?`<span class="restr-lab">${r.rstLab}</span>`:'')}</td>
@@ -15075,7 +15158,9 @@ function AppInner() {
       //   insp は両店が1本に入っていて台数制限も両店共通なので、片方だけ出すと紙と画面で数が食い違う。
       //   ★整備・代車・備考・休日は今までどおり「その店のぶんだけ」。混ぜないこと。
       const inspRow=(r,other)=>({
-        time:r.time||"",name:r.name,carType:r.carType||"",no:r.no||"",course:cName(r.course),
+        time:r.time||"",name:r.name,carType:r.carType||"",no:r.no||"",
+        // ★コースの字のうしろに部品注文の印（マッハの行だけ）。列は増やさない
+        course:[cName(r.course),partsTextMark(r)].filter(Boolean).join("　"),
         noChi:r.noChi||"",noBun:r.noBun||"",noKana:r.noKana||"",   // ★フルナンバーを出すのに要る（plateFull）
         phone:r.phone||"",loaner:r.loaner||r.rentalLabel||"",staff:r.staff||"",note:r.note||"",other:!!other});
       const inspAll=(inspData[dk]||[]).filter(r=>r&&r.name);
@@ -16036,9 +16121,13 @@ function AppInner() {
   },[]);
   const applyArrivedOv=useCallback((dk,row,idx)=>{
     if(!row||!row.name)return row;
-    const o=arrivedOv[`${dk}|${(row.seq||row.custId||row.name)||idx}`];
-    if(!o)return row;
-    return o.v?{...row,arrived:true}:{...row,arrived:undefined};
+    const base=`${dk}|${(row.seq||row.custId||row.name)||idx}`;
+    const o=arrivedOv[base], pt=arrivedOv[base+'|P']; // |P＝部品注文チェックの覚え書き
+    if(!o&&!pt)return row;
+    let r=row;
+    if(o)  r=o.v ?{...r,arrived:true}:{...r,arrived:undefined};
+    if(pt) r=pt.v?{...r,parts:true}  :{...r,parts:undefined};
+    return r;
   },[arrivedOv]);
 
   const toggleInspArrived=useCallback((dk,idx)=>{
@@ -16054,6 +16143,28 @@ function AppInner() {
       {name:cur.name,verb:next?'入庫チェック':'入庫チェックの解除',dk,alert:false}
     ));
   },[inspData,inspLimits,persistInsp,shownArrived,runAfterPaint,markArrivedOv]);
+
+  // ★部品注文チェック（2026-11-05 ユーザー決定・A案）。マッハ車検の行だけで押せる。
+  //   入庫済み（arrived）・納車済み（delivered）とまったく同じ作りの【別の印】。
+  //   覚え書きのキーは arrivedKey + '|P'（納車が '|D' なのと同じ考え方）。
+  const partsKey=(dk,row,idx)=>arrivedKey(dk,row,idx)+'|P';
+  const shownParts=useCallback((k,row)=>{
+    const o=arrivedOvRef.current[k];
+    return o?!!o.v:!!(row&&row.parts);
+  },[]);
+  const toggleInspParts=useCallback((dk,idx)=>{
+    const cur=(inspData[dk]||[])[idx];
+    if(!cur||!cur.name)return;
+    const k=partsKey(dk,cur,idx);
+    const next=!shownParts(k,cur); // 今の「表示」を反転する（連打しても1回ごとに切り替わる）
+    markArrivedOv(k,next);         // ここで即座に色が変わる
+    const _tgt={custId:cur.custId,seq:(cur.seq!=null)?cur.seq:null,name:cur.name,no:cur.no,idx,limit:inspLimits[dk]??6};
+    runAfterPaint(k,()=>persistInsp( // 保存は画面が描き替わってから
+      base=>patchInspBooking(base,dk,_tgt,{parts:next||undefined}),
+      back=>{const rows=(back&&back[dk])||[];const j=rows.findIndex(_inspMatcher(_tgt));return j>=0&&!!rows[j].parts===next;},
+      {name:cur.name,verb:next?'部品注文チェック':'部品注文チェックの解除',dk,alert:false}
+    ));
+  },[inspData,inspLimits,persistInsp,shownParts,runAfterPaint,markArrivedOv]);
 
   // 一般予約（タイムスケジュール）側の入庫済みチェック
   const toggleSchedArrived=useCallback((dk,slotKey)=>{
@@ -17832,7 +17943,7 @@ function AppInner() {
                           const origIdx=row._origIdx??dispIdx;
                           const {_origIdx,...cleanRow}=row;
                           rows.push(
-                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={inspItems}/>
+                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems}/>
                           );
                         });
                         // ② 台数制限超過バナー（7台目以降がある場合）
@@ -17854,7 +17965,7 @@ function AppInner() {
                             ?{...cleanRow,pendingApproval:false}  // 承認済み：承認待ちバッジ消す
                             :{...cleanRow,pendingApproval:true};  // 未承認：承認待ちバッジ表示
                           rows.push(
-                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} isOverLimit={false} setItems={inspItems}/>
+                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems}/>
                           );
                         });
                         // ④ 追加行（isNew=trueで開く）。台数制限を掛けた日で上限に達していたら「予約不可」

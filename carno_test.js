@@ -97,7 +97,7 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
     return [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
   });
   t('車検：ナンバーが車種と同じマスに出る', !!inspCells && inspCells.some(c => /シエンタ/.test(c) && /ナンバー\s*3310/.test(c)), inspCells);
-  t('車検：電話がコースと同じマスに出る', !!inspCells && inspCells.some(c => /クイック車検/.test(c) && /090-1234-5678/.test(c)), inspCells);
+  t('車検：電話がコースと同じマスに出る', !!inspCells && inspCells.some(c => /クイック/.test(c) && /090-1234-5678/.test(c)), inspCells);
   t('車検：電話は車種のマスから消えている', !!inspCells && !inspCells.some(c => /シエンタ/.test(c) && /090-1234-5678/.test(c)), inspCells);
   const schedCells = await page.evaluate(() => {
     const tr = [...document.querySelectorAll('tr')].find(r => r.innerText.includes('相原')); if (!tr) return null;

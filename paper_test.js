@@ -32,7 +32,9 @@ const fake = {
     'hub-v8-dev-insp': S({
       [TD]: [
         { name: '甲野一郎', carType: 'アルト', no: 1111, course: 2, store: 'honten', staff: '見取大介', phone: '090-0000-0001', time: '09:00', loaner: 'ハスラー青 (8178)', note: '' },
-        { name: '乙野二郎', carType: 'ワゴンR', no: 2222, course: 1, store: 'sanda', staff: '岡上秀一', phone: '090-0000-0002', time: '10:00', note: '' }
+        { name: '乙野二郎', carType: 'ワゴンR', no: 2222, course: 1, store: 'sanda', staff: '岡上秀一', phone: '090-0000-0002', time: '10:00', note: '', parts: true },
+        // ★部品注文チェック（2026-11-05）。マッハで【未注文】の行
+        { name: '部品未子', carType: 'ハスラー', no: 5151, course: 1, store: 'honten', staff: '見取大介', phone: '', time: '11:00', note: '' }
       ],
       [FAR]: [{ name: '丙野三郎', carType: 'スペーシア', no: 3333, course: 3, store: 'honten', staff: '江川京志', phone: '090-0000-0003', time: '13:00', note: '遠い先の予約' }],
       [OLD]: [{ name: '古野四郎', carType: 'タント', no: 4444, course: 2, store: 'honten', staff: '江川京志', phone: '', time: '09:00', note: '' }]
@@ -139,7 +141,7 @@ fs.writeFileSync(srcFile, JSON.stringify(fake));
   t('★あいだに「三田店 入庫」の見出しが出る', txt.indexOf('三田店　入庫') >= 0);
   t('★自店が先・他店が後', txt.indexOf('甲野一郎') < txt.indexOf('三田店　入庫')
     && txt.indexOf('三田店　入庫') < txt.indexOf('乙野二郎'));
-  t('★上の台数は合算＋内訳', /車検 2台（本店1・三田店1）/.test(txt), (txt.match(/車検 [^\n]{0,40}/) || [])[0]);
+  t('★上の台数は合算＋内訳', /車検 3台（本店2・三田店1）/.test(txt), (txt.match(/車検 [^\n]{0,40}/) || [])[0]);
   t('★整備は混ぜない（三田店の整備は出ない）', txt.indexOf('戊野六郎') < 0);
   t('代車の貸出が出る', txt.indexOf('ハスラー青') >= 0 && txt.indexOf('レンタ・パール') >= 0);
   t('空いている代車が出る', txt.indexOf('空いている代車') >= 0 && txt.indexOf('アルト白') >= 0);

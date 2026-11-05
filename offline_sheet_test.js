@@ -42,8 +42,10 @@ const LF = d(0), LT = d(3);
   const seed = {
     [STOR + 'insp']: {
       [dk(TD)]: [
-        { name: '前村　和子', carType: 'ワゴンR', no: '3310', time: '09:00', course: 1, store: 'honten', phone: '090-1234-5678', loaner: 'ハスラー (7074)', staff: '竹林', note: 'ワイパー交換', seq: 1, id: 1 },
+        { name: '前村　和子', carType: 'ワゴンR', no: '3310', time: '09:00', course: 1, store: 'honten', phone: '090-1234-5678', loaner: 'ハスラー (7074)', staff: '竹林', note: 'ワイパー交換', seq: 1, id: 1, parts: true },
         { name: '三田　太郎', carType: 'アルト', no: '0088', time: '10:30', course: 3, store: 'sanda', phone: '079-111-2222', loaner: '', staff: '藤原', note: '', seq: 2, id: 2 },
+        // ★部品注文チェック（2026-11-05）。マッハで【未注文】の行（前村さんは course:1 + parts:true ＝注文済み）
+        { name: '部品　未子', carType: 'ハスラー', no: '5151', time: '11:00', course: 1, store: 'honten', phone: '', loaner: '', staff: '竹林', note: '', seq: 4, id: 4 },
       ],
       [dk(FAR)]: [{ name: '遠藤　先夫', carType: 'ジムニー', no: '8612', time: '13:00', course: 2, store: 'honten', phone: '090-9999-0000', loaner: '', staff: '魚住', note: '', seq: 3, id: 3 }],
     },
@@ -115,6 +117,13 @@ const LF = d(0), LT = d(3);
   t('本店の控えが保存される', !!hon.html, hon.name);
   t('ファイル名に店と日付が入る', /予定表_本店_\d+-\d+-\d+\.html/.test(hon.name), hon.name);
   t('保存できたと画面に出る', await seeText(page, '保存しました', 8000), await page.evaluate(() => document.body.innerText.slice(0, 400)));
+
+  head('②-2 部品注文の印（2026-11-05 ユーザー指示）');
+  // ★紙は色が出ないことがあるので【字】で出す。マッハの行だけ・注文済みは ✓ 付き。
+  t('注文済みのマッハに「(部)✓」が出る', hon.html.indexOf('マッハ　(部)✓') > 0, (hon.html.match(/マッハ[^<]*/g) || []).slice(0, 4));
+  t('未注文のマッハに「(部)」が出る（✓ なし）', /マッハ　\(部\)</.test(hon.html), (hon.html.match(/マッハ[^<]*/g) || []).slice(0, 4));
+  t('クイック・レギュラーには印を出さない', !/(クイック|レギュラー)　\(部\)/.test(hon.html));
+  t('列は増やしていない（見出しの行は10列のまま）', /colspan=10/.test(hon.html));
 
   head('② 中身（本店の控え）');
   t('本店の車検が入っている', hon.html.indexOf('前村　和子') > 0);

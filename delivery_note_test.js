@@ -142,7 +142,7 @@ const MD_N = `${nx.getMonth() + 1}/${nx.getDate()}`;
   const okSanda = await seeText(page, '車検予約カード', 8000);
   const sandaCourses = await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner'); if (!box) return [];
-    return [...box.querySelectorAll('button')].map(b => b.innerText.replace(/\s/g, '')).filter(x => /車検$/.test(x));
+    return [...box.querySelectorAll('button')].map(b => b.innerText.replace(/\s/g, '')).filter(x => /(マッハ|クイック|レギュラー)$/.test(x));  // ★2026-11-05 にコース名を短くした（マッハ車検→マッハ）
   });
   t('三田店の予約カードにマッハ車検が無い', okSanda && sandaCourses.length > 0 && !sandaCourses.some(x => x.includes('マッハ')), { sandaCourses, okSanda, text: await page.evaluate(() => document.body.innerText.slice(0, 200)) });
   t('クイック・レギュラーは出る', sandaCourses.some(x => x.includes('クイック')) && sandaCourses.some(x => x.includes('レギュラー')), sandaCourses);
@@ -155,7 +155,7 @@ const MD_N = `${nx.getMonth() + 1}/${nx.getDate()}`;
   await seeText(page, '車検予約カード', 8000);
   const hontenCourses = await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner'); if (!box) return [];
-    return [...box.querySelectorAll('button')].map(b => b.innerText.replace(/\s/g, '')).filter(x => /車検$/.test(x));
+    return [...box.querySelectorAll('button')].map(b => b.innerText.replace(/\s/g, '')).filter(x => /(マッハ|クイック|レギュラー)$/.test(x));  // ★2026-11-05 にコース名を短くした（マッハ車検→マッハ）
   });
   t('本店ではマッハ車検が出る', hontenCourses.some(x => x.includes('マッハ')), hontenCourses);
 

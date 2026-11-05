@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1793834680698';
+  window.__APP_BUILD='build-1793853003759';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.99.0';
+const MOBILE_VERSION='3.100.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -216,10 +216,12 @@ const ArrivedCheck=({on,onToggle,size=18})=>(
       color:"#dc2626",fontWeight:900,fontSize:size-6,lineHeight:1,
       boxShadow:on?"0 0 0 2px rgba(253,224,71,.55)":"none"}}>{on?"✓":""}</span>
 );
+// ★コース名は【短い呼び名】（2026-11-05 ユーザー決定）。PC版（index_dev.html）と同じ字にそろえる。
+//   判定はすべて id（1/2/3）で行っているので、名前を短くしても動きは変わらない。
 const COURSES=[
-  {id:1,name:'マッハ車検',  short:'マ',color:'#b91c1c',bg:'#fca5a5'},
-  {id:2,name:'クイック車検',short:'ク',color:'#1d4ed8',bg:'#bfdbfe'},
-  {id:3,name:'レギュラー',  short:'レ',color:'#d97706',bg:'#fde68a'},
+  {id:1,name:'マッハ',    short:'マ',color:'#b91c1c',bg:'#fca5a5'},
+  {id:2,name:'クイック',  short:'ク',color:'#1d4ed8',bg:'#bfdbfe'},
+  {id:3,name:'レギュラー',short:'レ',color:'#d97706',bg:'#fde68a'},
 ];
 // PC版（index_dev.html）と同一の選択肢定義
 // ★2026-10-31 ユーザー決定で11個に整理。月数は内容欄（⚡ クイックメニュー）で書く。
@@ -1558,6 +1560,27 @@ const Adv2yTags=({row})=>{
       :<span data-adv2ywait="1" style={ADV2Y_TAG(ADV2Y.waitbg,ADV2Y.wait,ADV2Y.wait)}>未確定</span>}
   </>);
 };
+// ★部品注文チェック（2026-11-05 ユーザー決定・A案。PC版と同じ）。
+//   マッハ車検（course===1）の行だけ、コースのバッジのとなりに出す。
+//   未注文＝白地にこはく色の丸「部」／注文済み＝緑の丸に白い ✓。タップするたびに入れ替わる。
+//   予約の1行に parts:true を持つだけ（入庫済み arrived と同じ作り・独立した印）。
+//   ★色と大きさはこの定数で決める。画面に直書きしないこと。index_dev.html と同じ値にそろえる。
+const PARTS_SIZE=24;              // 指で押せる大きさ（PC は 22）
+const PARTS_OFF_BG='#ffffff';
+const PARTS_OFF_FG='#b45309';
+const PARTS_ON_BG='#15803d';
+const PARTS_ON_FG='#ffffff';
+const PartsChip=({on,onToggle,size=PARTS_SIZE})=>(
+  <span role="checkbox" aria-checked={!!on} data-partschip={on?'1':'0'}
+    onClick={e=>{e.preventDefault();e.stopPropagation();onToggle&&onToggle();}}
+    style={{width:size,height:size,flexShrink:0,borderRadius:'50%',
+      display:'inline-flex',alignItems:'center',justifyContent:'center',
+      border:`2px solid ${on?PARTS_ON_BG:PARTS_OFF_FG}`,
+      background:on?PARTS_ON_BG:PARTS_OFF_BG,
+      color:on?PARTS_ON_FG:PARTS_OFF_FG,
+      fontWeight:900,fontSize:on?size-9:size-11,lineHeight:1}}>{on?'✓':'部'}</span>
+);
+
 const blankInsp=()=>({deliveryNote:'',noteToDelivery:false,name:'',user:'',staff:'',carType:'',no:'',noChi:'',noBun:'',noKana:'',adv2y:false,contact:'',fixed:false,course:0,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null,tokuten:'-',time:'',note:'',bookingStatus:'provisional',entryDate:'',deliveryDate:'',deliveryTime:''});
 
 // ── この予約の「受け付け」の記録（2026-10-29 ユーザー指示。PC版と同じ形・同じ言葉）──
@@ -3266,7 +3289,7 @@ const MemoSheet=({dateLabel,isNew,initContent,initBy,staffNames,items,onSave,onD
   );
 };
 
-const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,arrivedOv,mySchedPanel,onEditMemo,onToggleMemo,onMoveDay})=>{
+const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDataS,vsId,onClose,onGoSchedule,onToggleArrived,onToggleParts,arrivedOv,mySchedPanel,onEditMemo,onToggleMemo,onMoveDay})=>{
   const sc=vsId==='honten'?'#1d4ed8':'#dc2626';
   const irows=(inspData[dk]||[]).filter(r=>r&&r.name&&!r.pendingApproval&&r.bookingStatus!=='cancelled');
   const sorted=[...irows.filter(r=>normStore(r.store)===vsId),...irows.filter(r=>!normStore(r.store)),...irows.filter(r=>normStore(r.store)&&normStore(r.store)!==vsId)];
@@ -3345,11 +3368,17 @@ const DayDetailModal=({dk,y,m,d,inspData,schedDataH,schedDataS,memoDataH,memoDat
               {sorted.map((r,i)=>{
                 const c=COURSES.find(co=>co.id===Number(r.course));
                 const isOther=normStore(r.store)&&normStore(r.store)!==vsId;
+                // ★行の番号は元の並びから引く（irows は絞り込んであるので i とは違う）
+                const _ix=(inspData[dk]||[]).indexOf(r);
+                const _pk=dk+'|'+(r.seq||r.custId||r.name)+'|P';
+                const _parts=(arrivedOv&&_pk in arrivedOv)?!!arrivedOv[_pk]:!!r.parts;
                 return(
                   <div key={i} style={{padding:'9px 11px',marginBottom:5,borderRadius:10,background:isOther?'#f8fafc':'white',border:`1.5px solid ${isOther?'#e2e8f0':sc+'33'}`,borderLeft:`4px solid ${isOther?'#94a3b8':sc}`,opacity:isOther?0.75:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
                       <span style={{fontWeight:800,fontSize:14}}>{sama(r.name)}</span>
                       {c&&<span style={{padding:'2px 7px',borderRadius:10,background:c.bg,color:c.color,fontSize:10,fontWeight:700}}>{c.name}</span>}
+                      {/* ★部品注文チェック（マッハ車検の行だけ・2026-11-05） */}
+                      {c&&c.id===1&&!isOther&&_ix>=0&&<PartsChip on={_parts} size={22} onToggle={()=>onToggleParts&&onToggleParts(dk,_ix)}/>}
                       {isOther&&<span style={{fontSize:10,color:'#94a3b8',marginLeft:'auto'}}>{normStore(r.store)==='honten'?'本店':'三田店'}</span>}
                     </div>
                     <div style={{marginTop:3,fontSize:11,color:'#64748b',display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -4420,7 +4449,7 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGro
   );
 };
 
-const ScheduleView=({pleaveData,trainingData,onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
+const ScheduleView=({pleaveData,trainingData,onEditMemo,onToggleMemo,otherView,inspData,schedDataH,schedDataS,memoDataH,memoDataS,loanerResH,loanerResS,loanerCarsH,loanerCarsS,vsId,initDate,onOpenEdit,onToggleArrived,onToggleParts,arrivedOv,schedRestrictions,staffList,dayOffData,closedDays,closedDates,overrideOpen,inspLimits})=>{
   const today=new Date();
   const [ds,setDs]=useState({y:today.getFullYear(),m:today.getMonth(),d:today.getDate()});
   useEffect(()=>{if(initDate)setDs(initDate);},[initDate]);
@@ -4655,6 +4684,9 @@ const ScheduleView=({pleaveData,trainingData,onEditMemo,onToggleMemo,otherView,i
               // ★入庫済みチェック。押した直後は手元の保持を優先（古いキャッシュで点滅しないように）
               const _ovk=dk+'|'+(r.seq||r.custId||r.name);
               const _arr=(arrivedOv&&_ovk in arrivedOv)?arrivedOv[_ovk]:!!r.arrived;
+              // ★部品注文チェック（マッハ車検の行だけ）。覚え書きのキーは入庫済みと同じ作りに '|P' を足したもの
+              const _pk=_ovk+'|P';
+              const _parts=(arrivedOv&&_pk in arrivedOv)?!!arrivedOv[_pk]:!!r.parts;
               // PC版と同じ解決順（rentalLabel → 代車予約(lres) → 行が持つloaner文字列）。
               // 代車予約が無く loaner 文字列だけ持つ行があるため、r.loaner へのフォールバックは必須。
               const loaner=getLoanerLabel(myLoanerRes,dk,r.name,r.bookingKey||`insp-${dk}-${idx}`,myCars)||'';
@@ -4673,6 +4705,8 @@ const ScheduleView=({pleaveData,trainingData,onEditMemo,onToggleMemo,otherView,i
                     <span style={{fontWeight:800,fontSize:15,flex:1}}>{sama(r.name)}</span>
                     {r.pendingApproval&&<span style={{padding:'2px 7px',borderRadius:10,background:'#fef3c7',color:'#b45309',fontSize:10,fontWeight:800}}>⏳ 承認待ち</span>}
                     {c&&<span style={{padding:'2px 8px',borderRadius:10,background:c.bg,color:c.color,fontSize:10,fontWeight:700}}>{c.name}</span>}
+                    {/* ★部品注文チェック（マッハ車検の行だけ・2026-11-05。PC の1日表示と同じ） */}
+                    {c&&c.id===1&&!isOther&&<PartsChip on={_parts} onToggle={()=>onToggleParts&&onToggleParts(dk,idx)}/>}
                     {/* ★2年前予約の札（2026-11-04。PC の1日表示と同じ並び） */}
                     <Adv2yTags row={r}/>
                     {isOther&&<span style={{fontSize:10,color:'#94a3b8',padding:'1px 5px',background:'#f1f5f9',borderRadius:6}}>{normStore(r.store)==='honten'?'本店':'三田店'}</span>}
@@ -7034,6 +7068,25 @@ const App=()=>{
     }catch(e){ console.warn('入庫チェックを保存できませんでした',e); }
   },[hotInsp,schedDataH,schedDataS,vsId,shownArrived,runAfterPaint,markArrivedOv]);
 
+  // ★部品注文チェック（2026-11-05 ユーザー決定）。マッハ車検の行だけで押せる。
+  //   入庫済み（arrived）とまったく同じ作りの【別の印】。覚え書きのキーは '|P' を足したもの。
+  const toggleParts=useCallback((dk,idx)=>{
+    try{
+      const cur=(hotInsp[dk]||[])[idx];
+      if(!cur||!cur.name)return;
+      const k=dk+'|'+(cur.seq||cur.custId||cur.name)+'|P';
+      const next=!((k in arrivedOvRef.current)?!!arrivedOvRef.current[k]:!!cur.parts);
+      markArrivedOv(k,next);           // ここで即座に色が変わる
+      runAfterPaint(k,()=>writeShared(STOR+'insp',hotInsp,base=>{
+        const rows=[...((base[dk])||[])];
+        const r=rows[idx];
+        if(!r||r.name!==cur.name)return base;           // 行がズレていたら触らない
+        rows[idx]=next?{...r,parts:true}:(()=>{const {parts,...rest}=r;return rest;})();
+        return {...base,[dk]:rows};
+      },v=>setInspData(applyOverlays(STOR+'insp',v)),null,true).catch(e=>console.warn('部品注文チェックを保存できませんでした',e)));
+    }catch(e){ console.warn('部品注文チェックを保存できませんでした',e); }
+  },[hotInsp,runAfterPaint,markArrivedOv]);
+
   const openEdit=useCallback((req)=>{
     // req: {type:'insp'|'sched', dk, idx?, slot?, isNew}
     // initial はローカルデータから即座に作れる（GAS不要）ので、まずモーダルを開く。
@@ -7875,7 +7928,7 @@ const App=()=>{
       )}
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0}}>
         {tab==='sched'&&<ScheduleView onEditMemo={(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={toggleDayMemo} otherView={otherView} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS}
-          loanerResH={loanerResH} loanerResS={loanerResS} loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId} initDate={schedInitDate} onOpenEdit={openEdit} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
+          loanerResH={loanerResH} loanerResS={loanerResS} loanerCarsH={loanerCarsH} loanerCarsS={loanerCarsS} vsId={vsId} initDate={schedInitDate} onOpenEdit={openEdit} onToggleArrived={toggleArrived} onToggleParts={toggleParts} arrivedOv={arrivedOv}
           schedRestrictions={schedRestrictions}
           staffList={staffPick(vsId,staffH,staffS)}
           dayOffData={vsId==='honten'?dayOffH:dayOffS}
@@ -7901,7 +7954,7 @@ const App=()=>{
           monthlyHolidays={monthlyHolidays} onToggle={toggleDayOff}
           offNoteH={offNoteH} offNoteS={offNoteS} onSaveNote={saveOffNote}/>}
       </div>
-      {dayDetail&&<DayDetailModal {...dayDetail} onEditMemo={otherView?null:(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={otherView?null:toggleDayMemo} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} arrivedOv={arrivedOv}
+      {dayDetail&&<DayDetailModal {...dayDetail} onEditMemo={otherView?null:(dk,idx)=>setMemoEdit({dk,idx})} onToggleMemo={otherView?null:toggleDayMemo} inspData={inspData} schedDataH={schedDataH} schedDataS={schedDataS} memoDataH={memoDataH} memoDataS={memoDataS} vsId={vsId} onToggleArrived={toggleArrived} onToggleParts={toggleParts} arrivedOv={arrivedOv}
         onClose={()=>setDayDetail(null)}
         onMoveDay={(delta,unit)=>setDayDetail(p=>{ if(!p)return p;
           let nd;

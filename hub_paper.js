@@ -108,6 +108,10 @@ const madeDk = madeAt.getFullYear() + '-' + pad(madeAt.getMonth() + 1) + '-' + p
 const stamp = book.作成日時_表示 || madeAt.toLocaleString('ja-JP');
 
 const COURSES = { 1: 'マッハ', 2: 'クイック', 3: 'レギュラー' };
+// ★紙に出す部品注文の印（2026-11-05 ユーザー指示）。マッハ車検の行だけ。
+//   注文済み＝「(部)✓」／未注文＝「(部)」／ほかのコースは空。
+//   ★同じものが index_dev.html（partsTextMark）にもある。片方だけ変えないこと。
+const partsTextMark = function (r) { return (Number(r && r.course) === 1) ? ((r && r.parts) ? '(部)✓' : '(部)') : ''; };
 // ★昔の予約は保存されている字のまま出す（2026-10-31）。古い id も残しておくこと
 const WORKS = { Q: 'クイック整備・修理', 'メンパ': 'メンパ', '有点': '有料点検', '無点': '無料点検', '⑫': '12ヶ月点検', M12: 'メンパ12ヶ月', M6: 'メンパ6ヶ月', M1: 'メンパ1ヶ月', N1: '新車1ヶ月', N6: '新車6ヶ月', B: '鈑金塗装', R: 'リコール', 商: '商談', 保: '保険', 試: '試乗', 納: '納車', 他: 'その他' };
 const WORK_SUB_P = { 'メンパ': ['1', '6', '12'], '有点': ['12'], '無点': ['1', '6'] };
@@ -189,7 +193,9 @@ const dayOf = (sid, dk) => {
   //   ★整備・代車・備考・休日は今までどおり「その店のぶんだけ」。
   const inspRow = (r, other) => ({
     time: r.time || r.bookingTime || '', name: sama(r.name), carType: r.carType || '', no: plateFullP(r),
-    course: COURSES[r.course] || '', phone: r.phone || '', loaner: r.loaner || r.rentalLabel || '',
+    // ★コースの字のうしろに部品注文の印（マッハの行だけ）。列は増やさない
+    course: [COURSES[r.course] || '', partsTextMark(r)].filter(Boolean).join('　'),
+    phone: r.phone || '', loaner: r.loaner || r.rentalLabel || '',
     staff: r.staff || '', other: !!other,
     note: [r.note, r.entryDate ? '前日入庫 ' + r.entryDate : '', r.deliveryDate ? '納車 ' + r.deliveryDate + ' ' + (r.deliveryTime || '') : ''].filter(Boolean).join(' / ')
   });
@@ -456,7 +462,7 @@ function daySheet(d){
   h += '<h3 class=r>🚗 車検（入庫予定・両店舗）</h3>';
   h += tbl(d.insp, [{t:'入庫',w:52,c:1,v:function(r){return r.time||'未定';}},{t:'済',w:34,chk:1},
     {t:'氏名',v:function(r){return r.name;}},{t:'車種',v:function(r){return r.carType;}},{t:'ナンバー',w:76,c:1,v:function(r){return r.no;}},
-    {t:'コース',w:70,c:1,v:function(r){return r.course;}},{t:'電話',w:104,tel:1,v:function(r){return r.phone;}},
+    {t:'コース',w:88,c:1,v:function(r){return r.course;}},{t:'電話',w:104,tel:1,v:function(r){return r.phone;}},
     {t:'代車',w:110,v:function(r){return r.loaner;}},{t:'担当',w:58,c:1,v:function(r){return r.staff;}},{t:'備考',v:function(r){return r.note;}}],
     d.nOther ? {at:d.nMine, label:other} : null);
   h += '<h3>⏰ 整備（タイムスケジュール）</h3>';
