@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1793853003759';
+    window.__APP_BUILD='build-1793870531181';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.100.0';
+const APP_VERSION = '3.100.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2856,7 +2856,14 @@ const patchInspBooking = (base, dk, target, patch)=>{
   let rows=(data[dk]||[]).map(r=>r||blankInsp());
   const isT=_inspMatcher(target);
   let j=(target.idx!=null&&rows[target.idx]&&isT(rows[target.idx]))?target.idx:rows.findIndex(isT);
-  if(j>=0)rows[j]={...rows[j],...patch};
+  // ★対象の行が無い時は base を1文字も変えずに返す（2026-11-05・本番 10/7・10/8 の消失の直し）。
+  //   14日より前の予約は insp から保管箱（insp-arch）へ移してあり、insp にその日のキーは無い。
+  //   それでも data[dk]=[] を書くと、画面は {...inspArch,...hotInsp} の合体なので
+  //   【空の配列が保管箱の予約を覆い隠し、その日の車検がぜんぶ消えたように見える】。
+  //   しかもサーバーにも「空の日」が書かれるので、全員の画面から隠れたままになる。
+  //   ここを if(j>=0) だけで済ませないこと（印を付ける処理が空振りした時に起きる）。
+  if(j<0)return base;
+  rows[j]={...rows[j],...patch};
   data[dk]=recomputeInspApproval(rows,(target.limit!=null)?target.limit:6);
   return data;
 };
@@ -16130,9 +16137,24 @@ function AppInner() {
     return r;
   },[arrivedOv]);
 
+  // ★保管箱（insp-arch）に入っている予約には、印（入庫・部品注文・納車）を付けられない。
+  //   14日より前の予約は insp から保管箱へ移してあり、画面は合体して出しているが、
+  //   書き込みは insp にしか効かない。押しても空振りで、3回やり直して失敗メールまで飛ぶ。
+  //   さらに直す前は insp にその日の「空の配列」を書いてしまい、
+  //   保管箱の予約がぜんぶ隠れていた（本番 10/7・10/8。2026-11-05 に現場から報告）。
+  //   押す前にここで止めて、理由をそのまま伝える。
+  const inspInBox=useCallback((dk,row)=>{
+    if(!row||!row.name)return false;
+    const hot=(hotInsp&&hotInsp[dk])||[];
+    const isT=_inspMatcher({custId:row.custId,seq:(row.seq!=null)?row.seq:null,name:row.name,no:row.no});
+    return !hot.some(r=>r&&isT(r));
+  },[hotInsp]);
+  const INBOX_MSG='この予約は保管箱に入っています（車検日から14日より前の予約）。'+String.fromCharCode(10)+'印は付けられません。';
+
   const toggleInspArrived=useCallback((dk,idx)=>{
     const cur=(inspData[dk]||[])[idx];
     if(!cur||!cur.name)return;
+    if(inspInBox(dk,cur)){alert(INBOX_MSG);return;} // ★保管箱の予約は印を付けられない
     const k=arrivedKey(dk,cur,idx);
     const next=!shownArrived(k,cur); // 今の「表示」を反転する（連打しても1回ごとに切り替わる）
     markArrivedOv(k,next);           // ここで即座に色が変わる
@@ -16142,7 +16164,7 @@ function AppInner() {
       back=>{const rows=(back&&back[dk])||[];const j=rows.findIndex(_inspMatcher(_tgt));return j>=0&&!!rows[j].arrived===next;},
       {name:cur.name,verb:next?'入庫チェック':'入庫チェックの解除',dk,alert:false}
     ));
-  },[inspData,inspLimits,persistInsp,shownArrived,runAfterPaint,markArrivedOv]);
+  },[inspData,inspLimits,persistInsp,shownArrived,runAfterPaint,markArrivedOv,inspInBox]);
 
   // ★部品注文チェック（2026-11-05 ユーザー決定・A案）。マッハ車検の行だけで押せる。
   //   入庫済み（arrived）・納車済み（delivered）とまったく同じ作りの【別の印】。
@@ -16155,6 +16177,7 @@ function AppInner() {
   const toggleInspParts=useCallback((dk,idx)=>{
     const cur=(inspData[dk]||[])[idx];
     if(!cur||!cur.name)return;
+    if(inspInBox(dk,cur)){alert(INBOX_MSG);return;} // ★保管箱の予約は印を付けられない
     const k=partsKey(dk,cur,idx);
     const next=!shownParts(k,cur); // 今の「表示」を反転する（連打しても1回ごとに切り替わる）
     markArrivedOv(k,next);         // ここで即座に色が変わる
@@ -16164,7 +16187,7 @@ function AppInner() {
       back=>{const rows=(back&&back[dk])||[];const j=rows.findIndex(_inspMatcher(_tgt));return j>=0&&!!rows[j].parts===next;},
       {name:cur.name,verb:next?'部品注文チェック':'部品注文チェックの解除',dk,alert:false}
     ));
-  },[inspData,inspLimits,persistInsp,shownParts,runAfterPaint,markArrivedOv]);
+  },[inspData,inspLimits,persistInsp,shownParts,runAfterPaint,markArrivedOv,inspInBox]);
 
   // 一般予約（タイムスケジュール）側の入庫済みチェック
   const toggleSchedArrived=useCallback((dk,slotKey)=>{
@@ -16192,6 +16215,7 @@ function AppInner() {
   const toggleInspDelivered=useCallback((dk,idx)=>{
     const cur=(inspData[dk]||[])[idx];
     if(!cur||!cur.name)return;
+    if(inspInBox(dk,cur)){alert(INBOX_MSG);return;} // ★保管箱の予約は印を付けられない
     const k=deliveredKey(dk,cur,idx);
     const next=!shownDelivered(k,cur);
     markArrivedOv(k,next);
@@ -16201,7 +16225,7 @@ function AppInner() {
       back=>{const rows=(back&&back[dk])||[];const j=rows.findIndex(_inspMatcher(_tgt));return j>=0&&!!rows[j].delivered===next;},
       {name:cur.name,verb:next?'納車チェック':'納車チェックの解除',dk,alert:false}
     ));
-  },[inspData,inspLimits,persistInsp,shownDelivered,runAfterPaint,markArrivedOv]);
+  },[inspData,inspLimits,persistInsp,shownDelivered,runAfterPaint,markArrivedOv,inspInBox]);
   const toggleSchedDelivered=useCallback((dk,slotKey)=>{
     const cur=(schedData[dk]||{})[slotKey];
     if(!cur||!cur.name)return;
