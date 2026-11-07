@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1793870531181';
+  window.__APP_BUILD='build-1794015488973';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.100.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.100.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1341,6 +1341,30 @@ const fixMD=(v,baseY,baseM)=>{
   if(baseM&&baseM-mm>6)y++;         // 基準より半年以上まえ → 次の年
   return `${y}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
 };
+// ★年が入っている日付でも、ファイルの年月から半年以上ずれていたら年を直す（2026-11-07）。
+//   なぜ要るか：エクセルで「1/8」と打つと、エクセルがその時の年（2026）を勝手に付ける。
+//   202701（2027年1月）のファイルに 2026-01-08 と入ってしまい、
+//   そのまま取り込むと【1年前に車検の予約が立ち、スケジュールに出てこない】
+//   （しかも過去日なので翌朝の仕分けで保管箱へ移り、ますます見えなくなる）。
+//   実際に本番の 202701 で8件起きた（競様・松様・今様・麻様・岩様・東様・桂様・株様）。
+//   文字で「1/8」と入っていた時は fixMD が年を決めるので、ここは【年付きの日付】の受け持ち。
+//   直すのは半年より遠い分だけ＝12ヶ月ずれを 2027 に寄せる。1〜6ヶ月のずれ（前月入庫など）は触らない。
+const fixYear=(v,baseY,baseM)=>{
+  if(typeof v!=='string')return v||'';
+  const m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m||!baseM)return v;
+  const y0=Number(m[1]), mm=Number(m[2]);
+  const d=(y0*12+mm)-(Number(baseY)*12+Number(baseM));   // ファイルの年月との差（月）
+  // ★直すのは「1年（または2年）まるごとずれている」時だけ。
+  //   k＝何年ずれているか。残り（d-12k）が3ヶ月より大きければ、年の打ち間違いとは言えないので触らない。
+  //   例）202701 のファイルで 2026-01-08 → d=-12・k=-1・残り0 → 2027-01-08 に直す
+  //   例）202701 のファイルで 2026-12-20 → d=-1 → そのまま（前月入庫はふつう）
+  //   例）202701 のファイルで 2027-08-01 → d=7・k=1・残り-5 → 触らない（年のズレとは言えない）
+  const k=Math.round(d/12);
+  if(k===0)return v;
+  if(Math.abs(d-k*12)>3)return v;
+  return `${y0-k}-${m[2]}-${m[3]}`;
+};
 const parseExcelDate=v=>{
   if(v===null||v===undefined||v==='')return'';
   // Dateオブジェクトの場合
@@ -1574,7 +1598,14 @@ const parseExcelFile=async(file)=>{
         const fileName=file.name.replace(/\.[^.]+$/,'');
         const _fm=fileName.match(/(20\d{2})[^0-9]?(\d{1,2})/);   // 202610 / 2026-10 など
         const baseY=_fm?Number(_fm[1]):new Date().getFullYear(), baseM=_fm?Number(_fm[2]):0;
-        const pd=v=>fixMD(parseExcelDate(v),baseY,baseM);
+        // ★年のずれも直す（fixYear）。黙って直すと気づけないので、直した分を数えて取り込み結果に出す。
+        const yearFixes=[];
+        const pd=(v,who)=>{
+          const raw=fixMD(parseExcelDate(v),baseY,baseM);
+          const fixed=fixYear(raw,baseY,baseM);
+          if(fixed&&raw&&fixed!==raw)yearFixes.push((who||'日付')+' '+raw+' → '+fixed);
+          return fixed;
+        };
         const customers=[];
 
         for(let i=headerRow+1;i<rows.length;i++){
@@ -1582,14 +1613,14 @@ const parseExcelFile=async(file)=>{
           const name=String(row[cName]||'').trim();
           if(!name||name.includes('合計')||name.includes('件数'))continue;
 
-          const expiry =pd(row[cExpiry]);
+          const expiry =pd(row[cExpiry],'満期');
           const no     =String(row[cNo]||'').trim();
           const carType=String(row[cCar>=0?cCar:0]||'').trim();
-          const dm1Date=pd(row[cDm1D>=0?cDm1D:null]);
-          const dm1Book=pd(row[cBook1f>=0?cBook1f:null]);
-          const dm2Date=pd(row[cDm2D>=0?cDm2D:null]);
-          const dm2Book=pd(row[cBook2f>=0?cBook2f:null]);
-          const entryDate=pd(row[cEntry>=0?cEntry:null]);
+          const dm1Date=pd(row[cDm1D>=0?cDm1D:null],'投函日①');
+          const dm1Book=pd(row[cBook1f>=0?cBook1f:null],'予約①');
+          const dm2Date=pd(row[cDm2D>=0?cDm2D:null],'投函日②');
+          const dm2Book=pd(row[cBook2f>=0?cBook2f:null],'予約②');
+          const entryDate=pd(row[cEntry>=0?cEntry:null],'入庫日');
           const tokRaw =(()=>{const v=row[cTok>=0?cTok:null];return isDateLike(v)?'':String(v||'').trim();})(); // 日付が紛れていたら特典なし
           const courseRaw=(cCourse>=0?String(row[cCourse]||''):'').trim();
           const storeRaw=String(row[cStore>=0?cStore:null]||'').trim();
@@ -1664,6 +1695,7 @@ const parseExcelFile=async(file)=>{
           phoneHeader:[colName(cPhoneHome),colName(cPhoneMobile)].filter(Boolean).join('・'),
           phoneCount:customers.filter(c=>c.phoneHome||c.phoneMobile).length,
           addressHeader:colName(cAddress), addressCount:cnt('address'),
+          yearFixed:yearFixes.length, yearFixedSample:yearFixes.slice(0,8),
           dmUnsent1:customers.filter(c=>dmUnsent(c,0)).length,
           dmUnsent2:customers.filter(c=>dmUnsent(c,1)).length,
           headers:headers.filter(Boolean).join(' / '),
@@ -1904,11 +1936,29 @@ const CANCEL_BG  = '#fecaca';
 const CANCEL_OFF = {pointerEvents:'none',opacity:.5};
 
 // ── 車検カレンダーピッカー（入庫日選択用）──
-function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,overrideOpen,inspLimits,open,onClose}){
-  const [calMonth,setCalMonth]=useState(()=>{
+function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,overrideOpen,inspLimits,open,onClose,baseMonth}){
+  // ★開く月の決め方（2026-11-07）
+  //   ① 入庫日が入っていればその月
+  //   ② 入っていなければ【車検満了の月】（baseMonth）。
+  //      2027年1月のお客様なのに「今月（2026年11月）」が開くと、
+  //      そのまま押して【1年前の日】を選んでしまう。202701 の8件がこれで
+  //      2026-01-xx になり、スケジュールに出てこなくなった。
+  //   ③ 満了も分からない時だけ今月。
+  const monthOf=()=>{
     if(value){const p=value.split('-');return new Date(Number(p[0]),Number(p[1])-1,1);}
+    const m=String(baseMonth||'').match(/^(\d{4})-(\d{1,2})/);
+    if(m)return new Date(Number(m[1]),Number(m[2])-1,1);
     return new Date();
-  });
+  };
+  const [calMonth,setCalMonth]=useState(monthOf);
+  // ★この部品は閉じても消えない（if(!open)return null は下にある＝state は残る）。
+  //   そのため【開いた時にもう一度決め直す】。これをしないと、
+  //   一度開いた月をずっと覚えていて、別のお客様を開いても前の月が出る。
+  const wasOpenRef=useRef(open);
+  useEffect(()=>{
+    if(open&&!wasOpenRef.current)setCalMonth(monthOf());
+    wasOpenRef.current=open;
+  },[open]);
   if(!open)return null;
   const cy=calMonth.getFullYear(),cm=calMonth.getMonth();
   const dim=new Date(cy,cm+1,0).getDate();
@@ -1946,7 +1996,7 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
     <div style={{border:'1.5px solid #e5e7eb',borderRadius:9,overflow:'hidden',fontSize:12}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 12px',background:'#f8fafc',borderBottom:'1px solid #e5e7eb'}}>
         <button onClick={()=>setCalMonth(new Date(cy,cm-1,1))} style={{padding:'3px 10px',border:'1px solid #d1d5db',borderRadius:6,background:'white',cursor:'pointer',fontSize:13}}>&#8249;</button>
-        <span style={{fontWeight:800,color:'#1e1b4b',fontSize:13}}>{cy}年{cm+1}月</span>
+        <span data-custmon={`${cy}-${String(cm+1).padStart(2,'0')}`} style={{fontWeight:800,color:'#1e1b4b',fontSize:13}}>{cy}年{cm+1}月</span>
         <button onClick={()=>setCalMonth(new Date(cy,cm+1,1))} style={{padding:'3px 10px',border:'1px solid #d1d5db',borderRadius:6,background:'white',cursor:'pointer',fontSize:13}}>&#8250;</button>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#eef2ff',borderBottom:'1px solid #e5e7eb'}}>
@@ -1979,7 +2029,7 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
             // 台数制限を掛けた日で上限に達していたら選べない（制限を掛けていない日は従来どおり）
             const limitBlocked=!!(inspLimits&&inspLimits[getDk(d)]!=null&&cc.total>=lmt);
             return (
-              <div key={di}
+              <div key={di} data-custday={ds}
                 onClick={()=>{if(isClosed)return;if(limitBlocked){alert(`🚫 ${cm+1}/${d} は台数制限（最大${lmt}台）に達しているため、予約できません。`);return;}onChange(ds);if(onClose)onClose();}}
                 style={{minHeight:66,padding:'3px 2px',cursor:(isClosed||limitBlocked)?'not-allowed':'pointer',
                   borderTop:'1px solid #f3f4f6',borderLeft:di>0?'1px solid #f3f4f6':'none',
@@ -2167,6 +2217,22 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
       // 特典「-」は「特典なし」として有効（エラーにしない）
       if(missing.length){setErr(`本予約には ${missing.join('・')} が必要です`);return;}
     }
+    // ★入庫日が過去なら、年の打ち間違いの疑い（2026-11-07）。
+    //   エクセルの「1/8」が 2026-01-08 として入っていた8件が、そのまま1年前に予約されていた。
+    //   車検の予約が過去になることは、ふつうは無い。止めずに「このまま進める」も選べる。
+    if(form.entryDate){
+      const _t=new Date();const _td=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
+      if(form.entryDate<_td){
+        const _ex=customer.expiry?`（この方の満了日は ${customer.expiry}）`:'';
+        if(!window.confirm(`⚠ 入庫日が過去の日です。
+
+入庫日 ${form.entryDate}${_ex}
+
+年が違っていませんか？ このまま予約すると、スケジュールの過去の日に入って見えなくなります。
+
+このまま進めますか？`)){return;}
+      }
+    }
     setSaving(true);
     // モーダルは即座に閉じ、GAS保存はバックグラウンドで継続させる。
     // GAS書き込みは直列ロック(最大25秒)＋チャンク保存で長時間かかることがあり、
@@ -2296,6 +2362,7 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
                 inspLimits={inspLimits}
                 open={showCal}
                 onClose={()=>setShowCal(false)}
+                baseMonth={customer.expiry}
               />
             </div>
             <div>
@@ -3445,7 +3512,11 @@ const App=()=>{
           `    ${line('入庫日')(c.entryCount||0,c.entryHeader)}${(!c.entryCount&&c.entrySample)?`　※ 値の例「${c.entrySample}」を日付として読めません`:''}\n`+
           `    ${line('満期')(c.expiryCount||0,c.expiryHeader)}\n`+
           `    ${line('電話')(c.phoneCount||0,c.phoneHeader)}\n`+
-          `    ${line('住所')(c.addressCount||0,c.addressHeader)}`;
+          `    ${line('住所')(c.addressCount||0,c.addressHeader)}`+
+          // ★年を直した分は黙って通さない（2026-11-07）。エクセルで「1/8」と打つと
+          //   その時の年（2026）が付くので、202701 のファイルに 2026-01-08 が入っていた。
+          (c.yearFixed?`
+    ★年をファイルの年月に合わせて直しました ${c.yearFixed}件（例：${(c.yearFixedSample||[]).slice(0,3).join('　/　')}）`:'');
       }).join('\n');
       const _missing=results.filter(r=>!(r.cols&&r.cols.entryHeader));
       if(!window.confirm(
