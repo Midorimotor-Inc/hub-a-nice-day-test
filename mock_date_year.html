@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>見本：スケジュール画面の日付を西暦から出す</title>
+<style>
+ body{font-family:-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+   background:#f1f5f9;margin:0;padding:22px;color:#1b2129}
+ h1{font-size:19px;margin:0 0 4px}
+ .note{font-size:13px;color:#475569;margin:0 0 18px;line-height:1.7}
+ .card{background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);
+   padding:16px 18px;margin-bottom:16px;border-top:4px solid #2563eb}
+ .ttl{font-size:14px;font-weight:900;margin-bottom:2px}
+ .sub{font-size:12px;color:#64748b;margin-bottom:12px}
+ /* 本物と同じ作り：ナビの行 */
+ .nav{display:flex;align-items:center;justify-content:center;gap:3;padding:6px 0}
+ .nv{font-family:inherit;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:7;
+   padding:4px 8px;font-size:12px;font-weight:800;color:#334155;cursor:default}
+ .nv.s{padding:4px 7px;font-size:10px}
+ .badge{font-weight:900;font-size:15px;padding:4px 14px;min-width:130px;
+   display:inline-flex;align-items:center;justify-content:center;gap:6px;
+   user-select:none;background:#7c2d12;color:white;border:2px solid #a5b4fc;border-radius:8px;
+   box-sizing:border-box;white-space:nowrap}
+ .meas{font-size:11px;color:#64748b;margin-top:7px;text-align:center}
+ .yr{font-size:11px;font-weight:800;opacity:.85}
+ .pick{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+ .pick b{font-size:12px}
+ button.go{font-family:inherit;font-size:13px;font-weight:800;padding:7px 14px;border-radius:8px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ button.go.on{background:#1d4ed8;border-color:#1d4ed8;color:white}
+ .wide{background:#fff7ed;border:1px dashed #fdba74;border-radius:8px;padding:9px 12px;
+   font-size:12px;color:#7c2d12;margin-top:10px;line-height:1.6}
+</style>
+<h1>見本：スケジュール画面の日付を「西暦から」出す</h1>
+<p class="note">
+ いまの札は <b>11月7日（土）</b> だけで、年が出ていません。<br>
+ 下の3案を見比べて、どれにするか教えてください。<b>札が横に長くなるのは承知の上</b>とのことなので、
+ それぞれ「どれだけ長くなるか」も出してあります（前後の ‹ › ボタンの位置が少しずれるだけです）。
+</p>
+
+<div class="card">
+  <div class="ttl">いま（年が出ていない）</div>
+  <div class="sub">11月7日（土）</div>
+  <div class="nav">
+    <span class="nv s">««</span><span class="nv s">«</span><span class="nv">‹</span>
+    <span class="badge" id="b0">11月7日（土）</span>
+    <span class="nv">›</span><span class="nv s">»</span><span class="nv s">»»</span>
+  </div>
+  <div class="meas" id="m0"></div>
+</div>
+
+<div class="card" style="border-top-color:#16a34a">
+  <div class="ttl">A案　2026年11月7日（土）</div>
+  <div class="sub">いまの出し方に「2026年」を足すだけ。いちばん素直で、読み上げたとおりの形です。</div>
+  <div class="nav">
+    <span class="nv s">««</span><span class="nv s">«</span><span class="nv">‹</span>
+    <span class="badge" id="b1">2026年11月7日（土）</span>
+    <span class="nv">›</span><span class="nv s">»</span><span class="nv s">»»</span>
+  </div>
+  <div class="meas" id="m1"></div>
+</div>
+
+<div class="card" style="border-top-color:#16a34a">
+  <div class="ttl">B案　2026/11/7（土）</div>
+  <div class="sub">いちばん短い。ただし「月」「日」が消えるので、いまの見た目からは少し変わります。</div>
+  <div class="nav">
+    <span class="nv s">««</span><span class="nv s">«</span><span class="nv">‹</span>
+    <span class="badge" id="b2">2026/11/7（土）</span>
+    <span class="nv">›</span><span class="nv s">»</span><span class="nv s">»»</span>
+  </div>
+  <div class="meas" id="m2"></div>
+</div>
+
+<div class="card" style="border-top-color:#16a34a">
+  <div class="ttl">C案　年だけ小さく　2026年 11月7日（土）</div>
+  <div class="sub">年は小さめ・日付はいまと同じ大きさ。ふだん見る「11月7日（土）」の見やすさが変わりません。</div>
+  <div class="nav">
+    <span class="nv s">««</span><span class="nv s">«</span><span class="nv">‹</span>
+    <span class="badge" id="b3"><span class="yr">2026年</span>11月7日（土）</span>
+    <span class="nv">›</span><span class="nv s">»</span><span class="nv s">»»</span>
+  </div>
+  <div class="meas" id="m3"></div>
+</div>
+
+<div class="card" style="border-top-color:#94a3b8">
+  <div class="ttl">日をまたいでも確かめられます</div>
+  <div class="sub">1桁の月日・年が変わる日で、どれくらい幅が動くかを見るところ</div>
+  <div class="pick">
+    <b>日付：</b>
+    <button class="go on" data-d="2026-11-07">2026/11/7（土）</button>
+    <button class="go" data-d="2026-12-31">2026/12/31（木）</button>
+    <button class="go" data-d="2027-01-01">2027/1/1（金）</button>
+    <button class="go" data-d="2027-03-05">2027/3/5（金）</button>
+  </div>
+  <div class="wide">
+   いまの札は <b>最小の幅が130px</b> で固定してあります。西暦を足すと A案で約<span id="need"></span>px 必要になるので、
+   最小の幅もそれに合わせて広げます（<b>日によって札の幅が動かない</b>ようにするためです）。
+  </div>
+</div>
+
+<script>
+var DOW=['日','月','火','水','木','金','土'];
+function fmt(kind,dt){
+  var y=dt.getFullYear(),m=dt.getMonth()+1,d=dt.getDate(),w=DOW[dt.getDay()];
+  if(kind===0)return m+'月'+d+'日（'+w+'）';
+  if(kind===1)return y+'年'+m+'月'+d+'日（'+w+'）';
+  if(kind===2)return y+'/'+m+'/'+d+'（'+w+'）';
+  return '<span class="yr">'+y+'年</span>'+m+'月'+d+'日（'+w+'）';
+}
+function draw(ds){
+  var p=ds.split('-').map(Number), dt=new Date(p[0],p[1]-1,p[2]);
+  for(var i=0;i<4;i++){
+    var el=document.getElementById('b'+i);
+    el.innerHTML=fmt(i,dt);
+  }
+  // 実際の幅を測って出す（見た目だけで決めずに数で確かめる）
+  // フォントが届く前に測ると、どれも最小の幅（130px）になる。届いてから測り直す。
+  function measure(){
+    var w0=document.getElementById('b0').getBoundingClientRect().width;
+    for(var i=0;i<4;i++){
+      var w=document.getElementById('b'+i).getBoundingClientRect().width;
+      var dif=Math.round(w-w0);
+      document.getElementById('m'+i).textContent='札の幅 '+Math.round(w)+'px'+(i?'（いまより '+(dif>=0?'+':'')+dif+'px）':'（これが基準）');
+    }
+    document.getElementById('need').textContent=Math.ceil(document.getElementById('b1').getBoundingClientRect().width);
+  }
+  requestAnimationFrame(measure);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(measure);
+  setTimeout(measure,300);
+}
+document.querySelectorAll('button.go').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('button.go').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on'); draw(b.dataset.d);
+  };
+});
+draw('2026-11-07');
+</script>

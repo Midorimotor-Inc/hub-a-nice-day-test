@@ -1,0 +1,251 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>見本：車検の名義ちがいの「！」と、検査員のチェック</title>
+<style>
+ body{font-family:-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+   background:#f1f5f9;margin:0;padding:20px;color:#1b2129}
+ h1{font-size:19px;margin:0 0 4px}
+ .note{font-size:13px;color:#475569;margin:0 0 16px;line-height:1.75}
+ .note b{color:#1b2129}
+ .wrap{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+ .pane{background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}
+ .pane.sch{flex:1;min-width:560px;border-top:4px solid #2563eb}
+ .hd{padding:9px 14px;font-size:13px;font-weight:900;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+ table{border-collapse:collapse;width:100%}
+ th{background:#fff7ed;font-size:11px;font-weight:800;color:#7c2d12;padding:5px 7px;
+   border-bottom:2px solid #64748b;text-align:left;white-space:nowrap}
+ td{border-bottom:1px solid #64748b;border-right:1px solid #cbd5e1;padding:3px 5px;font-size:13px;vertical-align:middle}
+ tr.r{cursor:pointer}
+ tr.r:hover td{background:#eff6ff}
+ .nm{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+ .pname{font-weight:700;color:#7c2d12;white-space:nowrap}
+ /* ★びっくりマーク（鮮やかな黄色の丸＋黒い！） */
+ .bang{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+   border-radius:50%;background:#fff200;color:#000;font-weight:900;line-height:1;
+   box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:help}
+ .bang.ok{background:#22c55e;color:#000}
+ .crs{padding:1px 7px;border-radius:20px;font-size:10px;font-weight:800;color:white}
+ .staff{font-size:12px;color:#374151}
+ .cno{font-size:11px;color:#475569;font-weight:700}
+ /* 予約カード */
+ .pane.card{width:430px;border-top:4px solid #7c2d12}
+ .cbody{padding:14px 16px}
+ .LBL{font-size:11px;font-weight:800;color:#475569;margin-bottom:5px;height:22px;display:flex;align-items:center;gap:8px}
+ .INP{width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;font-family:inherit;
+   border:2px solid #cbd5e1;border-radius:8px;outline:none}
+ .INP:focus{border-color:#1d4ed8}
+ .row2{display:flex;gap:10px}
+ .row2>div{flex:1;min-width:0}
+ .same{font-size:11px;font-weight:800;color:#1d4ed8;background:#eff6ff;border:1.5px solid #bfdbfe;
+   border-radius:7px;padding:3px 10px;cursor:pointer;font-family:inherit}
+ /* ★検査員のチェックボタン（氏名の行） */
+ .chk{font-size:11px;font-weight:900;font-family:inherit;border-radius:7px;padding:3px 10px;cursor:pointer;
+   border:1.5px solid #000;background:#fff200;color:#000;white-space:nowrap}
+ .chk.done{background:#22c55e;border-color:#15803d;color:#052e16}
+ .chkoff{font-size:11px;color:#94a3b8;font-weight:700}
+ .warn{margin:10px 0 0;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.6;
+   background:#fffbeb;border:2px solid #fff200;color:#78350f}
+ .warn.done{background:#f0fdf4;border-color:#22c55e;color:#14532d}
+ .mini{font-size:11px;color:#64748b;margin-top:4px}
+ .side{width:260px}
+ .side .cbody{font-size:12px;line-height:1.8;color:#334155}
+ .side label{display:block;margin-bottom:6px;cursor:pointer}
+ .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:800;
+   background:#e2e8f0;color:#334155;margin-right:4px}
+ .foot{font-size:12px;color:#475569;margin-top:16px;line-height:1.8;
+   background:white;border-radius:10px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+ .foot b{color:#1b2129}
+</style>
+<h1>見本：車検の名義ちがいの「！」と、検査員のチェック</h1>
+<p class="note">
+ <b>車検証の使用者</b>と<b>来店した人</b>のお名前が違う車検は、スケジュールのお名前の<b>左横</b>に
+ <span class="bang" style="width:20px;height:20px;font-size:14px">！</span>（鮮やかな黄色の丸・黒い！）が付きます。<br>
+ その行を押すと予約カードが開き、<b>氏名の行にチェックボタン</b>があります。検査員が押すと
+ <span class="bang ok" style="width:20px;height:20px;font-size:14px">！</span>（緑）に変わり、確認済みの印になります。<br>
+ <b>実際に押して動きます。</b>行を押す → カードの「✓ 名義を確認」を押す → 一覧の！が緑に変わるところまで試せます。
+</p>
+<div class="wrap">
+  <div class="pane sch">
+    <div class="hd">2026年11月7日（土）　本店　車検（行を押すと予約カードが開きます）</div>
+    <table>
+      <thead><tr><th style="width:34px">No</th><th>お客様名</th><th style="width:120px">車種</th>
+        <th style="width:70px">コース</th><th style="width:74px">入庫</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <div style="padding:10px 14px;font-size:11px;color:#64748b;line-height:1.7">
+      ※ この見本の 1・3・6 行目が「使用者と来店者が違う」車検です。<br>
+      ※ 4行目は <b>車検証の使用者が未入力</b>。いまの案では<b>！を出していません</b>（違うかどうか分からないため）。
+      出した方がよければ、右の設定で切り替えて見比べられます。
+    </div>
+  </div>
+
+  <div class="pane card" id="card" style="display:none">
+    <div class="hd" id="chd">予約カード</div>
+    <div class="cbody">
+      <div class="row2">
+        <div>
+          <div class="LBL">来店者氏名 *</div>
+          <input class="INP" id="f_name">
+        </div>
+        <div>
+          <div class="LBL">
+            <span>車検証の使用者</span>
+            <button class="same" id="btnSame">同じ</button>
+            <span id="chkwrap"></span>
+          </div>
+          <input class="INP" id="f_user" placeholder="同じなら「同じ」を押す">
+        </div>
+      </div>
+      <div id="warn"></div>
+      <div style="margin-top:12px">
+        <div class="LBL" style="height:auto">車種</div>
+        <input class="INP" id="f_car">
+      </div>
+      <div style="margin-top:10px">
+        <div class="LBL" style="height:auto">担当</div>
+        <input class="INP" id="f_staff">
+      </div>
+      <div class="mini">※ 見本なので、ここで直した内容は保存されません（！とチェックの動きだけ本物と同じにしてあります）。</div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="same" style="padding:8px 14px;font-size:13px" id="btnClose">とじる</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pane side">
+    <div class="hd">見比べる所</div>
+    <div class="cbody">
+      <b>！の大きさ</b>
+      <label><input type="radio" name="sz" value="18"> 18px（小さめ）</label>
+      <label><input type="radio" name="sz" value="20" checked> 20px（この案）</label>
+      <label><input type="radio" name="sz" value="22"> 22px（大きめ）</label>
+      <div style="height:10px"></div>
+      <b>使用者が未入力のとき</b>
+      <label><input type="radio" name="emp" value="off" checked> ！を出さない（この案）</label>
+      <label><input type="radio" name="emp" value="on"> ！を出す（灰色の！）</label>
+      <div style="height:10px"></div>
+      <b>いまの印</b>
+      <div id="stat"></div>
+    </div>
+  </div>
+</div>
+<div class="foot">
+ <b>決めていただきたいこと</b><br>
+ ① ！の大きさ（18 / 20 / 22px）<br>
+ ② 車検証の使用者が<b>未入力</b>の行に！を出すか（いまの案は出さない）<br>
+ ③ チェックボタンの字は「<b>✓ 名義を確認</b>」でよいか（押したあとは「✓ 確認済み」）<br>
+ <br>
+ <b>作りの話（念のため）</b><br>
+ ・チェックの印は<b>予約そのものには書きません</b>。別の控え（ダッシュボードの「使用者の確認」と同じ <b>usrchk</b>）に
+ 「誰が・いつ」で残します。保管箱に移った過去の予約を触らずに済むので、予約を壊しません。<br>
+ ・<b>整備のカードには出しません</b>（車検証の話なので）。
+</div>
+<script>
+var ME='江川京志';
+var CRS={1:['マ','#dc2626'],2:['ク','#2563eb'],3:['レ','#16a34a']};
+var rows=[
+ {no:1,name:'田中　一郎',user:'田中　花子',car:'ハスラー',cno:'3310',course:2,time:'09:00',staff:'見取大介'},
+ {no:2,name:'佐藤　健太',user:'佐藤　健太',car:'スペーシア',cno:'1182',course:1,time:'10:00',staff:'竹林'},
+ {no:3,name:'みどり建設',user:'株式会社みどり建設',car:'ハイエース',cno:'5821',course:3,time:'11:00',staff:'魚住'},
+ {no:4,name:'山本　三郎',user:'',car:'ワゴンR',cno:'778',course:2,time:'13:00',staff:''},
+ {no:5,name:'岩本　久美',user:'岩本　久美',car:'タント',cno:'2043',course:2,time:'14:00',staff:'幸田桂紀'},
+ {no:6,name:'両澤　ちよう',user:'両澤　まさる',car:'ジムニー',cno:'4411',course:2,time:'15:30',staff:'芦田昌則'}
+];
+// ★確認の印（本物は Firestore の usrchk。{日付:{行の印:{by,at}}}）
+var chk={};
+var SZ=20, SHOW_EMPTY=false, open=-1;
+// 氏名の見比べは空白（半角・全角）を外してから（本物の dashNorm と同じ）
+function nrm(s){return String(s||'').replace(/[\s　]/g,'');}
+function kindOf(r){
+  var n=nrm(r.name), u=nrm(r.user);
+  if(!u)return 'empty';
+  return (u===n)?'same':'diff';
+}
+function stamp(o){
+  if(!o)return '';
+  var d=new Date(o.at);
+  return o.by+'　'+(d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
+function bangHtml(r,i){
+  var k=kindOf(r);
+  if(k==='same')return '';
+  if(k==='empty'&&!SHOW_EMPTY)return '';
+  var done=!!chk[i];
+  var bg=(k==='empty')?'#cbd5e1':(done?'#22c55e':'#fff200');
+  var tip=(k==='empty')?'車検証の使用者が未入力です'
+    :(done?'名義ちがい（確認済み '+stamp(chk[i])+'）':'車検証の使用者と来店者のお名前が違います（未確認）');
+  return '<span class="bang'+(done?' ok':'')+'" style="width:'+SZ+'px;height:'+SZ+'px;font-size:'+Math.round(SZ*0.7)+'px;background:'+bg+'" title="'+tip+'">！</span>';
+}
+function draw(){
+  var h='';
+  rows.forEach(function(r,i){
+    var c=CRS[r.course];
+    h+='<tr class="r" data-i="'+i+'">'
+      +'<td style="text-align:center;font-weight:700;color:#64748b">'+r.no+'</td>'
+      +'<td><div class="nm">'+bangHtml(r,i)+'<span class="pname">'+r.name+' 様</span></div>'
+      +(r.staff?'<div class="staff">'+r.staff+'</div>':'')+'</td>'
+      +'<td><div style="font-weight:700">'+r.car+'</div><div class="cno">'+r.cno+'</div></td>'
+      +'<td><span class="crs" style="background:'+c[1]+'">'+c[0]+'</span></td>'
+      +'<td style="font-weight:700">'+r.time+'</td></tr>';
+  });
+  document.getElementById('tb').innerHTML=h;
+  document.querySelectorAll('tr.r').forEach(function(tr){
+    tr.onclick=function(){openCard(Number(tr.dataset.i));};
+  });
+  var st='', any=false;
+  rows.forEach(function(r,i){
+    if(kindOf(r)==='diff'){any=true;
+      st+='<div><span class="pill" style="background:'+(chk[i]?'#22c55e':'#fff200')+'">'
+        +(chk[i]?'確認済み':'未確認')+'</span>'+r.name+'</div>';}
+  });
+  document.getElementById('stat').innerHTML=any?st:'（名義ちがいはありません）';
+  if(open>=0)openCard(open,true);
+}
+function openCard(i,keep){
+  open=i; var r=rows[i];
+  document.getElementById('card').style.display='';
+  document.getElementById('chd').textContent='11月7日（土）　'+r.name+' 様　の予約カード';
+  document.getElementById('f_name').value=r.name;
+  document.getElementById('f_user').value=r.user;
+  document.getElementById('f_car').value=r.car;
+  document.getElementById('f_staff').value=r.staff;
+  var k=kindOf(r), w=document.getElementById('warn'), cw=document.getElementById('chkwrap');
+  if(k==='diff'){
+    var done=!!chk[i];
+    cw.innerHTML='<button class="chk'+(done?' done':'')+'" id="btnChk">'+(done?'✓ 確認済み':'✓ 名義を確認')+'</button>';
+    w.className='warn'+(done?' done':'');
+    w.innerHTML=done
+      ?'<b>✓ 名義のちがいを確認しました</b>　'+stamp(chk[i])+'<br>一覧の！は緑になっています。もう一度押すと取り消せます。'
+      :'<b>！ 車検証の使用者と来店者のお名前が違います</b><br>'
+       +'車検証の使用者：<b>'+(r.user||'(未入力)')+'</b>　／　来店者：<b>'+r.name+'</b><br>'
+       +'確かめたら、上の「✓ 名義を確認」を押してください。';
+    document.getElementById('btnChk').onclick=function(){
+      if(chk[i])delete chk[i]; else chk[i]={by:ME,at:Date.now()};
+      draw();
+    };
+  }else if(k==='empty'){
+    cw.innerHTML='<span class="chkoff">（使用者を入れると出ます）</span>';
+    w.className='warn'; w.style.borderColor='#cbd5e1';
+    w.innerHTML='車検証の使用者が<b>未入力</b>です。同じなら「同じ」を押してください。';
+  }else{
+    cw.innerHTML=''; w.className=''; w.innerHTML='';
+  }
+}
+document.getElementById('btnClose').onclick=function(){open=-1;document.getElementById('card').style.display='none';};
+document.getElementById('btnSame').onclick=function(){
+  if(open<0)return; rows[open].user=rows[open].name; delete chk[open]; draw();
+};
+document.getElementById('f_user').oninput=function(){
+  if(open<0)return; rows[open].user=this.value; delete chk[open];
+  var v=this.value, p=this.selectionStart; draw();
+  var el=document.getElementById('f_user'); el.focus(); try{el.setSelectionRange(p,p);}catch(e){}
+};
+document.getElementById('f_name').oninput=function(){
+  if(open<0)return; rows[open].name=this.value; delete chk[open];
+  var p=this.selectionStart; draw();
+  var el=document.getElementById('f_name'); el.focus(); try{el.setSelectionRange(p,p);}catch(e){}
+};
+document.querySelectorAll('input[name=sz]').forEach(function(b){b.onchange=function(){SZ=Number(this.value);draw();};});
+document.querySelectorAll('input[name=emp]').forEach(function(b){b.onchange=function(){SHOW_EMPTY=(this.value==='on');draw();};});
+draw();
+</script>
