@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794025279337';
+  window.__APP_BUILD='build-1794032301938';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.102.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.103.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -2985,6 +2985,47 @@ const SYNC_FROM_DK='2026-9-22';
 const _dkNum=dk=>{const p=String(dk||'').split('-');return p.length<3?0:Number(p[0])*10000+Number(p[1])*100+Number(p[2]);};
 const inSyncRange=d=>{const dk=toDk(d);return !!dk&&_dkNum(dk)>=_dkNum(SYNC_FROM_DK);};
 
+// ═══ 同期チェックの照合（2026-11-07・本番で102件の誤検出が出たのを直した時に作った）═══
+//  ★①【保管箱も見る】14日より前の車検は insp から insp-arch へ移してある（画面は両方を合体して出す）。
+//    insp だけを見ていたので、9月〜10月の予約が全部「反映漏れ」になっていた（102件のうち94件）。
+//    毎日1日ぶんが保管箱へ移るので、放っておくと件数が毎日増えていく。
+//  ★②【手打ちの行も拾う】スケジュールに手で入れた行は氏名の書き方が違う
+//    （「白石」だけ／「藤原資材」だけ／「◯◯様」）。custId も無い。
+//    ナンバー下4桁か車種が合っている時にかぎって、氏名の部分一致も同じ人とみなす。
+//    ★氏名だけで同じ人と決めないこと（別人を「反映済み」と見なしてしまう）。
+//  ★③【別の日に予約がある人は数えない】日にちを動かした時の古い控え（custbk）の残り。
+const syncNm=s=>String(s==null?'':s).replace(/[s　]/g,'')
+  .replace(/(様|さま|サマ|御中|殿)$/,'')
+  .replace(/(株式会社|有限会社|合同会社|(株)|（株）|(有)|（有）)/g,'');
+const _SKANA='ァィゥェォャュョ',_BKANA='アイウエオヤユヨ';
+const syncCar=s=>String(s==null?'':s).replace(/[s　]/g,'')
+  .replace(/[ァィゥェォャュョ]/g,m=>_BKANA[_SKANA.indexOf(m)])
+  .replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toUpperCase();
+const syncNo=s=>String(s==null?'':s).replace(/[^0-9]/g,'');
+// その予約行とこの顧客が同じ人か
+const syncSameRow=(r,c)=>{
+  if(!r||!c)return false;
+  if(r.custId&&c.custId&&r.custId===c.custId)return true;
+  const rn=syncNm(r.name),cn=syncNm(c.name);
+  if(!rn||!cn)return false;
+  if(rn===cn)return true;
+  const short=rn.length<cn.length?rn:cn, long=rn.length<cn.length?cn:rn;
+  if(short.length<2||long.indexOf(short)<0)return false;   // 片方がもう片方を含んでいる時だけ
+  const rNo=syncNo(r.no),cNo=syncNo(c.no);
+  const rCar=syncCar(r.carType),cCar=syncCar(c.carType);
+  return !!((rNo&&rNo===cNo)||(rCar&&rCar===cCar));        // ★ナンバーか車種の裏付けが要る
+};
+// その日の生きている行（insp＋保管箱）
+const syncRowsOf=(insp,arch,dk)=>[...(((insp&&insp[dk])||[])),...(((arch&&arch[dk])||[]))]
+  .filter(r=>r&&r.bookingStatus!=='cancelled'&&r.name);
+const syncHas=(insp,arch,dk,c)=>syncRowsOf(insp,arch,dk).some(r=>syncSameRow(r,c));
+// その人が【別の日】に予約を持っていないか（持っていれば入庫日のズレ＝反映漏れではない）
+const syncOtherDay=(insp,arch,c,skipDk)=>{
+  const dks=new Set([...Object.keys(insp||{}),...Object.keys(arch||{})]);
+  for(const dk of dks){ if(dk===skipDk)continue; if(syncHas(insp,arch,dk,c))return dk; }
+  return '';
+};
+
 // ═══════════════════════════════════════════
 // メインアプリ
 // ═══════════════════════════════════════════
@@ -4295,25 +4336,27 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   const handleSyncCheck=useCallback(async()=>{
     setSyncing(true);
     try{
-      // GASから全ファイルとinspDataを直接取得（キャッシュ不使用）
-      const [latestInsp,fileIndex]=await Promise.all([
+      // サーバーから全ファイルとinspDataを直接取得（キャッシュ不使用）
+      // ★保管箱（insp-arch）も必ず一緒に読むこと（2026-11-07）。読まないと9月〜10月が全部「漏れ」になる。
+      const [latestInsp,latestArch,fileIndex]=await Promise.all([
         sGet(STOR+'insp').then(v=>v||{}),
+        sGet(STOR+'insp-arch').then(v=>v||{}).catch(()=>({})),
         sGet(STOR+'cf-index').then(v=>v||[]),
       ]);
       const allFiles=await Promise.all(fileIndex.map(fi=>loadFileChunked(fi.name).catch(()=>null)));
       const allCusts=allFiles.filter(Boolean).flatMap(f=>f.customers||[]);
       const confirmedWithDate=allCusts.filter(c=>c.status==='confirm'&&c.entryDate&&inSyncRange(c.entryDate));
-      const notInInsp=c=>{
+      // 照合は syncHas（insp＋保管箱・手打ちの行も拾う）。理由（_why）を1件ずつ付ける。
+      const missing=[];
+      confirmedWithDate.forEach(c=>{
         const dk=toDk(c.entryDate);
-        if(!dk)return false;
-        // cancelledを除いた行で照合。custId一致 or 氏名一致（再インポートでcustIdが変わった場合の対策）
-        const activeRows=(latestInsp[dk]||[]).filter(r=>r&&r.bookingStatus!=='cancelled');
-        return!activeRows.some(r=>
-          (r.custId&&r.custId===c.custId)||
-          (r.name&&r.name===c.name)
-        );
-      };
-      const missing=confirmedWithDate.filter(notInInsp);
+        if(!dk)return;
+        if(syncHas(latestInsp,latestArch,dk,c))return;
+        const other=syncOtherDay(latestInsp,latestArch,c,dk);
+        // ★別の日に予約がある＝入庫日がずれているだけ。足すと二重予約になるので自動では直さない。
+        missing.push(other?{...c,_why:'別の日（'+other.replace(/-/g,'/')+'）に予約があります',_noFix:true}
+                          :{...c,_why:'スケジュールに予約がありません'});
+      });
       // ★顧客ファイルへの保存ごと失敗した予約は、リスト側が'confirm'にならないので上のチェックには
       //   絶対に引っかからない（阪上さんのケース）。予約時の控え(pending)とカレンダー用のcustbkも
       //   突き合わせ、スケジュールに無いものを未反映として拾う。
@@ -4323,10 +4366,13 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       pendLoad().forEach(p=>{
         if(!p.dk||!p.row)return;
         if(!inSyncRange(p.cust&&p.cust.entryDate||p.dk))return;   // 見はじめより前は数えない
-        if(inspHasCust(latestInsp,p.dk,p.custId,p.name))return;
+        const _pc={custId:p.custId,name:p.name,no:p.no,carType:p.row.carType};
+        if(syncHas(latestInsp,latestArch,p.dk,_pc))return;
+        if(syncOtherDay(latestInsp,latestArch,_pc,p.dk))return;   // ★③ 別の日に予約あり＝控えの残り
         pushExtra({...(p.cust||{}),custId:p.custId,name:p.name,no:p.no,carType:p.row.carType,
           course:p.row.course,store:p.row.store,staff:p.row.staff,tokuten:p.row.tokuten,note:p.row.note,
-          bookingTime:p.row.bookingTime,entryDate:p.cust?.entryDate||p.dk,_src:'この端末の予約控え'});
+          bookingTime:p.row.bookingTime,entryDate:p.cust?.entryDate||p.dk,
+          _src:'この端末の予約控え',_why:'この端末の予約控えに残っています'});
       });
       let custbk={};
       try{custbk=(await sGet(STOR+'custbk'))||{};}catch(e){}
@@ -4334,11 +4380,13 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         if(!e||e.status!=='confirmed'||!e.dk||!e.formData)return;
         if(!inSyncRange(e.dk))return;                              // 見はじめより前は数えない
         const f=e.formData;
-        if(inspHasCust(latestInsp,e.dk,f.custId,f.name))return;
+        if(syncHas(latestInsp,latestArch,e.dk,f))return;
+        if(syncOtherDay(latestInsp,latestArch,f,e.dk))return;      // ★③ 別の日に予約あり＝控えの残り
         pushExtra({custId:f.custId,name:f.name,no:f.no,carType:f.carType,course:f.course,store:f.store,
-          staff:f.staff,tokuten:f.tokuten,note:f.note,bookingTime:f.time,entryDate:e.dk,_src:'カレンダー仮登録(custbk)'});
+          staff:f.staff,tokuten:f.tokuten,note:f.note,bookingTime:f.time,entryDate:e.dk,
+          _src:'カレンダー仮登録(custbk)',_why:'カレンダーの仮登録（custbk）に残っています'});
       });
-      setSyncDialog({missing:[...missing,...extra],total:confirmedWithDate.length+extra.length,latestInsp});
+      setSyncDialog({missing:[...missing,...extra],total:confirmedWithDate.length+extra.length,latestInsp,latestArch});
     }catch(e){alert('GASからのデータ取得に失敗しました: '+(e.message||e));}
     finally{setSyncing(false);}
   },[]);
@@ -4348,18 +4396,23 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     setSyncing(true);
     try{
       let newInspData={...(await sGet(STOR+'insp')||{})};
+      // ★保管箱も読む（2026-11-07）。保管箱にしか無い日へ insp に1件足すと、画面の合体
+      //   （{...保管箱, ...insp}）で insp 側が勝ち、その日の予約が丸ごと画面から消える。
+      const archNow=await sGet(STOR+'insp-arch').then(v=>v||{}).catch(()=>({}));
       const sizeBefore=JSON.stringify(newInspData).length;
-      let added=0;
+      let added=0,skipped=0;
+      const skipNames=[];
       const toAdd=[];
       for(const c of syncDialog.missing){
         const dk=toDk(c.entryDate);
         if(!dk)continue;
+        // ★別の日に予約がある人（入庫日のズレ）は足さない＝二重予約になる
+        if(c._noFix){skipped++;skipNames.push(c.name+'（'+(c._why||'')+'）');continue;}
+        if(archNow[dk]&&!(Array.isArray(newInspData[dk])&&newInspData[dk].length>0)){
+          skipped++;skipNames.push(c.name+'（'+dk.replace(/-/g,'/')+'＝保管箱の日なので手で入れてください）');continue;
+        }
         if(!Array.isArray(newInspData[dk]))newInspData[dk]=[];
-        const activeRows=newInspData[dk].filter(r=>r&&r.bookingStatus!=='cancelled');
-        if(activeRows.some(r=>
-          (r.custId&&r.custId===c.custId)||
-          (r.name&&r.name===c.name)
-        ))continue;
+        if(syncRowsOf(newInspData,archNow,dk).some(r=>syncSameRow(r,c)))continue;
         const courseNum=Number(c.course)||0;
         const idx=newInspData[dk].length;
         newInspData[dk]=[...newInspData[dk],{
@@ -4382,21 +4435,25 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       toAdd.forEach(({dk,idx})=>{newInspData[dk]=applyMahPendingRule(newInspData[dk],idx);});
       const sizeAfter=Math.round(JSON.stringify(newInspData).length/1024);
       const sizeBeforeKB=Math.round(sizeBefore/1024);
+      // ★足す分が無い時は1文字も書かない（全部が「自動では直さない」分だった場合）
+      if(added===0){
+        setSyncDialog(prev=>({...prev,fixed:true,addedCount:0,writeOk:true,verified:0,skipped,skipNames,
+          diagMsg:'スケジュールに足す分はありませんでした（書き込みなし）'}));
+        setSyncing(false);
+        return;
+      }
       await sSet(STOR+'insp',newInspData);
 
       // sSetはno-corsのため成否不明。3秒後に読み返して確認する
       await new Promise(r=>setTimeout(r,3000));
       const readBack=await sGet(STOR+'insp')||{};
-      const verified=toAdd.filter(({c,dk})=>{
-        const rows=(readBack[dk]||[]).filter(r=>r&&r.bookingStatus!=='cancelled');
-        return rows.some(r=>(r.custId&&r.custId===c.custId)||(r.name&&r.name===c.name));
-      }).length;
+      const verified=toAdd.filter(({c,dk})=>syncRowsOf(readBack,null,dk).some(r=>syncSameRow(r,c))).length;
       const writeOk=toAdd.length>0&&verified===toAdd.length;
 
       setInspData(writeOk?readBack:newInspData);
       if(writeOk)inspWriteRef.current=Date.now();
-      setSyncDialog(prev=>({...prev,fixed:true,addedCount:added,writeOk,verified,
-        diagMsg:`データサイズ: ${sizeBeforeKB}KB → ${sizeAfter}KB（追加${added}件・確認${verified}件）`}));
+      setSyncDialog(prev=>({...prev,fixed:true,addedCount:added,writeOk,verified,skipped,skipNames,
+        diagMsg:`データサイズ: ${sizeBeforeKB}KB → ${sizeAfter}KB（追加${added}件・確認${verified}件${skipped?'・見送り'+skipped+'件':''}）`}));
     }catch(e){alert('修復に失敗しました: '+(e.message||e));}
     finally{setSyncing(false);}
   },[syncDialog,inspLimits]);
@@ -4828,6 +4885,9 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               syncDialog.writeOk?(
                 <>
                   <div style={{fontWeight:800,fontSize:18,color:'#16a34a'}}>✅ 修復完了・GAS保存確認</div>
+                  {syncDialog.skipped>0&&(<div data-syncskip="1" style={{fontSize:12,color:'#92400e',background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'7px 10px'}}>
+                    自動では直さなかった分 {syncDialog.skipped}件：{(syncDialog.skipNames||[]).join('／')}
+                  </div>)}
                   <div style={{fontSize:14,color:'#374151'}}>{syncDialog.addedCount}件をスケジュールに追加しました。</div>
                   <div style={{fontSize:12,color:'#6b7280'}}>{syncDialog.diagMsg}</div>
                   <div style={{fontSize:12,color:'#6b7280'}}>スケジュール画面を強制リロードすると反映されます。</div>
@@ -4865,11 +4925,14 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                 <div style={{fontWeight:800,fontSize:18,color:'#dc2626'}}>⚠️ {syncDialog.missing.length}件の反映漏れを検出</div>
                 <div style={{fontSize:13,color:'#6b7280'}}>入庫日あり・本予約ステータスだが、スケジュールへの反映が確認できない顧客です。（全{syncDialog.total}件中）</div>
                 <div style={{fontSize:12,color:'#9ca3af'}}>入庫日が {SYNC_FROM_DK.replace(/-/g,'/')} 以降の分を見ています（スケジュールを使い始めた日より前は数えません）。</div>
+                <div data-syncnote="1" style={{fontSize:12,color:'#166534',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:6,padding:'7px 10px'}}>
+                  14日より前の予約（保管箱）も見ています。スケジュールに手で入れた行（氏名が短い・「様」付き）も、ナンバーか車種が合えば反映済みとして扱います。
+                </div>
                 <div style={{overflowY:'auto',flex:1,border:'1px solid #e5e7eb',borderRadius:8}}>
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
                     <thead>
                       <tr>
-                        {['氏名','No.','入庫日','コース','店舗'].map(h=>(
+                        {['氏名','No.','入庫日','コース','店舗','なぜ出ているか'].map(h=>(
                           <th key={h} style={{padding:'6px 10px',background:'#f8fafc',fontWeight:700,textAlign:'left',borderBottom:'1px solid #e5e7eb',position:'sticky',top:0}}>
                             {h}
                           </th>
@@ -4884,6 +4947,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                           <td style={{padding:'5px 10px',fontWeight:700,color:'#1d4ed8'}}>{c.entryDate}</td>
                           <td style={{padding:'5px 10px'}}>{c.course||'—'}</td>
                           <td style={{padding:'5px 10px'}}>{c.store==='sanda'?'三田店':'本店'}</td>
+                          <td data-syncwhy="1" style={{padding:'5px 10px',color:c._noFix?'#b45309':'#374151',fontWeight:c._noFix?700:400}}>{c._why||'—'}</td>
                         </tr>
                       ))}
                     </tbody>

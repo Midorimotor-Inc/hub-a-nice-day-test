@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794025279337';
+    window.__APP_BUILD='build-1794032301938';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.102.2';
+const APP_VERSION = '3.103.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -15252,6 +15252,20 @@ function AppInner() {
       );
       // entryDate・linkedInspDateもクリア、matchName/matchNoも渡してcustId不在時も対応
       if(delCustId||delName) syncCustStatus(delCustId,'cancel',{entryDate:'',linkedInspDate:''},delName,delNo);
+      // ★その日のカレンダー控え（custbk）も外す（2026-11-07）。
+      //   残っていると顧客リストの同期チェックが「custbk に残っています」として拾い続ける
+      //   （本番の伊東様がこれ。日にち変更の時は v3.29 で外していたが、削除では外していなかった）。
+      if(delCustId||delName){
+        setCustBookings(prev=>{
+          const n={...prev};let hit=false;
+          Object.keys(n).forEach(k=>{
+            const e=n[k],g=e&&e.formData;
+            if(!e||!g||String(e.dk||'')!==dk)return;
+            if((delCustId&&g.custId===delCustId)||(delName&&String(g.name||'').trim()===String(delName||'').trim())){delete n[k];hit=true;}
+          });
+          return hit?n:prev;
+        });
+      }
       return;
     }
     if(dk&&isNew){

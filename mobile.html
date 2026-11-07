@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794025279337';
+  window.__APP_BUILD='build-1794032301938';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.102.2';
+const MOBILE_VERSION='3.103.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -7731,6 +7731,37 @@ const App=()=>{
         const _n=archDropOneBooking(_a,req.dk,{custId:req.initial&&req.initial.custId,seq:deletedSeq,name:deletedName,no:req.initial&&req.initial.no});
         if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
       }catch(e){}
+      // ★★顧客リストにも「この予約は消えました」と知らせる（2026-11-07）。
+      //   PC（index）の削除は前から syncCustStatus で知らせていたが、スマホには無かった。
+      //   そのためスマホで消すと【顧客リストが本予約（青）のまま残り】、同期チェックに
+      //   「スケジュールに予約がありません」として出ていた（本番の清原様・赤石様がこれ）。
+      //   知らせ方・中身は PC とまったく同じ（status='cancel' ＋ 入庫日を空にする）。
+      const _dnm=String(deletedName||'').trim();
+      const _dno=req.initial&&req.initial.no;
+      if((req.initial&&req.initial.custId)||_dnm){
+        // 古いカレンダー控え（custbk）もその日の分だけ外す（残ると同期チェックが作り直す）
+        try{
+          await writeShared(STOR+'custbk',{},base=>{
+            const b=isPlainObj(base)?base:{};
+            const hit=k=>{const e=b[k],g=e&&e.formData;
+              if(!e||!g||String(e.dk||'')!==req.dk)return false;
+              return (!!(req.initial&&req.initial.custId)&&g.custId===req.initial.custId)
+                   ||(!!_dnm&&String(g.name||'').trim()===_dnm);};
+            const drop=Object.keys(b).filter(hit);
+            if(drop.length===0)return undefined;
+            const n={...b};drop.forEach(k=>{delete n[k];});return n;
+          },()=>{},null,true);
+        }catch(e){}
+        try{
+          const _upd={custId:(req.initial&&req.initial.custId)||'',name:_dnm,no:_dno,
+            status:'cancel',entryDate:'',linkedInspDate:'',ts:Date.now()};
+          const _cur=await sGet(STOR+'cust-updates');
+          const _arr=Array.isArray(_cur)?_cur:[];
+          await sSet(STOR+'cust-updates',[..._arr.filter(u=>!(u&&(
+            (!!_upd.custId&&u.custId===_upd.custId)||
+            (!!_dnm&&u.name===_dnm&&String(u.no)===String(_dno))))),_upd]);
+        }catch(e){}
+      }
     }else{
       const sdKey=storKey('sched',vsId);
       const sd=vsId==='honten'?schedDataH:schedDataS;
