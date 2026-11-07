@@ -75,6 +75,19 @@ const clickRowBtn = (page, name, label) => page.evaluate(([nm, lb]) => {
   if (b) { b.click(); return true; } return false;
 }, [name, label]);
 
+// ★v3.102.0：赤いカードの入口は「行の ✎ 編集 → 窓の中の 🗒 予約カードで見る」の2段になった。
+//   行の ✎ 編集 はどの行でも「帯の色を選ぶ窓」を開く（2026-11-07 ユーザー指示）。
+const openCancelCard = async (page, name) => {
+  await page.evaluate((nm) => {
+    const tr = [...document.querySelectorAll('tbody tr')].find(r => ((r.children[1] || {}).innerText || '').indexOf(nm) >= 0);
+    if (tr) { const b = tr.querySelector('[data-bandedit]'); if (b) b.click(); }
+  }, name);
+  await page.waitForTimeout(600);
+  const ok = await page.evaluate(() => { const b = document.querySelector('[data-cxedit]'); if (b) { b.click(); return true; } return false; });
+  await page.waitForTimeout(900);
+  return ok;
+};
+
 // 開いているカードの様子
 const cardInfo = (page) => page.evaluate(() => {
   const sc = document.getElementById('booking-modal-scroll');
@@ -142,14 +155,12 @@ const cardInfo = (page) => page.evaluate(() => {
   t('★「復活」はもう画面に無い', !(await page.evaluate(() => document.body.innerText)).includes('復活'));
   t('★「再予約」は残っている', !!r2 && r2.btns.some(x => x.indexOf('再予約') >= 0), r2);
   t('その行は赤帯（#fecaca）', !!r2 && r2.bg === RED, r2 && r2.bg);
-  t('印（data-cxedit）が付いている', !!r2 && r2.hasEdit, r2);
   const r1 = await rowBtns(page, '客1');
   t('ふつうの行は今までどおり「＋予約」', !!r1 && r1.btns.some(x => x.indexOf('＋予約') >= 0), r1);
-  t('ふつうの行に「編集」は出さない', !!r1 && !r1.hasEdit, r1);
+  t('★v3.102.0：ふつうの行にも「✎ 編集」が出る', !!r1 && r1.btns.some(x => x.indexOf('編集') >= 0), r1);
 
-  head('② 「✎ 編集」で開くカードは赤い背景');
-  t('ボタンを押せた', await clickRowBtn(page, '客2', '編集'));
-  await page.waitForTimeout(900);
+  head('② 「✎ 編集」→「🗒 予約カードで見る」で開くカードは赤い背景');
+  t('ボタンを押せた', await openCancelCard(page, '客2'));
   const c = await cardInfo(page);
   t('カードが開いた', !!c, c);
   t('★背景が赤帯と同じ #fecaca', !!c && c.bg === RED, c && c.bg);
@@ -196,8 +207,7 @@ const cardInfo = (page) => page.evaluate(() => {
   head('⑦ もう一度「✎ 編集」を開くと、書いたコメントが入っている');
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => (e.innerText || '').trim() === 'キャンセル'); if (b) b.click(); });
   await page.waitForTimeout(700);
-  await clickRowBtn(page, '客2', '編集');
-  await page.waitForTimeout(900);
+  await openCancelCard(page, '客2');
   const c3 = await cardInfo(page);
   t('★前に書いたコメントが出ている', !!c3 && c3.noteVal === '他店で車検を済ませたため', c3 && c3.noteVal);
 

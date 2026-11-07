@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794017628264';
+  window.__APP_BUILD='build-1794021189314';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.101.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.102.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -2768,7 +2768,108 @@ const DmConfirm=({ask,onYes,onNo})=>(
   </div>
 );
 
-const CustomerRow=memo(({customer,onBook,onEditCancel,pending,flash,dmRow,dmSel,onDmDown,onDmOver,dmCanEdit})=>{
+// ═══════════════════════════════════════════
+// ★「✎ 編集」＝帯の色（状態）を選ぶ小さな窓（2026-11-07 ユーザー指示）
+// ═══════════════════════════════════════════
+//   ねらい：2年前にマッハ車検で予約をもらっている方を、担当者がリストを見ながら
+//   青帯（本予約）に変えられるようにする。そのため「✎ 編集」を【すべての行】に付けた。
+//     ・黄（初回車検）… 帯を黄色にして【備考に「初回車検」を入れる】。窓は閉じるだけ
+//     ・緑（仮予約）／青（本予約）… 帯を変えて【予約カードが開く】（入庫日はそちらで入れる）
+//     ・赤（キャンセル）… 【赤帯にするだけ】。理由はこの窓の備考に書く
+//   ★すでに色が付いている行で色を押した時は【確認】を1枚はさむ（押し間違い対策・ユーザー指示）。
+//     まだ色が無い行（未予約）からの初回だけは確認を出さない。
+//   ★「未予約に戻す」は色の一覧に入れない（2026-11-02 の決定：一度キャンセルが点いたら未予約に戻さない）。
+//   ★この窓が書くのは【顧客リストの行だけ】。スケジュール(insp)にも代車にも一切触らない。
+const BAND_ORDER=['new_car','temp','confirm','cancel'];
+const BAND_WHAT={new_car:'備考に「初回車検」を入れます',temp:'予約カードが開きます',
+  confirm:'予約カードが開きます',cancel:'赤帯にするだけ（何も開きません）'};
+const BAND_BTN={padding:'8px 16px',borderRadius:8,fontWeight:800,fontSize:13,cursor:'pointer'};
+const BandEditModal=({customer,onApply,onSaveNote,onOpenCancelCard,onClose})=>{
+  const [note,setNote]=useState(customer.note||'');
+  const [ask,setAsk]=useState(null);                        // {to:'confirm'} … 確認を出している色
+  const cur=customer.status||'none';
+  const curDef=STATUS_DEF[cur]||STATUS_DEF.none;
+  const hasBooking=!!(customer.linkedInspDate||customer.entryDate);
+  // まだ色が無い行はそのまま。色が付いている行は確認を1枚はさむ
+  const pick=k=>{ if(cur==='none'){onApply(customer,k,note);return;} setAsk({to:k}); };
+  return(
+    <div data-bandwin="1" style={{position:'fixed',inset:0,background:'rgba(15,23,42,.45)',zIndex:1200,
+      display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{background:'white',borderRadius:14,width:'min(430px,96vw)',overflow:'hidden',
+        boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+        <div style={{padding:'11px 14px',background:'#334155',color:'white',fontWeight:900,fontSize:14}}>
+          ✎ 編集 — {customer.name} 様
+        </div>
+        <div style={{padding:14}}>
+          <p style={{margin:'0 0 10px',fontSize:12,color:'#475569'}}>
+            いまの帯：<b>{curDef.label}</b>　／　帯の色を選んでください。
+          </p>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {BAND_ORDER.map(k=>{const d=STATUS_DEF[k];return(
+              <button key={k} data-bandpick={k} onClick={()=>pick(k)}
+                style={{display:'flex',alignItems:'center',gap:10,borderRadius:9,padding:'9px 11px',
+                  border:`2px solid ${d.btnBorder}`,background:d.btnBg,color:d.btnColor,
+                  fontSize:13.5,fontWeight:900,textAlign:'left',width:'100%',cursor:'pointer',
+                  ...(cur===k?{boxShadow:'0 0 0 4px rgba(14,165,233,.35)'}:{})}}>
+                <span style={{display:'flex',flexDirection:'column',gap:1}}>
+                  <span>{d.label}{cur===k?'（いま）':''}</span>
+                  <span style={{fontSize:11,fontWeight:600,opacity:.85}}>→ {BAND_WHAT[k]}</span>
+                </span>
+              </button>);})}
+          </div>
+          <div style={{marginTop:12}}>
+            <label style={{display:'block',fontSize:11.5,fontWeight:800,color:'#334155',marginBottom:3}}>
+              備考（そのまま直せます）</label>
+            <textarea data-bandnote="1" value={note} onChange={e=>setNote(e.target.value)} rows={2}
+              placeholder="例：2年前にマッハで予約／他店で車検を済ませたため"
+              style={{width:'100%',padding:'6px 8px',border:'2px solid #cbd5e1',borderRadius:7,
+                fontSize:13,resize:'vertical',boxSizing:'border-box'}}/>
+          </div>
+          {cur==='cancel'&&(
+            <button data-cxedit="1" onClick={()=>onOpenCancelCard(customer)}
+              style={{marginTop:8,padding:'6px 10px',borderRadius:8,border:'1.5px solid #991b1b',
+                background:'#fee2e2',color:'#991b1b',fontWeight:800,fontSize:11.5,cursor:'pointer'}}>
+              🗒 予約カードで見る（赤いカード）
+            </button>)}
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'0 14px 14px'}}>
+          <button data-bandclose="1" onClick={onClose}
+            style={{...BAND_BTN,border:'1.5px solid #94a3b8',background:'white',color:'#334155',fontWeight:700}}>やめる</button>
+          <button data-bandnotesave="1" onClick={()=>onSaveNote(customer,note)}
+            style={{...BAND_BTN,border:'none',background:'#0891b2',color:'white'}}>✓ 備考だけ保存</button>
+        </div>
+      </div>
+      {/* ★押し間違いの確認（はい／キャンセル）。色を押した時の「書きかけの備考」は捨てない。 */}
+      {ask&&(
+        <div data-bandask="1" style={{position:'fixed',inset:0,background:'rgba(15,23,42,.45)',zIndex:1300,
+          display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div style={{background:'white',borderRadius:14,width:'min(380px,94vw)',overflow:'hidden',
+            boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+            <div style={{padding:'11px 14px',background:'#b45309',color:'white',fontWeight:900,fontSize:14}}>確認</div>
+            <div style={{padding:14,fontSize:13.5,lineHeight:1.8}}>
+              {ask.to===cur?<span>この行は すでに <b>{curDef.label}</b> です。</span>
+                           :<span>押し間違いではありませんか？</span>}
+              <div data-bandasktxt="1" style={{fontSize:15,fontWeight:900,margin:'6px 0'}}>
+                {ask.to===cur?`もう一度 ${curDef.label} にしますか？`
+                             :`${curDef.label} → ${(STATUS_DEF[ask.to]||{}).label} に変更しますか？`}
+              </div>
+              {ask.to==='cancel'&&hasBooking&&(
+                <div style={{fontSize:11.5,fontWeight:700,color:'#7f1d1d'}}>
+                  ※ スケジュールに入っている予約は消えません（必要ならスケジュール側で消してください）。
+                </div>)}
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'0 14px 14px'}}>
+              <button data-bandno="1" onClick={()=>setAsk(null)}
+                style={{...BAND_BTN,border:'1.5px solid #94a3b8',background:'white',color:'#334155',fontWeight:700}}>キャンセル</button>
+              <button data-bandyes="1" onClick={()=>{const k=ask.to;setAsk(null);onApply(customer,k,note);}}
+                style={{...BAND_BTN,border:'none',background:'#0891b2',color:'white'}}>はい</button>
+            </div>
+          </div>
+        </div>)}
+    </div>);
+};
+
+const CustomerRow=memo(({customer,onBook,onEditBand,pending,flash,dmRow,dmSel,onDmDown,onDmOver,dmCanEdit})=>{
   const st=STATUS_DEF[customer.status]||STATUS_DEF.none;
   const courseObj=COURSES.find(c=>c.id===Number(customer.course));
   const isCancelled=customer.status==='cancel';
@@ -2778,22 +2879,23 @@ const CustomerRow=memo(({customer,onBook,onEditCancel,pending,flash,dmRow,dmSel,
       {/* ＋予約ボタン ＋ 満期日 */}
       <td style={{padding:'7px 6px',whiteSpace:'nowrap',verticalAlign:'middle'}}>
         <div style={{display:'flex',alignItems:'center',gap:5}}>
-          {/* ★キャンセル（赤帯）の行は「✎ 編集」（2026-11-02 ユーザー指示）。
-              押すと同じ予約カードが赤い背景で開き、備考にキャンセルの理由を書ける。
-              ★「↩ 復活」（未予約に戻す）は廃止。もう一度予約を取る時は「再予約」を使う。 */}
-          <button data-cxedit={isCancelled?'1':undefined} onClick={()=>isCancelled?onEditCancel(customer):onBook(customer)}
+          {/* ★左＝「✎ 編集」（2026-11-07 ユーザー指示。すべての行に付ける）。
+              押すと帯の色（状態）を選ぶ小さな窓が開く。備考もここで直せる。
+              ★右＝状態のボタン。押すと今までどおり予約カード（未予約・初回車検＝＋予約／
+              仮予約・本予約＝その字／キャンセル＝再予約）。
+              ★ボタンの置き場所は今までどおり【一番左の列】のまま（2026-11-07 ユーザー指示）。 */}
+          <button data-bandedit="1" onClick={()=>onEditBand(customer)}
+            style={{padding:'4px 9px',borderRadius:8,border:'1.5px solid #64748b',
+              background:'white',color:'#1f2937',fontWeight:700,fontSize:11,whiteSpace:'nowrap',
+              minWidth:62,cursor:'pointer'}}>
+            ✎ 編集
+          </button>
+          <button data-bandstatus={customer.status||'none'} onClick={()=>onBook(customer)}
             style={{padding:'4px 9px',borderRadius:8,border:`1.5px solid ${st.btnBorder}`,
               background:st.btnBg,color:st.btnColor,fontWeight:700,fontSize:11,whiteSpace:'nowrap',
-              minWidth:62}}>
-            {isCancelled?'✎ 編集':customer.status==='none'?'＋予約':st.label}
+              minWidth:62,cursor:'pointer'}}>
+            {isCancelled?'再予約':(customer.status==='none'||customer.status==='new_car')?'＋予約':st.label}
           </button>
-          {isCancelled&&(
-            <button onClick={()=>onBook(customer)}
-              style={{padding:'4px 7px',borderRadius:8,border:'1.5px solid #86efac',
-                background:'#dcfce7',color:'#16a34a',fontWeight:700,fontSize:10,whiteSpace:'nowrap'}}>
-              再予約
-            </button>
-          )}
           <span style={{fontSize:11,color:'#111827',fontWeight:customer.expiry?600:400}}>
             {fmtDate(customer.expiry)}
           </span>
@@ -3148,6 +3250,40 @@ const App=()=>{
   const openCancelEdit=useCallback((customer)=>{
     setCancelEdit(true);
     setBookingModal(customer);
+  },[]);
+  // ★「✎ 編集」＝帯の色（状態）を選ぶ窓（2026-11-07 ユーザー指示）。すべての行に付けてある。
+  const [bandEdit,setBandEdit]=useState(null);
+  const openBandEdit=useCallback((customer)=>{setBandEdit(customer);},[]);
+  // 帯の色を変える。★書くのは【顧客リストの行だけ】＝スケジュール(insp)にも代車にも触らない。
+  //   黄（初回車検）は備考に「初回車検」を入れる。緑・青はこのあと予約カードが開くので、
+  //   入庫日・コース・代車はそちらで入れて保存する。
+  const applyBand=useCallback((customer,status,note)=>{
+    let n=String(note==null?'':note);
+    if(status==='new_car'&&n.indexOf('初回車検')<0)n=(n?n+'　':'')+'初回車検';
+    const updated={...customer,status,note:n};
+    setFiles(prev=>prev.map(f=>{
+      const ci=f.customers.findIndex(c=>c.custId===customer.custId);
+      if(ci<0)return f;
+      const custs=[...f.customers];
+      custs[ci]=updated;
+      saveFileChunked({...f,customers:custs});
+      return{...f,customers:custs};
+    }));
+    setBandEdit(null);
+    if(status==='temp'||status==='confirm')openBookingModal(updated);
+  },[openBookingModal]);
+  // 色は変えずに備考だけ保存する
+  const saveBandNote=useCallback((customer,note)=>{
+    const updated={...customer,note:String(note==null?'':note)};
+    setFiles(prev=>prev.map(f=>{
+      const ci=f.customers.findIndex(c=>c.custId===customer.custId);
+      if(ci<0)return f;
+      const custs=[...f.customers];
+      custs[ci]=updated;
+      saveFileChunked({...f,customers:custs});
+      return{...f,customers:custs};
+    }));
+    setBandEdit(null);
   },[]);
   const [closedDaysH,setClosedDaysH]=useState([]);
   const [closedDaysS,setClosedDaysS]=useState([3]);
@@ -4642,7 +4778,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                   {search||filterStatus!=='all'?'条件に一致する顧客がいません':'データがありません'}
                 </td></tr>
               ):filtered.map((c,i)=>(
-                <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onEditCancel={openCancelEdit}
+                <CustomerRow key={c.custId} customer={c} onBook={openBookingModal} onEditBand={openBandEdit}
                   pending={pendingSync[c.custId]||pendingSync[`${c.name}__${c.no}`]||null}
                   flash={!!(recentApplied[c.custId]||recentApplied[`${c.name}__${c.no}`])}
                   dmRow={i} dmSel={dmSelOf(i)} onDmDown={handleDmDown} onDmOver={handleDmOver} dmCanEdit={dmCanEdit}/>
@@ -4740,6 +4876,17 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
             )}
           </div>
         </div>
+      )}
+
+      {/* ── 「✎ 編集」＝帯の色を選ぶ窓（2026-11-07） ── */}
+      {bandEdit&&(
+        <BandEditModal
+          customer={bandEdit}
+          onApply={applyBand}
+          onSaveNote={saveBandNote}
+          onOpenCancelCard={(c)=>{setBandEdit(null);openCancelEdit(c);}}
+          onClose={()=>setBandEdit(null)}
+        />
       )}
 
       {/* ── 予約モーダル ── */}
