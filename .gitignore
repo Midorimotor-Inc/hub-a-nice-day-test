@@ -24,3 +24,14 @@ shots/
 
 # 下調べの道具（その場かぎり）
 scratchpad/
+
+# ★説明書を作るための画面写真（2026-11-07）。
+#   PPTX を組み立てる時に手元で使うだけで、サイトとして開く必要がない。
+#   161枚・約50MB あり、GitHub Pages の配信が遅くなって deploy が時間切れで失敗していた。
+#   消えても `node capture_manualN_shots.js` でいつでも撮り直せる。
+#   ★manual4_web（週間カレンダー編のURL版）と help_shaken_*.jpg は配信に要るので外さないこと。
+guide_shots/
+manual_shots/
+manual2_shots/
+manual3_shots/
+manual4_shots/
