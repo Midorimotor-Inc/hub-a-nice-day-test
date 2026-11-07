@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794024963420';
+  window.__APP_BUILD='build-1794025279337';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.102.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.102.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -2781,6 +2781,12 @@ const DmConfirm=({ask,onYes,onNo})=>(
 //   ★「未予約に戻す」は色の一覧に入れない（2026-11-02 の決定：一度キャンセルが点いたら未予約に戻さない）。
 //   ★この窓が書くのは【顧客リストの行だけ】。スケジュール(insp)にも代車にも一切触らない。
 const BAND_ORDER=['new_car','temp','confirm','cancel'];
+// ★同じ色をもう一度押した時に「何もない状態（未予約）に戻せる」色（2026-11-07 ユーザー決定）。
+//   ・黄（初回車検）… 間違えて押した時に戻したい、というのが元の要望
+//   ・赤（キャンセル）… 同上
+//   ★仮予約・本予約は入れない。スケジュールに予約が入っているので、やめる時は
+//     未予約に戻すのではなく【キャンセル】にする（ユーザー判断・2026-11-07）。
+const BAND_REVERT=['new_car','cancel'];
 const BAND_WHAT={new_car:'備考に「初回車検」を入れます',temp:'予約カードが開きます',
   confirm:'予約カードが開きます',cancel:'赤帯にするだけ（何も開きません）'};
 const BAND_BTN={padding:'8px 16px',borderRadius:8,fontWeight:800,fontSize:13,cursor:'pointer'};
@@ -2801,7 +2807,7 @@ const BandEditModal=({customer,onApply,onSaveNote,onOpenCancelCard,onClose})=>{
   //     ただし戻せるのは【この窓で同じ色をもう一度押した時】だけ。一覧に「復活」ボタンは戻していない。
   const pick=k=>{
     if(cur==='none'){onApply(customer,k,note);return;}
-    setAsk({to:k,revert:(cur===k)});
+    setAsk({to:k,revert:(cur===k&&BAND_REVERT.indexOf(k)>=0)});
   };
   return(
     <div data-bandwin="1" style={{position:'fixed',inset:0,background:'rgba(15,23,42,.45)',zIndex:1200,
@@ -2825,7 +2831,8 @@ const BandEditModal=({customer,onApply,onSaveNote,onOpenCancelCard,onClose})=>{
                 <span style={{display:'flex',flexDirection:'column',gap:1}}>
                   <span>{d.label}{cur===k?'（いま）':''}</span>
                   <span style={{fontSize:11,fontWeight:600,opacity:.85}}>
-                    → {cur===k?'もう一度押すと、何もない状態に戻せます':BAND_WHAT[k]}</span>
+                    → {(cur===k&&BAND_REVERT.indexOf(k)>=0)?'もう一度押すと、何もない状態に戻せます'
+                        :BAND_WHAT[k]}</span>
                 </span>
               </button>);})}
           </div>
@@ -2859,11 +2866,12 @@ const BandEditModal=({customer,onApply,onSaveNote,onOpenCancelCard,onClose})=>{
             boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
             <div style={{padding:'11px 14px',background:'#b45309',color:'white',fontWeight:900,fontSize:14}}>確認</div>
             <div style={{padding:14,fontSize:13.5,lineHeight:1.8}}>
-              {ask.revert?<span>この行は すでに <b>{curDef.label}</b> です。</span>
-                         :<span>押し間違いではありませんか？</span>}
+              {(ask.revert||ask.to===cur)?<span>この行は すでに <b>{curDef.label}</b> です。</span>
+                                        :<span>押し間違いではありませんか？</span>}
               <div data-bandasktxt="1" style={{fontSize:15,fontWeight:900,margin:'6px 0'}}>
                 {ask.revert?`${curDef.label} を取り消して、何もない状態（未予約）に戻しますか？`
-                           :`${curDef.label} → ${(STATUS_DEF[ask.to]||{}).label} に変更しますか？`}
+                 :ask.to===cur?`もう一度 ${curDef.label} にしますか？`
+                              :`${curDef.label} → ${(STATUS_DEF[ask.to]||{}).label} に変更しますか？`}
               </div>
               {ask.revert&&cur==='new_car'&&(
                 <div data-bandrevert="1" style={{fontSize:11.5,fontWeight:700,color:'#78350f'}}>

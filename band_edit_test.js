@@ -280,17 +280,23 @@ const openState = page => page.evaluate(() => ({
   t('窓も閉じた', !(await openState(page)).win);
   t('★予約カードは開かない', !(await openState(page)).card);
 
-  // 青（本予約）… 手で書いた備考は消さない
+  // ★青（本予約）・緑（仮予約）は【戻せない】（2026-11-07 ユーザー決定）。
+  //   スケジュールに予約が入っているので、やめる時は未予約ではなく【キャンセル】にする。
   await clickEdit(page, '客5');
+  const hintC = await page.evaluate(() => (document.querySelector('[data-bandpick="confirm"]') || {}).innerText || '');
+  t('★青のボタンに「元に戻せます」とは出さない', hintC.indexOf('戻せます') < 0, hintC);
   await pickColor(page, 'confirm');
   o = await openState(page);
-  t('★青でも「本予約 を取り消して…」と出る', o.askTxt.indexOf('本予約') >= 0 && o.askTxt.indexOf('取り消して') >= 0, o.askTxt);
+  t('★青は「取り消して…未予約に戻す」を出さない', o.askTxt.indexOf('取り消して') < 0, o.askTxt);
+  t('★「もう一度 本予約 にしますか？」と出る（元の動き）', o.askTxt.indexOf('もう一度') >= 0, o.askTxt);
+  t('★「はい」のボタンは「元に戻す」ではない',
+    (await page.evaluate(() => (document.querySelector('[data-bandyes]') || {}).innerText || '')).indexOf('元に戻す') < 0);
   await page.evaluate(() => { const b = document.querySelector('[data-bandyes]'); if (b) b.click(); });
   await page.waitForTimeout(1100);
   sv = await saved(page, '客5');
-  t('★帯が未予約に戻った', !!sv && sv.status === 'none', sv);
-  t('★手で書いた備考は残っている', !!sv && sv.note === '2年前にマッハで予約', sv);
-  t('★予約カードは開かない', !(await openState(page)).card);
+  t('★帯は本予約のまま（未予約に戻らない）', !!sv && sv.status === 'confirm', sv);
+  t('手で書いた備考はそのまま', !!sv && sv.note === '2年前にマッハで予約', sv);
+  t('予約カードが開く（今までどおり）', (await openState(page)).card);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
