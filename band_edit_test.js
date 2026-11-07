@@ -224,14 +224,18 @@ const openState = page => page.evaluate(() => ({
   t('一覧の行も赤になった', (await rowInfo(page, '客2')).cls.indexOf('row-cancel') >= 0);
   t('右のボタンが「再予約」に変わった', (await rowInfo(page, '客2')).stLabel.indexOf('再予約') >= 0);
 
-  head('⑦ 同じ色をもう一度押した時');
+  head('⑦ 同じ色をもう一度押すと「元に戻しますか？」');
   await clickEdit(page, '客3');
   await pickColor(page, 'cancel');
   o = await openState(page);
   t('★確認が出る', o.ask, o);
-  t('★文面が「もう一度 キャンセル にしますか？」', o.askTxt.indexOf('もう一度') >= 0, o.askTxt);
+  t('★文面が「キャンセル を取り消して…未予約に戻しますか？」',
+    o.askTxt.indexOf('取り消して') >= 0 && o.askTxt.indexOf('未予約') >= 0, o.askTxt);
+  t('★「はい、元に戻す」のボタンが出る',
+    (await page.evaluate(() => (document.querySelector('[data-bandyes]') || {}).innerText || '')).indexOf('元に戻す') >= 0);
   await page.evaluate(() => { const b = document.querySelector('[data-bandno]'); if (b) b.click(); });
   await page.waitForTimeout(400);
+  t('★キャンセルを押せば帯はそのまま', (await saved(page, '客3')).status === 'cancel');
 
   head('⑧ 備考だけ保存／赤い行は予約カードも開ける');
   t('★赤い行の窓に「予約カードで見る」が出る', await page.evaluate(() => !!document.querySelector('[data-cxedit]')));
@@ -253,6 +257,40 @@ const openState = page => page.evaluate(() => ({
   t('★予約カードが開いた', o.card, o);
   sv = await saved(page, '客4');
   t('★帯が仮予約になった', !!sv && sv.status === 'temp', sv);
+
+  await closeCard(page);
+
+  head('⑩ 元に戻す（何もない状態へ）');
+  // 黄（初回車検）… 備考に入れた「初回車検」も外れる
+  await clickEdit(page, '客1');
+  const hint = await page.evaluate(() => (document.querySelector('[data-bandpick="new_car"]') || {}).innerText || '(無い)');
+  t('★黄のボタンに「もう一度押すと、何もない状態に戻せます」と出る', hint.indexOf('もう一度押すと、何もない状態に戻せます') >= 0, hint);
+  await pickColor(page, 'new_car');
+  o = await openState(page);
+  t('★確認が出る', o.ask, o);
+  t('★「初回車検 を取り消して…」と出る', o.askTxt.indexOf('初回車検') >= 0 && o.askTxt.indexOf('取り消して') >= 0, o.askTxt);
+  t('★「備考の初回車検も外す」と断っている', await page.evaluate(() => !!document.querySelector('[data-bandrevert]')));
+  await page.evaluate(() => { const b = document.querySelector('[data-bandyes]'); if (b) b.click(); });
+  await page.waitForTimeout(1100);
+  sv = await saved(page, '客1');
+  t('★帯が何もない状態（未予約）に戻った', !!sv && sv.status === 'none', sv);
+  t('★備考の「初回車検」も外れた', !!sv && sv.note === '', sv);
+  t('一覧の行も白に戻った', (await rowInfo(page, '客1')).cls.indexOf('row-none') >= 0);
+  t('右のボタンが「＋予約」に戻った', (await rowInfo(page, '客1')).stLabel.indexOf('＋予約') >= 0);
+  t('窓も閉じた', !(await openState(page)).win);
+  t('★予約カードは開かない', !(await openState(page)).card);
+
+  // 青（本予約）… 手で書いた備考は消さない
+  await clickEdit(page, '客5');
+  await pickColor(page, 'confirm');
+  o = await openState(page);
+  t('★青でも「本予約 を取り消して…」と出る', o.askTxt.indexOf('本予約') >= 0 && o.askTxt.indexOf('取り消して') >= 0, o.askTxt);
+  await page.evaluate(() => { const b = document.querySelector('[data-bandyes]'); if (b) b.click(); });
+  await page.waitForTimeout(1100);
+  sv = await saved(page, '客5');
+  t('★帯が未予約に戻った', !!sv && sv.status === 'none', sv);
+  t('★手で書いた備考は残っている', !!sv && sv.note === '2年前にマッハで予約', sv);
+  t('★予約カードは開かない', !(await openState(page)).card);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
