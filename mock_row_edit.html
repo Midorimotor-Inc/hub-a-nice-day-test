@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>顧客リスト：すべての行に「✎ 編集」ボタン（モック）</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px 20px 90px;background:#f1f5f9;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#1b2735}
+ h1{font-size:19px;margin:0 0 6px}
+ .lead{font-size:13px;color:#475569;line-height:1.75;margin:0 0 14px}
+ .nav{position:sticky;top:0;z-index:50;background:#f1f5f9;padding:8px 0 10px;margin-bottom:6px;border-bottom:1px solid #cbd5e1}
+ .nav b{font-size:12px;color:#334155;margin-right:8px}
+ .nav button{font-family:inherit;font-size:13px;font-weight:800;padding:7px 14px;margin-right:6px;border-radius:9px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .nav button.on{background:#E8492E;border-color:#E8492E;color:white}
+ .card{background:white;border:1px solid #cbd5e1;border-radius:12px;padding:14px 16px 18px;margin-bottom:18px;
+   box-shadow:0 2px 8px rgba(0,0,0,.06)}
+ .card h2{font-size:16px;margin:0 0 4px}
+ .card .note{font-size:12px;color:#64748b;line-height:1.75;margin:0 0 12px}
+ .warn{color:#b91c1c;font-weight:800}
+ .ok{color:#047857;font-weight:800}
+ .wrap{overflow:auto}
+
+ /* ── 顧客リストの表（本物と同じ色づかい） ── */
+ table{border-collapse:collapse;width:100%;min-width:860px;font-size:12px}
+ th{background:#1e293b;color:white;font-size:11px;font-weight:700;padding:7px 8px;text-align:left;white-space:nowrap}
+ td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+ tr.none    {background:#ffffff}
+ tr.temp    {background:#bbf7d0}
+ tr.confirm {background:#bfdbfe}
+ tr.cancel  {background:#fecaca}
+ tr.new_car {background:#fef3c7}
+ .btn{font-family:inherit;padding:4px 9px;border-radius:8px;font-weight:700;font-size:11;white-space:nowrap;cursor:pointer;
+   min-width:62px;font-size:11px}
+ .bEdit{border:1.5px solid #94a3b8;background:#f8fafc;color:#334155;min-width:54px}
+ .bNone   {border:1.5px solid #94a3b8;background:#e2e8f0;color:#334155}
+ .bTemp   {border:1.5px solid #16a34a;background:#86efac;color:#14532d}
+ .bConfirm{border:1.5px solid #1d4ed8;background:#93c5fd;color:#1e3a8a}
+ .bCancel {border:1.5px solid #16a34a;background:#dcfce7;color:#16a34a}
+ .bNew    {border:1.5px solid #d97706;background:#fde68a;color:#78350f}
+ .exp{font-size:11px;color:#111827;font-weight:600;margin-left:4px}
+ .tag2y{display:inline-block;background:#0891b2;color:white;font-size:9.5px;font-weight:900;border-radius:5px;padding:1px 5px;margin-left:5px;vertical-align:1px}
+ .muted{color:#64748b}
+
+ /* ── 出てくる窓 ── */
+ .mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+ .mask.on{display:flex}
+ .win{background:white;border-radius:14px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}
+ .win.big{max-width:720px}
+ .whdr{padding:12px 16px;color:white;font-weight:900;font-size:15px;display:flex;align-items:center;gap:8px}
+ .wbody{padding:14px 16px;font-size:13px;line-height:1.8}
+ .wfoot{padding:11px 16px;background:#fafafa;border-top:1px solid #f1f5f9;display:flex;gap:8px;justify-content:flex-end}
+ .wfoot button,.wbody button{font-family:inherit;font-size:13px;font-weight:700;padding:8px 16px;border-radius:9px;cursor:pointer}
+ .gray{border:1.5px solid #e5e7eb;background:white;color:#374151}
+ .blue{border:none;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:white}
+ .pick{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 14px}
+ .pick button{font-family:inherit;font-size:12.5px;font-weight:800;padding:9px 13px;border-radius:9px;cursor:pointer;border:2px solid transparent}
+ .pick button.sel{outline:3px solid #0f172a;outline-offset:1px}
+ label.lb{display:block;font-size:11.5px;font-weight:800;color:#374151;margin:10px 0 4px}
+ textarea{width:100%;font-family:inherit;font-size:13px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;resize:vertical}
+ .hint{font-size:11.5px;color:#64748b;line-height:1.7;margin-top:8px}
+ .log{position:fixed;left:0;right:0;bottom:0;background:#0f172a;color:#e2e8f0;font-size:12px;padding:8px 14px;z-index:60;
+   font-family:"Meiryo",monospace;min-height:34px}
+</style></head><body>
+
+<h1>顧客リスト：すべての行に「✎ 編集」ボタン（モック）</h1>
+<p class="lead">
+  いまは<b>キャンセル（赤帯）の行だけ</b>「✎ 編集」が出ます。これを<b>すべての行</b>に付けます。<br>
+  並びは <b>左＝✎ 編集 ／ 右＝状態のボタン（文字が変わる）</b>。右のボタンは 未予約＝「＋予約」・仮予約＝「仮予約」・本予約＝「本予約」・キャンセル＝「再予約」。<br>
+  <b>決めていただきたいのは「✎ 編集」を押したら何が出るか</b>です。下の A／B／C を切り替えて、実際に押して見てください。<br>
+  <span class="muted">※ 想定している使い方：2年前にマッハ車検の予約をもらっている方を、担当者がリストで確認して<b>青い帯（本予約）に変える</b>。</span>
+</p>
+
+<div class="nav">
+  <b>「✎ 編集」を押したら…</b>
+  <button id="nA" onclick="setPlan('A')">A案：予約カードが開く</button>
+  <button id="nB" class="on" onclick="setPlan('B')">B案：帯の色と備考だけの小さな窓</button>
+  <button id="nC" onclick="setPlan('C')">C案：キャンセルだけ今までどおり</button>
+</div>
+
+<div class="card">
+  <h2 id="planTitle">B案：帯の色と備考だけの小さな窓</h2>
+  <p class="note" id="planNote"></p>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th style="width:190px">予約 / 満期日</th><th>氏名</th><th>車種</th><th>入庫日</th><th>コース</th><th>備考</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="hint">
+    ・右のボタンは今までの「＋予約」と同じはたらき（予約カードが開く）です。文字だけが状態で変わります。<br>
+    ・左の「✎ 編集」は全行に出ます。<b>キャンセルの行の「再予約」は右のボタンに移る</b>ので、ボタンは2つのままです。
+  </p>
+</div>
+
+<div class="card">
+  <h2>いまの作り（くらべる用）</h2>
+  <p class="note">キャンセルの行だけボタンが2つ、ほかの行は1つ。「✎ 編集」は赤い行にしかありません。</p>
+  <div class="wrap">
+    <table>
+      <thead><tr><th style="width:190px">予約 / 満期日</th><th>氏名</th><th>車種</th><th>入庫日</th><th>コース</th><th>備考</th></tr></thead>
+      <tbody id="rowsOld"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mask" id="mask" onclick="if(event.target===this)closeWin()">
+  <div class="win" id="win"></div>
+</div>
+<div class="log" id="log">ここに「何が起きたか」が出ます。ボタンを押してみてください。</div>
+
+<script>
+var PLAN='B';
+var NOTE={
+ A:'「✎ 編集」を押すと<b>ふつうの予約カード</b>がそのまま開きます（右のボタンと同じもの）。'+
+   '帯の色は、カードの下の「仮予約／本予約」を押した時に変わります。<br>'+
+   '<span class="warn">気になる点：</span>右のボタンと同じものが開くので、ボタンが2つある意味が薄くなります。'+
+   'また本予約にするには 入庫日・コース・入庫時間・特典 がそろっていないと保存できません。',
+ B:'「✎ 編集」を押すと<b>小さな窓</b>が出て、<b>帯の色（状態）と備考だけ</b>を変えられます。予約の中身（入庫日・時間・コース・代車）は触りません。<br>'+
+   '<span class="ok">良い点：</span>2年前にもらった予約を「本予約（青）」に変えるのが<b>ひと押し＋保存</b>で済みます。'+
+   '入庫日などがそろっていなくても色を変えられます。<br>'+
+   '<span class="warn">気になる点：</span>スケジュールの予約そのものは変わりません（リストの帯の色だけ）。',
+ C:'いまのまま＝<b>キャンセルの行だけ</b>赤い制限つきカード（備考だけ書ける）、<b>ほかの行は ふつうの予約カード</b>が開きます。<br>'+
+   '<span class="warn">気になる点：</span>行によって出るものが違うので、押す前に何が出るか分かりません。'
+};
+var DATA=[
+ {id:1,name:'見本 一郎',car:'ワゴンＲ',exp:'01/22',st:'none',   entry:'',      course:'',        note:'',            adv:false},
+ {id:2,name:'見本 二郎',car:'アルト',  exp:'01/24',st:'temp',   entry:'01/16', course:'マッハ',  note:'電話で仮',     adv:false},
+ {id:3,name:'見本 三郎',car:'ハスラー',exp:'01/26',st:'confirm',entry:'01/20', course:'クイック',note:'',            adv:false},
+ {id:4,name:'見本 四郎',car:'スイフト',exp:'01/28',st:'cancel', entry:'',      course:'',        note:'車乗り換え',   adv:false},
+ {id:5,name:'見本 五郎',car:'スペーシア',exp:'01/30',st:'new_car',entry:'',    course:'',        note:'初回車検',     adv:false},
+ {id:6,name:'見本 六郎',car:'エブリィ',exp:'01/31',st:'none',   entry:'01/28', course:'マッハ',  note:'2年前に予約済み',adv:true}
+];
+var BTN={none:['＋予約','bNone'],temp:['仮予約','bTemp'],confirm:['本予約','bConfirm'],cancel:['再予約','bCancel'],new_car:['＋予約','bNew']};
+var STNAME={none:'未予約',temp:'仮予約',confirm:'本予約',cancel:'キャンセル',new_car:'初回車検'};
+var STCOL={none:'#e2e8f0|#334155|#94a3b8',temp:'#86efac|#14532d|#16a34a',confirm:'#93c5fd|#1e3a8a|#1d4ed8',
+           cancel:'#fca5a5|#7f1d1d|#dc2626',new_car:'#fde68a|#78350f|#d97706'};
+
+function log(s){document.getElementById('log').innerHTML=s;}
+function esc(s){return String(s).replace(/</g,'&lt;');}
+
+function draw(){
+  var h='';
+  DATA.forEach(function(r){
+    var b=BTN[r.st];
+    h+='<tr class="'+r.st+'">'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn bEdit" onclick="onEdit('+r.id+')">✎ 編集</button> '+
+        '<button class="btn '+b[1]+'" onclick="onBook('+r.id+')">'+b[0]+'</button>'+
+        '<span class="exp">'+r.exp+'</span>'+
+      '</td>'+
+      '<td style="font-weight:700">'+r.name+(r.adv?'<span class="tag2y">🗓 2年前</span>':'')+'</td>'+
+      '<td>'+r.car+'</td><td>'+(r.entry||'<span class="muted">-</span>')+'</td>'+
+      '<td>'+(r.course||'<span class="muted">-</span>')+'</td>'+
+      '<td>'+esc(r.note)+'</td></tr>';
+  });
+  document.getElementById('rows').innerHTML=h;
+
+  var o='';
+  DATA.forEach(function(r){
+    var b=BTN[r.st];
+    var lbl=(r.st==='cancel')?'✎ 編集':(r.st==='none'?'＋予約':STNAME[r.st]);
+    var c=STCOL[r.st].split('|');
+    o+='<tr class="'+r.st+'">'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn" style="border:1.5px solid '+c[2]+';background:'+c[0]+';color:'+c[1]+'">'+lbl+'</button> '+
+        (r.st==='cancel'?'<button class="btn bCancel" style="min-width:0">再予約</button> ':'')+
+        '<span class="exp">'+r.exp+'</span>'+
+      '</td>'+
+      '<td style="font-weight:700">'+r.name+(r.adv?'<span class="tag2y">🗓 2年前</span>':'')+'</td>'+
+      '<td>'+r.car+'</td><td>'+(r.entry||'<span class="muted">-</span>')+'</td>'+
+      '<td>'+(r.course||'<span class="muted">-</span>')+'</td>'+
+      '<td>'+esc(r.note)+'</td></tr>';
+  });
+  document.getElementById('rowsOld').innerHTML=o;
+}
+
+function setPlan(p){
+  PLAN=p;
+  ['A','B','C'].forEach(function(x){document.getElementById('n'+x).className=(x===p?'on':'');});
+  document.getElementById('planTitle').textContent=
+    p==='A'?'A案：予約カードが開く':p==='B'?'B案：帯の色と備考だけの小さな窓':'C案：キャンセルだけ今までどおり';
+  document.getElementById('planNote').innerHTML=NOTE[p];
+  log('『'+p+'案』にしました。行の「✎ 編集」を押してみてください。');
+}
+
+function row(id){for(var i=0;i<DATA.length;i++)if(DATA[i].id===id)return DATA[i];}
+function closeWin(){document.getElementById('mask').className='mask';}
+function openWin(html,big){
+  document.getElementById('win').innerHTML=html;
+  document.getElementById('win').className='win'+(big?' big':'');
+  document.getElementById('mask').className='mask on';
+}
+
+function onBook(id){
+  var r=row(id);
+  cardWin(r,false);
+  log('右のボタン（'+BTN[r.st][0]+'）＝ いままでと同じ<b>予約カード</b>が開きます。');
+}
+
+function onEdit(id){
+  var r=row(id);
+  if(PLAN==='B'){ bandWin(r); log('<b>B案</b>：帯の色と備考だけの小さな窓。'); return; }
+  if(PLAN==='C'&&r.st==='cancel'){ cardWin(r,true); log('<b>C案</b>：キャンセルの行なので、赤い制限つきカード（備考だけ）。'); return; }
+  cardWin(r,false);
+  log('<b>'+PLAN+'案</b>：ふつうの予約カードが開きます。');
+}
+
+/* ふつうの／赤い予約カード（中身は雰囲気だけ） */
+function cardWin(r,cancelMode){
+  var hdr=cancelMode?'linear-gradient(135deg,#7f1d1d,#dc2626)':'linear-gradient(135deg,#1e1b4b,#1d4ed8)';
+  var bg=cancelMode?'background:#fecaca;':'';
+  openWin(
+   '<div class="whdr" style="background:'+hdr+'">'+r.name+' 様　<span style="font-weight:400;font-size:12px">🚗 '+r.car+'　満期 '+r.exp+'</span></div>'+
+   '<div class="wbody" style="'+bg+'">'+
+     (cancelMode?'<div style="background:#991b1b;color:white;font-weight:900;padding:7px 10px;border-radius:8px;margin-bottom:10px">この予約はキャンセルです（備考だけ書けます）</div>':'')+
+     '<div style="'+(cancelMode?'opacity:.5;':'')+'">'+
+       '<b>入庫日</b>　'+(r.entry||'（未設定）')+'　／　<b>コース</b> '+(r.course||'（未設定）')+'<br>'+
+       '<b>入庫時間</b>　（未設定）　／　<b>特典</b> －<br>'+
+       '<b>店舗</b>　本店　／　<b>担当</b>（未設定）'+
+     '</div>'+
+     '<label class="lb">備考</label><textarea rows="3">'+esc(r.note)+'</textarea>'+
+     '<div class="hint">※ モックなので中身は雰囲気だけです。</div>'+
+   '</div>'+
+   '<div class="wfoot">'+
+     '<button class="gray" onclick="closeWin()">閉じる</button>'+
+     (cancelMode?'<button class="blue" style="background:linear-gradient(135deg,#7f1d1d,#dc2626)" onclick="closeWin()">✓ コメントを保存（キャンセルのまま）</button>'
+       :'<button class="gray" style="border-color:#86efac;color:#16a34a" onclick="closeWin()">仮予約</button><button class="blue" onclick="closeWin()">✓ 本予約</button>'),
+  true);
+}
+
+/* B案：帯の色と備考だけ */
+var pickSt='';
+function bandWin(r){
+  pickSt=r.st;
+  var btns='';
+  ['none','temp','confirm','cancel','new_car'].forEach(function(k){
+    var c=STCOL[k].split('|');
+    btns+='<button data-st="'+k+'" class="'+(k===r.st?'sel':'')+'" style="background:'+c[0]+';color:'+c[1]+';border-color:'+c[2]+'" '+
+      'onclick="pickBand(this,\''+k+'\')">'+STNAME[k]+'</button>';
+  });
+  openWin(
+   '<div class="whdr" style="background:linear-gradient(135deg,#334155,#0f172a)">✎ '+r.name+' 様　の帯を変える</div>'+
+   '<div class="wbody">'+
+     '<label class="lb">帯の色（リストでの状態）</label>'+
+     '<div class="pick">'+btns+'</div>'+
+     '<label class="lb">備考</label><textarea rows="3" id="bnote">'+esc(r.note)+'</textarea>'+
+     '<div class="hint">※ 変わるのは<b>リストの帯の色と備考だけ</b>です。スケジュールの予約・入庫日・代車には触りません。<br>'+
+     '　 入庫日や時間を直すときは、右のボタン（予約カード）からどうぞ。</div>'+
+   '</div>'+
+   '<div class="wfoot">'+
+     '<button class="gray" onclick="closeWin()">やめる</button>'+
+     '<button class="blue" onclick="saveBand('+r.id+')">✓ 保存</button>'+
+   '</div>');
+}
+function pickBand(el,k){
+  pickSt=k;
+  var ns=el.parentNode.children;
+  for(var i=0;i<ns.length;i++)ns[i].className=(ns[i]===el?'sel':'');
+}
+function saveBand(id){
+  var r=row(id);
+  var before=STNAME[r.st];
+  r.st=pickSt;
+  var t=document.getElementById('bnote');
+  if(t)r.note=t.value;
+  closeWin();draw();
+  log('<b>'+r.name+'</b> の帯を <b>'+before+' → '+STNAME[r.st]+'</b> に変えました（この表の色が変わります）。');
+}
+
+draw();setPlan('B');
+</script>
+</body></html>
