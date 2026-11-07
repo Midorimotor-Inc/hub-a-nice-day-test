@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794015488973';
+  window.__APP_BUILD='build-1794017628264';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.100.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.101.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1951,12 +1951,17 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
     return new Date();
   };
   const [calMonth,setCalMonth]=useState(monthOf);
+  // ★バッジをなぞった時に出す吹き出し（2026-11-07）。
+  //   マッハ車検は入庫から1時間、一般整備の入庫制限になるので、
+  //   「その日のマッハが何時なのか」をリストから予約する時に知りたい、という現場の要望。
+  const [tip,setTip]=useState(null);
   // ★この部品は閉じても消えない（if(!open)return null は下にある＝state は残る）。
   //   そのため【開いた時にもう一度決め直す】。これをしないと、
   //   一度開いた月をずっと覚えていて、別のお客様を開いても前の月が出る。
   const wasOpenRef=useRef(open);
   useEffect(()=>{
     if(open&&!wasOpenRef.current)setCalMonth(monthOf());
+    if(!open)setTip(null);
     wasOpenRef.current=open;
   },[open]);
   if(!open)return null;
@@ -1970,13 +1975,17 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
   }
   if(wk.some(x=>x!==null))weeks.push([...wk]);
   function getDk(d){return `${cy}-${cm+1}-${d}`;}
-  function getCounts(d){
+  // ★バッジに入庫時間を出すため、数ではなく【予約そのもの】を返す（2026-11-07）。
+  //   絞り込みの決まりは今までと同じ（名前あり・承認待ちでない・キャンセルでない）。
+  function getRows(d){
     const raw=(inspData&&inspData[getDk(d)])||[];
     // データ上に古い承認待ちフラグが残っていても正しい空き数になるよう、表示用に再計算してから数える
     const rows=recomputeInspApproval(raw,getLmt(d));
     const v=rows.filter(r=>r&&r.name&&!r.pendingApproval&&r.bookingStatus!=='cancelled');
-    return{1:v.filter(r=>Number(r.course)===1).length,2:v.filter(r=>Number(r.course)===2).length,3:v.filter(r=>Number(r.course)===3).length,total:v.length};
+    const by=c=>v.filter(r=>Number(r.course)===c);
+    return{1:by(1),2:by(2),3:by(3),total:v.length};
   }
+  function getCounts(d){const g=getRows(d);return{1:g[1].length,2:g[2].length,3:g[3].length,total:g.total};}
   function getLmt(d){return(inspLimits&&inspLimits[getDk(d)])||6;}
   function closed(d){
     const dt=new Date(cy,cm,d);
@@ -2008,7 +2017,8 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
         <div key={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
           {wk.map((d,di)=>{
             if(!d)return <div key={di} style={{minHeight:66,borderTop:'1px solid #f3f4f6',borderLeft:di>0?'1px solid #f3f4f6':'none',background:'#f9fafb'}}/>;
-            const cc=getCounts(d);
+            const gr=getRows(d);
+            const cc={1:gr[1].length,2:gr[2].length,3:gr[3].length,total:gr.total};
             const lmt=getLmt(d);
             const isClosed=closed(d);
             const isToday=d===today.getDate()&&cm===today.getMonth()&&cy===today.getFullYear();
@@ -2020,11 +2030,9 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
             if(isSel)bg='#dbeafe';
             else if(isClosed)bg=CLOSED_BG;
             else if(isFull)bg='#fee2e2';
-            // 6枠スロットを生成
+            // 6枠スロットを生成（★中身は {cid,row}。なぞった時に入庫時間を出すため）
             const slots=[];
-            for(let i=0;i<cc[1];i++)slots.push(1);
-            for(let i=0;i<cc[2];i++)slots.push(2);
-            for(let i=0;i<cc[3];i++)slots.push(3);
+            [1,2,3].forEach(cid=>gr[cid].forEach(row=>slots.push({cid,row})));
             while(slots.length<6)slots.push(0);
             // 台数制限を掛けた日で上限に達していたら選べない（制限を掛けていない日は従来どおり）
             const limitBlocked=!!(inspLimits&&inspLimits[getDk(d)]!=null&&cc.total>=lmt);
@@ -2039,15 +2047,25 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
                   color:isSel?'#1d4ed8':isClosed?CLOSED_FG:numColor,lineHeight:1.3}}>{d}</div>
                 {!isClosed&&(
                   <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:1,padding:'2px 2px'}}>
-                    {slots.map((cid,si)=>(
-                      <div key={si} style={{
+                    {slots.map((sl,si)=>{
+                      const cid=sl?sl.cid:0;
+                      return (
+                      <div key={si}
+                        data-custbadge={cid?(ds+'/'+cid+'/'+si):undefined}
+                        data-custbtime={cid?String(sl.row.time||''):undefined}
+                        onMouseEnter={cid?(ev=>{
+                          const r=ev.currentTarget.getBoundingClientRect();
+                          setTip({x:r.left+r.width/2,y:r.top,cid,row:sl.row,ds});
+                        }):undefined}
+                        onMouseLeave={cid?(()=>setTip(null)):undefined}
+                        style={{
                         height:14,borderRadius:2,
                         background:cid?COLORS[cid].bg:'#f3f4f6',
                         border:cid?'none':'1px solid #e5e7eb',
                         display:'flex',alignItems:'center',justifyContent:'center'}}>
                         {cid?<span style={{fontSize:7,fontWeight:900,color:COLORS[cid].tc}}>{COLORS[cid].label}</span>:null}
-                      </div>
-                    ))}
+                      </div>);
+                    })}
                   </div>
                 )}
                 {isClosed&&<div data-custclosed={ds} style={{display:'flex',alignItems:'center',justifyContent:'center',
@@ -2073,6 +2091,41 @@ function InspCalendarPicker({value,onChange,inspData,closedDays,closedDates,over
         </span>
         <span style={{fontSize:9,color:'#9ca3af'}}>休=休業</span>
       </div>
+      {/* ★バッジをなぞった時の吹き出し（2026-11-07 ユーザー依頼）。
+          狙いは「その日のマッハ車検が何時か」。マッハは入庫から1時間、
+          一般整備の入庫制限になるので、リストから予約する時に知りたい。
+          ・position:'fixed' で画面に対して出す（マスの中に absolute で置くと
+            カレンダーの高さが変わってチラつく＝CLAUDE.md の決まり）。
+            この予約カードは transform を持たないので、そのまま画面の座標で出せる。
+          ・pointerEvents:'none'＝吹き出しが日のマスのクリックをじゃましない。
+          ・下に入らない時は上側へ反転する。 */}
+      {tip&&(()=>{
+        const CNAME={1:'マッハ車検',2:'クイック車検',3:'レギュラー車検'};
+        const co=COLORS[tip.cid]||{bg:'#e5e7eb',tc:'#111',label:'?'};
+        const tm=String(tip.row.time||'').trim();
+        const W=206;
+        const left=Math.max(8,Math.min(tip.x-W/2,window.innerWidth-W-8));
+        const above=tip.y>170;
+        return (
+          <div data-custbtip={tm||'未定'} style={{position:'fixed',left,width:W,zIndex:1100,pointerEvents:'none',
+            top:above?(tip.y-8):(tip.y+22),transform:above?'translateY(-100%)':'none',
+            background:'white',border:'2px solid #bae6fd',borderRadius:10,padding:'7px 9px',
+            boxShadow:'0 10px 30px rgba(0,0,0,.18)',fontSize:11.5,lineHeight:1.5}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,fontWeight:900,color:co.tc}}>
+              <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:14,height:11,
+                borderRadius:2,background:co.bg,fontSize:7,fontWeight:900}}>{co.label}</span>
+              {CNAME[tip.cid]||'車検'}
+            </div>
+            <div style={{fontWeight:900,fontSize:15,color:'#0f172a',marginTop:1}}>入庫 {tm||'未定'}</div>
+            {tip.row.name?(
+              <div style={{color:'#334155'}}>{tip.row.name}{tip.row.carType?('／'+tip.row.carType):''}{tip.row.no?('（'+tip.row.no+'）'):''}</div>
+            ):null}
+            {tip.cid===1&&tm?(
+              <div style={{marginTop:3,color:'#c2410c',fontWeight:700}}>※ ここから1時間は一般整備が入りません</div>
+            ):null}
+          </div>
+        );
+      })()}
     </div>
   );
 }
