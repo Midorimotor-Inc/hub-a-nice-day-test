@@ -42,9 +42,26 @@ BUSY.forEach((d) => {
   day['未定'] = { name: '未定' + d, work: 'Q', content: '時間未定', staff: '江川京志', store: 'honten' };
   sched[dk(d)] = day;
 });
+// ★過去の週。入り具合を1枠ずつ変えて『ちょうど境目』の週を作る（2026-11-08 現場報告の再現）
+const pastDays = [];
+[[11,2],[11,3],[11,4],[11,5],[11,6],[11,7],[11,8],[10,26],[10,27],[10,28],[10,29],[10,30],[10,31],[11,1],[10,19],[10,20],[10,21],[10,22],[10,23],[10,24],[10,25],[10,12],[10,13],[10,14],[10,15],[10,16],[10,17],[10,18],[10,5],[10,6],[10,7],[10,8],[10,9],[10,10],[10,11]].forEach(x=>pastDays.push(x));
+pastDays.forEach(([m, d], idx) => {
+  const key = FIX[0] + '-' + m + '-' + d;
+  const n = 6 + (idx % 14);          // 6〜19枠ぶん＝どこかに『ちょうど境目』が来る
+  const day = {};
+  TIMES.slice(0, n).forEach((tm, j) => {
+    day[tm] = { name: '過' + m + d + '-' + j, work: 'Q', content: 'オイル交換とタイヤ交換の点検', staff: '江川京志', store: 'honten' };
+    if (j % 5 === 0) day[tm + '__1'] = { name: '過' + m + d + '-' + j + 'B', work: 'B', content: '鈑金の見積り', staff: '江川京志', store: 'honten' };
+  });
+  if (idx % 3 === 0) day['午後'] = { name: '午後' + d, work: 'Q', content: '午後入庫', staff: '江川京志', store: 'honten' };
+  sched[key] = day;
+});
+
 const ins = (nm, course) => ({ name: nm, carType: 'アルト', no: '3503', course, store: 'honten', time: '09:00', bookingStatus: 'confirmed' });
 const insp = {};
 BUSY.forEach(d => { insp[dk(d)] = Array.from({ length: 6 }, (_, i) => ins('車検' + d + '-' + i, (i % 3) + 1)); });
+pastDays.forEach(([m, d], idx) => { const key = FIX[0] + '-' + m + '-' + d;
+  insp[key] = Array.from({ length: 1 + (idx % 8) }, (_, i) => ins('過検' + d + '-' + i, (i % 3) + 1)); });
 
 const seed = {
   [STOR + 'insp']: insp,
@@ -95,7 +112,10 @@ const seed = {
     r.fulfill({ status: 200, contentType: 'application/javascript', body: r.request().url().indexOf('firebase-app-compat') >= 0 ? FAKE : '' }));
   await ctx.route('https://script.google.com/**', r => r.fulfill({ status: 200, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'null' }));
   const page = await ctx.newPage();
+  // ★React の『更新が止まらない（#185）』は console.error に出る＝pageerror では拾えない。
+  //   2026-11-08 の現場報告がこれ。必ず console も見ること。
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
+  page.on('console', m => { const x = m.text(); if (m.type() === 'error' && x.indexOf('BABEL') < 0) errs.push(x.slice(0, 180)); });
   page.on('dialog', async d => { await d.accept().catch(() => {}); });
   const click = (x) => page.evaluate(s => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes(s) && e.offsetParent !== null); if (b) { b.click(); return true; } return false; }, x);
   const see = async (s, ms = 20000) => { try { await page.waitForFunction(x => document.body.innerText.includes(x), s, { timeout: ms }); return true; } catch (e) { return false; } };
@@ -198,7 +218,23 @@ const seed = {
   t('★下限（0.5）より小さくはしない', !!e2 && e2.fit >= 0.5, e2 && e2.fit);
   if (process.env.SHOT4) { await page.screenshot({ path: process.env.SHOT4 }); console.log('  📷 ' + process.env.SHOT4); }
 
-  console.log('\n■ ⑥ ファイルの中身の見張り');
+  console.log('\n■ ⑥ 過去へさかのぼってもエラーが出ない（2026-11-08 現場報告）');
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.waitForTimeout(800);
+  let bad = [];
+  for (let i = 0; i < 12; i++) {
+    await page.evaluate(() => { const b = document.querySelector('[data-wnav="-1"]'); if (b) b.click(); });
+    await page.waitForTimeout(700);
+    const g = await look();
+    if (!g) { bad.push({ i, why: 'ひょうが消えた' }); break; }
+    if (g.canY !== 0 && g.fit > 0.5) bad.push({ i, why: 'スクロールが出る', fit: g.fit, canY: g.canY });
+    if (errs.length) { bad.push({ i, why: String(errs[0]).slice(0, 120) }); break; }
+  }
+  t('★前の週へ12回さかのぼってもエラーが出ない', errs.length === 0, errs.slice(0, 2));
+  t('★どの週でも畳んだまま1画面に収まる', bad.length === 0, bad.slice(0, 4));
+  t('★表そのものが消えていない', await page.evaluate(() => !!document.querySelector('[data-weekview]')));
+
+  console.log('■ ⑦ ファイルの中身の見張り');
   const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
   t('倍率の下限は WFIT_MIN ひとつで決めている', /const WFIT_MIN\s*=\s*0\.5/.test(SRC));
   t('★広げた時は必ず倍率1（folded の時だけ縮める）', /const fitv=folded\?fit:1;/.test(SRC));
@@ -206,6 +242,15 @@ const seed = {
   t('★横は 100/倍率 ％にしてから縮める（横幅を変えない）', /width:\(100\/fitv\)\.toFixed/.test(SRC));
   t('★据え置きの表も同じ倍率で縮める', (SRC.match(/transform:'scale\('\+fitv\+'\)'/g) || []).length >= 2);
   t('★ゼブラの位相合わせも倍率で割って直している', /mod\(\(r\.left-base\.left\)\/z\)/.test(SRC));
+  // ★★行ったり来たりの止め（2026-11-08 の現場報告）。倍率を変えると表の横幅も変わり、
+  //   字の折り返しが変わって高さも変わる＝素直に計算すると2つの値を往復して画面が落ちる。
+  const has = (x) => SRC.indexOf(x) >= 0;
+  t('★倍率は【下げる方へだけ】動かす', has('Math.min(run.current.f,space/need)'));
+  t('★週・店・畳み・窓の大きさ・予定が変わったら1からやり直す', has('run.current.key!==key') && has('storeId,folded?1:0,'));
+  t('★やり直しの合図に『枠の高さ』を入れない（自分で自分をやり直させない）', !has('const key=[el.clientHeight'));
+  t('★念のための止め（回り続けない）', has('run.current.n>12'));
+  t('★縮めた後の高さは切り捨て（1pxもはみ出させない）', has('Math.floor(mainH*fitv)') && has('Math.floor(footH*fitv)') && !has('Math.ceil(mainH*fitv)') && !has('Math.ceil(footH*fitv)'));
+  t('★縮めている間は上下に動かさない（スクロールバーで横幅が変わるのを防ぐ）', has("overflowY:(fitv<1&&fitv>WFIT_MIN)?'hidden':'auto'"));
   t('エラーは1件も出ていない', errs.length === 0, errs.slice(0, 3));
 
   await browser.close(); server.close();

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794124379583';
+    window.__APP_BUILD='build-1794128007066';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.105.0';
+const APP_VERSION = '3.105.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4808,6 +4808,15 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   const [fit,setFit]=useState(1);
   const [footH,setFootH]=useState(0);
   const [mainH,setMainH]=useState(0);
+  // ★★【重要】倍率を変えると、表の【CSS上の横幅】も変わる（width を 100/倍率 ％にしているため）。
+  //   横幅が変われば字やバッジの折り返しが変わり、**高さも変わる**。
+  //   そのため『ちょうど収まる倍率』を素直に計算すると、2つの値を行ったり来たりして止まらなくなる
+  //   （2026-11-08 現場報告：過去の週で 0.845 ⇄ 0.784 を往復し、React が「更新が止まらない」で画面ごと落ちた）。
+  //   ★直し＝ひとつの週・ひとつの窓の大きさの中では【倍率を下げる方へしか動かさない】。
+  //     下げる方へだけなら必ず数回で止まり、止まった所は必ず『入りきる』倍率になる。
+  //     週を変える・店を変える・畳む/広げる・窓の大きさを変える・予定そのものが変わった時は、
+  //     1 からやり直す（run.key）。★この決まりを外さないこと。外すと画面が落ちる。
+  const run=useRef({key:'',f:1,n:0});
   const fitRef=useRef(1); fitRef.current=folded?fit:1;
   useLayoutEffect(()=>{
     const el=scRef.current, tb=wtbRef.current;
@@ -4822,9 +4831,18 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
       const space=el.clientHeight+(fo?fo.offsetHeight:0)-(fo?4:0);
       const need=mn+fn;
       if(space<=0||need<=0)return;
-      let f=space/need;
-      f=(f>=0.995)?1:Math.max(WFIT_MIN,Math.round(f*1000)/1000);
-      setFit(v=>Math.abs(v-f)<0.004?v:f);
+      // ★やり直しの合図（週・店・畳み・窓の大きさ・予定の中身）。
+      //   ここに『枠の高さ』を入れないこと＝据え置きの帯は倍率で縮むので、自分で自分をやり直させてしまう。
+      const key=[weekStart?weekStart.getTime():0,storeId,folded?1:0,
+        (typeof window!=='undefined'?window.innerWidth+'x'+window.innerHeight:''),
+        tb.rows.length,(tb.textContent||'').length].join('|');   // textContent＝並べ直しを起こさない
+      if(run.current.key!==key){ run.current={key:key,f:1,n:0}; }
+      if(run.current.n>12)return;            // 念のための止め（ここへは来ない作りだが、絶対に回り続けさせない）
+      let f=Math.min(run.current.f,space/need);   // ★下げる方へだけ
+      f=(f>=0.995)?1:Math.max(WFIT_MIN,Math.floor(f*1000)/1000);
+      if(Math.abs(f-run.current.f)>=0.002)run.current.n++;
+      run.current.f=f;
+      setFit(v=>Math.abs(v-f)<0.002?v:f);
     };
     measure();
     let ro=null;
@@ -5266,7 +5284,11 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
             </div>
           );
         })()}
-        <div ref={scRef} data-wscroll="1" style={{flex:1,minHeight:0,overflow:'auto'}}>
+        {/* ★縮めている間は上下に動かさない（はしたのズレでスクロールバーが出ると、
+            枠の横幅が変わって字の折り返しが変わり、また倍率が動く＝行ったり来たりの元になる）。
+            下限（WFIT_MIN）まで縮めても入らない時だけ、今までどおりスクロールできるようにする。 */}
+        <div ref={scRef} data-wscroll="1" style={{flex:1,minHeight:0,
+          overflowX:'auto',overflowY:(fitv<1&&fitv>WFIT_MIN)?'hidden':'auto'}}>
           {/* ★余った高さは行に配らせる（2026-10-23 ユーザー指示：表を最大限に使う）。
               td の height:26 は最低の高さとして効く */}
           {/* ★畳んでいる時も高さを伸ばす（v3.99.0・2026-11-04 ユーザー決定・C案）。
@@ -5277,7 +5299,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
               縮めている時だけ表の height:'100%' を外す＝『本当の高さ』が測れるようにするため。 */}
           {/* 外の枠＝縮めた後の高さ。これが無いと、縮めても枠は『縮める前の高さ』のままで
               何も無い所へスクロールできてしまう（transform は配置を変えないため） */}
-          <div style={fitv<1?{height:Math.ceil(mainH*fitv),overflow:'hidden'}:{height:'100%'}}>
+          <div style={fitv<1?{height:Math.floor(mainH*fitv),overflow:'hidden'}:{height:'100%'}}>
           <div data-wfit={fitv<1?String(fitv):'1'} style={fitv<1
             ?{width:(100/fitv).toFixed(4)+'%',transform:'scale('+fitv+')',transformOrigin:'top left'}
             :{height:'100%'}}>
@@ -5460,7 +5482,7 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
           if(!pins.length)return null;
           return (
             <div data-wfoot="1" ref={wfootRef} style={{flexShrink:0,borderTop:'3px solid #94a3b8',background:'white',
-                ...(fitv<1?{height:Math.ceil(footH*fitv),overflow:'hidden'}:{paddingRight:sbw})}}>
+                ...(fitv<1?{height:Math.floor(footH*fitv),overflow:'hidden'}:{paddingRight:sbw})}}>
               {/* ★本体と【同じ倍率】で縮める。片方だけ縮めると列がズレる（v3.105.0） */}
               <div style={fitv<1?{width:(100/fitv).toFixed(4)+'%',transform:'scale('+fitv+')',transformOrigin:'top left'}:null}>
                 <table ref={wfootTbRef} style={{borderCollapse:'collapse',width:'100%',minWidth:980,tableLayout:'fixed'}}>
