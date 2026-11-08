@@ -162,6 +162,9 @@ const seed = {
       footBottom: foot ? Math.round(r(foot).bottom) : 0,
       rootBottom: Math.round(r(root).bottom),
       foldBtn: (root.querySelector('[data-wfold]') || {}).innerText || '',
+      tight: box ? box.getAttribute('data-wtight') : null,
+      // ★実際に目に見える字の大きさ＝指定した大きさ×倍率
+      tdFs: mainTm ? Math.round(parseFloat(getComputedStyle(mainTm.parentElement.querySelector('td:last-child') || mainTm).fontSize) * 100) / 100 : null,
       texts: (tb ? tb.innerText : '').length,
     };
   });
@@ -173,8 +176,10 @@ const seed = {
   t('★上下にスクロールしない（全体が見える）', !!a && a.canY === 0, a && { canY: a.canY, scH: a.scH });
   t('★いちばん下の行まで枠の中に入っている', !!a && a.lastBottom <= a.scBottom + 2, a && { last: a.lastBottom, box: a.scBottom });
   t('★据え置きの帯も画面の中に収まっている', !!a && a.footBottom <= a.rootBottom + 2, a && { foot: a.footBottom, root: a.rootBottom });
-  t('★入りきらないので縮めている（倍率 < 1）', !!a && a.fit < 1, a && a.fit);
   t('★縮めすぎない（倍率は 0.5 以上）', !!a && a.fit >= 0.5, a && a.fit);
+  // ★★2026-11-08 ユーザー指示：上（日付）から下（時間未定）まで画面いっぱい＝【下に余白を作らない】
+  t('★下に余白を作らない（いちばん下の行の底が枠の底にそろう）', !!a && a.lastBottom >= a.scBottom - 10, a && { last: a.lastBottom, box: a.scBottom });
+  t('★入りきらない時は、まず字をふつうの大きさに落とす（縮めるのは最後）', !!a && (a.tight === '1' || a.fit === 1), a && { tight: a.tight, fit: a.fit });
   t('★横幅は変わらない＝純粋なズーム（横スクロールは出ない）', !!a && a.canX === 0, a && { canX: a.canX, w: a.scW });
   t('★スクロールバーそのものが出ていない', !!a && a.bar === 0, a && a.bar);
   t('★据え置きの表も同じ倍率＝時間の列の幅がそろう', !!a && a.mainTmW != null && a.footTmW != null && Math.abs(a.mainTmW - a.footTmW) <= 1, a && { main: a.mainTmW, foot: a.footTmW });
@@ -189,11 +194,14 @@ const seed = {
   let b2 = await look();
   t('★広げた時は縮めない（倍率1）', !!b2 && b2.fit === 1, b2 && b2.fit);
   t('★広げた時は縮める箱を使わない（今までどおりの出し方）', !!b2 && (b2.tf === 'none' || !b2.tf), b2 && b2.tf);
+  // ★★2026-11-08 ユーザー指示：「畳んだ状態の字が、開いている状態より小さいと非常に見にくい」
+  t('★★畳んだ時の字は、広げた時より小さくない', !!a && !!b2 && (a.tdFs * (a.fit || 1)) >= b2.tdFs - 0.3,
+    { 畳んだ: a && a.tdFs, 倍率: a && a.fit, 実効: a && Math.round(a.tdFs * a.fit * 100) / 100, 広げた: b2 && b2.tdFs });
   if (process.env.SHOT2) { await page.screenshot({ path: process.env.SHOT2 }); console.log('  📷 ' + process.env.SHOT2); }
   await page.evaluate(() => { const b = document.querySelector('[data-wfold]'); if (b) b.click(); });
   await page.waitForTimeout(900);
   let b3 = await look();
-  t('★また畳むと、もう一度1画面に収まる', !!b3 && b3.fit < 1 && b3.canY === 0, b3 && { fit: b3.fit, canY: b3.canY });
+  t('★また畳むと、もう一度1画面に収まる', !!b3 && b3.canY === 0 && b3.lastBottom <= b3.scBottom + 2, b3 && { fit: b3.fit, canY: b3.canY });
 
   console.log('\n■ ③ 予定が少ない週は今までどおり（倍率1・高さいっぱい）');
   await page.evaluate(() => { const b = document.querySelector('[data-wnav="1"]'); if (b) b.click(); });
@@ -208,7 +216,7 @@ const seed = {
   await page.evaluate(() => { const b = document.querySelector('[data-wnav="-1"]'); if (b) b.click(); });
   await page.waitForTimeout(1300);
   let d2 = await look();
-  t('★戻ると縮めて1画面に収まる（週を送っても効く）', !!d2 && d2.fit < 1 && d2.canY === 0, d2 && { fit: d2.fit, canY: d2.canY });
+  t('★戻ると1画面に収まる（週を送っても効く）', !!d2 && d2.canY === 0 && d2.lastBottom <= d2.scBottom + 2, d2 && { fit: d2.fit, canY: d2.canY });
 
   console.log('\n■ ⑤ 小さい画面（縦 700px）でも収まる');
   await page.setViewportSize({ width: 1280, height: 700 });
@@ -236,19 +244,22 @@ const seed = {
 
   console.log('■ ⑦ ファイルの中身の見張り');
   const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
+  const has = (x) => SRC.indexOf(x) >= 0;
   t('倍率の下限は WFIT_MIN ひとつで決めている', /const WFIT_MIN\s*=\s*0\.5/.test(SRC));
   t('★広げた時は必ず倍率1（folded の時だけ縮める）', /const fitv=folded\?fit:1;/.test(SRC));
-  t('★縮めている時は表の height:100% を外す（本当の高さを測るため）', /height:fitv<1\?'auto':'100%'/.test(SRC));
+  t('★縮めている時は表の height:100% を外す（本当の高さを測るため）', has("height:mainFix?mainFix:(fitv<1?'auto':'100%')"));
+  t('★★入らない時は、先に字をふつうの大きさに落とす（BIG をやめる）', has('const BIG=folded&&!tight;'));
+  t('★★落ち着いたら表の高さを決め打ちして下の余白をなくす', has('Math.floor(space/(f||1))-fn') && has('setMainFix'));
+  t('★3段がまえ（大きい字→ふつうの字→縮める）', has('r.st===0') && has('r.st===1') && has('r.st=2'));
   t('★横は 100/倍率 ％にしてから縮める（横幅を変えない）', /width:\(100\/fitv\)\.toFixed/.test(SRC));
   t('★据え置きの表も同じ倍率で縮める', (SRC.match(/transform:'scale\('\+fitv\+'\)'/g) || []).length >= 2);
   t('★ゼブラの位相合わせも倍率で割って直している', /mod\(\(r\.left-base\.left\)\/z\)/.test(SRC));
   // ★★行ったり来たりの止め（2026-11-08 の現場報告）。倍率を変えると表の横幅も変わり、
   //   字の折り返しが変わって高さも変わる＝素直に計算すると2つの値を往復して画面が落ちる。
-  const has = (x) => SRC.indexOf(x) >= 0;
-  t('★倍率は【下げる方へだけ】動かす', has('Math.min(run.current.f,space/need)'));
-  t('★週・店・畳み・窓の大きさ・予定が変わったら1からやり直す', has('run.current.key!==key') && has('storeId,folded?1:0,'));
+  t('★倍率は【下げる方へだけ】動かす', has('Math.min(r.f,space/need)'));
+  t('★週・店・畳み・窓の大きさ・予定が変わったら1からやり直す', has('r.key!==key') && has('storeId,folded?1:0,'));
   t('★やり直しの合図に『枠の高さ』を入れない（自分で自分をやり直させない）', !has('const key=[el.clientHeight'));
-  t('★念のための止め（回り続けない）', has('run.current.n>12'));
+  t('★念のための止め（回り続けない）', has('r.n>14'));
   t('★縮めた後の高さは切り捨て（1pxもはみ出させない）', has('Math.floor(mainH*fitv)') && has('Math.floor(footH*fitv)') && !has('Math.ceil(mainH*fitv)') && !has('Math.ceil(footH*fitv)'));
   t('★縮めている間は上下に動かさない（スクロールバーで横幅が変わるのを防ぐ）', has("overflowY:(fitv<1&&fitv>WFIT_MIN)?'hidden':'auto'"));
   t('エラーは1件も出ていない', errs.length === 0, errs.slice(0, 3));

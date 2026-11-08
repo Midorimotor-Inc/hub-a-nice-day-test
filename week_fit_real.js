@@ -79,12 +79,23 @@ const ME = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '
       const sc = r.querySelector('[data-wscroll="1"]'), box = r.querySelector('[data-wfit]');
       let canY = 0; if (sc) { sc.scrollTop = 9999; canY = sc.scrollTop; sc.scrollTop = 0; }
       const head = (r.innerText || '').split(String.fromCharCode(10))[0] || '';
-      return { fit: box ? box.getAttribute('data-wfit') : null, canY, head: head.slice(0, 34) };
+      // ★下の余白＝いちばん下の行の底と、枠の底のへだたり
+      const tb = box ? box.querySelector('table') : null;
+      const rows = tb ? [...tb.querySelectorAll('tbody tr')] : [];
+      const lb = rows.length ? Math.round(rows[rows.length-1].getBoundingClientRect().bottom) : 0;
+      const sb = sc ? Math.round(sc.getBoundingClientRect().bottom) : 0;
+      const td = tb ? tb.querySelector('tbody tr td:last-child') : null;
+      return { fit: box ? box.getAttribute('data-wfit') : null, canY, head: head.slice(0, 34),
+        tight: box ? box.getAttribute('data-wtight') : null, gap: sb - lb,
+        fs: td ? Math.round(parseFloat(getComputedStyle(td).fontSize)*10)/10 : null };
     });
     if (!g) { console.log(String(i).padStart(2) + ' 週前  ★表が消えた（画面が落ちた）'); ng++; break; }
     const bad = (g.canY !== 0 && Number(g.fit) > 0.5);
     if (bad) ng++;
-    console.log(String(i).padStart(2) + ' 週前  倍率 ' + String(g.fit).padEnd(6) + (g.canY ? ' ★上下に動く(' + g.canY + ')' : ' 収まっている') + '  ' + g.head);
+    if (g.gap > 12) ng++;
+    console.log(String(i).padStart(2) + ' 週前  倍率 ' + String(g.fit).padEnd(6) + ' 字' + String(g.fs).padEnd(5)
+      + (g.tight === '1' ? 'ふつう ' : '大きい ') + (g.canY ? '★上下に動く(' + g.canY + ')' : '収まる')
+      + ' 下の余白 ' + String(g.gap).padStart(4) + 'px  ' + g.head);
     if (errs.length) { console.log('   ★エラー: ' + errs[0]); ng++; break; }
   }
   await browser.close(); server.close();

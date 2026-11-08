@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794128007066';
+    window.__APP_BUILD='build-1794130449992';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.105.1';
+const APP_VERSION = '3.106.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -4806,8 +4806,16 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   const wfootRef=useRef(null);   // 据え置きの帯（外側）
   const wfootTbRef=useRef(null); // 据え置きの表そのもの
   const [fit,setFit]=useState(1);
+  // ★tight＝畳んでいるが【広げた時と同じ字の大きさ】に落とした状態（BIG をやめる）。
+  //   字を小さくする前に、まずここで入るかどうかを見る（2026-11-08 ユーザー指示：
+  //   「畳んだ状態の字が、開いている状態より小さくなっては見にくい」）。
+  const [tight,setTight]=useState(false);
   const [footH,setFootH]=useState(0);
   const [mainH,setMainH]=useState(0);
+  // ★mainFix＝落ち着いたあとの本体の表の高さ（px・0＝なりゆき）。
+   //  縮めている間は height:auto で『本当の高さ』を測り、落ち着いたら
+   //  「縮めたらちょうど画面いっぱいになる高さ」を入れる＝下に余白が出ない。
+  const [mainFix,setMainFix]=useState(0);
   // ★★【重要】倍率を変えると、表の【CSS上の横幅】も変わる（width を 100/倍率 ％にしているため）。
   //   横幅が変われば字やバッジの折り返しが変わり、**高さも変わる**。
   //   そのため『ちょうど収まる倍率』を素直に計算すると、2つの値を行ったり来たりして止まらなくなる
@@ -4816,33 +4824,62 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   //     下げる方へだけなら必ず数回で止まり、止まった所は必ず『入りきる』倍率になる。
   //     週を変える・店を変える・畳む/広げる・窓の大きさを変える・予定そのものが変わった時は、
   //     1 からやり直す（run.key）。★この決まりを外さないこと。外すと画面が落ちる。
-  const run=useRef({key:'',f:1,n:0});
+  const run=useRef({key:'',f:1,n:0,st:0});   // st 0=大きい字で試す 1=ふつうの字で試す 2=縮める 3=決まった
   const fitRef=useRef(1); fitRef.current=folded?fit:1;
   useLayoutEffect(()=>{
     const el=scRef.current, tb=wtbRef.current;
     if(!isOpen||!el||!tb)return;
     const measure=()=>{
-      if(!folded){ setFit(f=>f===1?f:1); return; }
+      if(!folded){
+        setFit(v=>v===1?v:1); setTight(v=>v?false:v); setMainFix(v=>v?0:v);
+        // ★広げている間に段（st）を捨てる＝また畳んだ時に、はじめから測り直す。
+        //   これを忘れると『広げて畳み直すと収まらない』（検査で見つけた）。
+        if(run.current.key)run.current={key:'',f:1,n:0,st:0};
+        return;
+      }
       const fo=wfootRef.current, ft=wfootTbRef.current;
       const fn=ft?ft.offsetHeight:0, mn=tb.offsetHeight;
       setMainH(v=>v===mn?v:mn);
       setFootH(v=>v===fn?v:fn);
       // 据え置きの帯は上に3pxの太線があるので、少しだけ余裕をみる
       const space=el.clientHeight+(fo?fo.offsetHeight:0)-(fo?4:0);
-      const need=mn+fn;
-      if(space<=0||need<=0)return;
+      if(space<=0||mn<=0)return;
       // ★やり直しの合図（週・店・畳み・窓の大きさ・予定の中身）。
       //   ここに『枠の高さ』を入れないこと＝据え置きの帯は倍率で縮むので、自分で自分をやり直させてしまう。
+      //   ★字の大きさ（tight）も入れないこと＝段を進めた途端にやり直しになって往復する。
       const key=[weekStart?weekStart.getTime():0,storeId,folded?1:0,
         (typeof window!=='undefined'?window.innerWidth+'x'+window.innerHeight:''),
         tb.rows.length,(tb.textContent||'').length].join('|');   // textContent＝並べ直しを起こさない
-      if(run.current.key!==key){ run.current={key:key,f:1,n:0}; }
-      if(run.current.n>12)return;            // 念のための止め（ここへは来ない作りだが、絶対に回り続けさせない）
-      let f=Math.min(run.current.f,space/need);   // ★下げる方へだけ
+      const r=run.current;
+      if(r.key!==key){
+        run.current={key:key,f:1,n:0,st:0};
+        setTight(v=>v?false:v); setFit(v=>v===1?v:1); setMainFix(v=>v?0:v);
+        return;                              // 次の描画で、大きい字のまま測り直す
+      }
+      if(r.st>=3)return;                     // 決まった＝もう動かさない
+      if(r.n>14){ r.st=3; return; }          // 念のための止め（絶対に回り続けさせない）
+      const need=mn+fn;
+      const over=mn>el.clientHeight+3;       // 表が枠より高い＝入りきっていない
+      // ① 大きい字（BIG）で入るなら、そのまま。表は height:100% なので下に余白は出ない。
+      if(r.st===0){
+        if(!over){ r.st=3; return; }
+        r.st=1; r.n++; setTight(true); return;   // ② 広げた時と同じ字の大きさに落とす
+      }
+      // ② ふつうの字で入るなら、ここで決まり（字は広げた時と同じ・高さは画面いっぱい）。
+      if(r.st===1){
+        if(!over){ r.st=3; return; }
+        r.st=2;                              // ③ どうしても入らないので縮める
+      }
+      let f=Math.min(r.f,space/need);        // ★下げる方へだけ
       f=(f>=0.995)?1:Math.max(WFIT_MIN,Math.floor(f*1000)/1000);
-      if(Math.abs(f-run.current.f)>=0.002)run.current.n++;
-      run.current.f=f;
-      setFit(v=>Math.abs(v-f)<0.002?v:f);
+      if(Math.abs(f-r.f)<0.002){
+        // ★落ち着いた。縮めたあとが画面いっぱいになる高さを入れて、下の余白をなくす。
+        r.st=3;
+        const tgt=Math.max(mn,Math.floor(space/(f||1))-fn);
+        setMainFix(v=>v===tgt?v:tgt);
+        return;
+      }
+      r.n++; r.f=f; setFit(f);
     };
     measure();
     let ro=null;
@@ -4902,7 +4939,12 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
   //   ★元に戻さないこと。戻すとまた余白が出る。
   //   C案＝① 表の高さを画面いっぱいに伸ばす ② 字とバッジを大きく ③ 整備は「氏名／内容」の2段。
   //   ★広げた時（folded=false）の見た目は一切変えない＝BIG を通さない所は触らないこと。
-  const BIG=folded;
+  // ★★畳んだ状態は【3段がまえ】（v3.106.0・2026-11-08 ユーザー指示）。
+  //   ① まず大きい字（BIG）のまま。入れば高さいっぱいに伸ばして終わり。
+  //   ② 入らなければ【広げた時と同じ字の大きさ】に落とす（tight）。ここでも高さいっぱいに伸ばす。
+  //   ③ それでも入らない時だけ、表ぜんぶを縮める（倍率）。
+  //   ★②を飛ばして先に縮めないこと＝畳んだ字が広げた時より小さくなって読みにくい（現場指摘）。
+  const BIG=folded&&!tight;
   // ★畳んでいて入りきらない時の倍率（1＝そのまま）。広げている時は必ず 1＝今までどおりスクロール。
   const fitv=folded?fit:1;
   const TH={padding:'5px 4px',fontSize:BIG?12.5:11,fontWeight:800,whiteSpace:'nowrap',border:'1px solid '+WLINE,
@@ -5300,10 +5342,10 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
           {/* 外の枠＝縮めた後の高さ。これが無いと、縮めても枠は『縮める前の高さ』のままで
               何も無い所へスクロールできてしまう（transform は配置を変えないため） */}
           <div style={fitv<1?{height:Math.floor(mainH*fitv),overflow:'hidden'}:{height:'100%'}}>
-          <div data-wfit={fitv<1?String(fitv):'1'} style={fitv<1
+          <div data-wfit={fitv<1?String(fitv):'1'} data-wtight={tight?'1':'0'} style={fitv<1
             ?{width:(100/fitv).toFixed(4)+'%',transform:'scale('+fitv+')',transformOrigin:'top left'}
             :{height:'100%'}}>
-          <table ref={wtbRef} style={{borderCollapse:'collapse',width:'100%',height:fitv<1?'auto':'100%',minWidth:980,tableLayout:'fixed'}}>
+          <table ref={wtbRef} style={{borderCollapse:'collapse',width:'100%',height:mainFix?mainFix:(fitv<1?'auto':'100%'),minWidth:980,tableLayout:'fixed'}}>
             <thead>
               <tr>
                 <th style={{...TH,width:54,minWidth:54}}></th>
