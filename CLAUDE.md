@@ -2580,3 +2580,29 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   **直す前のファイルでは 13件／5件 落ちる**ことを確認済み（保管箱の日に8件書き込んでしまうのも再現した）。
   `sync_cutoff_test`(12) `band_edit_test`(71) `cancel_edit_test`(32) `toukan_test`(63) `dm_admin_test`(16)
   `insp_double_test`(27) `insp_move_test`(28) `mobile_move_test`(54) `mobile_cust_test`(34) も PASS。
+
+### スケジュール画面の日付は【西暦から】出す（v3.104.0・2026-11-07 ユーザー決定・A案）
+- ユーザー要望「スケジュール画面の日付のところを西暦から表示してほしい。
+  **日付のバッジが横長になるのは仕方がありません**」。見本 `mock_date_year.html` で3案を見比べて **A案** を選択。
+
+  | | 出し方 | 札の幅 |
+  |---|---|---|
+  | いままで | 11月7日（土） | 130px |
+  | **A案（採用）** | **2026年11月7日（土）** | 181px |
+  | B案 | 2026/11/7（土） | 150px |
+  | C案 | 年だけ小さく　2026年 11月7日（土） | 173px |
+
+- 変えたのは **`index_dev.html` のスケジュール画面の日付の札 1か所だけ**（`HubDatePick` の `fmt`）。
+  ★**最小の幅（`minWidth`）を 130 → 200 に広げてある。** いちばん長い日（2026年12月31日（水））に
+  合わせた数字で、**日によって札が伸び縮みせず、前後の ‹ › ボタンの位置がずれない**。
+  **130 に戻さないこと**（戻すと札が縮んで、日を送るたびにボタンが動く）。
+- **ほかの日付の出し方は変えていない**：`dateLabel`（`M月D日（曜）`）・予約カードの日付・週間カレンダー・
+  カレンダー・スマホ・印刷・紙の控えは今までどおり。**「ここも西暦に」と言われた時に、まとめて直さないこと**
+  （週表の見出しのように、横幅が限られていて年を入れると崩れる所がある）。
+- 検査は **`node date_year_test.js`（13件・PORT 8453）**。札の形・本日と一致するか・
+  12/31 と 1/1 に移しても**札の幅とボタンの位置が動かないこと**・ファイルの中身（getFullYear と minWidth≧200）。
+  **直す前のファイルでは8件落ちる**ことを確認済み。
+  あわせて PASS：`insp_move_test`(28) `sched_scroll_test`(9) `delivery_dup_test`(20) `delivery_note2_test`(20)
+  `week_view_test`(138) `card_pop_test`(46) `collapsed_add_test`(19) `close_button_test`(19)
+  `header_v2_test`(31) `print_insp_time_test`(34) `datepick_pop_test`(18) `sync_arch_test`(24) `mobile_phone_test`(33)。
+- 見本：`mock_date_year.html`（3案と札の幅の実測）／`mock_meigi_check.html`（車検の名義ちがいの「！」。**まだ実装していない**＝ユーザーの指示待ち）。

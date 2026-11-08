@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794032301938';
+    window.__APP_BUILD='build-1794099005764';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.103.0';
+const APP_VERSION = '3.104.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -17676,11 +17676,16 @@ function AppInner() {
                         {/* ★隠した type="date" を showPicker で開いていた（2026-10-15 まで）。
                             ネイティブの日付欄に入ると Windows の IME が英数になり、備考・メモで ひらがな に戻らない。
                             自前のカレンダーにして、見た目は今までの札のまま。 */}
+                        {/* ★日付は【西暦から】出す（2026-11-07 ユーザー決定・A案「2026年11月7日（土）」）。
+                            札が横に長くなるのは承知の上（ユーザー了承）。最小の幅（minWidth）は
+                            いちばん長い日「2026年12月31日（水）」に合わせて 200px に広げてある
+                            ＝日によって札が伸び縮みせず、前後の ‹ › ボタンの位置がずれない。
+                            ★狭くすると札が縮んで日ごとに幅が変わるので、130 に戻さないこと。 */}
                         <HubDatePick clearable={false} icon={null} color="#7c2d12" txColor="white"
                           value={_selDate?`${_selDate.getFullYear()}-${String(_selDate.getMonth()+1).padStart(2,'0')}-${String(_selDate.getDate()).padStart(2,'0')}`:''}
                           onChange={v=>{const p=v.split('-').map(Number);if(p.length===3&&!isNaN(p[0]))setSelDate(new Date(p[0],p[1]-1,p[2]));}}
-                          fmt={(v,dt)=>`${dt.getMonth()+1}月${dt.getDate()}日（${['日','月','火','水','木','金','土'][dt.getDay()]}）`}
-                          style={{fontWeight:900,fontSize:15,padding:'4px 14px',minWidth:130,justifyContent:'center',
+                          fmt={(v,dt)=>`${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日（${['日','月','火','水','木','金','土'][dt.getDay()]}）`}
+                          style={{fontWeight:900,fontSize:15,padding:'4px 14px',minWidth:200,justifyContent:'center',
                             userSelect:'none',background:'#7c2d12',border:'2px solid #a5b4fc',borderRadius:8}}/>
                       </div>
                       <button onClick={()=>moveDate(1)} style={{...NAV_S,padding:'4px 8px'}}><ChevronRight size={14}/></button>
