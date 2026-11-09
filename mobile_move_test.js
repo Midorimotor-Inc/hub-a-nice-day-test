@@ -46,10 +46,16 @@ const signedInInit = ([me, stor]) => {
 const now = new Date();
 const Y = now.getFullYear(), M = now.getMonth(), D = now.getDate();
 const DK = `${Y}-${M + 1}-${D}`;                       // 今日（整備が入っている日）
-const nx = new Date(Y, M, D + 1);
+// ★移り先に「休業日」を選ばないこと（2026-11-09）。
+//   第2火曜は休業日なのでアプリが正しく断る。そのせいで日にちが動かず、
+//   「移り先（翌日）に入る」だけが落ちていた（翌日が第2火曜の日にだけ起きる）。
+const isClosedD = d => d.getDay() === 2 && d.getDate() >= 8 && d.getDate() <= 14;   // 第2火曜
+let _o1 = 1; while (isClosedD(new Date(Y, M, D + _o1))) _o1++;
+let _o2 = _o1 + 1; while (isClosedD(new Date(Y, M, D + _o2))) _o2++;
+const nx = new Date(Y, M, D + _o1);
 const DK2 = `${nx.getFullYear()}-${nx.getMonth() + 1}-${nx.getDate()}`;   // 移り先の日
 const IN2 = `${nx.getFullYear()}-${String(nx.getMonth() + 1).padStart(2, '0')}-${String(nx.getDate()).padStart(2, '0')}`;
-const EMPTY = new Date(Y, M, D + 2);                   // 予約がゼロの日
+const EMPTY = new Date(Y, M, D + _o2);                   // 予約がゼロの日
 const EMPTY_D = EMPTY.getDate();
 
 (async () => {

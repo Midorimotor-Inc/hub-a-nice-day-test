@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794189516312';
+    window.__APP_BUILD='build-1794211671143';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.107.1';
+const APP_VERSION = '3.108.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2784,6 +2784,80 @@ const buildInspSave = (base, p)=>{
   return {result, idxPlace, relocated, pendingNow:!!(rows[idxPlace]&&rows[idxPlace].pendingApproval&&!wasPending)};
 };
 
+// ═══ 保管箱（insp-arch）と insp の「同じ日」をめぐる直し（Kyoshi承認のBLOCK-B変更・2026-11-09）═══
+//  【何が起きていたか（本番 2026-9-26）】
+//    14日より前の日は insp → insp-arch へ仕分けてある。その日に予約を1件足すと
+//    insp にその日のキーができ、画面は {...保管箱, ...insp} の合体＝【日付キーごと insp が
+//    保管箱を丸ごと覆い隠す】ので、その日の既存の予約がぜんぶ消えたように見えた。
+//    さらに翌朝の仕分けが arch[k]=hot[k] で【その日ごと置き換える】ため、
+//    過去の車検が【永久に消えた】（元6件 → 11/2 に1件足す → 11/3 の仕分けで6件消滅）。
+//    江川さんが同期チェックから3件を入れ直したら、11/9 の仕分けで今度はその1件が消えた＝回り続けていた。
+//  【直し方】1つの日を insp と保管箱の両方に置かない。
+//    ・予約を足す【前】に hubUnarchiveDay(日付) でその日を保管箱から insp へ引き戻す
+//    ・仕分けは archMergeDay で【足す】（置き換えない）
+//    ・画面の合体も archMergeDay で【足す】（覆い隠さない）
+//  ★保管箱にすでにある行は【位置も中身もそのまま】＝代車の紐付け（insp-日付-行番号）を壊さない。
+const archSameRow=(a,b)=>!!(a&&b&&(
+  (a.custId&&b.custId&&a.custId===b.custId)||
+  (a.seq!=null&&b.seq!=null&&a.seq===b.seq)||
+  (!!a.name&&a.name===b.name&&String(a.no||'')===String(b.no||''))
+));
+// 保管箱のその日（oldRows）に、insp 側のその日（newRows）を「足した」配列を返す純関数。
+//   ・oldRows が配列でなければ newRows をそのまま返す（保管箱にその日が無い＝ふつうの仕分け）
+//   ・同じ予約（custId → seq → 氏名+ナンバー）は1つにまとめ、位置は動かさず中身を新しい方にする
+//   ・保管箱に無い行だけ後ろに足す。行番号が変わるので bookingKey も新しい番号に直す
+const archMergeDay=(oldRows,newRows,dk)=>{
+  const ar=Array.isArray(oldRows)?oldRows:null;
+  const nr=Array.isArray(newRows)?newRows:[];
+  if(!ar)return nr;
+  const out=ar.slice();
+  nr.forEach(r=>{
+    if(!r||!r.name)return;                                   // 空き行は足さない
+    const at=out.findIndex(q=>archSameRow(q,r));
+    if(at>=0){ out[at]=r; return; }                          // 同じ予約＝中身だけ新しくする
+    const idx=out.length;
+    const bk=(dk&&r.bookingKey&&String(r.bookingKey).indexOf('insp-')===0)?('insp-'+dk+'-'+idx):r.bookingKey;
+    out.push(bk===r.bookingKey?r:{...r,bookingKey:bk});
+  });
+  return out;
+};
+// ★保管箱からその日を insp へ引き戻す。予約を足す【前】に呼ぶこと。
+//   保管箱にその日が無ければ何もしない（＝ふだんの予約では1回の読み取りだけで終わる）。
+//   insp と保管箱を1つのトランザクションで書くので、途中で片方だけになることはない。
+// 画面に出すための合体。★日付キーごとに置き換えないこと（2026-11-09）。
+//   以前は {...inspArch, ...hotInsp} だったので、14日より前の日に予約を1件足した瞬間に
+//   その日の既存の予約が。ん画面から消えた（保管箱が覆い隠される）。
+const mergeInspWithArch=(arch,hot)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch)||!Object.keys(arch).length)return hot;
+  const h=(hot&&typeof hot==='object'&&!Array.isArray(hot))?hot:{};
+  const out={...arch,...h};
+  Object.keys(arch).forEach(dk=>{ if(Array.isArray(h[dk])) out[dk]=archMergeDay(arch[dk],h[dk],dk); });
+  return out;
+};
+const hubUnarchiveDay = async (dk) => {
+  if (!FB_ON || !fbDb || !dk) return false;
+  if (fbAuth && !fbUser) return false;
+  let did = 0;
+  try {
+    await fbDb.runTransaction(async t => {
+      const as = await t.get(fbDoc(STOR + 'insp-arch'));
+      const arch = fbParse(as) || {};
+      if (!arch || typeof arch !== 'object' || Array.isArray(arch)) return;
+      const old = arch[dk];
+      if (!Array.isArray(old) || !old.some(r => r && r.name)) return;   // 保管箱にその日は無い
+      const hs = await t.get(fbDoc(STOR + 'insp'));
+      const hot = fbParse(hs) || {};
+      if (!hot || typeof hot !== 'object' || Array.isArray(hot)) return;
+      hot[dk] = archMergeDay(old, hot[dk], dk);
+      delete arch[dk];
+      t.set(fbDoc(STOR + 'insp-arch'), { v: JSON.stringify(arch), u: firebase.firestore.FieldValue.serverTimestamp() });
+      t.set(fbDoc(STOR + 'insp'), { v: JSON.stringify(hot), u: firebase.firestore.FieldValue.serverTimestamp() });
+      did = hot[dk].length;
+    });
+  } catch (e) { console.warn('[ARCH] 保管箱からの引き戻しに失敗', dk, e && e.message); return false; }
+  if (did) console.log('[ARCH] 保管箱から引き戻しました', dk, did + '件');
+  return did > 0;
+};
 // ★保管箱（insp-arch）から「同じ予約」を外す（2026-10-04）。
 //   14日より前の予約は insp から insp-arch に移してあり、画面は両方を合体して出す。
 //   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
@@ -3784,7 +3858,14 @@ const fbArchiveOldInsp = async () => {
       const hot = fbParse(hs) || {}, arch = fbParse(as) || {};
       if (!hot || typeof hot !== 'object' || Array.isArray(hot)) return;
       let cnt = 0;
-      for (const k of Object.keys(hot)) { const dt = parseDk(k); if (dt && dt.getTime() < cutoff.getTime()) { arch[k] = hot[k]; delete hot[k]; cnt++; } }
+      for (const k of Object.keys(hot)) {
+        const dt = parseDk(k); if (!dt || dt.getTime() >= cutoff.getTime()) continue;
+        // ★ここを arch[k] = hot[k] に戻さないこと（2026-11-09）。
+        //   「その日ごと置き換える」ので、保管箱にすでにある過去の車検が永久に消える。
+        //   本番 2026-9-26 で実際に起きた（元 6件 → 1件足す → 翌朝の仕分けで 6件消滅）。
+        arch[k] = archMergeDay(arch[k], hot[k], k);
+        delete hot[k]; cnt++;
+      }
       if (!cnt) return;
       t.set(fbKvRef(STOR + 'insp-arch'), { v: JSON.stringify(arch), u: firebase.firestore.FieldValue.serverTimestamp() });
       t.set(fbKvRef(STOR + 'insp'), { v: JSON.stringify(hot), u: firebase.firestore.FieldValue.serverTimestamp() });
@@ -14167,7 +14248,7 @@ function AppInner() {
     return()=>{cancelled=true;clearTimeout(t);};
   },[]);
   // 表示用＝hot と 保管箱 の合体（同じ日付は hot 優先）。書き込みは常に hot 経由なので保管箱は汚れない。
-  const inspData = useMemo(()=> (inspArch && Object.keys(inspArch).length) ? {...inspArch, ...hotInsp} : hotInsp, [inspArch, hotInsp]);
+  const inspData = useMemo(()=> mergeInspWithArch(inspArch, hotInsp), [inspArch, hotInsp]);
 
   // ── insp を「サーバー最新値ベース」で確実に変更する共通ヘルパ（第2層の一般化）──
   //   予約消失の元凶＝「ローカル全文を書き戻す」保存経路。これを1本に集約して根絶する。
@@ -14183,6 +14264,10 @@ function AppInner() {
     // 即時反映（ローカルのみ）
     updateLocalInspData(prev=>{ try{return mutate(prev);}catch(e){return prev;} });
     (async()=>{
+      // ★14日より前の日（保管箱に移った日）に予約を置く時は、先に保管箱から引き戻す（2026-11-09）。
+      //   引き戻さないと、この後の書き込みが「insp にその日のキーを作る」だけになり、
+      //   画面で保管箱を覆い隠し、翌朝の仕分けで保管箱をその1件に置き換えてしまう。
+      if(o.unarch&&o.dk) await hubUnarchiveDay(o.dk);
       const ok=await withSaveBusy(()=>writeVerified(STOR+'insp',
         // ★土台に「手元の作りたての予約」を足してから変更を適用する（古いキャッシュ対策）
         base=>{
@@ -14615,7 +14700,7 @@ function AppInner() {
       return rows.some(r=>r&&r.bookingStatus!=='cancelled'&&(c?r.custId===c:(r.name===nm&&String(r.no||'')===String(no||''))));};
     const params={targetDk:p.dk,origDk:p.dk,isDateChange:false,dcPlaceIdx:0,modalIdx:0,row,limits:inspLimits||{},seq:Date.now(),wasEditing:false};
     persistInsp(base=>has(base)?base:buildInspSave(base,params).result, back=>has(back),
-      {verb:'送り直し',name:row.name,dk:p.dk,pid:p.pid,onDone:ok=>{ if(ok)setInspPendings(l=>l.filter(x=>x.pid!==p.pid)); resolve(ok); }});
+      {verb:'送り直し',unarch:true,name:row.name,dk:p.dk,pid:p.pid,onDone:ok=>{ if(ok)setInspPendings(l=>l.filter(x=>x.pid!==p.pid)); resolve(ok); }});
   }),[persistInsp,inspLimits]);
   const discardInspPending=useCallback(p=>{ inspPendDrop(p.pid); setInspPendings(l=>l.filter(x=>x.pid!==p.pid)); },[]);
   // ── 保存中の表示。終わるまで画面を閉じたりリロードしたりしないよう促す ──
@@ -15694,7 +15779,7 @@ function AppInner() {
       persistInsp(
         base=>{ const b=buildInspSave(base,_clParams); _clPending=b.pendingNow; return b.result; },
         back=>{ const rows=(back&&back[dk])||[]; return rows.some(r=>r&&r.bookingStatus!=='cancelled'&&(cs.custId?r.custId===cs.custId:(r.name===cs.name&&String(r.no||'')===String(cs.no||'')))); },
-        {name:cs.name,verb:'保存',dk}
+        {name:cs.name,verb:'保存',dk,unarch:true}
       );
       if(_clPending){
         const lim=inspLimits[dk]??6;
@@ -16003,6 +16088,9 @@ function AppInner() {
             //   実際に書けた内容は、この後の mutate と着地確認で必ず上書きされる。
             try{ updateLocalInspData(prev=>buildInspSave(prev,_saveParams).result); }catch(e){}
             (async()=>{
+              // ★予約を書く前に、その日が保管箱にあるなら insp へ引き戻す（2026-11-09）。
+              //   これをしないと、過去の車検が画面から消え、翌朝の仕分けで永久に消える。
+              await hubUnarchiveDay(_vDk);
               const ok=await withSaveBusy(()=>writeVerified(STOR+'insp',
                 base=>{
                   // 毎回サーバー最新値から組み立て直す。組み立てた結果は画面にも即反映して、
