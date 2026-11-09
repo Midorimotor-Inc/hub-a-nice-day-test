@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794130449992';
+    window.__APP_BUILD='build-1794183418594';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.106.0';
+const APP_VERSION = '3.107.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9162,7 +9162,7 @@ const QuickMenuModal=memo(({isOpen,onClose,items,groups,value,onChangeValue,onSa
     </div>
   );
 });
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits})=>{
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits,usrChk:bmUsrChk,onSetChecked:bmSetChecked})=>{
   const [form,setForm]=useState(initialData);
   const [showQuickMenu,setShowQuickMenu]=useState(false);   // ⚡ クイックメニュー（2026-10-31）
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
@@ -9574,6 +9574,20 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     }
   };
 
+  // ★★名義ちがい（車検証の使用者 ≠ 来店者）の見張り（v3.107.0・2026-11-09）。
+  //   ・判定は【打っている途中の値（form）】で見る＝「同じ」を押したらその場で消える。
+  //   ・印の鍵は【保存されている行（initialData）】から作る＝スケジュールの！・ダッシュボードと同じ鍵。
+  //     氏名を打ち替えている最中に鍵が動くと、押した印が迷子になるため。
+  //   ・新しい予約（まだ保存していない）は鍵が作れないので、ボタンを出さず「保存すると押せます」と出す。
+  const meigiK=isInsp?meigiKind(form):"same";
+  const meigiKey=(isInsp&&!isNew&&initialData&&initialData.name)
+    ?dashRowKey(initialData,(modalIdxProp??initialData._idx??0)):"";
+  const meigiDone=(meigiKey&&modalDk)?((((bmUsrChk||{})[modalDk])||{})[meigiKey]||null):null;
+  const meigiToggle=()=>{
+    if(!meigiKey||!modalDk||!bmSetChecked)return;
+    bmSetChecked([{dk:modalDk,key:meigiKey}],!meigiDone);
+  };
+
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',zIndex:1000,display:'flex',alignItems:'stretch',justifyContent:'flex-start'}} onClick={onClose}>
       {/* ★onFocus はバブリングするので、Tab・クリック・↓キーのどれで欄が変わっても centerField が走る（2026-10-15） */}
@@ -9769,9 +9783,17 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{...LBL,marginBottom:5,height:22,display:'flex',alignItems:'center',gap:8}}>
-                <span>車検証の使用者</span>
+                {/* ★見出しの行は左右とも22pxのまま。窓が狭い時は【字の方を … で詰める】＝ボタンは出したまま */}
+                <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>車検証の使用者</span>
                 <button type="button" data-userSame="1" onClick={()=>setForm(p=>({...p,user:p.name||''}))}
-                  style={{fontSize:11,fontWeight:800,color:'#1d4ed8',background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:7,padding:'3px 10px',cursor:'pointer',fontFamily:'inherit'}}>同じ</button>
+                  style={{flexShrink:0,fontSize:11,fontWeight:800,color:'#1d4ed8',background:'#eff6ff',border:'1.5px solid #bfdbfe',borderRadius:7,padding:'3px 10px',cursor:'pointer',fontFamily:'inherit'}}>同じ</button>
+                {/* ★名義ちがいの確認ボタン（2026-11-09 ユーザー決定・③）。押すと一覧の！が緑になる */}
+                {meigiK==='diff'&&meigiKey&&(
+                  <button type="button" data-meigichk={meigiDone?"done":"todo"} onClick={meigiToggle}
+                    title={meigiDone?('確認済み '+dashStamp(meigiDone)+'（もう一度押すと取り消せます）'):'車検証の使用者と来店者のお名前が違います。確かめたら押してください'}
+                    style={{flexShrink:0,fontSize:11,fontWeight:900,fontFamily:'inherit',borderRadius:7,padding:'3px 10px',cursor:'pointer',
+                      border:'1.5px solid '+(meigiDone?'#15803d':'#000'),background:meigiDone?MEIGI_OK:CALBANG_YEL,
+                      color:meigiDone?'#052e16':'#000',whiteSpace:'nowrap'}}>{meigiDone?'✓ 確認済み':'✓ 名義を確認'}</button>)}
               </div>
               <input ref={userRef} data-userfld="1" value={form.user||''} onChange={e=>setForm({...form,user:e.target.value})}
                 onFocus={()=>setKbField('user')} onBlur={()=>setKbField('')}
@@ -9791,6 +9813,18 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             </div>
           </div>
           )}
+          {/* ★名義ちがいの知らせ（2026-11-09）。車検のカードで、使用者と来店者の名前が違う時だけ出す。
+              使用者が【未入力】の時は出さない（ユーザー決定②：違うかどうか分からないため）。 */}
+          {isInsp&&meigiK==='diff'&&(
+            <div data-meigiwarn={meigiDone?"done":"todo"}
+              style={{padding:'8px 11px',borderRadius:8,fontSize:12,lineHeight:1.6,
+                background:meigiDone?'#f0fdf4':'#fffbeb',border:'2px solid '+(meigiDone?MEIGI_OK:CALBANG_YEL),
+                color:meigiDone?'#14532d':'#78350f'}}>
+              {meigiDone?(<span><b>✓ 名義のちがいを確認しました</b>　{dashStamp(meigiDone)}<br/>一覧の！は緑になっています。もう一度押すと取り消せます。</span>)
+                :(<span><b>！ 車検証の使用者と来店者のお名前が違います</b><br/>
+                  車検証の使用者：<b>{form.user||'(未入力)'}</b>　／　来店者：<b>{form.name||'(未入力)'}</b><br/>
+                  {meigiKey?'確かめたら、上の「✓ 名義を確認」を押してください。':'※ この予約を保存すると「✓ 名義を確認」が押せるようになります。'}</span>)}
+            </div>)}
           {/* 担当 */}
           <div>
             {/* ★欄を押すと、その店のスタッフがポップで出る（2026-10-30 ユーザー指示）。
@@ -10358,6 +10392,39 @@ const PartsChip=({on,onToggle,size=PARTS_SIZE})=>(
 );
 
 // ╔══════════════════════════════════════════════════════════════════╗
+// ★★車検の名義ちがいの「！」（v3.107.0・2026-11-09 ユーザー決定・見本 mock_meigi_check.html）
+//   陸運局へ出す時、【車検証の使用者】と【来店した人】のお名前が違うと不都合がある。
+//   そこでスケジュールのお名前の【左横】に、鮮やかな黄色の丸＋黒い「！」を出す。
+//   検査員が予約カードで「✓ 名義を確認」を押すと【緑】に変わる＝確認済みの印。
+//   ★決めごと（2026-11-09 ユーザー）：
+//     ① 大きさは 20px（`MEIGI_SZ`。18/22 と見比べて決定）
+//     ② 車検証の使用者が【未入力】の行には出さない（違うかどうか分からないため。
+//        いまの予約はほとんど未入力なので、出すと画面が「！」だらけになる）
+//     ③ ボタンの字は「✓ 名義を確認」→ 押したあとは「✓ 確認済み」
+//   ★チェックは【車検の予約そのものには書かない】。ダッシュボードと同じ `usrchk` に残す
+//     （予約の行を書き換えると、保管箱へ移った過去の予約まで触ることになり、予約を壊しかねない）。
+//     ＝ダッシュボードの「車検 使用者の確認」と同じ印なので、どちらで押しても両方に効く。
+//   ★整備のカードには出さない（車検証の話なので）。
+//   ★色は `CALBANG_YEL`（カレンダーの！と同じ蛍光の黄）と `MEIGI_OK`。画面に直書きしないこと。
+const MEIGI_SZ=20, MEIGI_OK='#22c55e';
+//   same＝同じ／diff＝ちがう（！を出す）／empty＝使用者が未入力（②により出さない）
+const meigiKind=(r)=>{
+  if(!r||!r.name)return 'same';
+  const n=dashNorm(r.name), u=dashNorm(r.user);
+  if(!u)return 'empty';
+  return (u===n)?'same':'diff';
+};
+//   出すだけの部品。BLOCK-C（InspRow）の中では【これを置くだけ】にして、判定・並び・保存には触らない。
+const MeigiBang=({row,done,dim})=>{
+  if(meigiKind(row)!=='diff')return null;
+  return <span data-meigi={done?"done":"todo"}
+    title={done?('名義ちがい（確認済み '+dashStamp(done)+'）'):'車検証の使用者と来店者のお名前が違います（未確認）'}
+    style={{display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0,
+      width:MEIGI_SZ,height:MEIGI_SZ,borderRadius:'50%',background:done?MEIGI_OK:CALBANG_YEL,color:'#000',
+      fontSize:Math.round(MEIGI_SZ*0.7),fontWeight:900,lineHeight:1,
+      boxShadow:'0 1px 3px rgba(0,0,0,.35)',cursor:'help',opacity:dim?0.45:1}}>！</span>;
+};
+
 // ║  BLOCK-C: コアロジック・行表示                                  ║
 // ║  【変更禁止】7台目承認・店舗判定・ロック処理が含まれる          ║
 // ║  含まれる内容:                                                  ║
@@ -10389,7 +10456,7 @@ const ArrivedCheck=({on,onToggle,size=17})=>(
       transition:'background .12s, border-color .12s'}}>{on?'✓':''}</span>
 );
 
-const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH,loanerResS,vsId,onApprove,onToggleArrived,onToggleParts,isOverLimit,limitFull,setItems})=>{
+const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH,loanerResS,vsId,onApprove,onToggleArrived,onToggleParts,isOverLimit,limitFull,setItems,meigiDone})=>{
   const cObj=row.course?COURSES.find(c=>c.id===row.course):null;
   const isEmpty=!row.name&&!row.staff&&!row.carType&&!row.course;
   const locked=lockInfo?.lockedBy;
@@ -10460,6 +10527,8 @@ const InspRow=memo(({row,idx,dispNo,dk,onOpenModal,lockInfo,loanerRes,loanerResH
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加</div>
          :<div style={{padding:'3px 5px'}}>
               <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
+                {/* ★名義ちがいの「！」（2026-11-09）。出すだけの部品＝BLOCK-C の判定・並び・保存には触っていない */}
+                <MeigiBang row={row} done={meigiDone} dim={pending||isOverLimit||isCancelled}/>
                 <EntryName row={row} style={{fontWeight:700,color:pending?'#6b7280':'#7c2d12',whiteSpace:'nowrap'}}>{sama(row.name)}</EntryName>
                 {row.store&&<span style={{padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:800,background:row.store==='honten'?'#2563eb':'#dc2626',color:'white',flexShrink:0,whiteSpace:'nowrap'}}>
                   {row.store==='honten'?'本店':'三田店'}
@@ -14521,6 +14590,8 @@ function AppInner() {
   //     過去の予約まで触ることになり、予約を壊しかねないため。印だけを別のキーに残す。
   //   日付ごとに分けてあるので、時点復旧の「日を指定して戻す」もそのまま使える。
   const [usrChk, setUsrChk] = useShared(STOR+'usrchk', {});
+  // ★名義ちがいの「！」が緑かどうか（2026-11-09）。ダッシュボードとまったく同じ印を見る。
+  const meigiDoneOf=useCallback((dk,row,idx)=>(((usrChk||{})[dk]||{})[dashRowKey(row,idx)])||null,[usrChk]);
   const setUserChecked = useCallback((items,on)=>{
     if(!items||!items.length)return;
     const by=(currentUser&&currentUser.name)||'';
@@ -18113,7 +18184,7 @@ function AppInner() {
                           const origIdx=row._origIdx??dispIdx;
                           const {_origIdx,...cleanRow}=row;
                           rows.push(
-                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems}/>
+                            <InspRow key={`${origIdx}-${dispIdx}`} row={applyArrivedOv(dk,cleanRow,origIdx)} idx={origIdx} dispNo={dispIdx+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems} meigiDone={meigiDoneOf(dk,cleanRow,origIdx)}/>
                           );
                         });
                         // ② 台数制限超過バナー（7台目以降がある場合）
@@ -18135,7 +18206,7 @@ function AppInner() {
                             ?{...cleanRow,pendingApproval:false}  // 承認済み：承認待ちバッジ消す
                             :{...cleanRow,pendingApproval:true};  // 未承認：承認待ちバッジ表示
                           rows.push(
-                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems}/>
+                            <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems} meigiDone={meigiDoneOf(dk,displayRow,origIdx)}/>
                           );
                         });
                         // ④ 追加行（isNew=trueで開く）。台数制限を掛けた日で上限に達していたら「予約不可」
@@ -18729,6 +18800,7 @@ function AppInner() {
         pendingRentalId={pendingRentalId} pendingRentalRec={pendingRentalRec}
         rentalCarsData={dynRentalCars}
         loanerRes={loanerRes} modalDk={modalDk}
+        usrChk={usrChk} onSetChecked={setUserChecked}
         onDeleteLoaner={handleDeleteLoaner}
         onToggleLoanerLock={toggleLoanerLock}
         onTogglePendingLoanerLock={togglePendingLoanerLock}

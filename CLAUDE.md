@@ -2605,7 +2605,7 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   あわせて PASS：`insp_move_test`(28) `sched_scroll_test`(9) `delivery_dup_test`(20) `delivery_note2_test`(20)
   `week_view_test`(138) `card_pop_test`(46) `collapsed_add_test`(19) `close_button_test`(19)
   `header_v2_test`(31) `print_insp_time_test`(34) `datepick_pop_test`(18) `sync_arch_test`(24) `mobile_phone_test`(33)。
-- 見本：`mock_date_year.html`（3案と札の幅の実測）／`mock_meigi_check.html`（車検の名義ちがいの「！」。**まだ実装していない**＝ユーザーの指示待ち）。
+- 見本：`mock_date_year.html`（3案と札の幅の実測）／`mock_meigi_check.html`（車検の名義ちがいの「！」。★v3.107.0・2026-11-09 に実装済み。下の節を見ること）。
 
 ### 週間カレンダーは【畳んだら1画面で全部見える】（v3.105.0・2026-11-08 ユーザー指示）
 - ユーザーの言葉：「畳んだ状態で予定が詰まってくると上下スクロールしないと全体が見えない。
@@ -2693,3 +2693,39 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   「下に余白を作らない」「広げて畳み直しても収まる」を足してある。
   あわせて PASS：`week_view_test`(138) `week4_test`(61) `week_find_test`(89) `collapsed_add_test`(19)
   `ampm_round_test`(19) `mach_restrict_test`(31) `insp_badge_test`(68)。
+
+### 車検の「名義ちがいの！」と検査員のチェック（v3.107.0・2026-11-09 ユーザー決定）
+- **なぜ**：陸運局へ出す時、**車検証の使用者と来店した人の名前が違うと不都合**がある。
+  予約カードには 2026-10-29 から両方の欄（`name` / `user`）があり、ダッシュボードの
+  「車検 使用者の確認リスト」で後から突き合わせていたが、**スケジュールを見ただけでは気づけなかった**。
+- **決めごと（見本 `mock_meigi_check.html` で3つ選んでもらった）**：
+  ① **！の大きさは 20px**（`MEIGI_SZ`。18/22 と見比べて決定）
+  ② **車検証の使用者が【未入力】の行には！を出さない**（違うかどうか分からないため。
+     いまの予約はほとんど未入力なので、出すと画面が「！」だらけになる）
+  ③ ボタンの字は **「✓ 名義を確認」→ 押したあと「✓ 確認済み」**
+- **出す所**：PC のスケジュール1日表示、**お名前の【左横】**（`data-meigi`）。
+  **黄（`CALBANG_YEL`）＝未確認／緑（`MEIGI_OK=#22c55e`）＝確認済み**。なぞると理由と「誰が・いつ」。
+  予約カードには **チェックボタン（`data-meigichk`）**（氏名の行・「同じ」のとなり）と
+  **知らせの箱（`data-meigiwarn`）**（氏名の行のすぐ下・黄／緑）。
+- ★**チェックは予約そのものには書かない。** ダッシュボードとまったく同じ **`usrchk`**
+  （`{日付:{行の印:{by,at}}}`）に残す＝**どちらで押しても両方に効く**。
+  行の印は `dashRowKey`（`seq || custId || 氏名`）＝入庫済みチェックと同じ作り。
+  予約の行を書き換えると保管箱（`insp-arch`）の過去の予約まで触ることになるため。
+- ★**判定は打っている途中の値（`form`）で見る**＝「同じ」を押すとその場で！も箱も消える。
+  ★**印の鍵は保存されている行（`initialData`）から作る**＝氏名を打ち替えている最中に鍵が動いて、
+  押した印が迷子になるのを防ぐ。**新しい予約はまだ鍵が無いので、ボタンを出さず「保存すると押せます」と出す。**
+- ★**`InspRow` に置いたのは `<MeigiBang/>`（出すだけの部品）1つだけ**。BLOCK-C の判定・並び・保存には
+  触っていない（v3.81.0 の「様」・v3.83.0 の `EntryName`・v3.95.0 の `Adv2yTags` と同じ扱い）。
+- ★**氏名の見比べは `dashNorm`（半角・全角の空白を外す）**。「佐藤 健太」と「佐藤　健太」は同じ人。
+- ★**整備のカードには出さない**（車検証の話なので）。**週間カレンダーにも出していない**（バッジが増えすぎるため）。
+  **スマホ（mobile.html）も今回は対象外**（見本は PC のみ）。足す時は `usrchk` の同じ鍵を使うこと。
+- ★**見出しの行は左右とも 22px のまま**（2026-10-29 の決まり）。ボタンが2つ並んで横幅が足りない時は
+  **「車検証の使用者」の字の方を … で詰める**（ボタンは `flexShrink:0` で消さない）。
+- 検査は **`node meigi_test.js`（42件・PORT 8459）**。！の色・大きさ・お名前の左・未入力では出ない・
+  押すと緑／もう一度で戻る・一覧と連動する・「同じ」で消える・整備には出ない を見ている。
+  あわせて PASS：`shaken_user_test`(18) `dashboard_test`(61) `entry_log_test`(30) `adv2y_test`(77)
+  `card_pop_test`(46) `insp_badge_test`(68) `works_quick_test`(64) `sama_test`(14) `collapsed_add_test`(19)
+  `insp_move_test`(28) `insp_double_test`(27) `print_insp_time_test`(34) `sync_arch_test`(24)
+  `archbox_guard_test`(16) `pc_card_store_test`(19) `staff_pick_test`(38) `carno_test`(31)
+  `quick_split_test`(43) `week_view_test`(138)。
+  ※`cal_bang_test` の5件不合格は**この変更の前（git stash して確認）でも同じ**＝前からの宿題。
