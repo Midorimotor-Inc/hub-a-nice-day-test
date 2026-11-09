@@ -10,6 +10,8 @@
 //                                      … 実際に戻す（テスト版）
 //   node fb_restore.js --from last --keys insp,honten-sched --write
 //                                      … そのキーだけ丸ごと戻す
+//   node fb_restore.js --from last --keys insp-arch --days 2026-9-26 --write
+//                                      … そのキーの、その日だけ（両方指定でいちばん狭くなる）
 //   node fb_restore.js --from last --all --write
 //                                      … 控えに入っているもの全部を戻す
 //
@@ -24,6 +26,9 @@
 //     --days … その日の中身を、控えを取った時点の姿にそろえる。
 //              控えに無くて今ある予約は消える（＝その時点に戻すのだから当然）。下見で件数を出す。
 //     --keys / --all … そのキーを控えの値でまるごと置き換える。
+//     --keys と --days を両方指定 … そのキーの、その日だけをそろえる
+//              （2026-11-09 追加。狭くできるだけなので、戻しすぎる心配が減る。
+//               例：9/26 の保管箱だけを戻し、custbk には触らない）
 //     どちらも「控えに入っていないキー」には一切触らない。
 const fs = require('fs'), path = require('path');
 const { execFileSync } = require('child_process');
@@ -227,7 +232,7 @@ const pickFrom = () => {
       let cur = null; try { cur = typeof curRaw === 'string' ? JSON.parse(curRaw) : null; } catch (e) { cur = null; }
 
       // --days（日ごとにそろえる）
-      if (DAYS && !wantKeys.length && !ALL) {
+      if (DAYS && !ALL) {
         if (shape === 'whole') { skipped.push(base + '（日付で切れない形）'); continue; }
         if (shape === 'period') { skipped.push(base + '（期間を持つので日付で切れない。--keys ' + base + ' で丸ごと戻せます）'); continue; }
         if (!src || typeof src !== 'object' || Array.isArray(src)) { skipped.push(base + '（形がちがう）'); continue; }
