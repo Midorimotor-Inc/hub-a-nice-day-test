@@ -2755,3 +2755,18 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   `cust_delete_test`(12) `band_edit_test`(71) `cancel_edit_test`(32) `toukan_test`(63) `dm_admin_test`(16)
   `staff_pick_test`(38) `carno_test`(31) `cust_load_test`(9) `insp_double_test`(27) `search_same_test`(23)
   `auth_crossenv_test`(56)。
+
+### 【重要】両リポジトリは public。実データが写る画面写真を置かない（2026-11-09 に発見）
+- ★**`Midorimotor-Inc/hub-a-nice-day-test` も `-main` も「public」**（GitHub の API が誰でも 200 を返す）。
+  テスト版サイトに置いたファイルは **URL を知っていれば誰でも開ける**（Pages も公開）。
+- **見つけた漏れ**：`smoke_main.js` は**本番 Firestore の実データ**で画面を撮るので、
+  `smoke-main-last.png` / `smoke-main-mobile.png` に**お客様の氏名と電話番号**が写っていた。
+  この2枚がテスト版リポジトリに入っていて、`.../hub-a-nice-day-test/smoke-main-last.png` で**実際に開けた**。
+  → 2枚を git から外し、`.gitignore` に入れ、`smoke_main.js` の保存先を **`shots/`**（元から .gitignore 済み）に変えた。
+- ★**git の履歴には過去の写真が126回ぶん残っている。** 消すには履歴の書き換えが要る（ユーザーの判断待ち）。
+  履歴から消すまでは、**古いコミットを指す URL では今も開ける**。
+- ★**これから検査で画面を撮る時の決まり**：
+  ・**実データ（本番・テスト版の Firestore）を使う写真はリポジトリに入れない。** 置くのは `shots/` か scratchpad。
+  ・にせ firebase（`fake_firebase.js`）の種データだけで撮ったものは今までどおりでよい（架空の名前のため）。
+  ・説明書の写真（`capture_manualN_shots.js`）は**氏名・電話・住所を架空に置き換えてから**撮っている＝そのままでよい。
+  ・`week_fit_real.js` のように実データを使う道具は、**元から写真を撮らない**ようにしてある。
