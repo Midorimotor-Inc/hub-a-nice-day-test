@@ -2738,3 +2738,20 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   **版 3.107.0・青ヘッダー・[テスト版]表記なし・オレンジの残骸ゼロ**を確認済み（3ファイルとも）。
 - ★**`port_to_main.js` はまるごと移すので、「テスト版のみ」と書いた項目は移植のたびに 但し書きを見直すこと**
   （2026-10-14 と同じ注意）。
+
+### 顧客リストの上の帯も テスト版＝オレンジ／本番＝青（v3.107.1・2026-11-09 ユーザー指示）
+- ユーザーの言葉：「**パッと見、本番なのかテスト版なのか分からない**」。
+  スケジュール（index）とスマホ（mobile）は前から色で見分けられたが、**顧客リスト（customers.html）だけ
+  両方とも青のまま**だった（`port_to_main.js` の CUST_RULES に色のルールが無かった）。
+- 直し：`customers.html` に **`const UI_HEAD='#EA580C';`**（index_dev.html と同じ値）を置き、
+  上の帯を `background:UI_HEAD` にした。`port_to_main.js` の CUST_RULES に
+  `const UI_HEAD='linear-gradient(135deg,#1e1b4b,#1d4ed8)'` へ変換するルールを足した。
+  ★**色は必ずこの定数を通すこと**（画面に直書きすると変換されず、本番までオレンジになる）。
+  ★FORBIDDEN に `const UI_HEAD='#EA580C'` は元から入っているので、変換し忘れると移植が止まる。
+- 帯の中身は触っていない（緑の「スケジュールに戻る」・版の札・全画面・赤い ✕ はそのまま）。
+  版の札（うすい青に青字）はスケジュール画面のオレンジの帯でも同じものを使っているのでそろっている。
+- 検査は `node cust_year_test.js`（30件。`SHOT=<保存先.png>` で見た目も撮れる）。あわせて PASS：
+  `cust_open_mode_test`(9) `close_button_test`(19) `cust_closed_color_test`(11) `cust_badge_tip_test`(23)
+  `cust_delete_test`(12) `band_edit_test`(71) `cancel_edit_test`(32) `toukan_test`(63) `dm_admin_test`(16)
+  `staff_pick_test`(38) `carno_test`(31) `cust_load_test`(9) `insp_double_test`(27) `search_same_test`(23)
+  `auth_crossenv_test`(56)。

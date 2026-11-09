@@ -49,6 +49,9 @@ const INDEX_REGEX_RULES = [
 const CUST_RULES = [
   ["const STOR='hub-v8-dev-';", "const STOR='hub-v8-';", 1],
   ['<link rel="manifest" href="manifest_dev.json"/>', '<link rel="manifest" href="manifest.json"/>', 1],
+  // 上の帯の色（2026-11-09）。テスト版＝オレンジ／本番＝青のグラデーション。
+  //   index_dev.html の UI_HEAD と同じ決まり。色はこの定数だけを通すこと。
+  ["const UI_HEAD='#EA580C';", "const UI_HEAD='linear-gradient(135deg,#1e1b4b,#1d4ed8)';", 1],
 ];
 const CUST_REGEX_RULES = [
   // 自動アップデート検知のビルド識別子をデプロイ毎に更新
