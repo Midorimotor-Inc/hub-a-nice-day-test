@@ -2269,7 +2269,7 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - 検査は **`node band_edit_test.js`（71件・PORT 8447）**。**直す前のファイルでは通らない**ことを確認済み。
   あわせて PASS：`cancel_edit_test`(32) `cust_year_test`(30) `cust_badge_tip_test`(23) `cust_closed_color_test`(11)
   `cust_open_mode_test`(9) `toukan_test`(63) `dm_admin_test`(16) `cust_delete_test`(12) `staff_pick_test`(38)。
-- モックは `mock_row_edit.html`（テスト版サイトで公開）。**2026-11-07 時点でテスト版のみ。本番へはまだ出していない。**
+- モックは `mock_row_edit.html`（テスト版サイトで公開）。~~2026-11-07 時点でテスト版のみ~~ → **2026-11-09 に本番へ移植済み**（v3.107.0・`port_to_main.js`）。
 
 ### 顧客リストのカレンダー：バッジをなぞると入庫時間（v3.101.0・2026-11-07 ユーザー依頼）
 
@@ -2729,3 +2729,12 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   `archbox_guard_test`(16) `pc_card_store_test`(19) `staff_pick_test`(38) `carno_test`(31)
   `quick_split_test`(43) `week_view_test`(138)。
   ※`cal_bang_test` の5件不合格は**この変更の前（git stash して確認）でも同じ**＝前からの宿題。
+
+### 【記録】2026-11-09 に本番を v3.107.0 へ（port_to_main.js でまるごと移植）
+- 本番は v3.105.1 → **v3.107.0**。`node port_to_main.js` → **`node smoke_main.js` PASS** を確認して push（`aae2940`）。
+- 入ったのは2つ：**畳んだ週表の3段がまえ**（v3.106.0）と **車検の「名義ちがいの！」**（v3.107.0）。
+  それ以前にテスト版だけに入っていた分（顧客リストの行ごとの ✎ 編集＝v3.102.0 など）も**一緒に本番へ出た**。
+- 江川さんのテスト版での目視確認を待ってから出した（A-1）。配信後に本番サイトで
+  **版 3.107.0・青ヘッダー・[テスト版]表記なし・オレンジの残骸ゼロ**を確認済み（3ファイルとも）。
+- ★**`port_to_main.js` はまるごと移すので、「テスト版のみ」と書いた項目は移植のたびに 但し書きを見直すこと**
+  （2026-10-14 と同じ注意）。
