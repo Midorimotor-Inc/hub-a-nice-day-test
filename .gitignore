@@ -36,6 +36,16 @@ manual2_shots/
 manual3_shots/
 manual4_shots/
 
-# ★本番の実データが写る写真（お客様の氏名・電話）。リポジトリは公開なので置かない（2026-11-09）
-smoke-main-last.png
-smoke-main-mobile.png
+# ★検査・確認で撮った画面の写真は、ぜんぶリポジトリに置かない（2026-11-09）
+#   ・このリポジトリは public。履歴に残ると誰でも取り出せる。
+#   ・smoke_main.js は本番の実データで撮るので、お客様の氏名・電話が写る。
+#   ・必要な時は手元で見るだけ。置き場所は shots/（下で除外済み）か scratchpad。
+#   ★アプリが使う写真（help_shaken_*.jpg / IMG_*.jpeg / manual4_web/img/）は別。消さないこと。
+smoke-*.png
+render-*.png
+verify-newgas-*.png
+manual_shots/
+manual2_shots/
+manual3_shots/
+manual4_shots/
+guide_shots/
