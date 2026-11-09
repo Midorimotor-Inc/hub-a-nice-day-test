@@ -35,3 +35,7 @@ manual_shots/
 manual2_shots/
 manual3_shots/
 manual4_shots/
+
+# ★本番の実データが写る写真（お客様の氏名・電話）。リポジトリは公開なので置かない（2026-11-09）
+smoke-main-last.png
+smoke-main-mobile.png

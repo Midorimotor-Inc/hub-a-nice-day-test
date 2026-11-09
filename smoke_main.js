@@ -16,6 +16,11 @@
 //
 // 依存: playwright（無ければ `npm i playwright && npx playwright install chromium`）
 const path = require('path');
+
+// ★この写真には本番の【実データ】（お客様の氏名・電話）が写る。
+//   リポジトリは公開なので、絶対にコミットされない shots/ に置くこと（.gitignore 済み）。
+const SHOT_DIR = path.join(__dirname, 'shots');
+try { require('fs').mkdirSync(SHOT_DIR, { recursive: true }); } catch (e) {}
 const fs = require('fs');
 const http = require('http');
 
@@ -191,7 +196,7 @@ async function loadProdStore() {
     await checkPage(page, '三田店ビュー');
     console.log('  ✔ 三田店切替');
   } catch (e) { problems.push('三田店切替: ' + String(e).slice(0, 60)); }
-  await page.screenshot({ path: path.join(__dirname, 'smoke-main-last.png') });
+  await page.screenshot({ path: path.join(SHOT_DIR, 'smoke-main-last.png') });
   await page.close();
 
   // ── customers.html ──
@@ -284,7 +289,7 @@ async function loadProdStore() {
       if (b.includes('レンダリングエラー')) problems.push(`mobile ${tab}: レンダリングエラー表示`);
       else console.log(`  ✔ mobile ${tab}`);
     }
-    await page3.screenshot({ path: path.join(__dirname, 'smoke-main-mobile.png') });
+    await page3.screenshot({ path: path.join(SHOT_DIR, 'smoke-main-mobile.png') });
     await mctx.close();
   } catch (e) { problems.push('mobile: スモーク実行失敗 ' + String(e).slice(0, 120)); }
 
