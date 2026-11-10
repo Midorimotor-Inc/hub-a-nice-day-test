@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794211671143';
+  window.__APP_BUILD='build-1794287159510';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.108.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.109.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1556,6 +1556,11 @@ const dmSkipWhy=(c)=>!c?'':c.status==='confirm'?'本予約が入っているの�
   :c.status==='cancel'?'キャンセル・案内不要なので、投函の対象外です':'';
 // まだ投函していないマスか（n: 0=投函① 1=投函②）
 const dmUnsent=(c,n)=>!!c&&!dmSkip(c)&&!!c[DM_DATE_KEYS[n]]&&c[DM_SENT_KEYS[n]]===false;
+// ★ドラッグで選んだ範囲のうち【この回で本当に変わるマス】か（2026-11-10）。
+//   水色の見た目（dmSelOf）と、離した時に確定する分（mouseup）を【同じ決まり】にするためのもの。
+//   範囲の中に「もう投函済み」「日付なし」「対象外（赤・青）」が混ざっていると、
+//   範囲ぜんぶを水色にしてしまい「選んだもの以外まで選ばれた」ように見えていた。
+const dmWillChange=(c,n,toSent)=>!!c&&!dmSkip(c)&&!!c[DM_DATE_KEYS[n]]&&dmUnsent(c,n)===toSent;
 
 // ═══════════════════════════════════════════
 // Excelインポート
@@ -2770,8 +2775,8 @@ const DmCell=memo(({customer,n,row,sel,onDown,onOver,canEdit})=>{
   const unsent=dmUnsent(customer,n);
   return(
     <td
-      onMouseDown={e=>{if(has){e.preventDefault();onDown(row,n);}}}
-      onMouseOver={()=>{if(has)onOver(row,n);}}
+      onMouseDown={e=>{if(has){e.preventDefault();onDown(row,n,e);}}}
+      onMouseOver={e=>{if(has)onOver(row,n,e);}}
       title={skip?(date?dmSkipWhy(customer):''):
         !canEdit?(date?'投函の記録を変えられるのは管理者だけです':''):
         !has?'':unsent?'まだ投函していません（ドラッグで選ぶと投函済みにできます）':'投函済み（ドラッグで選ぶと未投函に戻せます）'}
@@ -4580,19 +4585,99 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   dmFilteredRef.current=filtered;
   const dmDragRef=useRef(null);
   const dmDragging=useRef(false);
-  const handleDmDown=useCallback((row,n)=>{
-    dmDragRef.current={col:n,from:row,to:row};dmDragging.current=true;
-    setDmDrag({col:n,from:row,to:row});
+  // ── ★ドラッグ中、画面の端に近づいたら自動で送りながら選ぶ（2026-11-10 ユーザー要望）
+  //   316件を順に消していく作業では、画面に入る20行ほどでは足りない。代車管理の edgeAutoScroll の縦版。
+  //   ★「スクロールしただけでは範囲を伸ばさない」決まり（handleDmOver）があるので、
+  //     こちらは【送ったあとに指の下にある行】を自分で読んで伸ばす＝端に寄せている間だけ、わざと伸ばす。
+  //     ホイールで眺めるだけの時は今までどおり伸びない。
+  const dmScrollRef=useRef(null);                 // 縦にスクロールする箱（表の入れもの）
+  const dmMoveRef=useRef(null);                   // いちばん新しいマウスの場所（自動送り用）
+  const dmAutoRef=useRef({timer:null,dir:0,speed:0});
+  const dmStopAuto=useCallback(()=>{
+    const a=dmAutoRef.current;
+    if(a.timer){clearInterval(a.timer);a.timer=null;}
+    a.dir=0;a.speed=0;
   },[]);
-  const handleDmOver=useCallback((row,n)=>{
-    const d=dmDragRef.current;
-    if(!dmDragging.current||!d||d.col!==n||d.to===row)return;   // 列はまたがない
+  // 指の下にある行まで範囲を伸ばす（自動送りの時だけ使う）
+  const dmExtendToPoint=useCallback(()=>{
+    const d=dmDragRef.current,pt=dmMoveRef.current,el=dmScrollRef.current;
+    if(!d||!pt||!el)return;
+    const r=el.getBoundingClientRect();
+    const y=Math.min(Math.max(pt.y,r.top+2),r.bottom-2);   // 箱の外に出ていても端の行を見る
+    const rowAt=(yy)=>{const h=document.elementFromPoint(pt.x,yy);const e=h&&h.closest?h.closest('tbody tr'):null;return e&&e.parentNode?e:null;};
+    let tr=rowAt(y);
+    // ★見出しの行（sticky な thead）の下に指が居ると行が拾えない。
+    //   その時は箱の中を少しずつ探す（上へ送っている時は下向きに、下へ送っている時は上向きに）。
+    //   これをしないと【上へ送っている間だけ範囲が伸びない】（2026-11-10 実測で発覚）。
+    if(!tr){
+      const dir=dmAutoRef.current.dir;
+      let yy=dir<0?r.top+2:r.bottom-2;const step=dir<0?12:-12;
+      for(let k=0;k<60&&!tr;k++){tr=rowAt(yy);yy+=step;}
+    }
+    if(!tr||!tr.parentNode)return;
+    const row=Array.prototype.indexOf.call(tr.parentNode.children,tr);
+    if(row<0||row===d.to)return;
     d.to=row;setDmDrag({...d});
   },[]);
+  const dmEdgeAuto=useCallback((clientY)=>{
+    const el=dmScrollRef.current;
+    if(!el||!dmDragging.current){dmStopAuto();return;}
+    const r=el.getBoundingClientRect(),EDGE=70;    // 端から何px以内で送りはじめるか（代車管理と同じ）
+    let dir=0,speed=0;
+    if(clientY>r.bottom-EDGE){dir=1;speed=Math.min(26,Math.ceil((clientY-(r.bottom-EDGE))/3)+6);}
+    else if(clientY<r.top+EDGE){dir=-1;speed=Math.min(26,Math.ceil(((r.top+EDGE)-clientY)/3)+6);}
+    const a=dmAutoRef.current;
+    if(!dir){dmStopAuto();return;}
+    a.dir=dir;a.speed=speed;
+    if(!a.timer)a.timer=setInterval(()=>{
+      const b=dmAutoRef.current,e2=dmScrollRef.current;
+      if(!dmDragging.current||!e2||!b.dir){dmStopAuto();return;}
+      const before=e2.scrollTop;
+      e2.scrollTop=before+b.dir*(b.speed||10);
+      if(e2.scrollTop===before){dmStopAuto();return;}      // 端まで来たら止める
+      dmExtendToPoint();
+    },16);
+  },[dmStopAuto,dmExtendToPoint]);
+  useEffect(()=>()=>dmStopAuto(),[dmStopAuto]);
+  //   ★マウスが最後に居た場所。スクロールだけで選択を伸ばさないために持つ（2026-11-10）。
+  const dmPtRef=useRef(null);
+  const handleDmDown=useCallback((row,n,e)=>{
+    dmDragRef.current={col:n,from:row,to:row};dmDragging.current=true;
+    dmPtRef.current=e?{x:e.clientX,y:e.clientY}:null;
+    dmMoveRef.current=e?{x:e.clientX,y:e.clientY}:null;
+    setDmDrag({col:n,from:row,to:row});
+  },[]);
+  const handleDmOver=useCallback((row,n,e)=>{
+    const d=dmDragRef.current;
+    if(!dmDragging.current||!d)return;
+    // ★【バグ対策・2026-11-10】マウスの左ボタンが離れていたら、その場でドラッグを打ち切る。
+    //   mouseup を取りこぼす（ドラッグ中に別のアプリへ切り替えた・右クリックのメニューが出た など）と、
+    //   ボタンを押していない【ただの hover】で選択が伸び続け、次にどこかをクリックした瞬間に
+    //   大きな範囲が確定していた（＝「選んだもの以外まで選ばれる」）。
+    //   mouseover は押されているボタンを教えてくれるので、これで自動的に元へ戻る。
+    if(e&&typeof e.buttons==='number'&&!(e.buttons&1)){
+      dmDragging.current=false;dmDragRef.current=null;dmPtRef.current=null;dmStopAuto();setDmDrag(null);return;
+    }
+    if(d.col!==n||d.to===row)return;   // 列はまたがない
+    // ★【バグ対策・2026-11-10】スクロールだけでは選択を伸ばさない。
+    //   319行ある月では画面に入りきらないので、押したままホイールを回すことになる。
+    //   その時 Chrome は「指は動いていないのに」新しい行の mouseover を送ってくる
+    //   （座標はまったく同じ・実測で確認）ので、流れてきた行ぜんぶが選ばれていた。
+    //   マウスが実際に動いた時だけ伸ばす。
+    if(e&&dmPtRef.current&&Math.abs(e.clientX-dmPtRef.current.x)<2&&Math.abs(e.clientY-dmPtRef.current.y)<2)return;
+    if(e)dmPtRef.current={x:e.clientX,y:e.clientY};
+    d.to=row;setDmDrag({...d});
+  },[]);
+  // ★水色にするのは【この回で本当に変わるマス】だけ（2026-11-10）。
+  //   範囲の中の「もう投函済み」「日付なし」「対象外」は確定の時に外れるので、見た目でも外す
+  //   ＝水色の数と、離した時に出るポップの件数が必ず一致する。
   const dmSelOf=useCallback((i)=>{
     if(!dmDrag)return 0;
     const a=Math.min(dmDrag.from,dmDrag.to),b=Math.max(dmDrag.from,dmDrag.to);
-    return (i>=a&&i<=b)?dmDrag.col+1:0;
+    if(i<a||i>b)return 0;
+    const rows=dmFilteredRef.current||[];
+    const start=rows[dmDrag.from];if(!start)return 0;
+    return dmWillChange(rows[i],dmDrag.col,dmUnsent(start,dmDrag.col))?dmDrag.col+1:0;
   },[dmDrag]);
 
   // サーバーへ書く（変わったチャンクだけ書かれる）。先に画面へ出してから裏で保存する。
@@ -4624,9 +4709,9 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   useEffect(()=>{
     const up=()=>{
       if(!dmDragging.current)return;
-      dmDragging.current=false;
+      dmDragging.current=false;dmStopAuto();dmMoveRef.current=null;
       if(!dmCanEdit){dmDragRef.current=null;setDmDrag(null);return;}   // 管理者以外は確定させない
-      const d=dmDragRef.current;dmDragRef.current=null;setDmDrag(null);
+      const d=dmDragRef.current;dmDragRef.current=null;dmPtRef.current=null;setDmDrag(null);
       if(!d)return;
       const rows=dmFilteredRef.current||[];
       const start=rows[d.from];if(!start)return;
@@ -4635,15 +4720,26 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       const picked=[];
       for(let i=a;i<=b;i++){
         const c=rows[i];
-        if(c&&!dmSkip(c)&&c[DM_DATE_KEYS[d.col]]&&dmUnsent(c,d.col)===toSent)picked.push(c);
+        if(dmWillChange(c,d.col,toSent))picked.push(c);
       }
       if(!picked.length)return;
       setDmAsk({col:d.col,toSent,ids:picked.map(c=>c.custId),
         names:picked.map(c=>({name:c.name,car:c.carType}))});
     };
+    // ★マウスの動き：端に近づいたら自動で送る。ボタンが離れていたらドラッグを打ち切る。
+    const mv=(e)=>{
+      if(!dmDragging.current)return;
+      if(typeof e.buttons==='number'&&!(e.buttons&1)){
+        dmDragging.current=false;dmDragRef.current=null;dmPtRef.current=null;dmMoveRef.current=null;
+        dmStopAuto();setDmDrag(null);return;
+      }
+      dmMoveRef.current={x:e.clientX,y:e.clientY};
+      dmEdgeAuto(e.clientY);
+    };
     window.addEventListener('mouseup',up);
-    return ()=>window.removeEventListener('mouseup',up);
-  },[dmCanEdit]);
+    window.addEventListener('mousemove',mv);
+    return ()=>{window.removeEventListener('mouseup',up);window.removeEventListener('mousemove',mv);};
+  },[dmCanEdit,dmEdgeAuto,dmStopAuto]);
 
   const dmYes=useCallback(()=>{
     if(!dmAsk)return;
@@ -4939,7 +5035,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
 
         {/* ── テーブル ── */}
         <div style={{flex:1,overflowX:'auto',overflowY:'hidden',display:'flex',flexDirection:'column'}}>
-          <div style={{flex:1,overflowY:'auto',minWidth:900}}>
+          <div ref={dmScrollRef} data-custscroll="1" style={{flex:1,overflowY:'auto',minWidth:900}}>
           <table style={{width:'100%',borderCollapse:'collapse',minWidth:900}}>
             <thead>
               <tr>

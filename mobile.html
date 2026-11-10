@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794211671143';
+  window.__APP_BUILD='build-1794287159510';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.108.0';
+const MOBILE_VERSION='3.109.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -5005,8 +5005,20 @@ const LOANER_SECTION_COLORS={honten:'#1d4ed8',sanda:'#dc2626',rental:'#7c3aed'};
 // 代車・レンタカー名の比べ方（2026-10-14）。**鍵マークと空白は無視する。**
 //   レンタカーを付けると予約カードには「🔑 ノマド (3101)」と書かれるが、代車管理の一覧は「ノマド (3101)」。
 //   そのまま文字で比べるとレンタカーが全部「車名ちがい」になる（本番で確認）。PC版と同じ決まり。
-const sameCarLabel = (a, b) => String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
-                           === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
+// ★かっこの中のナンバーが両方にあって同じなら「同じ車」とみなす（2026-11-10）。PC版と同じ決まり。
+//   車両管理で車の名前を直すと、それより前に取った予約のカードには古い名前が残る。
+//   ナンバーが同じなら同じ車なので、名前の書き方の違いだけで「ズレ」に出さない。
+//   ★別の車に入れ替えた時はナンバーが違うので、これまでどおりズレに出る。
+const carLabelNum = (s) => {
+  const m = String(s == null ? '' : s).match(/[（(]([^（）()]*)[）)]\s*$/);
+  return m ? m[1].replace(/[^0-9]/g, '') : '';
+};
+const sameCarLabel = (a, b) => {
+  const na = carLabelNum(a), nb = carLabelNum(b);
+  if (na && nb) return na === nb;
+  return String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
+      === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
+};
 const LOANER_PRESS_MS=200;   // ★長押しと判定する時間（2026-10-07 ユーザー指示：0.2秒で反応させる）
 const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,loanerCarsS,vsId,
                    inspData,schedData,schedOther,onMoveLoaner,onMoveRental,onFixSync,onDropSync})=>{

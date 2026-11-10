@@ -63,9 +63,17 @@ const cells = (page, n) => page.evaluate((n) => {
 }, n);
 const dragCells = (page, n, from, to) => page.evaluate(([n, from, to]) => {
   const td = (i) => { const tr = document.querySelectorAll('tbody tr')[i]; return tr ? tr.children[4 + n * 2] : null; };
-  const ev = (el, type) => el && el.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-  ev(td(from), 'mousedown');
-  for (let i = from + 1; i <= to; i++) ev(td(i), 'mouseover');
+  // ★本物のマウスと同じものを送ること（2026-11-10）。本体は2つを見張っている：
+  //   ・押しているボタン（buttons:1）… 離していたらドラッグを打ち切る
+  //   ・座標が動いたか … 同じ場所なら「スクロールだけ」とみなして伸ばさない
+  const ev = (el, type, buttons) => {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, buttons: buttons,
+      clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2) }));
+  };
+  ev(td(from), 'mousedown', 1);
+  for (let i = from + 1; i <= to; i++) ev(td(i), 'mouseover', 1);
 }, [n, from, to]);
 const popOpen = (page) => page.evaluate(() => [...document.querySelectorAll('div')]
   .some(e => e.offsetParent !== null && /📮 投函の記録/.test(e.innerText || '')));

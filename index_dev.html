@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794211671143';
+    window.__APP_BUILD='build-1794287159510';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.108.0';
+const APP_VERSION = '3.109.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2376,8 +2376,22 @@ const CustomerListView = memo(({custFiles, setCustFiles, currentUser}) => {
 // 代車・レンタカー名の比べ方（2026-10-14）。**鍵マークと空白は無視する。**
 //   レンタカーを付けると予約カードには「🔑 ノマド (3101)」と書かれるが、代車管理の一覧は「ノマド (3101)」。
 //   そのまま文字で比べると、レンタカーが全部「車名ちがい」になる（本番で4件そうなっていた）。
-const sameCarLabel = (a, b) => String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
-                           === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
+// ★かっこの中のナンバーが両方にあって同じなら「同じ車」とみなす（2026-11-10 ユーザー報告）。
+//   車両管理で車の名前を直すと、それより前に取った予約のカードには古い名前が残る。
+//   ナンバーが同じなら同じ車なので、名前の書き方の違いだけで「ズレ」に出さない
+//   （実例：4750 を「スペーシア　イエロー」→「スペーシア G イエロー」に直したら、
+//     東園さまの 11/8 が「車名ちがい」に出た。車も期間も紐付けも合っていた）。
+//   ★別の車に入れ替えた時はナンバーが違うので、これまでどおりズレに出る。
+const carLabelNum = (s) => {
+  const m = String(s == null ? '' : s).match(/[（(]([^（）()]*)[）)]\s*$/);
+  return m ? m[1].replace(/[^0-9]/g, '') : '';
+};
+const sameCarLabel = (a, b) => {
+  const na = carLabelNum(a), nb = carLabelNum(b);
+  if (na && nb) return na === nb;
+  return String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
+      === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
+};
 // 全角の数字（０-９）を半角に直す。日本語入力（ひらがな）のまま打っても数字欄に入るようにするため（2026-10-13）。
 const toHankakuNum = (v) => String(v == null ? '' : v).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 // 「900」「９００」「9.00」「9:0」→「09:00」。読めない時は打った文字をそのまま返す（勝手に消さない）。
@@ -15929,6 +15943,26 @@ function AppInner() {
         back=>resHasRec(back,_lu.carId,_luRec.id),
         {verb:'登録',name:_lu.finalUser}
       ), 0);
+      // ★選んだ代車の名前を【予約カードの行にも書く】（2026-11-10 ユーザー報告）。
+      //   すぐ下のレンタカーの枝は、ここで rentalLabel を必ず書いている。
+      //   **代車の枝だけが帯（lres）しか書かず**、行の loaner は「カードを開いている間の form の値」
+      //   に任せていた（pendingLoanerId の useEffect が入れる）。その useEffect には穴が2つある：
+      //     ① 車の名簿（allCars）がまだ読めていないと car が undefined で**何も書かない**
+      //        （静的な LOANERS に落ちた時は、本番の実車と違う名前が入ることもある）。
+      //     ② 依存が [pendingLoanerId] だけなので、代車を選んだ後に form が作り直されると
+      //        **書いた名前が消える**（新規＝isNew は initialData が変わるたびに必ずリセットされる。
+      //        他の端末の保存が届いただけでも起きる）。pendingLoanerData は残るので、
+      //        **帯だけが書かれて行は空**になる。
+      //   画面はどこも getLoanerLabel が帯から引くので見た目は正しく、保存された文字だけが食い違う。
+      //   その食い違いが ①「スケジュールとズレ」に出る ②**1日の印刷と紙の控えは
+      //   保存された文字をそのまま刷るので代車の欄が空になる**（整備の行は帯から引き直さない）。
+      //   実例：戎さま 2026-11-29（帯は 7033・11/29 にあるのに行の loaner が空）。
+      //   ★帯を書くのと同じ場所で行にも書く＝どの経路でも取りこぼさない（レンタカーの枝と同じ形）。
+      //   ★スマホ（mobile.html の applyLoanerAction）は最初からこう書いており、PC版だけ抜けていた。
+      if(_lu.carName){
+        cleanData.loaner=`${_lu.carName}${_lu.carNum?` (${_lu.carNum})`:''}`;
+        cleanData.loanerId=_lu.carId;
+      }
       cleanData.rentalLabel='';
       cleanData.rentalCarId=null;
       setPendingLoanerData(null);
