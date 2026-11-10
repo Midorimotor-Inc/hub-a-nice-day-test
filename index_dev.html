@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794287159510';
+    window.__APP_BUILD='build-1794295352827';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.109.0';
+const APP_VERSION = '3.110.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -10464,6 +10464,56 @@ const EntryName=({row,style,children})=>{
   );
 };
 
+// ★車検カレンダーの6コマ：なぞると入庫時間が出る（v3.110.0・2026-11-10 ユーザー要望）
+//   「それぞれの車検の入庫時間を、マウスでなぞると出るように。予約を取るとき、とくに
+//     マッハ車検で、どの枠で取っているかが、あちこちのページへ飛ばずに分かるように」。
+//   ★6コマの見た目は変えないこと（現場が見慣れているため）＝なぞった時だけ出す。
+//   ★素の title は使わない（2026-10-24 ユーザー指示。四角くて素っ気ない）。
+//     1日表示の NoteCell・EntryName と同じ見た目の吹き出しにそろえてある。
+//   ★吹き出しは position:fixed。コマは25pxほどしかなく、absolute にするとカレンダーの枠
+//     （overflow:hidden）に切られる。下に入らない時は上へ出す。
+//   ★出すのは【予約が入っているコマだけ】。制限で ×（isLimitedSlot）のコマには出さない。
+const InspSlotTip=({row,style,children})=>{
+  const [rect,setRect]=useState(null);
+  const c=row&&row.course?COURSES.find(x=>x.id===Number(row.course)):null;
+  const sp=!!(row&&row.time&&isSpecialSlot(row.time));
+  const tm=row&&row.time?specialSlotLabel(row.time):'';
+  const W=252,H=160;
+  const pop=rect?(()=>{
+    const left=Math.max(8,Math.min(rect.left-6,(typeof window!=='undefined'?window.innerWidth:1200)-W-8));
+    const below=rect.bottom+6,fits=below+H<=((typeof window!=='undefined'?window.innerHeight:800))-8;
+    return fits?{position:'fixed',left,top:below}
+               :{position:'fixed',left,bottom:Math.max(8,((typeof window!=='undefined'?window.innerHeight:800))-rect.top+6)};
+  })():null;
+  const line=(t,st)=>(<span style={{display:'block',fontSize:11.5,lineHeight:1.7,...(st||{})}}>{t}</span>);
+  const plate=plateFull(row);
+  return (
+    <div data-insptip="1" style={{...(style||{}),cursor:'help'}}
+      onMouseEnter={e=>{try{const b=e.currentTarget.getBoundingClientRect();
+        setRect({left:b.left,top:b.top,bottom:b.bottom});}catch(x){}}}
+      onMouseLeave={()=>setRect(null)}>
+      {children}
+      {rect&&(
+        <span data-insptipbox="1" style={{...pop,zIndex:9999,width:W,background:'white',
+          border:'2px solid #0891b2',borderRadius:10,boxShadow:'0 12px 32px rgba(0,0,0,0.22)',
+          padding:'9px 11px',pointerEvents:'none',display:'block',textAlign:'left',
+          whiteSpace:'normal',wordBreak:'break-word',boxSizing:'border-box',fontWeight:400,color:'#1b2129'}}>
+          <span data-insptiptime="1" style={{display:'block',fontSize:15,fontWeight:900,marginBottom:4,
+            color:tm?(sp?'#9333ea':'#0e7490'):'#9a3412'}}>
+            🕘 {tm?(sp?tm:tm+' 入庫'):'入庫時間が入っていません'}
+          </span>
+          {c&&line('🚗 '+c.name+'車検',{fontWeight:800,color:c.color})}
+          {line(sama(shortenCorpName(String((row&&row.name)||''))),{fontWeight:700,color:'#111'})}
+          {(row.carType||plate)&&line((row.carType||'')+(plate?'（'+plate+'）':''),{color:'#475569'})}
+          {line((row.store==='sanda'?'三田店':'本店')+'入庫',{color:'#64748b',fontSize:10.5})}
+          {row.pendingApproval&&line('⚠ まだ承認されていません',{fontWeight:800,color:'#b45309'})}
+          {c&&c.id===1&&row.store!=='sanda'&&line('🚫 この入庫から1時間は 一般整備が入庫制限',{color:'#b91c1c',fontSize:10.5})}
+        </span>
+      )}
+    </div>
+  );
+};
+
 // ★部品注文チェックの丸（2026-11-05 ユーザー決定・A案）。
 //   マッハ車検の行だけ、コースのバッジのとなりに出す。
 //   未注文＝白地にこはく色の丸「部」／注文済み＝緑の丸に白い ✓。押すたびに入れ替わる。
@@ -17720,21 +17770,26 @@ function AppInner() {
                           </div>
                           {/* 休業日は6コマを描かない（営業日と見分けがつくように） */}
                           {!isCl&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:2,position:'relative',overflow:'visible'}}>
-                            {icons.map(({c,si,store})=>{
+                            {icons.map(({c,si,store,r})=>{
                               const isLimitedSlot=si>=cellLimit;
-                              return (
-                              <div key={si} style={{aspectRatio:'1',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:14,
+                              const sty={aspectRatio:'1',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:14,
                                 background:isLimitedSlot?'repeating-linear-gradient(45deg,#fef2f2,#fef2f2 3px,#fecaca 3px,#fecaca 6px)':c?c.bg+'cc':'#f3f4f6',
                                 color:c&&!isLimitedSlot?c.color:'#ddd',
                                 border:`1.5px solid ${isLimitedSlot?'#fca5a5':c?c.color+'66':'#e5e7eb'}`,
-                                position:'relative',overflow:'visible',opacity:isLimitedSlot?0.7:1}}>
+                                position:'relative',overflow:'visible',opacity:isLimitedSlot?0.7:1};
+                              const inner=(<>
                                 {c&&!isLimitedSlot?c.initial:''}
                                 {c&&!isLimitedSlot&&<span style={{position:'absolute',bottom:-2,left:-2,width:11,height:11,borderRadius:2,background:store==='honten'?'#2563eb':'#dc2626',color:'white',fontSize:6,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,zIndex:1}}>
                                   {store==='honten'?'本':'三'}
                                 </span>}
                                 {isLimitedSlot&&<span style={{fontSize:8,color:'#fca5a5',fontWeight:900}}>×</span>}
-                              </div>
-                            );})}
+                              </>);
+                              /* ★なぞると入庫時間が出る（2026-11-10）。予約が入っているコマだけ包む。
+                                 コマそのものを InspSlotTip が描く（グリッドの直の子を増やさないため）。 */
+                              return (r&&!isLimitedSlot)
+                                ? <InspSlotTip key={si} row={r} style={sty}>{inner}</InspSlotTip>
+                                : <div key={si} style={sty}>{inner}</div>;
+                            })}
                             {inspLimits[dkk]!=null&&(
                               <div style={{position:'absolute',bottom:-4,right:-4,padding:'1px 4px',background:'#dc2626',color:'white',borderRadius:3,fontSize:7,fontWeight:800,whiteSpace:'nowrap',zIndex:5,pointerEvents:'none'}}>
                                 最大{inspLimits[dkk]}台
