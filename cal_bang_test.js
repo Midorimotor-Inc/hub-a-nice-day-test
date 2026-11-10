@@ -49,9 +49,22 @@ const real1011 = [
   row('小畠', 2, { seq: 14 }),
 ];
 
+// 候補日（同じ月の中で、先に来た「開いている日」を使う）
+const SIX_DAYS = [5, 6], SEVEN_DAYS = [8, 9], EIGHT_DAYS = [12, 13], REAL_DAYS = [18, 19];
+
 (async () => {
+  // ★検査の日付を決め打ちにしないこと（2026-11-10 に直した）。
+  //   休業日（祝日・第2火曜）に当たると6コマそのものが描かれず、「！」も出ないので落ちる。
+  //   2026年11月の第2火曜が 11/10 で、8台の日を 10日 に固定していたため
+  //   5件が長いあいだ不合格のままだった（製品側の不具合ではない）。
+  //   → 候補日をいくつか置いて、実際に6コマが描かれた日を使う。
+  const insp = {};
+  SIX_DAYS.forEach(d => { insp[dk(d)] = six.map(r => Object.assign({}, r)); });
+  SEVEN_DAYS.forEach(d => { insp[dk(d)] = seven.map(r => Object.assign({}, r)); });
+  EIGHT_DAYS.forEach(d => { insp[dk(d)] = eight.map(r => Object.assign({}, r)); });
+  REAL_DAYS.forEach(d => { insp[dk(d)] = real1011.map(r => Object.assign({}, r)); });
   const seed = {
-    [STOR + 'insp']: { [dk(6)]: six, [dk(8)]: seven, [dk(10)]: eight, [dk(11)]: real1011 },
+    [STOR + 'insp']: insp,
     [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'office', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [], [STOR + 'sanda-cdow-v2']: [], [STOR + 'sanda-cdate']: [],
@@ -111,44 +124,65 @@ const real1011 = [
     const g = [...document.querySelectorAll('div')].filter(d => getComputedStyle(d).gridTemplateColumns.split(' ').length === 3 && d.children.length >= 6);
     return g.length ? g[0].children.length : 0;
   });
+  // 6コマが描かれた日＝開いている日。ここから候補日を選ぶ
+  const openDays = await page.evaluate(() => {
+    const out = [];
+    [...document.querySelectorAll('div')].forEach(d => {
+      const num = d.querySelector(':scope > div > span');
+      if (!num) return;
+      const n = Number(String(num.innerText || '').trim());
+      if (!n) return;
+      const g = [...d.querySelectorAll(':scope > div')].find(x => getComputedStyle(x).gridTemplateColumns.split(' ').length === 3 && x.children.length >= 6);
+      if (g) out.push(n);
+    });
+    return out;
+  });
+  const pick = arr => arr.find(d => openDays.includes(d));
+  const D6 = pick(SIX_DAYS), D7 = pick(SEVEN_DAYS), D8 = pick(EIGHT_DAYS), D11 = pick(REAL_DAYS);
+
+  console.log(String.fromCharCode(10) + '■ ⓪ 休業日に当たっていない日を選べたか（開いている日: ' + openDays.join(',') + '）');
+  t('6台の日を選べた', !!D6, SIX_DAYS);
+  t('7台の日を選べた', !!D7, SEVEN_DAYS);
+  t('8台の日を選べた', !!D8, EIGHT_DAYS);
+  t('10/11 を写した日を選べた', !!D11, REAL_DAYS);
 
   console.log('\n■ ① 6台まで・承認待ちも無い日には出さない');
-  t('6台の日（' + 6 + '日）に「！」が無い', !cells[6], cells[6]);
+  t('6台の日（' + D6 + '日）に「！」が無い', !cells[D6], cells[D6]);
 
   console.log('\n■ ② まだ承認されていない予約があれば黄色');
-  t('7台の日（8日）に「！」がある', !!cells[8], Object.keys(cells));
-  t('★黄色（未承認）になっている', !!cells[8] && cells[8].kind === 'wait', cells[8] && cells[8].kind);
-  t('★色は蛍光の黄色（#fff200）', !!cells[8] && /255, 242, 0/.test(cells[8].bg), cells[8] && cells[8].bg);
+  t('7台の日（' + D7 + '日）に「！」がある', !!cells[D7], Object.keys(cells));
+  t('★黄色（未承認）になっている', !!cells[D7] && cells[D7].kind === 'wait', cells[D7] && cells[D7].kind);
+  t('★色は蛍光の黄色（#fff200）', !!cells[D7] && /255, 242, 0/.test(cells[D7].bg), cells[D7] && cells[D7].bg);
 
   // ── 置き場所と大きさ（2026-10-30 ユーザー指示）──
   //   日付のとなりの 17px・白ふち付き では小さくて見落としていた。
   console.log(String.fromCharCode(10)+'■ ②-2 ★6枠の真ん中の真上に、大きく出す');
-  t('★大きさは 26px', !!cells[8] && cells[8].w === 26 && cells[8].h === 26, cells[8]);
-  t('★白いふちは付けない', !!cells[8] && parseFloat(cells[8].bd) === 0, cells[8] && cells[8].bd);
-  t('★6コマのグリッドの中に置いてある', !!cells[8] && cells[8].cols === 3, cells[8] && cells[8].cols);
-  t('★左右の真ん中に来ている（ずれ2px以内）', !!cells[8] && Math.abs(cells[8].dx) <= 2, cells[8] && cells[8].dx);
-  t('★6枠には重ねない（すぐ上に浮かせる）', !!cells[8] && cells[8].gap >= 0 && cells[8].gap <= 8, cells[8] && cells[8].gap);
+  t('★大きさは 26px', !!cells[D7] && cells[D7].w === 26 && cells[D7].h === 26, cells[D7]);
+  t('★白いふちは付けない', !!cells[D7] && parseFloat(cells[D7].bd) === 0, cells[D7] && cells[D7].bd);
+  t('★6コマのグリッドの中に置いてある', !!cells[D7] && cells[D7].cols === 3, cells[D7] && cells[D7].cols);
+  t('★左右の真ん中に来ている（ずれ2px以内）', !!cells[D7] && Math.abs(cells[D7].dx) <= 2, cells[D7] && cells[D7].dx);
+  t('★6枠には重ねない（すぐ上に浮かせる）', !!cells[D7] && cells[D7].gap >= 0 && cells[D7].gap <= 8, cells[D7] && cells[D7].gap);
 
   console.log('\n■ ③ 承認が済んでいれば緑');
-  t('8台の日（10日）に「！」がある', !!cells[10], cells[10]);
-  t('★緑（承認済み）になっている', !!cells[10] && cells[10].kind === 'ok', cells[10] && cells[10].kind);
-  t('★色が緑', !!cells[10] && /34, 197, 94/.test(cells[10].bg), cells[10] && cells[10].bg);
+  t('8台の日（' + D8 + '日）に「！」がある', !!cells[D8], cells[D8]);
+  t('★緑（承認済み）になっている', !!cells[D8] && cells[D8].kind === 'ok', cells[D8] && cells[D8].kind);
+  t('★色が緑', !!cells[D8] && /34, 197, 94/.test(cells[D8].bg), cells[D8] && cells[D8].bg);
 
   console.log('\n■ ④ なぞると中身が出る');
-  const tp = (cells[8] && cells[8].title) || '';
+  const tp = (cells[D7] && cells[D7].title) || '';
   t('★台数が出る', /7台/.test(tp), tp);
   t('★6コマに出ていないことが出る', /6コマに出ていません/.test(tp), tp);
   t('★その人の氏名が出る', /七番 様/.test(tp), tp);
   t('★承認の状態が出る', /まだ承認されていません/.test(tp), tp);
-  const tp2 = (cells[10] && cells[10].title) || '';
+  const tp2 = (cells[D8] && cells[D8].title) || '';
   t('★承認が済んだ日は「承認済み」と出る', /枠からあふれた分（承認済み）/.test(tp2) && !/まだ承認されていません/.test(tp2), tp2);
   t('★「承認は済んでいます」と締める', /承認は済んでいます/.test(tp2), tp2);
 
   console.log('\n■ ⑥ ★位置と承認を混ぜない（2026-10-29 ユーザー報告の 10/11）');
-  t('11日に「！」が出る（7台入っている）', !!cells[11], Object.keys(cells));
-  t('★★緑になる（あふれた分は承認済み）', !!cells[11] && cells[11].kind === 'ok', cells[11]);
-  t('★★色が緑', !!cells[11] && /34, 197, 94/.test(cells[11].bg), cells[11] && cells[11].bg);
-  const tp3 = (cells[11] && cells[11].title) || '';
+  t(D11 + '日に「！」が出る（7台入っている）', !!cells[D11], Object.keys(cells));
+  t('★★緑になる（あふれた分は承認済み）', !!cells[D11] && cells[D11].kind === 'ok', cells[D11]);
+  t('★★色が緑', !!cells[D11] && /34, 197, 94/.test(cells[D11].bg), cells[D11] && cells[D11].bg);
+  const tp3 = (cells[D11] && cells[D11].title) || '';
   t('★6コマに出ていないのは 小畠様', /小畠 様（クイック）　6コマに出ていません/.test(tp3), tp3);
   t('★あふれて承認されたのは みどりB様', /みどりB 様（クイック）　枠からあふれた分（承認済み）/.test(tp3), tp3);
   t('★同じ名前を2回出さない（小畠様は1回だけ）', (tp3.match(/小畠 様/g)||[]).length === 1, tp3);
