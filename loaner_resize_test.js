@@ -218,6 +218,17 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   t('★「もう貸し出しが始まっている」と知らせる', alerts.some(a => /始まって/.test(a)), alerts);
 
   head('⑧ レンタカーの表でも同じようにできる');
+  // ★レンタカーの表は【本日が右から7列目】に置いてある（2026-11-02 ユーザー指示）ので、
+  //   +8 日はまだ画面の外にある。表の外にある日をつかもうとしても引っぱれないので、
+  //   先に本日が左から4列目に来るまで横に送ってから引っぱること（2026-11-12 に直した）。
+  await page.evaluate(n => {
+    const th = [...document.querySelectorAll('th[data-rdaynum]')];
+    const me = th.find(e => e.getAttribute('data-rdaynum') === String(n));
+    if (!me) return;
+    const sc = th[0].closest('table').parentElement;
+    sc.scrollLeft = Math.max(0, (th.indexOf(me) - 3) * 44);
+  }, num(d(0)));
+  await page.waitForTimeout(400);
   const g8 = await gripAt(2001, 'end');
   const x8r = await rDayX(num(d(8)));
   t('レンタカーの帯にもつかむ所がある', !!g8, g8);
@@ -250,6 +261,13 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
   head('⑪ ★レンタカーの表は本日を右寄りに出す（2026-11-02 ユーザー指示）');
   // 「レンタカーは何を出しているかを見たいので過去を見ることが多い」＝左に過去を広く出す。
   // 代車の表はこれまでどおり（本日が左から4列目）。2つの表で置き方が違う。
+  // ★ここで見たいのは【開いた時の置き場所】。上の検査で帯を引っぱっており、その時の
+  //   「端に近づいたら横に送る」で表が横にずれているので、必ず開き直してから測ること
+  //   （開き直さないと、ずれた位置を測って必ず落ちる。2026-11-12 に直した）。
+  await clickText(page, 'スケジュールに戻る');
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button,a')].find(e => e.innerText.indexOf('代車管理') >= 0 && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(1800);
   const pos = await page.evaluate(n => {
     const grab = (attr) => {
       const th = [...document.querySelectorAll('th[' + attr + ']')];

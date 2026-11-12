@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794295352827';
+  window.__APP_BUILD='build-1794440817660';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.110.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.111.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -517,6 +517,29 @@ const archDropSameBooking=(arch,custId,keepDk)=>{
     out[d]=next;
   });
   return hit?out:undefined;
+};
+// ★【日程を消す】この方の車検予約を insp（または保管箱）から外す純関数（2026-11-12 ユーザー指示）。
+//   顧客リストは「予約を一旦決めると、日程は変更できても消せない」状態だった。
+//   仮予約の状態に戻った時に日程だけ消したい、という要望。
+//   ・消すのは【この方の車検予約の行】だけ。お客様の行（顧客リスト）は残す。
+//   ・行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+//     ※ applyBookingToInsp は詰める作りだが、あちらは「同じ予約を入れ直す」ので
+//       最後に自分の行を足し直す。こちらは足さないので詰めてはいけない。
+//   ・キャンセルの行（bookingStatus==='cancelled'）は触らない＝履歴として残す。
+//   ・照合は custId と「同じ車（氏名＋ナンバー＋車種）」の両方（取り込み直しで custId が変わるため）。
+const dropBookingRows=(base,customer,inspLimits)=>{
+  if(!base||typeof base!=='object'||Array.isArray(base))return undefined;
+  const sameBooking=r=>!!r&&r.name&&r.bookingStatus!=='cancelled'&&(
+    (!!customer.custId&&r.custId===customer.custId)||isSameVehicleRow(r,customer));
+  const out={};const spots=[];let hit=false;
+  Object.keys(base).forEach(d=>{
+    const rows=base[d];
+    if(!Array.isArray(rows)||!rows.some(sameBooking)){out[d]=rows;return;}
+    hit=true;
+    rows.forEach((r,i)=>{if(sameBooking(r))spots.push({dk:d,idx:i});});
+    out[d]=recomputeInspApproval(rows.map(r=>sameBooking(r)?null:r),(inspLimits&&inspLimits[d])??6);
+  });
+  return hit?{data:out,spots}:undefined;
 };
 const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})=>{
   const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
@@ -2323,6 +2346,23 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
   const [selLocked,setSelLocked]=useState(false);
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
+  // ★【日程を消す】（2026-11-12 ユーザー指示）。入庫日を決めたあと仮予約の状態に戻った時に、
+  //   日程だけ消せるようにする。押した時点ではまだ何も保存しない（このカードの作法どおり）。
+  //   下の「✓ 日程を消して保存」を押した時に、スケジュールの予約・代車・6枠の控えを外す。
+  const [cleared,setCleared]=useState(false);
+  const clearDate=()=>{
+    setCleared(true);
+    setForm(p=>({...p,entryDate:'',preEntry:'',deliveryDate:'',deliveryTime:''}));
+    setSelCarId(null);setSelDays([]);setSelLocked(false);
+    setShowCal(false);setErr('');
+  };
+  const undoClear=()=>{
+    setCleared(false);
+    setForm(p=>({...p,entryDate:customer.entryDate||'',
+      preEntry:_existingInspRow?.entryDate||'',
+      deliveryDate:_existingInspRow?.deliveryDate||'',
+      deliveryTime:_existingInspRow?.deliveryTime||''}));
+  };
   // キーボード操作用state/ref（Hooksはreturnより前に全定義）
   const [focusField,setFocusField]=useState('time');
   const [showTimePicker,setShowTimePicker]=useState(false);
@@ -2378,7 +2418,8 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
     // await完了まで待つと「保存中...」のままフリーズして見えるため。
     // 予約はローカルstateへ即時反映されるので、閉じても予約内容は失われない。
     onClose();
-    Promise.resolve(onSave({...form,isTemp,selCarId,selDays,selLocked},customer))
+    Promise.resolve(onSave({...form,isTemp,selCarId,selDays,selLocked,
+      clearSched:cleared&&!form.entryDate},customer))
       .catch(e=>console.error('onSave error:',e))
       .finally(()=>setSaving(false));
   };
@@ -2490,10 +2531,35 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
                     fontWeight:700,cursor:'pointer',flexShrink:0}}>
                   {showCal?'▲ 閉じる':'📅 カレンダーを開く'}
                 </button>
+                {/* ★【日程を消す】（2026-11-12 ユーザー指示）。入庫日が入っている時だけ出す。
+                    押すとこの欄が空になり、保存した時にスケジュールの予約も外れる。 */}
+                {!!form.entryDate&&(
+                  <button type="button" data-bmclear="1" onClick={clearDate}
+                    title="入庫日を消す（保存するとスケジュールの予約・代車も外れます）"
+                    style={{padding:'2px 10px',fontSize:10,borderRadius:6,border:'1.5px solid #dc2626',
+                      background:'white',color:'#dc2626',fontWeight:700,cursor:'pointer',flexShrink:0}}>
+                    🗑 日程を消す
+                  </button>)}
+                {cleared&&(
+                  <button type="button" data-bmundoclear="1" onClick={undoClear}
+                    style={{padding:'2px 10px',fontSize:10,borderRadius:6,border:'1.5px solid #64748b',
+                      background:'white',color:'#334155',fontWeight:700,cursor:'pointer',flexShrink:0}}>
+                    ↩ 元に戻す
+                  </button>)}
               </div>
+              {/* ★日程を消した時の案内。保存するまでは何も変わっていないことを伝える。 */}
+              {cleared&&(
+                <div data-bmclearnote="1" style={{marginBottom:8,padding:'8px 10px',background:'#fef2f2',
+                  border:'2px solid #fca5a5',borderRadius:8,color:'#991b1b',fontSize:11.5,fontWeight:700,lineHeight:1.7}}>
+                  🗑 日程を消しました。下の「<b>✓ 日程を消して保存</b>」を押すと決まります。<br/>
+                  <span style={{fontWeight:500}}>
+                    スケジュールのこの方の車検予約と、紐づいた代車・レンタカーの貸出も外れます。
+                    お客様の行は残り、状態は「仮予約」になります。
+                  </span>
+                </div>)}
               <InspCalendarPicker
                 value={form.entryDate}
-                onChange={v=>setForm(p=>({...p,entryDate:v}))}
+                onChange={v=>{setForm(p=>({...p,entryDate:v}));if(v)setCleared(false);}}
                 inspData={inspData}
                 closedDays={closedDays}
                 closedDates={closedDates}
@@ -2705,7 +2771,7 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
               style={{width:'100%',padding:'8px 10px',border:cancelEdit?'2px solid #991b1b':'1.5px solid #e5e7eb',borderRadius:8,fontSize:13,resize:'vertical',boxSizing:'border-box',
                 ...(cancelEdit?{background:'white',color:'#1b2129'}:{}),...FR('note')}}/>
           </div>
-          <div style={cancelEdit?CANCEL_OFF:undefined}>
+          <div style={(cancelEdit||cleared)?CANCEL_OFF:undefined}>
             <label style={{display:'block',fontSize:11,fontWeight:700,color:'#374151',marginBottom:5}}>
               代車
               {selCarId&&selDays.length>0&&(
@@ -2747,8 +2813,13 @@ const BookingModal=({customer,inspData,loanerResH,loanerResS,loanerListH,loanerL
               style={{padding:'9px 20px',border:'none',borderRadius:9,background:'linear-gradient(135deg,#7f1d1d,#dc2626)',color:'white',fontWeight:700,cursor:'pointer',boxShadow:'0 2px 8px rgba(220,38,38,0.3)'}}>
               ✓ コメントを保存（キャンセルのまま）
             </button>)}
-          {!cancelEdit&&<button onClick={()=>handleSave(true)} disabled={saving} style={{padding:'9px 20px',border:'1.5px solid #86efac',borderRadius:9,background:'#f0fdf4',color:'#16a34a',fontWeight:700,cursor:'pointer'}}>仮予約</button>}
-          {!cancelEdit&&<button onClick={()=>handleSave(false)} disabled={saving}
+          {/* ★日程を消した時は「✓ 日程を消して保存」1つだけにする（本予約は入庫日が必須なので出さない）。 */}
+          {!cancelEdit&&cleared&&<button data-bmclearsave="1" onClick={()=>handleSave(true)} disabled={saving}
+            style={{padding:'9px 20px',border:'none',borderRadius:9,background:'linear-gradient(135deg,#991b1b,#dc2626)',color:'white',fontWeight:800,cursor:'pointer',boxShadow:'0 2px 8px rgba(220,38,38,0.3)'}}>
+            {saving?'保存中...':'✓ 日程を消して保存'}
+          </button>}
+          {!cancelEdit&&!cleared&&<button onClick={()=>handleSave(true)} disabled={saving} style={{padding:'9px 20px',border:'1.5px solid #86efac',borderRadius:9,background:'#f0fdf4',color:'#16a34a',fontWeight:700,cursor:'pointer'}}>仮予約</button>}
+          {!cancelEdit&&!cleared&&<button onClick={()=>handleSave(false)} disabled={saving}
             style={{padding:'9px 20px',border:'none',borderRadius:9,background:storeObj.id==='sanda'?'linear-gradient(135deg,#991b1b,#dc2626)':`linear-gradient(135deg,#1d4ed8,${storeObj.color})`,color:'white',fontWeight:700,cursor:'pointer',boxShadow:storeObj.id==='sanda'?'0 2px 8px rgba(220,38,38,0.3)':'0 2px 8px rgba(29,78,216,0.3)'}}>
             {saving?'保存中...':'✓ 本予約'}
           </button>}
@@ -4014,7 +4085,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     const _bg=[]; // 裏で走らせる保存。全部終わってからカウンタを戻す
     try{ window.__hubBusyOps=(window.__hubBusyOps||0)+1; }catch(_e){}
     try{
-    const{entryDate,store,bookingTime,course,tokuten,staff,note,isTemp,selCarId,selDays,selLocked,preEntry,deliveryDate,deliveryTime}=form;
+    const{entryDate,store,bookingTime,course,tokuten,staff,note,isTemp,selCarId,selDays,selLocked,preEntry,deliveryDate,deliveryTime,clearSched}=form;
     const status=isTemp?'temp':'confirm';
     // ★同じ車の予約が別の日にも入っている時は、移すのか・両方残すのかを尋ねる（2026-10-04 現場報告）。
     //   custId が合う行はこれまでどおり黙って移す（同じ予約の入れ直しなので）。
@@ -4089,6 +4160,75 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       }
       return next;
     });
+    // ★【日程を消す】（2026-11-12 ユーザー指示）。カードで「🗑 日程を消す」を押して保存した時だけ走る。
+    //   お客様の行は上で「仮予約・入庫日なし」に書き換わっている。ここでは
+    //   ① スケジュール（insp）② 保管箱（insp-arch）③ カレンダー6枠の控え（custbk）
+    //   ④ 紐づいた代車・レンタカーの貸出 を外す。
+    //   ★印（clearSched）が立っている時だけ。入庫日が空のまま保存しただけでは何も触らない。
+    if(clearSched&&!entryDate){
+      // 外す行の場所（代車・レンタカーを消すのに使う）。氏名が合う行だけを見る
+      const _sameBk=r=>!!r&&r.name&&r.bookingStatus!=='cancelled'&&(
+        (!!customer.custId&&r.custId===customer.custId)||isSameVehicleRow(r,customer));
+      const _dropSpots=[];
+      [hotInsp,inspArch].forEach(src=>{
+        Object.keys(src||{}).forEach(d=>{
+          if(!Array.isArray(src[d]))return;
+          (src[d]||[]).forEach((r,i)=>{if(_sameBk(r))_dropSpots.push({dk:d,idx:i});});
+        });
+      });
+      // ① スケジュール（insp）。サーバー最新値から外して、読み返して確かめる
+      let _clearedInsp=null;
+      const _clrOk=await writeVerified(STOR+'insp',
+        base=>{const r=dropBookingRows(base,customer,inspLimits);if(!r)return undefined;_clearedInsp=r.data;return r.data;},
+        back=>!dropBookingRows(back,customer,inspLimits),
+        3,{requireBase:true} // 読めなかったサーバー値を「空」とみなして書かない
+      );
+      if(_clearedInsp){setInspData(_clearedInsp);inspWriteRef.current=Date.now();}
+      if(!_clrOk){
+        alert(`⚠️ ${customer.name} の日程をスケジュールから外せませんでした（サーバー混雑）。
+もう一度お試しください。`);
+      }
+      // ② 保管箱（14日より前の分）。ここに残ると画面に古い予約が出続ける
+      _bg.push((async()=>{
+        try{
+          const _a=await sGet(STOR+'insp-arch');
+          const _r=dropBookingRows(_a,customer,inspLimits);
+          if(_r){await sSet(STOR+'insp-arch',_r.data);setInspArch(_r.data);}
+        }catch(e){}
+      })());
+      // ③ カレンダー6枠の控え（custbk）。残すと同期チェックが予約を作り直す＝消したつもりが戻る
+      const _cbHits=b=>Object.keys((b&&typeof b==='object')?b:{}).filter(k=>{
+        const e=b[k],f=e&&e.formData;
+        if(!e||!f)return false;
+        return (!!customer.custId&&f.custId===customer.custId)||isSameVehicleRow(f,customer);
+      });
+      _bg.push(writeVerified(STOR+'custbk',
+        base=>{const b=(base&&typeof base==='object')?base:{};const drop=_cbHits(b);
+          if(drop.length===0)return undefined;
+          const n={...b};drop.forEach(k=>{delete n[k];});return n;},
+        back=>_cbHits(back).length===0,
+        2,{requireBase:true}
+      ).catch(()=>{}));
+      // ④ 紐づいた代車・レンタカーの貸出
+      if(_dropSpots.length>0){
+        const _arg={keys:_dropSpots.map(sp=>`insp-${sp.dk}-${sp.idx}`),
+          custId:customer.custId,name:customer.name,
+          dks:[...new Set(_dropSpots.map(sp=>sp.dk))]};
+        [storKey('lres','honten'),storKey('lres','sanda'),STOR+'rres'].forEach(_k=>{
+          _bg.push(writeVerified(_k,
+            base=>resDropForMove(base,_arg),
+            back=>!resDropForMove(back,_arg),
+            2,{requireBase:true}
+          ).then(()=>sGet(_k).then(v=>{
+            if(!v||typeof v!=='object')return;
+            if(_k===storKey('lres','honten'))setLoanerResH(v);
+            else if(_k===storKey('lres','sanda'))setLoanerResS(v);
+          }).catch(()=>{})).catch(()=>{}));
+        });
+      }
+      // 親（スケジュール画面）にも読み直させる
+      try{ if(IS_EMBED)window.parent.postMessage({type:'hub-reload-main'},location.origin); }catch(_e){}
+    }
     // 2. inspDataに予約追加（本予約のみ。仮予約はリスト表示のみでスケジュールには載せない）
     if(entryDate&&!isTemp){
       const dk=entryDate;

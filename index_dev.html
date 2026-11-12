@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794295352827';
+    window.__APP_BUILD='build-1794440817660';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.110.0';
+const APP_VERSION = '3.111.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -12496,6 +12496,9 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   //     先頭の車名列は 120px・sticky なので、日付が見えている幅は clientWidth-120。
   //     ★代車表はこれまでどおり（本日が左から4列目）。2つの表で置き方が違うので、
   //       片方を直す時はもう片方も必ず見ること。
+  //   ★ただし【予約カードから開いた時（pickMode）はレンタカー表も代車表と同じ左寄せ】
+  //     にする（2026-11-12 ユーザー指示）。予約を取る時は「これから先の空き」を見るので
+  //     未来を広く出したい。代車管理（pickMode でない）の時だけ RENT_TRAIL を効かせる。
   const RENT_NAME_W=120, RENT_TRAIL=7;
   useEffect(()=>{
     if(scrollLock.current)return;
@@ -12514,15 +12517,20 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       gridRef.current.scrollLeft=left;
       if(rentalScrollRef.current){
         const el=rentalScrollRef.current;
-        const seen=Math.max(0,el.clientWidth-RENT_NAME_W);          // 日付が見えている幅
-        let rl=targetIndex*cellWidth-(seen-RENT_TRAIL*cellWidth);   // 本日を右から RENT_TRAIL 列目に
-        rl=Math.min(rl,targetIndex*cellWidth);                      // 画面が狭い時でも本日を左端より外へ出さない
-        el.scrollLeft=Math.max(0,rl);
+        if(pickMode){
+          // 予約カードから開いた時＝代車表とまったく同じ置き方（基準日が左から4列目）
+          el.scrollLeft=left;
+        }else{
+          const seen=Math.max(0,el.clientWidth-RENT_NAME_W);          // 日付が見えている幅
+          let rl=targetIndex*cellWidth-(seen-RENT_TRAIL*cellWidth);   // 本日を右から RENT_TRAIL 列目に
+          rl=Math.min(rl,targetIndex*cellWidth);                      // 画面が狭い時でも本日を左端より外へ出さない
+          el.scrollLeft=Math.max(0,rl);
+        }
       }
       scrollLock.current=true;
     },100);
     return()=>clearTimeout(timer);
-  },[selDate,dateRange]);
+  },[selDate,dateRange,pickMode]);
 
   const getRes=(cid,y,m,d)=>{const num=toNum(y,m,d);return Object.values(loanerRes[cid]||{}).find(r=>num>=toNum(r.fy,r.fm,r.fd)&&num<=toNum(r.ty,r.tm,r.td));};
   // ★同じ日を覆う予約を「全部」返す。表示は1台1日1件しか描けないので、2件目以降は
