@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794455656237';
+    window.__APP_BUILD='build-1794471788893';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.111.1';
+const APP_VERSION = '3.112.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9306,6 +9306,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const timeRef=useRef(null);
   const slotRef=useRef(null);     // 整備の「時間帯」（2026-10-15。畳んだ状態から追加した時はここから始める）
   const cardRef=useRef(null);     // カードの外枠（スクロールするのはこの箱）
+  // ★フック（useRef）は【早い `if(!isOpen) return null;` より前】に置くこと。
+  //   後ろに足すと開閉のたびにフックの数が変わって React が落ちる（error #310。2026-11-12 に踏んだ）。
+  const ptrDownRef=useRef(0);       // 最後にマウス（指）を押した時刻
+  const pendCenterRef=useRef(null); // クリックが終わってから真ん中へ寄せる欄
   const noteRef=useRef(null);
   const contRef=useRef(null);
 
@@ -9435,7 +9439,12 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   //   以前は ↓キーで送った時だけ scrollIntoView していたので、**Tab・クリックでは一度もスクロールしなかった**
   //   （実測：scrollTop が 221 のまま、欄がカードの 80% まで下がっていた）。
   //   いまはカードの枠の onFocus から呼ぶので、Tab でもクリックでも ↓キーでも同じように効く。
-  const centerField=(el)=>{
+  // ★マウスで押した時は【クリックが終わってから】動かす（2026-11-12 ユーザー報告）。
+  //   押している最中に箱をスクロールすると、欄が指の下から逃げて click が別の所に落ちる。
+  //   そのため「作業内容」「担当」「時間」のように【押して開く欄】は、1回目のクリックが
+  //   真ん中へ寄せるだけで終わり、入れるのに2回押す必要があった（1回で入るのが正しい）。
+  //   キーボード（Tab・↓・Enter）で欄が変わった時は今までどおりその場で動かす。
+  const centerFieldNow=(el)=>{
     const box=cardRef.current; if(!box||!el)return;
     try{
       const br=box.getBoundingClientRect(), ar=el.getBoundingClientRect();
@@ -9444,6 +9453,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       const want=box.scrollTop+(mid-br.height*0.5);
       box.scrollTo({top:Math.max(0,Math.min(box.scrollHeight-box.clientHeight,want)),behavior:'smooth'});
     }catch(e){}
+  };
+  const centerField=(el)=>{
+    // クリックの途中（押してから離すまで）は動かさず、離した後にまとめて寄せる
+    if(Date.now()-ptrDownRef.current<1500){ pendCenterRef.current=el; return; }
+    centerFieldNow(el);
   };
   const goNext=(from)=>{
     const i=ORDER.indexOf(from); if(i<0||i>=ORDER.length-1)return;
@@ -9714,6 +9728,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       {/* ★onFocus はバブリングするので、Tab・クリック・↓キーのどれで欄が変わっても centerField が走る（2026-10-15） */}
       <div ref={cardRef} onClick={e=>e.stopPropagation()} className="slide-in booking-modal-inner"
         onFocus={e=>centerField(e.target)}
+        onPointerDown={()=>{ptrDownRef.current=Date.now();pendCenterRef.current=null;}}
+        onPointerUp={()=>{ptrDownRef.current=0;const _el=pendCenterRef.current;pendCenterRef.current=null;
+          // クリック（押して離す）が片づいてから寄せる。120ms 待てば click は必ず配られている。
+          if(_el)setTimeout(()=>centerFieldNow(_el),120);}}
         style={{background:'white',width:'clamp(360px,90vw,560px)',height:'100vh',overflowY:'auto',boxShadow:'8px 0 32px rgba(0,0,0,0.22)',borderRight:`3px solid ${isInsp?'#9a3412':'#0891b2'}`}}>
         {/* パネルヘッダー */}
         <div style={{background:isInsp?'linear-gradient(135deg,#9a3412,#ea580c)':'linear-gradient(135deg,#0e7490,#0891b2)',padding:'16px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:20}}>
@@ -15091,11 +15109,25 @@ function AppInner() {
     const noStoreRows = inspRows.filter(r=>r&&r.name&&!normSt(r.store));
     const sortedInsp = [...myRows, ...noStoreRows, ...otherRows];
 
+    const inspDense = sortedInsp.length>=7;   // 7台以上の日は詰めて刷る（字 13px → 11px）
     const courseLabel = id => {const c=COURSES.find(c=>c.id===Number(id));return c?c.name:'';};
     const courseBadge = id => {const c=COURSES.find(c=>c.id===Number(id));if(!c)return '';return c.id===1?`<span class="course-badge course-ma">${c.initial}</span>`:`<span class="course-badge course-other" style="color:${c.color}">${c.initial}</span>`;};
     // 代車表記：車種名（番号）。文字量で段階縮小（fitクラスは各表の文字サイズにem追従）
     const fmtLoaner = (nm, num) => num?`${nm}（${num}）`:(nm||'');
     const loanerFitCls = s => {const n=(s||'').length; return 'loaner-fit'+(n>13?' f3':n>9?' f2':n>6?' f1':'');};
+    // ★1行に収める（長体）。w＝列の幅(px)／base＝その表の字の大きさ(px)／minR＝縮めてよい高さの下限。
+    //   そのまま入るなら触らない。入らない時だけ字の高さを base*minR まで落とし、残りは横だけ縮める。
+    const PR_ESC = t => String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const fitLine = (txt, w, base, cls, minR) => {
+      const t=String(txt==null?'':txt); if(!t) return '';
+      const inner=w-12, n=Array.from(t).length;        // td の左右 padding 6px
+      const fs=(n*base<=inner)?base:base*(minR==null?0.8:minR);
+      const k=Math.min(1, inner/(n*fs));
+      return '<span class="'+cls+'"><i style="font-size:'+fs.toFixed(1)+'px;transform:scaleX('+k.toFixed(3)+')">'+PR_ESC(t)+'</i></span>';
+    };
+    const PR_CAR_W = 78;                               // 車種の列幅（th の width と必ず同じにすること）
+    const carCell = (txt, base) => fitLine(txt, PR_CAR_W, base, 'car-fit');
+    const stfCell = (txt, w) => txt ? fitLine('担 '+txt, w, 8.5, 'stf-p', 1) : '';   // 担当は高さを落とさず横だけ縮める
     // ★部品注文の印（2026-11-05 ユーザー決定）。マッハ車検（course===1）の行だけ出す。
     //   丸の「部」＋【注文済み（parts）の行だけ】隣に ✓。行も列も増やさない。
     const partsMark = r => (Number(r.course)===1)
@@ -15157,13 +15189,13 @@ function AppInner() {
         if(!r||!r.name||r.bookingStatus==='cancelled'||!_inStore(r))return;
         // 事前入庫：この日に車だけ預かる（車検作業日は別の日）
         if(wdk!==dk && r.entryDate===dk){
-          pushDerived(_slotOf(r.time),{kind:'事前入庫',cls:'d-pre',name:r.name,carType:r.carType||'',
+          pushDerived(_slotOf(r.time),{kind:'事前入庫',cls:'d-pre',name:r.name,carType:r.carType||'',staff:r.staff||'',
             loaner:getLoanerLabel(r.name,`insp-${wdk}-${ix}`),
             note:`${_mmdd(wdk)} 車検${_initial(r.course)?`（${_initial(r.course)}）`:''}の預かり`});
         }
         // 納車：この日に返す
         if(r.deliveryDate===dk){
-          pushDerived(_slotOf(r.deliveryTime),{kind:'納車',cls:'d-dlv',name:r.name,carType:r.carType||'',
+          pushDerived(_slotOf(r.deliveryTime),{kind:'納車',cls:'d-dlv',name:r.name,carType:r.carType||'',staff:r.staff||'',
             loaner:getLoanerLabel(r.name,`insp-${wdk}-${ix}`),
             note:`${_mmdd(wdk)} 車検${_initial(r.course)?`（${_initial(r.course)}）`:''}の納車`});
         }
@@ -15175,11 +15207,11 @@ function AppInner() {
         if(!r||!r.name)return;
         // 整備の事前入庫（2026-09-19）
         if(wdk!==dk && r.entryDate===dk){
-          pushDerived(_slotOf(getBaseSlot(sk)),{kind:'事前入庫',cls:'d-pre',name:r.name,carType:r.carType||'',loaner:schedLoaner(r),note:`${_mmdd(wdk)} 作業の預かり`});
+          pushDerived(_slotOf(getBaseSlot(sk)),{kind:'事前入庫',cls:'d-pre',name:r.name,carType:r.carType||'',staff:r.staff||'',loaner:schedLoaner(r),note:`${_mmdd(wdk)} 作業の預かり`});
         }
         if(r.deliveryDate!==dk)return;
         if(wdk===dk&&getBaseSlot(sk)===_slotOf(r.deliveryTime))return; // 自分自身の枠と重なる時は出さない
-        pushDerived(_slotOf(r.deliveryTime),{kind:'納車',cls:'d-dlv',name:r.name,carType:r.carType||'',
+        pushDerived(_slotOf(r.deliveryTime),{kind:'納車',cls:'d-dlv',name:r.name,carType:r.carType||'',staff:r.staff||'',
           loaner:schedLoaner(r),note:`${_mmdd(wdk)} 作業の納車`});
       });
     });
@@ -15200,11 +15232,11 @@ function AppInner() {
         let first=true;
         dataKeys.forEach(k=>{
           const r=schedData[dk][k];
-          schedRows.push({slot:first?slot:'', name:r.name||'', carType:r.carType||'', work:workBadgeText(r)||'', loaner:schedLoaner(r), note:r.content||'', isEmpty:false});
+          schedRows.push({slot:first?slot:'', name:r.name||'', carType:r.carType||'', work:workBadgeText(r)||'', loaner:schedLoaner(r), note:r.content||'', staff:r.staff||'', isEmpty:false});
           first=false;
         });
         derived.forEach(d=>{
-          schedRows.push({slot:first?slot:'', name:d.name, carType:d.carType, work:d.kind, loaner:d.loaner, note:d.note, isEmpty:false, cls:d.cls});
+          schedRows.push({slot:first?slot:'', name:d.name, carType:d.carType, work:d.kind, loaner:d.loaner, note:d.note, staff:d.staff||'', isEmpty:false, cls:d.cls});
           first=false;
         });
       }
@@ -15297,6 +15329,18 @@ function AppInner() {
   td.loaner-fit.f1 { font-size: 0.82em; }
   td.loaner-fit.f2 { font-size: 0.68em; }
   td.loaner-fit.f3 { font-size: 0.56em; white-space: normal; line-height: 1.15; word-break: break-all; }
+  /* ★車種は【1行】に収める（2026-11-12 ユーザー決定）。
+     等倍で小さくすると7台以上の日に 5.7px まで落ちて紙で読めない（実測）。
+     字の高さは base の 0.8 で止め、足りないぶんは【横だけ】 scaleX で縮める（長体）。
+     あわせて車種の列を 66px → 78px にした（広げたぶんは備考・内容から引いている）。
+     ★行も列も増やさないこと（1日が1枚に収まらなくなる）。 */
+  .car-fit { display:block; white-space:nowrap; overflow:hidden; }
+  .car-fit > i { display:inline-block; font-style:normal; transform-origin:left center; }
+  /* ★担当者（2026-11-12 ユーザー要望「誰が受けたか紙で分からない」）。
+     車検＝車種の下／一般整備＝お名前の下。セルの中の2行目なので行も列も増えない。 */
+  .stf-p { display:block; font-size:8.5px; font-weight:600; color:#475569; line-height:1.15; margin-top:1px; white-space:nowrap; overflow:hidden; }
+  .stf-p > i { display:inline-block; font-style:normal; transform-origin:left center; }
+  @media print and (monochrome){ .stf-p { color:#000 !important; } }
   /* 内容が長い枠は枠内に収まるよう段階縮小・折返し */
   .sched-table td.note-sm { font-size: 10px; white-space: normal; }
   .sched-table td.note-xs { font-size: 9px;  white-space: normal; line-height: 1.15; }
@@ -15339,12 +15383,12 @@ function AppInner() {
 
     <div class="section-box">
       <h2 class="insp-head">🚗 車検（${sortedInsp.length}台）</h2>
-      <table class="insp-table${sortedInsp.length>=7?' dense':''}">
+      <table class="insp-table${inspDense?' dense':''}">
         <thead><tr class="insp-head">
           <th style="width:20px">No</th>
           <th class="insp-time" style="width:34px">入庫</th>
           <th style="width:72px">氏名</th>
-          <th style="width:66px">車種</th>
+          <th style="width:78px">車種</th>
           <th style="width:38px">コース</th>
           <th style="width:60px">代車</th>
           <th style="width:28px">特典</th>
@@ -15361,7 +15405,7 @@ function AppInner() {
                 <td style="font-weight:700;color:${isOther?'#94a3b8':storeColor}">${i+1}</td>
                 <td class="insp-time">${printInspTime(r.time)}</td>
                 <td style="font-weight:700">${r.name||''}${storeTag?`<span style="font-size:9px;background:${tagColor};color:white;padding:1px 4px;border-radius:2px;margin-left:3px">${storeTag}</span>`:''}${partsMark(r)}${r.adv2y?`<span class="adv2y-p">2年前${r.contact==='sms'?'SMS':r.contact==='tel'?'電話':''}${r.fixed?'✓':''}</span>`:''}</td>
-                <td>${r.carType||''}</td>
+                <td>${carCell(r.carType,inspDense?11:13)}${stfCell(r.staff,78)}</td>
                 <td>${courseBadge(r.course)}</td>
                 <td class="loaner-wrap">${loaner}</td>
                 <td style="text-align:center">${r.tokuten||'-'}</td>
@@ -15393,7 +15437,7 @@ function AppInner() {
         <thead><tr class="sched-head">
           <th style="width:34px">時間</th>
           <th style="width:70px">氏名</th>
-          <th style="width:66px">車種</th>
+          <th style="width:78px">車種</th>
           <th style="width:38px">作業</th>
           <th style="width:76px">代車</th>
           <th>内容</th>
@@ -15413,8 +15457,8 @@ function AppInner() {
             }
             return `<tr class="${r.isEmpty?'slot-empty':'has-data'}${r.cls?' '+r.cls:''}${r.rst?' slot-restr':''}">
               <td style="font-weight:700;color:#0e7490;white-space:nowrap">${r.slot||''}</td>
-              <td style="font-weight:${r.name?'700':'400'}">${r.name||(r.rstLab?`<span class="restr-lab">${r.rstLab}</span>`:'')}</td>
-              <td>${r.carType||''}</td>
+              <td style="font-weight:${r.name?'700':'400'}">${r.name||(r.rstLab?`<span class="restr-lab">${r.rstLab}</span>`:'')}${r.name?stfCell(r.staff,70):''}</td>
+              <td>${carCell(r.carType,12)}</td>
               <td style="text-align:center${r.cls?';white-space:nowrap;font-weight:800':''}">${r.work||''}</td>
               <td class="${loanerFitCls(r.loaner)}">${r.loaner||''}</td>
               <td class="${nCls}">${r.note||''}</td>

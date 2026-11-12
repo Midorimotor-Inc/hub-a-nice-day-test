@@ -64,10 +64,22 @@ const printRows = async (page) => {
       rows: [...tb.querySelectorAll('tbody tr')].map(tr => [...tr.querySelectorAll('td')].map(cell)),
       colspan: colTd ? colTd.getAttribute('colspan') : null,
       timeCells: [...tb.querySelectorAll('tbody td.insp-time')].map(cell),
+      // ★車種（1行に収める）と担当（2026-11-12）
+      carW: (tb.querySelectorAll('thead th')[3] || {}).getAttribute ? tb.querySelectorAll('thead th')[3].getAttribute('style') : '',
+      hasCarCss: String(window.__printed || '').indexOf('.car-fit') >= 0,
+      hasStfCss: String(window.__printed || '').indexOf('.stf-p') >= 0,
+      inspCar: [...tb.querySelectorAll('tbody tr')].map(tr => {
+        const td = tr.children[3]; if (!td) return null;
+        const c = td.querySelector('.car-fit > i'), st = td.querySelector('.stf-p > i');
+        return { car: c ? cell(c) : '', sty: c ? (c.getAttribute('style') || '') : '', stf: st ? cell(st) : '' };
+      }),
       // タイムスケジュールの表（入庫制限の帯を見るため）
       sched: [...d.querySelectorAll('table.sched-table tbody tr')].map(tr => ({
         cls: tr.className, cells: [...tr.querySelectorAll('td')].map(cell),
         lab: (tr.querySelector('.restr-lab') ? cell(tr.querySelector('.restr-lab')) : ''),
+        stf: (tr.querySelector('.stf-p > i') ? cell(tr.querySelector('.stf-p > i')) : ''),
+        car: (tr.querySelector('.car-fit > i') ? cell(tr.querySelector('.car-fit > i')) : ''),
+        carSty: (tr.querySelector('.car-fit > i') ? (tr.querySelector('.car-fit > i').getAttribute('style') || '') : ''),
       })),
     };
   });
@@ -195,6 +207,47 @@ const printRows = async (page) => {
   t('★7台以上の日は詰めて刷る（dense）', !!r4 && r4.dense, r4 && r4.dense);
   t('★詰め方の決まりが印刷の CSS に入っている', !!r4 && r4.hasDenseCss);
   t('★6台までは詰めない（ふだんの大きさ）', !!r3 && r3.dense === false, r3 && r3.dense);
+
+  head('⑨ 担当者名を紙にも出す／車種は1行（2026-11-12 ユーザー要望）');
+  // 「誰が受けたか印刷の紙では分からない」＝車検は【車種の下】・一般整備は【お客様名の下】に担当。
+  // 車種は2行にせず1行（長体＝高さは残して横だけ縮める）。★行も列も増やさないこと。
+  await page.evaluate(([ki, ks, dk]) => {
+    window.__fakeFb.set(ki, { [dk]: [
+      { name: '担当太郎', carType: 'アルト', course: 2, store: 'honten', tokuten: '-', time: '09:00', staff: '江川京志', bookingStatus: 'confirmed', seq: 1 },
+      { name: '担当次郎', carType: 'アルトラパンショコラ', course: 2, store: 'honten', tokuten: '-', time: '10:00', staff: '長谷川昌彦', bookingStatus: 'confirmed', seq: 2 },
+      { name: '担当三郎', carType: 'ワゴンR', course: 2, store: 'honten', tokuten: '-', time: '11:00', staff: '', bookingStatus: 'confirmed', seq: 3 }
+    ] });
+    window.__fakeFb.set(ks, { [dk]: { '13:00': { name: '整備花子', carType: 'ワゴンRスティングレー', work: 'Q', content: 'オイル交換', staff: '魚住', store: 'honten', id: 11 } } });
+  }, [STOR + 'insp', STOR + 'honten-sched', DK]);
+  await page.waitForTimeout(2200);
+  const r5 = await printRows(page);
+  const row1 = r5 && r5.inspCar[0], row2 = r5 && r5.inspCar[1], row3 = r5 && r5.inspCar[2];
+  t('印刷の HTML を受け取れた（3台）', !!r5 && r5.rows.length === 3, r5 && r5.rows.length);
+  t('★列は8つのまま（担当のために列を増やさない）', !!r5 && r5.head.length === 8, r5 && r5.head);
+  t('★どの行も8つの欄のまま', !!r5 && r5.rows.every(c => c.length === 8), r5 && r5.rows.map(c => c.length));
+  t('★車検：車種の欄に「担 江川京志」が出る', !!row1 && row1.stf === '担 江川京志', row1);
+  t('★車検：担当が空の人には出さない', !!row3 && row3.stf === '', row3);
+  t('★車検：車種はそのまま出る', !!row2 && row2.car === 'アルトラパンショコラ', row2);
+  // 長体：font-size と scaleX から「1行に収まるか」を計算で確かめる（列78px・左右のpadding 6px）
+  const fitOk = (o, w) => { if (!o || !o.car) return false;
+    const fs = parseFloat((o.sty.match(/font-size:([0-9.]+)px/) || [])[1] || '0');
+    const k = parseFloat((o.sty.match(/scaleX\(([0-9.]+)\)/) || [])[1] || '0');
+    if (!fs || !k) return false;
+    return Array.from(o.car).length * fs * k <= (w - 12) + 0.5; };
+  t('★車検：ふつうの長さは縮めない（13px のまま）', !!row1 && /font-size:13.0px/.test(row1.sty) && /scaleX\(1.000\)/.test(row1.sty), row1 && row1.sty);
+  t('★車検：長い車種でも1行に収まる（横だけ縮める）', fitOk(row2, 78), row2 && row2.sty);
+  t('★車検：長い車種でも字の高さは 10px 以上（等倍で小さくしない）',
+    !!row2 && parseFloat((row2.sty.match(/font-size:([0-9.]+)px/) || [])[1] || '0') >= 10, row2 && row2.sty);
+  t('★車種の列は 78px', !!r5 && /78px/.test(r5.carW || ''), r5 && r5.carW);
+  t('★1行に収める決まりが印刷の CSS に入っている', !!r5 && r5.hasCarCss);
+  t('★担当の決まりが印刷の CSS に入っている', !!r5 && r5.hasStfCss);
+  const sr = (r5.sched || []).find(x => (x.cells[1] || '').indexOf('整備花子') >= 0);
+  t('★一般整備：お客様名の欄に「担 魚住」が出る', !!sr && sr.stf === '担 魚住', sr);
+  t('★一般整備：車種も1行に収まる', !!sr && (function () {
+      const fs = parseFloat((sr.carSty.match(/font-size:([0-9.]+)px/) || [])[1] || '0');
+      const k = parseFloat((sr.carSty.match(/scaleX\(([0-9.]+)\)/) || [])[1] || '0');
+      return !!fs && !!k && Array.from(sr.car).length * fs * k <= 78 - 12 + 0.5; })(), sr && sr.carSty);
+  t('★一般整備：予定が無い枠には担当が出ない', !!r5 && (r5.sched || []).filter(x => !x.cells[1] && x.stf).length === 0);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));

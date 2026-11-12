@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>印刷に担当者名を入れる（モック）</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif; background:#eef2f6; color:#1b2129; padding:14px 16px 40px; }
+h1 { font-size:18px; margin-bottom:4px; }
+.lead { font-size:13px; color:#475569; margin-bottom:12px; line-height:1.6; }
+.bar { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:10px 12px; margin-bottom:14px; }
+.bar .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:5px 0; }
+.bar b { font-size:12px; width:120px; color:#334155; }
+.bar button { font-size:12px; font-weight:700; padding:5px 10px; border-radius:6px; border:1.5px solid #94a3b8; background:#f8fafc; cursor:pointer; }
+.bar button.on { background:#0891b2; border-color:#0891b2; color:#fff; }
+.note { font-size:11px; color:#64748b; margin-top:6px; line-height:1.5; }
+.sheet { background:#fff; border:1px solid #94a3b8; padding:10px; border-radius:6px; display:inline-block; }
+.wrap { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+.cap { font-size:12px; font-weight:800; margin:0 0 5px; color:#334155; }
+
+/* ===== ここから本物の印刷CSSの写し（index_dev.html の handlePrint） ===== */
+.p { font-size:13px; color:#000; background:#fff; }
+.p table { width:100%; border-collapse:collapse; }
+.p .insp-table, .p .sched-table { table-layout:fixed; }
+.p th { padding:4px 4px; font-weight:800; font-size:10px; text-align:left; color:#fff; }
+.p td { padding:5px 6px; border-bottom:1px solid #94a3b8; vertical-align:middle; font-size:12px; font-weight:500; }
+.p .insp-table td { font-size:13px; padding:7px 6px; }
+.p .insp-table th { font-size:10px; }
+.p .insp-table.dense td { font-size:11px; padding:3px 5px; }
+.p .insp-table.dense td.insp-time { font-size:11px; }
+.p .insp-table.dense .course-badge { width:18px; height:18px; font-size:11px; }
+.p .adv2y-p { font-size:8.5px; font-weight:800; background:#6d28d9; color:#fff; padding:1px 3px; border-radius:2px; margin-left:3px; white-space:nowrap; }
+.p .parts-p { display:inline-flex; align-items:center; gap:1px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
+.p .parts-p i { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; border:1.5px solid #b45309; color:#b45309; background:#fff; font-size:9px; font-weight:900; font-style:normal; line-height:1; }
+.p .insp-table td.insp-time { font-size:12.5px; font-weight:800; white-space:nowrap; text-align:center; padding-left:2px; padding-right:2px; }
+.p .insp-table th.insp-time { text-align:center; padding-left:2px; padding-right:2px; }
+.p .course-badge { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; font-weight:800; font-size:12px; line-height:1; }
+.p .course-ma { background:#b91c1c; color:#fff; }
+.p .course-other { border:1.5px solid currentColor; background:transparent; }
+.p .sched-table td { font-size:12px; padding:3px 6px; line-height:1.2; }
+.p .sched-table tr.slot-empty td { padding:2px 6px; }
+.p .sched-table th { font-size:10px; }
+.p .insp-table td.loaner-wrap { white-space:normal; line-height:1.2; font-size:.9em; word-break:break-word; }
+.p td.loaner-fit { white-space:nowrap; }
+.p td.loaner-fit.f1 { font-size:0.82em; }
+.p td.loaner-fit.f2 { font-size:0.68em; }
+.p .sched-table td.note-sm { font-size:10px; white-space:normal; }
+.p .insp-head { background:#9a3412; }
+.p .sched-head { background:#0e7490; }
+.p h2 { font-size:12px; font-weight:800; padding:2px 9px; border-radius:4px; color:#fff; margin-bottom:3px; }
+.p .section-box { border:1px solid #94a3b8; border-radius:5px; overflow:hidden; }
+.p .store-my { border-left:3px solid #2563eb; }
+.p .slot-empty td { color:#94a3b8; background:#f1f5f9; }
+.p .slot-empty td:first-child { color:#334155; font-weight:700; }
+.p .has-data td { background:#fff; }
+
+/* ===== ここが今回の提案 ===== */
+/* 車種：1行に収める。
+   ①等倍＝文字数で段階縮小（em なので 7台以上の dense でも追従する）
+   ②長体＝字の高さは 0.8em のまま、横だけ scaleX で縮める（日本語の印刷でよく使う収め方） */
+.carfit { white-space:nowrap; overflow:hidden; display:block; }
+.carfit.c0 { font-size:1em; }
+.carfit.c1 { font-size:.88em; }
+.carfit.c2 { font-size:.78em; }
+.carfit.c3 { font-size:.68em; }
+.carfit.c4 { font-size:.60em; }
+.carfit.c5 { font-size:.52em; letter-spacing:-.2px; }
+.carsq { display:block; white-space:nowrap; overflow:hidden; }
+.carsq > i { display:inline-block; font-style:normal; transform-origin:left center; }
+/* 担当（A案）うすい灰色 */
+.stfA { display:block; font-size:8.5px; font-weight:600; color:#475569; line-height:1.1; margin-top:1px; white-space:nowrap; }
+/* 担当（B案）黒・太字 */
+.stfB { display:block; font-size:9.5px; font-weight:800; color:#000; line-height:1.1; margin-top:1px; white-space:nowrap; }
+/* 担当（C案）枠つきの札 */
+.stfC { display:inline-block; font-size:8px; font-weight:800; color:#334155; line-height:1.1; margin-top:2px;
+        border:1px solid #94a3b8; border-radius:2px; padding:0 2px; white-space:nowrap; }
+</style></head><body>
+
+<h1>印刷に担当者名を入れる（モック）</h1>
+<p class="lead">
+本物の印刷CSSをそのまま写し、<b>実際の紙と同じ幅</b>（A4横・余白6mm → 車検の表 495px／タイムスケジュール 581px）で並べています。<br>
+お名前は架空です。車種は<b>本番の実データで一番長いもの</b>（10〜11文字）まで入れてあります。
+</p>
+
+<div class="bar">
+  <div class="row"><b>担当の見せ方</b>
+    <button id="bA" class="on" onclick="setStf('A')">A案 うすい灰色</button>
+    <button id="bB" onclick="setStf('B')">B案 黒の太字</button>
+    <button id="bC" onclick="setStf('C')">C案 枠つきの札</button>
+  </div>
+  <div class="row"><b>車種の列幅</b>
+    <button id="w66" class="on" onclick="setW(66)">66px（いまのまま）</button>
+    <button id="w78" onclick="setW(78)">78px</button>
+    <button id="w90" onclick="setW(90)">90px</button>
+    <div class="note" style="margin:0 0 0 6px">広げたぶんは「備考」から引きます（行も列も増やしません）</div>
+  </div>
+  <div class="row"><b>車種の収め方</b>
+    <button id="mSQ" class="on" onclick="setMode('sq')">長体（高さそのまま・横だけ縮める）</button>
+    <button id="mEQ" onclick="setMode('eq')">等倍で小さくする</button>
+    <div class="note" style="margin:0 0 0 6px">長体は字の高さが残るので、同じ幅でも読みやすいです</div>
+  </div>
+  <div class="row"><b>車検の台数</b>
+    <button id="n5" class="on" onclick="setN(5)">5台（ふつう）</button>
+    <button id="n8" onclick="setN(8)">8台（7台以上＝字を詰める dense）</button>
+  </div>
+  <div class="note">
+    ★いまは 車種 66px＝中身54px なので、13px では<b>5文字でもう2行</b>になります（本番データの32%が5文字以上）。<br>
+    　1行にするには「縮める」だけでは足りず、<b>列を少し広げる</b>のが要ります。66px のままだと一番長い車種が 6.8px まで縮みます。
+  </div>
+</div>
+
+<div class="wrap">
+  <div>
+    <div class="cap">① 車検（担当は「車種の下」）</div>
+    <div class="sheet"><div class="p" style="width:495px">
+      <div class="section-box">
+        <h2 class="insp-head">🚗 車検（<span id="cnt">5</span>台）</h2>
+        <table class="insp-table" id="inspT">
+          <thead><tr class="insp-head">
+            <th style="width:20px">No</th>
+            <th class="insp-time" style="width:34px">入庫</th>
+            <th style="width:72px">氏名</th>
+            <th id="thCar" style="width:66px">車種</th>
+            <th style="width:38px">コース</th>
+            <th style="width:60px">代車</th>
+            <th style="width:28px">特典</th>
+            <th>備考</th>
+          </tr></thead>
+          <tbody id="inspB"></tbody>
+        </table>
+      </div>
+    </div></div>
+  </div>
+
+  <div>
+    <div class="cap">② 一般整備（担当は「お客様名の下」）</div>
+    <div class="sheet"><div class="p" style="width:581px">
+      <div class="section-box">
+        <h2 class="sched-head">⏰ タイムスケジュール（9:00〜18:00）</h2>
+        <table class="sched-table">
+          <thead><tr class="sched-head">
+            <th style="width:34px">時間</th>
+            <th style="width:70px">氏名</th>
+            <th id="thCar2" style="width:66px">車種</th>
+            <th style="width:38px">作業</th>
+            <th style="width:76px">代車</th>
+            <th>内容</th>
+          </tr></thead>
+          <tbody id="schedB"></tbody>
+        </table>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+var STF='A', CARW=66, NUM=5, MODE='sq';
+
+// 車検（架空のお名前・車種は本番の実データと同じ長さの分布）
+var INSP=[
+ {t:'09:00',n:'辻井　博',   c:'アルト',              co:'ク', l:'ハスラー (7074)',   tk:'○', nt:'タイヤ交換も希望', s:'江川京志'},
+ {t:'10:00',n:'整備　一郎', c:'ムーヴキャンバス',    co:'マ', l:'',                  tk:'-', nt:'部品手配済み',     s:'魚住', parts:1},
+ {t:'11:00',n:'古家　明',   c:'アルトラパンショコラ',co:'レ', l:'スペーシア (8967)', tk:'-', nt:'',                 s:'長谷川昌彦'},
+ {t:'午前',  n:'三木　洋子', c:'スペーシア',          co:'ク', l:'',                  tk:'○', nt:'代車いらない',     s:'竹林', adv:1},
+ {t:'13:30',n:'山田自動車工業', c:'ジムニーシエラ',  co:'レ', l:'ワゴンR (3310)',    tk:'-', nt:'オイルも一緒に',   s:'江川京志'},
+ {t:'14:00',n:'西村　健',   c:'ノア',                co:'ク', l:'',                  tk:'-', nt:'',                 s:'岡本'},
+ {t:'15:00',n:'石田　正',   c:'ワゴンRスティングレー',co:'レ',l:'',                  tk:'-', nt:'引き取り希望',     s:'魚住'},
+ {t:'16:30',n:'森　由美',   c:'ソリオバンディット',  co:'ク', l:'ハスラー (7074)',   tk:'○', nt:'',                 s:'竹林'}
+];
+
+// 一般整備
+var SCHED=[
+ {sl:'午前入庫', n:'小林　隆',  c:'エヴリィ',              w:'Q',   l:'',                  nt:'オイル・エレメント交換',   s:'江川京志'},
+ {sl:'09:00',   n:'',          c:'',                      w:'',    l:'',                  nt:'',                         s:''},
+ {sl:'09:30',   n:'村上　千春', c:'スーパーキャリー',      w:'無6', l:'ハスラー (7074)',   nt:'6ヶ月点検',                s:'魚住'},
+ {sl:'10:00',   n:'丸山建設',   c:'ワゴンRスティングレー', w:'B',   l:'',                  nt:'左リヤドア板金',           s:'長谷川昌彦'},
+ {sl:'10:30',   n:'',          c:'',                      w:'',    l:'',                  nt:'',                         s:''},
+ {sl:'11:00',   n:'藤本　久',   c:'プロボックス',          w:'有12',l:'スペーシア (8967)', nt:'12ヶ月点検・ブレーキ鳴き', s:'竹林'},
+ {sl:'11:30',   n:'',          c:'',                      w:'',    l:'',                  nt:'',                         s:''},
+ {sl:'13:00',   n:'中野　明美', c:'ミラ',                  w:'R',   l:'',                  nt:'エアコン効かない',         s:'岡本'},
+ {sl:'13:30',   n:'',          c:'',                      w:'',    l:'',                  nt:'',                         s:''},
+ {sl:'14:00',   n:'大西　茂',   c:'ハスラー/スペカス',     w:'納',  l:'',                  nt:'納車立会',                 s:'江川京志'}
+];
+
+// 車種を1行に収める中身を作る。dense（7台以上）は基準が 13px → 11px になるので base で渡す
+function carBox(name, w, base){
+  var inner = w - 12;                      // td の左右 padding 6px
+  var n = Array.from(name).length;
+  if (MODE==='eq'){
+    var em = [1, .88, .78, .68, .60, .52];
+    for (var i=0;i<em.length;i++){ if (n * base * em[i] <= inner) return '<span class="carfit c'+i+'">'+name+'</span>'; }
+    return '<span class="carfit c5">'+name+'</span>';
+  }
+  // 長体：字の高さは 0.8em で止め、足りないぶんは横だけ縮める
+  var fs = base * 0.8;
+  if (n * base <= inner) fs = base;        // そのまま入るなら縮めない
+  var k = Math.min(1, inner / (n * fs));
+  return '<span class="carsq"><i style="font-size:'+fs.toFixed(1)+'px;transform:scaleX('+k.toFixed(3)+')">'+name+'</i></span>';
+}
+function stfHtml(s){
+  if(!s) return '';
+  if(STF==='A') return '<span class="stfA">担 '+s+'</span>';
+  if(STF==='B') return '<span class="stfB">担 '+s+'</span>';
+  return '<span class="stfC">担 '+s+'</span>';
+}
+function draw(){
+  var dense = NUM>=7;
+  document.getElementById('inspT').className = 'insp-table'+(dense?' dense':'');
+  document.getElementById('cnt').textContent = NUM;
+  document.getElementById('thCar').style.width = CARW+'px';
+  document.getElementById('thCar2').style.width = CARW+'px';
+
+  var ib='';
+  INSP.slice(0,NUM).forEach(function(r,i){
+    var badge = r.co==='マ' ? '<span class="course-badge course-ma">マ</span>'
+                            : '<span class="course-badge course-other">'+r.co+'</span>';
+    ib += '<tr class="store-my">'
+        + '<td style="font-weight:700;color:#2563eb">'+(i+1)+'</td>'
+        + '<td class="insp-time">'+r.t+'</td>'
+        + '<td style="font-weight:700">'+r.n+' 様'
+          + (r.parts?'<span class="parts-p"><i>部</i></span>':'')
+          + (r.adv?'<span class="adv2y-p">2年前SMS✓</span>':'')
+        + '</td>'
+        + '<td>'+carBox(r.c,CARW,dense?11:13)+stfHtml(r.s)+'</td>'
+        + '<td>'+badge+'</td>'
+        + '<td class="loaner-wrap">'+r.l+'</td>'
+        + '<td style="text-align:center">'+r.tk+'</td>'
+        + '<td>'+r.nt+'</td>'
+        + '</tr>';
+  });
+  document.getElementById('inspB').innerHTML = ib;
+
+  var sb='';
+  SCHED.forEach(function(r){
+    var empty = !r.n;
+    sb += '<tr class="'+(empty?'slot-empty':'has-data')+'">'
+        + '<td style="font-weight:700;color:#0e7490;white-space:nowrap">'+r.sl+'</td>'
+        + '<td style="font-weight:'+(r.n?'700':'400')+'">'+(r.n?r.n+' 様'+stfHtml(r.s):'')+'</td>'
+        + '<td>'+(r.c?carBox(r.c,CARW,12):'')+'</td>'
+        + '<td style="text-align:center">'+r.w+'</td>'
+        + '<td class="loaner-fit'+(r.l&&Array.from(r.l).length>10?' f1':'')+'">'+r.l+'</td>'
+        + '<td'+((r.nt||'').length>22?' class="note-sm"':'')+'>'+r.nt+'</td>'
+        + '</tr>';
+  });
+  document.getElementById('schedB').innerHTML = sb;
+}
+function setStf(v){ STF=v; ['A','B','C'].forEach(function(k){ document.getElementById('b'+k).className = (k===v?'on':''); }); draw(); }
+function setW(v){ CARW=v; [66,78,90].forEach(function(k){ document.getElementById('w'+k).className = (k===v?'on':''); }); draw(); }
+function setN(v){ NUM=v; [5,8].forEach(function(k){ document.getElementById('n'+k).className = (k===v?'on':''); }); draw(); }
+function setMode(v){ MODE=v; document.getElementById('mSQ').className=(v==='sq'?'on':''); document.getElementById('mEQ').className=(v==='eq'?'on':''); draw(); }
+draw();
+</script>
+</body></html>
