@@ -3122,3 +3122,41 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   ・⑧（レンタカーの返却日を伸ばす）… レンタカー表は本日が右から7列目なので、**+8日はまだ画面の外**。
     表の外の日はつかめないので、**先に横へ送って見える所に出してから**引っぱるようにした。
   → 32件 PASS。★**レンタカーの表を触る検査は「その日が画面に出ているか」を先に確かめること。**
+
+### 予約カードの代車「削除」は予約確定まで消さない／週表から代車管理が開けなかった（v3.111.1・2026-11-12）
+- 現場報告2件（どちらも PC の予約カード）：
+  ① 「**予約カードから代車を選んだら、予約カード自体が消えます**」
+  ② 「**代車を取り消して、予約確定ボタンを押さずにカードを閉じると代車が消えてしまう。
+     確定していないのに消えるのは、確定したのと同じ意味なのでまずい**」
+- **① の正体は【覆いの下に隠れていた】**。週間カレンダー（weekOpen）とダッシュボード（dashOpen）は
+  `position:fixed / zIndex:900` の覆い。**代車管理の画面は `zIndex:10`**（main の中）なので、
+  週表から予約カードを開いて「選択」を押すと、カードは閉じるのに**代車管理表は覆いの下**に出る。
+  画面には週間カレンダーだけが残る＝「予約カードが消えた」に見える。
+  → **`handleOpenLoanerPicker` で `setWeekOpen(false)` と `setDashOpen(false)` を呼ぶ**。
+  選び終われば予約カードはスケジュール画面の上に戻る（週表の `onPickDay` と同じ考え方）。
+  ★**今後、画面を覆うもの（zIndex 900 以上）を足した時は、代車管理へ移る所でも閉じること。**
+  代車管理の zIndex を上げる手もあるが、予約カード（1000）より下に置く決まりは崩さない方がよい。
+- **② は `handleDeleteLoaner` がその場で `persistLres`（レンタカーは `deleteRentalRes`）を呼んでいた**＝
+  削除ボタンを押した瞬間にサーバーから消えていた。保存を押していないのに確定と同じだった。
+  → **印を立てるだけにした**：`pendLoanerDrop` / `pendRentalDrop`（形は `{carId,ids,bk,user}`）。
+  ・画面に出す分は **`dropPendRes(res,pend)`** で印の帯を抜いた控え（`loanerResView` / `rentalResView`）を渡す。
+    **代車管理表からも消えて見える**＝ユーザーの手順どおり、同じ車・同じ期間をもう一度選び直せる。
+  ・**実際に外すのは `handleSaveModal` の「★削除の印を確定」の所だけ**（予約確定を押した時）。
+    あわせて予約カードの行の `loaner` / `rentalLabel` も空にする（片方だけ残すとズレになる）。
+  ・**カードを閉じた時（`handleCloseModal`）と、別の予約を開いた時は印を捨てる**＝元の貸出がそのまま戻る。
+  ★**書き込み（persistLres など）の土台には必ず【素の loanerRes / rentalResData】を使うこと。**
+    控え（…View）を土台に書くと、画面から消して見せているだけの帯を本当に消してしまう。
+  ★**新しい代車を選び直している時は、bookingKey での削除をしないこと**（登録側の
+    `removeResByBk(base,[_lu.bk,_pldBk])` が同じ bookingKey の古い帯を消すので、そちらに任せる）。
+    ここで bookingKey でも消すと、いま書いた帯まで消しかねない。id での念押しだけ行う。
+- 検査は **`node loaner_pend_del_test.js`（59件・PORT 8473）**。削除してもサーバーに残る／代車管理表
+  からは消えて見える／閉じたら戻る／選び直して確定すると入れ替わる／削除だけ確定すると消える／
+  レンタカーも同じ／週表から代車管理表が触れる（`elementFromPoint` で覆いの下でないか見る）。
+  **直す前のファイルでは19件落ちる**ことを確認済み（`HUB_FILE=<控え>.html node loaner_pend_del_test.js`
+  で古いファイルにも当てられる）。
+- あわせて PASS を確認：`loaner_delete_test`(11) `loaner_dnd_test`(52) `loaner_dnd_stress_test`(14)
+  `loaner_resize_test`(32) `rent_pick_left_test`(13) `week_view_test`(138) `week4_test`(61)
+  `week_find_test`(89) `delivery_dup_test`(20) `delivery_note2_test`(20) `insp_move_test`(28)
+  `insp_double_test`(27) `cust_clear_date_test`(29) `adv2y_test`(77) `card_pop_test`(46) `collapsed_add_test`(19)。
+  ※`rental_period_test` の4件不合格は**前からの宿題**（整備のカードが開けない検査側の問題。この変更の前でも同じ）。
+- **スマホ（mobile.html）と顧客リスト（customers.html）は元から保存の時にまとめて書く作り**なので変更なし（版だけ上げた）。

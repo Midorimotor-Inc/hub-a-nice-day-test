@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794440817660';
+    window.__APP_BUILD='build-1794455656237';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.111.0';
+const APP_VERSION = '3.111.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3012,6 +3012,32 @@ const retagResBk=(base,oldBk,newBk)=>{
 // 着地確認用
 const resHasBk =(base,bk)=>Object.values(_resObj(base)).some(days=>Object.values(days||{}).some(r=>r&&r.bookingKey===bk));
 const resHasRec=(base,carId,resId)=>Object.values(_resObj(base)[carId]||{}).some(r=>r&&r.id===resId);
+// ★予約カードの「削除」は【予約確定を押すまでサーバーに書かない】（2026-11-12 ユーザー指示）。
+//   確定していないのに消えるのは「確定したのと同じ意味」になってしまうため。
+//   印（pendLoanerDrop / pendRentalDrop）を立てて、画面の上だけ消して見せる道具がこれ。
+//   ・代車管理表でも消えて見える ＝ 同じ車・同じ期間をもう一度選び直せる
+//   ・カードを閉じたら印を捨てる ＝ 元の貸出がそのまま戻る
+//   ★書き込み（persistLres／persistRres など）には必ず【素の loanerRes / rentalResData】を使うこと。
+//     この関数の結果を土台に書くと、画面から消して見せているだけの帯を本当に消してしまう。
+const dropPendRes=(res,pend)=>{
+  if(!pend)return res;
+  const src=_resObj(res);
+  const ids=(pend.ids||[]).filter(v=>v!=null).map(String);
+  const bk=pend.bk||'';
+  if(!ids.length&&!bk)return res;
+  const out={};let hit=false;
+  Object.keys(src).forEach(cid=>{
+    const days=src[cid]||{};const o={};
+    Object.keys(days).forEach(k=>{
+      const r=days[k];
+      const same=!!r&&((bk&&r.bookingKey===bk)
+        ||(String(cid)===String(pend.carId)&&r.id!=null&&ids.indexOf(String(r.id))>=0));
+      if(same)hit=true;else o[k]=r;
+    });
+    out[cid]=o;
+  });
+  return hit?out:res;
+};
 
 // ── 重要キーを「サーバー最新値ベース」で確実に書く（customers.html の同名関数と同じ仕組み）──
 //   mutate(サーバー最新値)→保存する値 を返す。書く→少し待つ→読み返して check(読み返し値)=true なら成功。
@@ -14701,6 +14727,13 @@ function AppInner() {
   const [pendingRentalId,setPendingRentalId]=useState(null);
   const [pendingLoanerDeleteBk,setPendingLoanerDeleteBk]=useState('');
   const [pendingRentalRec,setPendingRentalRec]=useState(null);
+  // ★予約カードで「削除」した代車・レンタカー（まだサーバーからは外していない）。
+  //   形は {carId, ids:[...], bk:'...', user:'...'}。dropPendRes の説明も見ること。
+  const [pendLoanerDrop,setPendLoanerDrop]=useState(null);
+  const [pendRentalDrop,setPendRentalDrop]=useState(null);
+  // 画面（代車管理表・予約カードの代車欄）に出す用。印が無ければ素の値そのまま＝描き直しは増えない。
+  const loanerResView=useMemo(()=>dropPendRes(loanerRes,pendLoanerDrop),[loanerRes,pendLoanerDrop]);
+  const rentalResView=useMemo(()=>dropPendRes(rentalResData,pendRentalDrop),[rentalResData,pendRentalDrop]);
   const [savedModalData, setSavedModalData] =useState(null);
   const [showHoliday,    setShowHoliday]    =useState(false);
   const [showRestore,    setShowRestore]    =useState(false);
@@ -15665,6 +15698,7 @@ function AppInner() {
     setPendingLoanerId(null);
     setPendingRentalId(savedRentalId);
     setPendingRentalRec(savedRentalRec);
+    setPendLoanerDrop(null);setPendRentalDrop(null);
     setPickMode(false);setModalOpen(true);
   },[currentUser,inspData,schedData,locks,isClosed,acquireLock,inspLimits,syncCustStatus,persistInsp]);
 
@@ -15682,6 +15716,7 @@ function AppInner() {
     setModalIsNew(false);
     setModalData(bookingData);
     setPendingLoanerId(null);setPendingRentalId(null);setPendingRentalRec(null);setPickMode(false);
+    setPendLoanerDrop(null);setPendRentalDrop(null);
     setView('schedule');
     setSelDate(new Date(dk.split('-').map(Number)[0],dk.split('-').map(Number)[1]-1,dk.split('-').map(Number)[2]));
     setModalOpen(true);
@@ -15703,6 +15738,7 @@ function AppInner() {
     setModalIsNew(true);
     setModalData({...prefilledData,_idx:idx||0,bookingStatus:'provisional'});
     setPendingLoanerId(null);setPendingRentalId(null);setPendingRentalRec(null);setPickMode(false);
+    setPendLoanerDrop(null);setPendRentalDrop(null);
     setSelDate(new Date(y,m-1,d));
     setFromCustList(true);
     const bkKey=`${(prefilledData?.name||'').trim()}::${dk}`;
@@ -15892,6 +15928,7 @@ function AppInner() {
     setModalIsNew(idx<0); // custBookings仮予約の再編集はisNew扱い
     setModalData(bookingData);
     setPendingLoanerId(null);setPendingRentalId(null);setPendingRentalRec(null);setPickMode(false);
+    setPendLoanerDrop(null);setPendRentalDrop(null);
     const [dy,dm,dd]=dk.split('-').map(Number);
     setSelDate(new Date(dy,dm-1,dd));
     setFromCustList(true);
@@ -15903,6 +15940,8 @@ function AppInner() {
     releaseLock(curLockKey);setCurLockKey(null);setModalOpen(false);setPickMode(false);
     setPendingLoanerData(null);setPendingLoanerId(null);
     setPendingRentalId(null);setPendingRentalRec(null);
+    // ★「削除」したまま確定していない分は捨てる＝元の代車・レンタカーがそのまま残る（2026-11-12）
+    setPendLoanerDrop(null);setPendRentalDrop(null);
     setFromCustList(false);setCustModalMeta(null);
   },[curLockKey,releaseLock]);
 
@@ -16025,6 +16064,53 @@ function AppInner() {
       cleanData.rentalCarId=null;
       setPendingLoanerData(null);
       setPendingLoanerId(null);
+    }
+
+    // ★削除の印を確定：予約カードで「削除」した代車・レンタカーを、ここで初めてサーバーから外す
+    //   （2026-11-12 ユーザー指示。handleDeleteLoaner の説明も見ること）。
+    //   ★新しい代車を選び直している時は、上の登録が同じ bookingKey の帯を消すのでそれに任せる。
+    //     ここで bookingKey でも消すと、いま書いた帯まで消しかねない（id での念押しだけ行う）。
+    if(pendLoanerDrop){
+      const _pd=pendLoanerDrop;
+      const _pdIds=(_pd.ids||[]).filter(v=>v!=null);
+      const _pdBk=_hadLoanerForBk?'':(_pd.bk||'');
+      if(_pdIds.length||_pdBk){
+        const _gone=b=>!_pdIds.some(id=>resHasRec(b,_pd.carId,id))&&!(_pdBk&&resHasBk(b,_pdBk));
+        setTimeout(()=>persistLres(
+          base=>{
+            if(_gone(base))return undefined;
+            let out=_resObj(base);
+            _pdIds.forEach(id=>{ out=removeResById(out,_pd.carId,id); });
+            if(_pdBk)out=removeResByBk(out,[_pdBk]); // id を持たない古いレコードの保険
+            return out;
+          },
+          back=>_gone(back),
+          {verb:'解除',name:_pd.user}
+        ),0);
+      }
+      // ★帯を外すなら、予約カードの行の代車名も必ず空にする（片方だけ残すとズレになる）
+      if(!_hadLoanerForBk){ cleanData.loaner=''; cleanData.loanerId=null; }
+      setPendLoanerDrop(null);
+    }
+    if(pendRentalDrop){
+      const _rd=pendRentalDrop;
+      // 選び直した記録と同じ id は消さない（消すと今書いた分が消える）
+      const _rdIds=(_rd.ids||[]).filter(v=>v!=null&&!(pendingRentalRec&&String(pendingRentalRec.id)===String(v)));
+      if(_rdIds.length){
+        const _goneR=b=>!_rdIds.some(id=>resHasRec(b,_rd.carId,id));
+        setTimeout(()=>persistRres(
+          base=>{
+            if(_goneR(base))return undefined;
+            let out=_resObj(base);
+            _rdIds.forEach(id=>{ out=removeResById(out,_rd.carId,id); });
+            return out;
+          },
+          back=>_goneR(back),
+          {verb:'解除',name:_rd.user}
+        ),0);
+      }
+      if(!(pendingRentalId!=null&&pendingRentalRec)){ cleanData.rentalLabel=''; cleanData.rentalCarId=null; }
+      setPendRentalDrop(null);
     }
 
     // レンタカーが選択されている場合、ラベルをデータに付加
@@ -16379,7 +16465,7 @@ function AppInner() {
     setCurLockKey(null);
     setTimeout(()=>releaseLock(keyToRelease),200);
     setFromCustList(false);setCustModalMeta(null);
-  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
+  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,pendLoanerDrop,pendRentalDrop,persistRres,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
 
   const handleDeleteModal=useCallback(()=>{
     // bookingKeyを特定してloanerRes・rentalResも連動削除
@@ -16689,6 +16775,10 @@ function AppInner() {
   // 代車ピック
   const handleOpenLoanerPicker=useCallback((formData)=>{
     setSavedModalData(formData);setModalOpen(false);
+    // ★週間カレンダー・ダッシュボードの覆い（zIndex 900）を開いたまま代車管理（zIndex 10）へ移ると、
+    //   代車管理表が覆いの下に隠れて【予約カードだけが消えた】ように見える（2026-11-12 ユーザー報告）。
+    //   代車を選びに行く時は必ず閉じること。選び終われば予約カードはスケジュール画面の上に戻る。
+    setWeekOpen(false);setDashOpen(false);
     setPendingRentalId(null);setPendingRentalRec(null); // レンタカー選択リセット
     const targetDk=modalDkRef.current||modalDk;
     // 日付変更がある場合、古い代車予約キーを削除予定としてセット
@@ -16737,18 +16827,25 @@ function AppInner() {
     setModalOpen(true);
   },[savedModalData,modalType,selDate]);
 
+  // ★「削除」はこの場でサーバーから消さない。【印を立てるだけ】にして、予約確定（保存）を押した
+  //   時に初めて外す（2026-11-12 ユーザー指示）。確定していないのに消えるのは「確定したのと
+  //   同じ意味」になってしまうため。カードを閉じれば印は捨てられ、元の貸出がそのまま残る。
+  //   ・画面（代車管理表・カードの代車欄）からは dropPendRes で消えて見える
+  //     ＝同じ車・同じ期間をもう一度選び直せる（ユーザーの手順どおり）
+  //   ・実際に外すのは handleSaveModal の「★削除の印を確定」の所だけ。
   const handleDeleteLoaner=useCallback((loanerId,dk,userName,type='loaner')=>{
+    // 代車・レンタカーとも bookingKey でこの予約に紐づく帯を拾う
+    const bk=modalType==='insp'?`insp-${modalDk}-${modalIdx}`:`sched-${modalDk}-${modalSlot}`;
     if(type==='rental'){
-      // レンタカーの場合: pendingRentalRecのidで該当予約を削除
-      setPendingRentalId(null);
-      setPendingRentalRec(prev=>{
-        if(prev)deleteRentalRes(loanerId,prev.id);
-        return null;
-      });
+      const prev=pendingRentalRec;
+      setPendingRentalId(null);setPendingRentalRec(null);
+      // 期間の無い仮の記録（id:'restored'）はサーバーに書かれていないので外すものが無い
+      if(prev&&prev.id!=null&&prev.id!=='restored')
+        setPendRentalDrop({carId:loanerId,ids:[prev.id],bk:'',user:prev.user||userName||''});
       return;
     }
-    // 代車の場合：bookingKeyで該当する代車予約を削除
-    const bk=modalType==='insp'?`insp-${modalDk}-${modalIdx}`:`sched-${modalDk}-${modalSlot}`;
+    // まだ保存していない（いま選んだばかりの）代車は、サーバーに何も無いので印は要らない
+    setPendingLoanerData(null);setPendingLoanerId(null);
     // まずbookingKeyで完全一致を試み、一致しない場合（customers.html経由などでidxがズレた場合）は
     // userNameで照合する。※消す対象は「今画面に見えている予約」から id で確定させる。
     //   再送のたびに userName で探し直すと、その間に入った同名の別予約まで巻き込むため。
@@ -16757,19 +16854,11 @@ function AppInner() {
     const _rmIds=Object.values(_cur)
       .filter(r=>r&&(_hasExact?r.bookingKey===bk:(userName&&r.user===userName)))
       .map(r=>r.id).filter(v=>v!=null);
-    persistLres(
-      base=>{
-        if(!_rmIds.length&&!_hasExact)return undefined;
-        let out=_resObj(base);
-        _rmIds.forEach(id=>{ out=removeResById(out,loanerId,id); });
-        if(_hasExact)out=removeResByBk(out,[bk]); // id を持たない古いレコードの保険
-        return out;
-      },
-      back=>!_rmIds.some(id=>resHasRec(back,loanerId,id))&&!(_hasExact&&resHasBk(back,bk)),
-      {verb:'解除',name:userName}
-    );
-    setPendingLoanerId(null);
-  },[modalType,modalDk,modalIdx,modalSlot,persistLres,deleteRentalRes,loanerRes]);
+    // ★この予約に紐づく帯は、別の車の下にあることもある（選び直した直後など）。bookingKey でも拾う。
+    const _bkAny=resHasBk(loanerRes,bk);
+    if(_rmIds.length||_bkAny)
+      setPendLoanerDrop({carId:loanerId,ids:_rmIds,bk:_bkAny?bk:'',user:userName||''});
+  },[modalType,modalDk,modalIdx,modalSlot,loanerRes,pendingRentalRec]);
 
   // 代車予約の期間編集は1回のatomic更新で差し替える（delete+addの競合を防ぐ）。
   //   bookingKey / carName / carNum / locked などの既存フィールドはそのまま残るので紐付けが切れない。
@@ -18794,7 +18883,7 @@ function AppInner() {
         {view==='loaner'&&(
           <div style={{background:'white',borderRadius:13,padding:'4px 4px',boxShadow:'0 10px 40px rgba(0,0,0,.18)',borderTop:`4px solid ${vsStore.color}`,position:'fixed',top:'var(--header-h,90px)',left:'8px',right:'8px',bottom:'8px',overflowY:'auto',zIndex:10,borderRadius:13,display:'flex',flexDirection:'column'}}>
             <LoanerGrid
-              loanerRes={loanerRes} loanerMonth={loanerMonth} setLoanerMonth={setLoanerMonth}
+              loanerRes={loanerResView} loanerMonth={loanerMonth} setLoanerMonth={setLoanerMonth}
               onDeleteRes={deleteLoanerRes} onReplaceRes={replaceLoanerRes} onUndo={undoLoanerRes}
               selDate={selDate} onBack={handleLoanerBack} onPickLoaner={handlePickLoaner}
               pickMode={pickMode} locks={locks} currentUser={currentUser}
@@ -18807,7 +18896,7 @@ function AppInner() {
               storeLoaners={currentLoaners} storeInfo={STORES.find(s=>s.id===vsId)}
               schedOther={vsId==='honten'?schedDataS:schedDataH}
               loanerResOther={vsId==='honten'?loanerResS:loanerResH} loanersOther={vsId==='honten'?dynLoanerListS:dynLoanerListH}
-              rentalCars={dynRentalCars} rentalRes={rentalResData}
+              rentalCars={dynRentalCars} rentalRes={rentalResView}
               onAddRentalRes={addRentalRes} onDeleteRentalRes={deleteRentalRes} onReplaceRentalRes={replaceRentalRes}
               onPickRental={handlePickRental}
               onOpenSettings={()=>setShowLoanerSettings(true)}
@@ -18984,7 +19073,7 @@ function AppInner() {
         pendingLoanerData={pendingLoanerData}
         pendingRentalId={pendingRentalId} pendingRentalRec={pendingRentalRec}
         rentalCarsData={dynRentalCars}
-        loanerRes={loanerRes} modalDk={modalDk}
+        loanerRes={loanerResView} modalDk={modalDk}
         usrChk={usrChk} onSetChecked={setUserChecked}
         onDeleteLoaner={handleDeleteLoaner}
         onToggleLoanerLock={toggleLoanerLock}
