@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>主作業のカスタマイズ 見本（A案／B案／C案）</title>
+<style>
+  :root{ --ink:#1b2129; --line:#64748b; --soft:#e2e8f0; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Meiryo",system-ui,sans-serif;color:var(--ink);background:#f1f5f9}
+  header{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;padding:10px 16px}
+  header h1{margin:0;font-size:16px;font-weight:900}
+  header p{margin:4px 0 0;font-size:12px;opacity:.9}
+  .bar{display:flex;gap:8px;align-items:center;padding:10px 16px;background:white;border-bottom:3px solid #1d4ed8;flex-wrap:wrap}
+  .bar button{padding:8px 14px;border-radius:8px;border:2px solid #cbd5e1;background:white;font-size:13px;font-weight:800;cursor:pointer}
+  .bar button.on{background:#1d4ed8;color:white;border-color:#1d4ed8}
+  .wrap{padding:16px;max-width:1240px;margin:0 auto}
+  .note{background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.7;margin-bottom:14px}
+  .note b{color:#92400e}
+  .panel{background:white;border-radius:12px;box-shadow:0 8px 28px rgba(15,23,42,.14);overflow:hidden}
+  .phead{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--soft)}
+  .phead .t{font-size:15px;font-weight:900;flex:1}
+  .phead button{padding:6px 12px;border-radius:8px;border:2px solid #cbd5e1;background:white;font-size:12px;font-weight:800;cursor:pointer}
+  .phead button.x{background:#dc2626;color:white;border-color:#dc2626;width:34px;height:28px;padding:0}
+  .pbody{padding:14px}
+  /* ── A案・C案：グループの区画 ── */
+  .grp{border:2px solid var(--soft);border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .ghead{display:flex;align-items:center;gap:8px;padding:6px 10px;color:white;font-size:13px;font-weight:900}
+  .gitems{display:flex;flex-wrap:wrap;gap:8px;padding:10px;min-height:52px;background:#fcfdff}
+  .card{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:2px solid #cbd5e1;background:white;cursor:grab;user-select:none}
+  .card.sel{border-color:#1d4ed8;box-shadow:0 0 0 3px #1d4ed833}
+  .badge{min-width:34px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:white;font-size:13px;font-weight:900;padding:0 5px}
+  .nm{font-size:13px;font-weight:800}
+  .sub{font-size:10.5px;color:#475569;font-weight:700}
+  .mini{display:flex;gap:4px;margin-left:4px}
+  .mini button{width:24px;height:24px;border-radius:6px;border:1px solid #cbd5e1;background:white;font-size:11px;cursor:pointer;padding:0}
+  .tagrow{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+  .tag{font-size:9.5px;font-weight:800;border-radius:4px;padding:1px 5px}
+  .tag.m{background:#cffafe;color:#0e7490}
+  .tag.k{background:#fee2e2;color:#991b1b}
+  .tag.q{background:#ede9fe;color:#6d28d9}
+  .addrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:10px;border-top:1px dashed #cbd5e1}
+  .addrow input,.addrow select{padding:6px 8px;border-radius:7px;border:2px solid #cbd5e1;font-size:13px;font-family:inherit}
+  .addrow button{padding:7px 12px;border-radius:8px;border:none;background:#059669;color:white;font-size:12px;font-weight:800;cursor:pointer}
+  /* ── B案：表 ── */
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:5px 7px;text-align:left}
+  th{background:#f1f5f9;font-size:11.5px;font-weight:900;white-space:nowrap}
+  td input[type=text]{width:100%;padding:4px 6px;border-radius:5px;border:1px solid #cbd5e1;font-size:13px;font-family:inherit}
+  td.c{text-align:center}
+  .chip{display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:800;border:1px solid #cbd5e1;background:white;cursor:pointer;margin:1px}
+  .chip.on{background:#0891b2;color:white;border-color:#0891b2}
+  .yn{width:28px;height:24px;border-radius:5px;border:1px solid #cbd5e1;background:white;font-size:12px;font-weight:900;cursor:pointer}
+  .yn.on{background:#dc2626;color:white;border-color:#dc2626}
+  .arrow{width:22px;height:20px;border-radius:4px;border:1px solid #cbd5e1;background:white;cursor:pointer;font-size:10px;padding:0}
+  /* ── C案：引き出し ── */
+  .two{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  .draw{border:2px solid #1d4ed8;border-radius:10px;padding:12px;background:#f8fbff;align-self:start}
+  .draw h3{margin:0 0 8px;font-size:13px;font-weight:900;color:#1d4ed8}
+  .fl{margin-bottom:9px}
+  .fl label{display:block;font-size:11px;font-weight:800;color:#475569;margin-bottom:3px}
+  .fl input[type=text]{width:100%;padding:6px 8px;border-radius:7px;border:2px solid #cbd5e1;font-size:13px;font-family:inherit}
+  .sw{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;margin-bottom:7px}
+  /* プレビュー */
+  .prev{margin-top:16px;background:white;border-radius:12px;padding:12px 14px;box-shadow:0 4px 14px rgba(15,23,42,.1)}
+  .prev h3{margin:0 0 8px;font-size:13px;font-weight:900}
+  .prevrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 0;border-top:1px solid var(--soft)}
+  .pl{font-size:11px;font-weight:800;color:#475569;min-width:150px}
+  .wk{min-width:30px;height:19px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:white;font-size:12px;font-weight:900;padding:0 4px}
+  .warn{background:#fee2e2;border:2px solid #dc2626;border-radius:9px;padding:8px 10px;font-size:12px;line-height:1.7;color:#7f1d1d;margin-top:10px}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>主作業（作業内容）を画面からカスタマイズする — 見本</h1>
+  <p>2026-11-12 ご依頼「主作業の部分もカスタマイズして作って、表示する形の方が、何回も頼んで作り直してもらうよりいいのでは」。3つの案を実際に触って選んでください。</p>
+</header>
+<div class="bar">
+  <span style="font-size:12px;font-weight:900">案を選ぶ：</span>
+  <button id="bA" class="on" onclick="setCase('A')">A案　クイックメニューと同じ</button>
+  <button id="bB" onclick="setCase('B')">B案　表で一覧を直す</button>
+  <button id="bC" onclick="setCase('C')">C案　A案＋押して詳しい設定</button>
+  <span style="flex:1"></span>
+  <button onclick="reset()">↺ 最初の状態に戻す</button>
+</div>
+
+<div class="wrap">
+  <div class="note">
+    <b>どの案でも中身は同じです。</b>できること＝<b>名前・バッジの字・色・並び・グループを変える／項目を足す／使わない項目を隠す</b>。<br>
+    あわせて項目ごとに決められるもの3つ…<span class="tag m">月1/6/12</span>＝点検のように「何ヶ月か」を聞く／
+    <span class="tag k">マ止</span>＝マッハ車検の入庫から1時間は受けない／<span class="tag q">場所</span>＝リフト・ピットを分ける（いまは Q だけ）。<br>
+    <b>⚠ 「消す」ではなく「隠す」にしてあります。</b>過去の予約が持っている作業名を消すと、昔の予定の表示が「—」になってしまうためです。
+  </div>
+
+  <div class="panel">
+    <div class="phead">
+      <span class="t" id="ttl">🔧 主作業の編集</span>
+      <button onclick="alert('見本なので保存はしません')">✓ 保存</button>
+      <button class="x" onclick="alert('見本です')">✕</button>
+    </div>
+    <div class="pbody">
+      <div id="viewA"></div>
+      <div id="viewB" class="hide"></div>
+      <div id="viewC" class="hide"></div>
+    </div>
+  </div>
+
+  <div class="prev">
+    <h3>👀 直した結果が画面にどう出るか</h3>
+    <div class="prevrow"><span class="pl">予約カードの作業内容</span><span id="pv1" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
+    <div class="prevrow"><span class="pl">週間カレンダー・1日表示のバッジ</span><span id="pv2" style="display:flex;gap:4px;flex-wrap:wrap"></span></div>
+    <div class="prevrow"><span class="pl">入庫制限の「解除できる作業」の一覧</span><span id="pv3" style="font-size:11.5px;font-weight:700;color:#334155"></span></div>
+    <div class="warn" id="pv4"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// 見本のデータ。いまの11項目＝実物と同じ並び・同じ字
+//   id は【変えられない】ことにしてある（過去の予約と入庫制限がこの字で保存されているため）
+// ─────────────────────────────────────────────
+var G0=[{id:'g1',name:'点検',col:'#0891b2'},{id:'g2',name:'整備・修理',col:'#9333ea'},{id:'g3',name:'その他',col:'#64748b'}];
+var W0=[
+ {id:'メンパ',g:'g1',name:'メンパ',badge:'M',col:'#0891b2',mon:['1','6','12'],mach:true,place:false,hide:false,used:31},
+ {id:'無点', g:'g1',name:'無料点検',badge:'無',   col:'#0891b2',mon:['1','6'],     mach:true,place:false,hide:false,used:12},
+ {id:'有点', g:'g1',name:'有料点検',badge:'有',   col:'#0891b2',mon:['12'],        mach:true,place:false,hide:false,used:18},
+ {id:'Q',   g:'g2',name:'クイック整備・修理',badge:'Q',col:'#9333ea',mon:[],mach:true,place:true,hide:false,used:64},
+ {id:'B',   g:'g2',name:'鈑金塗装',badge:'B',col:'#9333ea',mon:[],mach:false,place:false,hide:false,used:27},
+ {id:'R',   g:'g2',name:'リコール',badge:'R',col:'#9333ea',mon:[],mach:true, place:false,hide:false,used:9},
+ {id:'商',  g:'g3',name:'商談',    badge:'商',col:'#64748b',mon:[],mach:false,place:false,hide:false,used:5},
+ {id:'保',  g:'g3',name:'保険',    badge:'保',col:'#64748b',mon:[],mach:false,place:false,hide:false,used:3},
+ {id:'試',  g:'g3',name:'試乗',    badge:'試',col:'#64748b',mon:[],mach:false,place:false,hide:false,used:2},
+ {id:'納',  g:'g3',name:'納車',    badge:'納',col:'#64748b',mon:[],mach:false,place:false,hide:false,used:14},
+ {id:'他',  g:'g3',name:'その他',  badge:'他',col:'#64748b',mon:[],mach:false,place:false,hide:false,used:8}
+];
+var COLS=['#0891b2','#9333ea','#059669','#b45309','#dc2626','#64748b','#1d4ed8'];
+var G=[],W=[],CASE='A',selId=null;
+function clone(x){return JSON.parse(JSON.stringify(x));}
+function reset(){G=clone(G0);W=clone(W0);selId=W[0].id;draw();}
+function setCase(c){CASE=c;['A','B','C'].forEach(function(k){
+  document.getElementById('b'+k).className=(k===c?'on':'');
+  document.getElementById('view'+k).className=(k===c?'':'hide');});
+  document.getElementById('ttl').textContent=(c==='B'?'🔧 主作業の編集（表で一覧）':'🔧 主作業の編集');
+  draw();}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function gOf(id){for(var i=0;i<G.length;i++)if(G[i].id===id)return G[i];return G[G.length-1];}
+function wOf(id){for(var i=0;i<W.length;i++)if(W[i].id===id)return W[i];return null;}
+
+// ── 操作 ──
+function ren(id){var w=wOf(id);var v=prompt('画面に出す名前',w.name);if(v==null)return;w.name=v.trim()||w.name;draw();}
+function renB(id){var w=wOf(id);var v=prompt('バッジの字（2〜3文字まで）',w.badge);if(v==null)return;w.badge=(v.trim()||w.badge).slice(0,4);draw();}
+function col(id){var w=wOf(id);w.col=COLS[(COLS.indexOf(w.col)+1)%COLS.length];draw();}
+function hide(id){var w=wOf(id);
+  if(!w.hide&&w.used>0&&!confirm(w.name+' は過去の予約 '+w.used+'件 が使っています。\n隠すと【新しく選べなくなる】だけで、昔の予定の表示はそのまま残ります。\n隠しますか？'))return;
+  w.hide=!w.hide;draw();}
+function mv(id,d){var i=-1;for(var k=0;k<W.length;k++)if(W[k].id===id)i=k;
+  var j=i+d;if(j<0||j>=W.length)return;var a=W[i];W[i]=W[j];W[j]=a;draw();}
+function grp(id,gid){wOf(id).g=gid;draw();}
+function mon(id,m){var w=wOf(id);var i=w.mon.indexOf(m);
+  if(i>=0)w.mon.splice(i,1);else w.mon.push(m);
+  w.mon.sort(function(a,b){return Number(a)-Number(b);});draw();}
+function mach(id){var w=wOf(id);w.mach=!w.mach;draw();}
+function place(id){var w=wOf(id);w.place=!w.place;draw();}
+function addW(){
+  var nm=document.getElementById('nwNm').value.trim();
+  var bd=document.getElementById('nwBd').value.trim();
+  var gi=document.getElementById('nwG').value;
+  if(!nm){alert('名前を入れてください');return;}
+  var id='w'+Date.now();
+  W.push({id:id,g:gi,name:nm,badge:(bd||nm).slice(0,4),col:gOf(gi).col,mon:[],mach:false,place:false,hide:false,used:0});
+  document.getElementById('nwNm').value='';document.getElementById('nwBd').value='';
+  selId=id;draw();}
+function addG(){var nm=prompt('新しいグループの名前');if(!nm)return;
+  G.push({id:'g'+Date.now(),name:nm.trim(),col:COLS[G.length%COLS.length]});draw();}
+function renG(id){var g=gOf(id);var v=prompt('グループの名前',g.name);if(v==null)return;g.name=v.trim()||g.name;draw();}
+
+// ── 絵を描く ──
+function cardHtml(w,withMini){
+  var tags='';
+  if(w.mon.length)tags+='<span class="tag m">月'+w.mon.join('/')+'</span>';
+  if(w.mach)tags+='<span class="tag k">マ止</span>';
+  if(w.place)tags+='<span class="tag q">場所</span>';
+  var op=w.hide?'opacity:.42;border-style:dashed;':'';
+  return '<div class="card'+(selId===w.id&&CASE==='C'?' sel':'')+'" style="'+op+'" onclick="pick(\''+w.id+'\')">'
+   +'<span class="badge" style="background:'+w.col+'">'+esc(w.badge)+'</span>'
+   +'<span><span class="nm">'+esc(w.name)+(w.hide?'（隠している）':'')+'</span>'
+   +'<div class="tagrow">'+tags+'<span class="sub">過去 '+w.used+'件</span></div></span>'
+   +(withMini?'<span class="mini">'
+     +'<button title="並びを前へ" onclick="event.stopPropagation();mv(\''+w.id+'\',-1)">◀</button>'
+     +'<button title="並びを後へ" onclick="event.stopPropagation();mv(\''+w.id+'\',1)">▶</button>'
+     +'<button title="名前を直す" onclick="event.stopPropagation();ren(\''+w.id+'\')">✎</button>'
+     +'<button title="バッジの字" onclick="event.stopPropagation();renB(\''+w.id+'\')">字</button>'
+     +'<button title="色を変える" onclick="event.stopPropagation();col(\''+w.id+'\')">色</button>'
+     +'<button title="隠す／戻す" onclick="event.stopPropagation();hide(\''+w.id+'\')">'+(w.hide?'↺':'✕')+'</button>'
+   +'</span>':'')+'</div>';
+}
+function pick(id){selId=id;if(CASE==='C')draw();}
+function groupsHtml(withMini){
+  var h='';
+  G.forEach(function(g){
+    h+='<div class="grp"><div class="ghead" style="background:'+g.col+'"><span>'+esc(g.name)+'</span>'
+      +'<button style="margin-left:auto;padding:2px 8px;border-radius:6px;border:none;background:rgba(255,255,255,.25);color:white;font-size:11px;font-weight:800;cursor:pointer" onclick="renG(\''+g.id+'\')">✎ 名前</button></div><div class="gitems">';
+    var n=0;
+    W.forEach(function(w){ if(w.g===g.id){n++;h+=cardHtml(w,withMini);} });
+    if(!n)h+='<span class="sub" style="padding:8px">（空）ここへ引っぱって入れられます</span>';
+    h+='</div></div>';
+  });
+  var opt='';G.forEach(function(g){opt+='<option value="'+g.id+'">'+esc(g.name)+'</option>';});
+  h+='<div class="addrow"><span style="font-size:12px;font-weight:900">＋ 足す</span>'
+   +'<input id="nwNm" type="text" placeholder="名前（例：タイヤ交換）" style="width:200px">'
+   +'<input id="nwBd" type="text" placeholder="バッジの字（例：タ）" style="width:130px">'
+   +'<select id="nwG">'+opt+'</select>'
+   +'<button onclick="addW()">足す</button>'
+   +'<button style="background:#1d4ed8" onclick="addG()">＋ グループ</button></div>';
+  return h;
+}
+function tableHtml(){
+  var h='<table><thead><tr><th>並び</th><th>バッジ</th><th>色</th><th>名前</th><th>グループ</th>'
+   +'<th>月数を聞く</th><th title="マッハ車検の入庫から1時間は受けない">マッハ<br>で止める</th>'
+   +'<th title="リフト作業・ピット作業を分ける">場所を<br>分ける</th><th>過去</th><th>使う</th></tr></thead><tbody>';
+  W.forEach(function(w){
+    var opt='';G.forEach(function(g){opt+='<option value="'+g.id+'"'+(g.id===w.g?' selected':'')+'>'+esc(g.name)+'</option>';});
+    var ms='';['1','6','12','18','24'].forEach(function(m){
+      ms+='<span class="chip'+(w.mon.indexOf(m)>=0?' on':'')+'" onclick="mon(\''+w.id+'\',\''+m+'\')">'+m+'</span>';});
+    h+='<tr style="'+(w.hide?'opacity:.45':'')+'">'
+     +'<td class="c"><button class="arrow" onclick="mv(\''+w.id+'\',-1)">▲</button><button class="arrow" onclick="mv(\''+w.id+'\',1)">▼</button></td>'
+     +'<td class="c"><span class="badge" style="background:'+w.col+';cursor:pointer" onclick="renB(\''+w.id+'\')">'+esc(w.badge)+'</span></td>'
+     +'<td class="c"><span class="yn" style="width:26px;height:22px;background:'+w.col+';border-color:'+w.col+'" title="押すと色が変わります" onclick="col(\''+w.id+'\')"></span></td>'
+     +'<td><input type="text" value="'+esc(w.name)+'" onchange="wOf(\''+w.id+'\').name=this.value;draw()"></td>'
+     +'<td><select onchange="grp(\''+w.id+'\',this.value)">'+opt+'</select></td>'
+     +'<td>'+ms+'</td>'
+     +'<td class="c"><button class="yn'+(w.mach?' on':'')+'" onclick="mach(\''+w.id+'\')">'+(w.mach?'止':'可')+'</button></td>'
+     +'<td class="c"><button class="yn'+(w.place?' on':'')+'" onclick="place(\''+w.id+'\')">'+(w.place?'○':'—')+'</button></td>'
+     +'<td class="c sub">'+w.used+'件</td>'
+     +'<td class="c"><button class="yn" style="width:44px;background:'+(w.hide?'#e2e8f0':'#059669')+';color:'+(w.hide?'#475569':'white')+';border-color:'+(w.hide?'#cbd5e1':'#059669')+'" onclick="hide(\''+w.id+'\')">'+(w.hide?'隠す':'使う')+'</button></td>'
+     +'</tr>';
+  });
+  h+='</tbody></table>';
+  var opt2='';G.forEach(function(g){opt2+='<option value="'+g.id+'">'+esc(g.name)+'</option>';});
+  h+='<div class="addrow"><span style="font-size:12px;font-weight:900">＋ 足す</span>'
+   +'<input id="nwNm" type="text" placeholder="名前" style="width:200px">'
+   +'<input id="nwBd" type="text" placeholder="バッジの字" style="width:130px">'
+   +'<select id="nwG">'+opt2+'</select><button onclick="addW()">足す</button>'
+   +'<button style="background:#1d4ed8" onclick="addG()">＋ グループ</button></div>';
+  return h;
+}
+function drawHtml(){
+  var w=wOf(selId)||W[0];selId=w.id;
+  var ms='';['1','6','12','18','24'].forEach(function(m){
+    ms+='<span class="chip'+(w.mon.indexOf(m)>=0?' on':'')+'" onclick="mon(\''+w.id+'\',\''+m+'\')">'+m+'ヶ月</span>';});
+  return '<div class="two"><div>'+groupsHtml(false)+'</div>'
+   +'<div class="draw"><h3>⚙ '+esc(w.name)+' の設定</h3>'
+   +'<div class="fl"><label>画面に出す名前</label><input type="text" value="'+esc(w.name)+'" onchange="wOf(\''+w.id+'\').name=this.value;draw()"></div>'
+   +'<div class="fl"><label>バッジの字（2〜3文字）</label><input type="text" value="'+esc(w.badge)+'" onchange="wOf(\''+w.id+'\').badge=this.value.slice(0,4);draw()"></div>'
+   +'<div class="fl"><label>色</label><span class="badge" style="background:'+w.col+';cursor:pointer" onclick="col(\''+w.id+'\')">'+esc(w.badge)+'</span>'
+   +' <span class="sub">押すと変わります</span></div>'
+   +'<div class="fl"><label>何ヶ月か を聞く</label>'+ms+'</div>'
+   +'<div class="sw"><button class="yn'+(w.mach?' on':'')+'" onclick="mach(\''+w.id+'\')">'+(w.mach?'止':'可')+'</button> マッハ車検の入庫から1時間は受けない</div>'
+   +'<div class="sw"><button class="yn'+(w.place?' on':'')+'" onclick="place(\''+w.id+'\')">'+(w.place?'○':'—')+'</button> リフト作業・ピット作業を分ける</div>'
+   +'<div class="sw"><button class="yn" style="width:52px" onclick="mv(\''+w.id+'\',-1)">◀ 前へ</button>'
+   +'<button class="yn" style="width:52px" onclick="mv(\''+w.id+'\',1)">後へ ▶</button></div>'
+   +'<div class="sw"><button class="yn'+(w.hide?'':' on')+'" style="width:52px" onclick="hide(\''+w.id+'\')">'+(w.hide?'隠す':'使う')+'</button> 新しく選べるようにする</div>'
+   +'<div class="sub" style="margin-top:8px">過去の予約で '+w.used+'件 使われています</div>'
+   +'</div></div>';
+}
+function draw(){
+  document.getElementById('viewA').innerHTML=groupsHtml(true);
+  document.getElementById('viewB').innerHTML=tableHtml();
+  document.getElementById('viewC').innerHTML=drawHtml();
+  // プレビュー
+  var h1='',h2='',ex=[];
+  G.forEach(function(g){
+    var any=W.some(function(w){return w.g===g.id&&!w.hide;});
+    if(!any)return;
+    h1+='<span style="font-size:10.5px;font-weight:900;color:'+g.col+';align-self:center">'+esc(g.name)+'</span>';
+    W.forEach(function(w){ if(w.g!==g.id||w.hide)return;
+      h1+='<span class="card" style="cursor:default"><span class="badge" style="background:'+w.col+'">'+esc(w.badge)+'</span><span class="nm">'+esc(w.name)+'</span></span>';});
+  });
+  W.forEach(function(w){ if(w.hide)return;
+    if(w.mon.length)w.mon.forEach(function(m){h2+='<span class="wk" style="background:'+w.col+'">'+esc(w.badge)+m+'</span>';});
+    else h2+='<span class="wk" style="background:'+w.col+'">'+esc(w.badge)+'</span>';});
+  W.forEach(function(w){ if(w.hide)return;
+    if(w.place){ex.push(w.id+'（リフトもピットも使わない）');ex.push(w.id+' のリフト作業');ex.push(w.id+' のピット作業');}
+    else ex.push(w.id+' '+w.name);});
+  document.getElementById('pv1').innerHTML=h1;
+  document.getElementById('pv2').innerHTML=h2;
+  document.getElementById('pv3').textContent=ex.join('／');
+  var bl=W.filter(function(w){return w.mach&&!w.hide;}).map(function(w){return w.name;});
+  document.getElementById('pv4').innerHTML='<b>マッハ車検の入庫から1時間は受けない作業</b>：'
+   +(bl.length?esc(bl.join('・')):'（なし）')
+   +'<br>※ ピット作業は今までどおり受けられます（Q の「場所を分ける」が入っているため）。'
+   +'<br>※ <b>入庫制限の「解除できる作業」は主作業からそのまま作られます</b>。名前を変えても、すでに掛けてある制限は壊れません（内部の見分け字は変えない作りにしてあります）。';
+}
+reset();
+</script>
+</body>
+</html>
