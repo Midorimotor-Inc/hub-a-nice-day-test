@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794471788893';
+  window.__APP_BUILD='build-1794475017672';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -165,7 +165,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.112.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.113.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -317,9 +317,11 @@ const saveFileChunked=async(file,prevCustomers,onStep)=>{
   }
 };
 // ファイルをチャンクから復元
-const loadFileChunked=async(name)=>{
+// fresh=true で【サーバー】から読み直す（書く前の読み直し。購読の写しを使わない）
+const loadFileChunked=async(name,fresh)=>{
   const sn=safeName(name);
-  const idx=await sGet(STOR+'cf-'+sn+'-index');
+  const G=fresh?(k=>sGetFresh(k)):(k=>sGet(k));
+  const idx=await G(STOR+'cf-'+sn+'-index');
   if(!idx)return null;
   // ★読めなかったチャンクは1回だけ即再試行する。以前は落ちた分を黙って捨てて
   //   flat() していたため、件数が減ったまま「一部の顧客だけ消えている」状態になり得た。
@@ -328,13 +330,13 @@ const loadFileChunked=async(name)=>{
   //   専用で読み取りは競合しないため、並列にしても取りこぼしは増えない。
   const chunks=await Promise.all(
     Array.from({length:idx.chunks},async(_,i)=>{
-      let c=await sGet(STOR+'cf-'+sn+'-chunk-'+i);
+      let c=await G(STOR+'cf-'+sn+'-chunk-'+i);
       // ★読めるまで待って3回まで試す。1回だけの再試行では、回線や端末が遅いPCで
       //   取りこぼして「このPCだけ一部の顧客が出ない」状態になっていた
       //   （2026-08-27にユーザーが報告：PCによって読めたり読めなかったりする）。
       for(let a=0;!Array.isArray(c)&&a<3;a++){
         await new Promise(r=>setTimeout(r,800*(a+1)));
-        c=await sGet(STOR+'cf-'+sn+'-chunk-'+i);
+        c=await G(STOR+'cf-'+sn+'-chunk-'+i);
       }
       return Array.isArray(c)?c:null;
     })
@@ -345,6 +347,74 @@ const loadFileChunked=async(name)=>{
   const _missing=chunks.filter(c=>!c).length;
   if(!_complete)console.warn('[CF] 読み込み不完全',name,customers.length,'/',idx.total,'欠け',_missing,'/',idx.chunks);
   return{name:idx.name,customers,_complete,_expected:idx.total,_missing,_chunks:idx.chunks};
+};
+// ─────────────────────────────────────────────────────────────
+// ★顧客ファイルの書き込みは「サーバーの最新に、このPCが変えた項目だけを当てて書く」（2026-11-12）
+//   それまでは【手元のファイル全体】を書いていたので、古い写しを持ったPCが1回保存するだけで
+//   他のPCが付けた投函の印・備考・担当がサーバーから消えていた（本番 202701 で240件が消滅）。
+//   読み取りが欠けていた時（_complete===false）は「サーバーには無い」と見なさず、書かない。
+// ─────────────────────────────────────────────────────────────
+const CF_HOLD_MS=20000;            // この PC がさっき直した項目を守る時間
+const cfHold=new Map();            // custId+項目 → 直した時刻
+const cfHoldMark=(custId,keys)=>{
+  const now=Date.now();
+  (keys||[]).forEach(k=>cfHold.set(custId+'##'+k,now));
+  if(cfHold.size>4000){ cfHold.forEach((t,k)=>{ if(now-t>CF_HOLD_MS)cfHold.delete(k); }); }
+};
+const cfHeld=(custId,k)=>{ const t=cfHold.get(custId+'##'+k); return !!t&&(Date.now()-t)<CF_HOLD_MS; };
+// 1人ぶんの行の「変わった項目」だけを取り出す
+const cfRowDiff=(before,after)=>{
+  const d={},b=before||{},a=after||{};
+  const keys=new Set([...Object.keys(b),...Object.keys(a)]);
+  keys.forEach(k=>{ if(k.charAt(0)==='_')return; if(JSON.stringify(b[k])!==JSON.stringify(a[k]))d[k]=a[k]; });
+  return d;
+};
+// 予約の進み具合（後戻りさせない順）
+const CF_PRIO={cancel:4,confirm:3,temp:2,new_car:2,none:0};
+// 画面に出す1行を作る。★既定はサーバー＝他のPCの投函の印・備考・担当がそのまま出る。
+const cfMergeRow=(lc,fc)=>{
+  if(!lc)return fc;
+  if(!fc)return lc;
+  const out={...fc};
+  // ① この PC がさっき直した項目だけ、保存が行き渡るまで手元の値を守る
+  const keys=new Set([...Object.keys(lc),...Object.keys(fc)]);
+  keys.forEach(k=>{ if(k.charAt(0)!=='_'&&cfHeld(fc.custId,k))out[k]=lc[k]; });
+  // ② 予約の進み具合は後戻りさせない（仮予約→本予約の途中で古い値に戻さない）
+  const lp=CF_PRIO[lc.status||'none']||0, fp=CF_PRIO[fc.status||'none']||0;
+  if(lp>fp){
+    out.status=lc.status;
+    if(lc.entryDate&&!fc.entryDate)out.entryDate=lc.entryDate;
+    if(lc.bookingTime&&!fc.bookingTime)out.bookingTime=lc.bookingTime;
+    if(lc.linkedInspDate&&!fc.linkedInspDate)out.linkedInspDate=lc.linkedInspDate;
+  }
+  return out;
+};
+// 1人ぶんの項目だけをサーバーに書く。書けたらサーバー最新＋この変更の行を返す。
+const cfSaveRowFields=async(name,custId,fields,localRows)=>{
+  cfHoldMark(custId,Object.keys(fields||{}));
+  for(let a=0;a<3;a++){
+    try{
+      const latest=await loadFileChunked(name,true).catch(()=>null);   // ★サーバーから読み直す
+      // ★欠けて読めた時は書かない（短い行でサーバーを上書きしないため）
+      const base=(latest&&Array.isArray(latest.customers)&&latest._complete!==false)?latest.customers:null;
+      if(base){
+        let hit=false;
+        const rows=base.map(c=>{ if(c&&c.custId===custId){hit=true;return{...c,...fields};} return c; });
+        if(!hit&&Array.isArray(localRows)){
+          const lc=localRows.find(c=>c&&c.custId===custId);
+          if(lc)rows.push({...lc,...fields});
+        }
+        if(await saveFileChunked({name,customers:rows},base)){
+          cfHoldMark(custId,Object.keys(fields||{}));
+          try{localStorage.setItem(STOR+'cf-'+safeName(name),JSON.stringify({name,customers:rows}));}catch(e){}
+          return rows;
+        }
+      }
+    }catch(e){console.error('[CF] 1人ぶんの保存エラー:',e);}
+    await new Promise(r=>setTimeout(r,800*(a+1)));
+  }
+  console.error('[CF] サーバーに書けませんでした',name,custId);
+  return null;
 };
 // 全ファイルリスト
 let __lastCfIndex=null; // 最後に読めたサーバー側の顧客ファイル一覧（読み取り失敗時のフォールバック）
@@ -723,6 +793,14 @@ const fbGet = async k => {
   const ent = fbLiveMap.get(k);
   if (ent && ent.loaded) return ent.value;   // 購読中＝手元が常に最新（自分の書き込みも即座に反映される）
   if (fbAuth) { await fbWhenReady(); if (!fbUser) return null; }   // 未サインインは「まだ読めない」（赤い帯は出さない）
+  try { const s = await fbWithTimeout(fbDoc(k).get({ source: 'server' }), 'get ' + k); fbUp(); return fbParse(s); }
+  catch (e) { console.warn('[FB] 読めません', k, e && e.message); fbDown(); return null; }
+};
+// ★【2026-11-12】購読の手元の写しではなく【サーバー】から読む。
+//   顧客ファイルを書く前の読み直しはこれを使うこと。購読の写しが1拍遅れていると、
+//   それを元に書いて他のPCが付けた投函の印を消してしまう（本番で240件が消えた形）。
+const fbGetFresh = async k => {
+  if (fbAuth) { await fbWhenReady(); if (!fbUser) return null; }
   try { const s = await fbWithTimeout(fbDoc(k).get({ source: 'server' }), 'get ' + k); fbUp(); return fbParse(s); }
   catch (e) { console.warn('[FB] 読めません', k, e && e.message); fbDown(); return null; }
 };
@@ -1241,6 +1319,8 @@ const __sSetOnce=async(k,v)=>{
     return 'unknown';
   }
 };
+// ★サーバーから読み直す（顧客ファイルを書く前に使う・2026-11-12）
+const sGetFresh=async(k)=>{ if(FB_ON)return fbGetFresh(k); return sGet(k); };
 const sSet=async(k,v,retries=4)=>{
   if(FB_ON){                              // 保存先が Firestore のとき（2026-09-18）
     window.__hubWriteBusy=(window.__hubWriteBusy||0)+1;
@@ -3396,28 +3476,28 @@ const App=()=>{
   },[]);
   const pruneMissingRef=useRef(null);
   useEffect(()=>{ pruneMissingRef.current=pruneMissing; },[pruneMissing]);
-  const applyServerFile=useCallback((f)=>{
+  // ★onlyExisting=true は「すでに並んでいるファイルの中身を新しくするだけ」。
+  //   並んでいないファイルは足さない＝他のPCが消したファイルを、その直後に届いた
+  //   チャンクの知らせで生き返らせない（2026-11-12）。
+  const applyServerFile=useCallback((f,onlyExisting)=>{
     if(!f)return;
     const SAFE=n=>n.replace(/[^a-zA-Z0-9　-鿿゠-ヿ぀-ゟ]/g,'_').slice(0,30);
     setFiles(prev=>{
       const existing=prev.find(p=>p.name===f.name);
       if(existing){
-        // ローカルのconfirm/tempをGASの古いデータで上書きしない
-        const merged={...f,customers:f.customers.map(fc=>{
-          const lc=existing.customers.find(c=>c.custId===fc.custId);
-          if(!lc)return fc;
-          const priority={cancel:4,confirm:3,temp:2,new_car:2,none:0};
-          const lp=priority[lc.status||'none']||0;
-          const fp=priority[fc.status||'none']||0;
-          if(lp>fp)return lc;
-          if(fp>lp)return fc;
-          if(fc.entryDate&&!lc.entryDate)return fc;
-          if(fc.entryDate&&lc.entryDate&&fc.entryDate!==lc.entryDate)return fc;
-          return lc;
-        })};
+        // ★【2026-11-12】項目ごとに合わせる（cfMergeRow）。既定はサーバー＝他のPCが付けた
+        //   投函の印・備考・担当・入庫日がこの画面にもそのまま出る。
+        //   手元を守るのは「この PC がさっき直した項目（20秒）」と「予約の進み具合」だけ。
+        //   それまでは【行まるごと】ローカル優先（既定 return lc）だったので、
+        //   他のPCが付けた投函の印が永久にこの画面に出てこなかった
+        //   ＝「パソコンによって表示が全く異なる」の元。ここを行単位に戻さないこと。
+        const lmap=new Map();
+        (existing.customers||[]).forEach(c=>{ if(c&&c.custId)lmap.set(c.custId,c); });
+        const merged={...f,customers:(f.customers||[]).map(fc=>cfMergeRow(lmap.get(fc&&fc.custId),fc))};
         if(f._complete!==false)try{localStorage.setItem(STOR+'cf-'+SAFE(f.name),JSON.stringify(merged));}catch(e){}
         return prev.map(p=>p.name===f.name?merged:p);
       }
+      if(onlyExisting)return prev;   // ★消されたファイルを生き返らせない
       if(f._complete!==false)try{localStorage.setItem(STOR+'cf-'+SAFE(f.name),JSON.stringify(f));}catch(e){}
       return [...prev,f];
     });
@@ -3479,6 +3559,23 @@ const App=()=>{
   // ★「✎ 編集」＝帯の色（状態）を選ぶ窓（2026-11-07 ユーザー指示）。すべての行に付けてある。
   const [bandEdit,setBandEdit]=useState(null);
   const openBandEdit=useCallback((customer)=>{setBandEdit(customer);},[]);
+  // ★顧客の【1人ぶんの、変えた項目だけ】をサーバーへ書く（2026-11-12）。
+  //   その人が入っているファイルを探し、サーバーの最新を読んでから項目を当てて書く。
+  //   ここを「手元のファイル全体を書く」に戻さないこと＝他のPCが付けた
+  //   投函の印・備考・担当がサーバーから消える（本番 202701 で240件が消えた原因）。
+  const cfSaveRowFields0=useCallback(async(custId,fields)=>{
+    const fl=filesRef.current||[];
+    const f=fl.find(x=>x&&Array.isArray(x.customers)&&x.customers.some(c=>c&&c.custId===custId));
+    if(!f)return false;
+    const rows=await cfSaveRowFields(f.name,custId,fields,f.customers);
+    if(!rows){
+      alert('⚠ サーバーに保存できませんでした。'+String.fromCharCode(10)+'通信を確かめて、もう一度やり直してください。');
+      return false;
+    }
+    // サーバーの最新で画面もそろえる（他のPCが付けた投函の印・備考もここで出る）
+    setFiles(prev=>prev.map(x=>x.name===f.name?{...x,customers:rows}:x));
+    return true;
+  },[]);
   // 帯の色を変える。★書くのは【顧客リストの行だけ】＝スケジュール(insp)にも代車にも触らない。
   //   黄（初回車検）は備考に「初回車検」を入れる。緑・青はこのあと予約カードが開くので、
   //   入庫日・コース・代車はそちらで入れて保存する。
@@ -3486,30 +3583,33 @@ const App=()=>{
     let n=String(note==null?'':note);
     if(status==='new_car'&&n.indexOf('初回車検')<0)n=(n?n+'　':'')+'初回車検';
     const updated={...customer,status,note:n};
+    // ★サーバーへは【変えた項目だけ】を書く（2026-11-12）。手元のファイル全体を書くと
+    //   他のPCが付けた投函の印・備考・担当を消す（cfSaveRowFields）。
+    cfSaveRowFields0(customer.custId,{status,note:n});
     setFiles(prev=>prev.map(f=>{
       const ci=f.customers.findIndex(c=>c.custId===customer.custId);
       if(ci<0)return f;
       const custs=[...f.customers];
       custs[ci]=updated;
-      saveFileChunked({...f,customers:custs});
       return{...f,customers:custs};
     }));
     setBandEdit(null);
     if(status==='temp'||status==='confirm')openBookingModal(updated);
-  },[openBookingModal]);
+  },[openBookingModal,cfSaveRowFields0]);
   // 色は変えずに備考だけ保存する
   const saveBandNote=useCallback((customer,note)=>{
-    const updated={...customer,note:String(note==null?'':note)};
+    const nt=String(note==null?'':note);
+    const updated={...customer,note:nt};
+    cfSaveRowFields0(customer.custId,{note:nt});   // ★変えた項目だけ（2026-11-12）
     setFiles(prev=>prev.map(f=>{
       const ci=f.customers.findIndex(c=>c.custId===customer.custId);
       if(ci<0)return f;
       const custs=[...f.customers];
       custs[ci]=updated;
-      saveFileChunked({...f,customers:custs});
       return{...f,customers:custs};
     }));
     setBandEdit(null);
-  },[]);
+  },[cfSaveRowFields0]);
   const [closedDaysH,setClosedDaysH]=useState([]);
   const [closedDaysS,setClosedDaysS]=useState([3]);
   const [closedDatesH,setClosedDatesH]=useState([]);
@@ -3669,7 +3769,7 @@ const App=()=>{
                 //   1分以上占有していた。＝他の保存が巻き添えで遅くなる/溢れる原因。
                 //   通知の送り主がすでに保存済みなら書き込みは0本で済む。
                 //   欠けている(_complete===false)時だけは全部書き直して修復する。
-                const _cur=await loadFileChunked(f.name).catch(()=>null);
+                const _cur=await loadFileChunked(f.name,true).catch(()=>null);   // ★サーバーから読み直す
                 await saveFileChunked(f,(_cur&&_cur._complete!==false)?_cur.customers:null);
                 try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(f));}catch(e){}
                 await new Promise(r=>setTimeout(r,2000));
@@ -3792,6 +3892,47 @@ const App=()=>{
     return()=>clearInterval(t);
   },[pruneMissing]);
 
+  // ── 開いている顧客ファイルの中身を【購読】する（2026-11-12・投函チェックの食い違い対策） ──
+  // それまで、一度読んだファイルは二度と読み直していなかった（60秒の pickup は
+  // 「手元に無いファイル」しか読まない／チャンクは購読していない）。
+  // そのため他のPCが付けた投函の印・備考・担当は、画面を開き直すまで出てこなかった
+  // ＝「それぞれのパソコンによって表示が全く異なる」の元。
+  // ★読み直しではなく購読にしてあるのは、Firestore の読み取りを増やさないため
+  //   （購読は「変わった時だけ1件」。60秒ごとに全チャンクを読むと1台で1日2万件を超える）。
+  const cfApplyLive=useCallback(async()=>{
+    if(__saveCount>0||(window.__hubWriteBusy||0)>0)return;   // 自分が保存中はさわらない
+    for(const f of (filesRef.current||[])){
+      try{
+        const nf=await loadFileChunked(f.name);   // 購読中なので手元から即返る（通信しない）
+        if(!nf||nf._complete===false)continue;
+        if(!(filesRef.current||[]).some(x=>x&&x.name===f.name))continue;   // 読んでいる間に消されたら触らない
+        applyServerFile(nf,true);
+      }catch(e){}
+    }
+  },[applyServerFile]);
+  const cfApplyLiveRef=useRef(null);
+  useEffect(()=>{ cfApplyLiveRef.current=cfApplyLive; },[cfApplyLive]);
+  const cfSubRef=useRef({key:'',un:null});
+  useEffect(()=>{
+    const fl=(files||[]).filter(f=>f&&f.name);
+    // ★購読し直すのは「ファイルの並び」か「チャンクの数」が変わった時だけ。
+    //   files は保存のたびに作り直されるので、ここで止めないと購読し直し＝全件読み直しになる。
+    const chunksOf=f=>Math.max(1,Number(f._chunks)||Math.ceil((f.customers||[]).length/CHUNK_SIZE)||1);
+    const key=fl.map(f=>safeName(f.name)+'/'+chunksOf(f)).join('|');
+    if(cfSubRef.current.key===key)return;
+    if(cfSubRef.current.un){try{cfSubRef.current.un();}catch(e){}cfSubRef.current.un=null;}
+    cfSubRef.current.key=key;
+    if(!fl.length)return;
+    const keys=[];
+    fl.forEach(f=>{
+      const sn=safeName(f.name),cn=chunksOf(f);
+      keys.push(STOR+'cf-'+sn+'-index');   // チャンクの数が増えた時にここが変わる
+      for(let i=0;i<cn;i++)keys.push(STOR+'cf-'+sn+'-chunk-'+i);
+    });
+    cfSubRef.current.un=fbLive(keys,()=>{ if(cfApplyLiveRef.current)cfApplyLiveRef.current(); });
+  },[files]);
+  useEffect(()=>()=>{ if(cfSubRef.current.un){try{cfSubRef.current.un();}catch(e){}} },[]);
+
   // 画面復帰時（タブ切替・スリープ復帰）に即時リフレッシュ
   useEffect(()=>{
     const onVisible=()=>{
@@ -3875,8 +4016,11 @@ const App=()=>{
       for(const f of next){
         if(!changedFiles.has(f.name))continue;
         try{
-          const latest=await loadFileChunked(f.name);
-          const base=(latest&&Array.isArray(latest.customers))?latest.customers:f.customers;
+          const latest=await loadFileChunked(f.name,true);   // ★サーバーから読み直す
+          // ★欠けて読めた時はローカルで埋めない（短い行でサーバーを上書きしないため・2026-11-12）
+          const base=(latest&&Array.isArray(latest.customers)&&latest._complete!==false)?latest.customers:null;
+          if(!base){console.warn('[RECONCILE] サーバーを読み切れないので書きません',f.name);continue;}
+          Object.keys(fixedByCustId).forEach(id=>cfHoldMark(id,Object.keys(fixedByCustId[id]||{})));
           const merged=base.map(c=>(c&&c.custId&&fixedByCustId[c.custId])?{...c,...fixedByCustId[c.custId]}:c);
           await saveFileChunked({...f,customers:merged});
           try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify({...f,customers:merged}));}catch(e){}
@@ -3963,7 +4107,7 @@ const App=()=>{
         };
         try{
           // 中身が変わったチャンクだけ書く（同じ月の入れ直しは差分だけで済み、大幅に速い）。
-          const _prev=await loadFileChunked(r.name).catch(()=>null);
+          const _prev=await loadFileChunked(r.name,true).catch(()=>null);   // ★サーバーから読み直す
           ok=await saveFileChunked(r,(_prev&&_prev._complete!==false)?_prev.customers:null,onStep);
         }catch(_e){ok=false;}
         if(!ok)failed.push(r.name);
@@ -4020,18 +4164,19 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
   //   状態は 'cancel' のまま。予約（insp）にも代車にも一切触らない。
   //   一度キャンセルが点いたら未予約には戻さない＝また予約が入る時は「再予約」で取り直す。
   const handleCancelNote=useCallback((customer,note)=>{
-    const updated={...customer,note:String(note==null?'':note)};
+    const nt=String(note==null?'':note);
+    const updated={...customer,note:nt};
+    cfSaveRowFields0(customer.custId,{note:nt});   // ★変えた項目だけ（2026-11-12）
     setFiles(prev=>prev.map(f=>{
       const ci=f.customers.findIndex(c=>c.custId===customer.custId);
       if(ci<0)return f;
       const custs=[...f.customers];
       custs[ci]=updated;
-      saveFileChunked({...f,customers:custs});
       return{...f,customers:custs};
     }));
     setBookingModal(null);
     setCancelEdit(false);
-  },[]);
+  },[cfSaveRowFields0]);
   // ★「↩ 復活」（キャンセルを消して未予約に戻す）は 2026-11-02 に廃止（ユーザー決定）。
   //   一度キャンセルが点いたら未予約には戻さない。また予約が入ったら「再予約」で取り直す。
 
@@ -4459,10 +4604,15 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       _bg.push((async()=>{
         for(let _attempt=0;_attempt<3;_attempt++){
           try{
-            const _latest=await loadFileChunked(changedFile.name);
-            const _base=(_latest&&Array.isArray(_latest.customers))?_latest.customers:changedFile.customers;
-            let _merged=_base.map(c=>c.custId===customer.custId?updCustomer:c);
-            if(!_merged.some(c=>c.custId===customer.custId))_merged.push(updCustomer);
+            const _latest=await loadFileChunked(changedFile.name,true);   // ★サーバーから読み直す
+            // ★欠けて読めたサーバー値を「それが全部」と見なさない（短い行で上書きしない）
+            const _base=(_latest&&Array.isArray(_latest.customers)&&_latest._complete!==false)?_latest.customers:changedFile.customers;
+            // ★行まるごとではなく【変えた項目だけ】を当てる（2026-11-12）。
+            //   まるごと置くと、他のPCがこの人に付けた投函の印・備考を手元の古い値で消す。
+            const _dif=cfRowDiff(customer,updCustomer);
+            cfHoldMark(customer.custId,Object.keys(_dif));
+            let _merged=_base.map(c=>c&&c.custId===customer.custId?{...c,..._dif}:c);
+            if(!_merged.some(c=>c&&c.custId===customer.custId))_merged.push(updCustomer);
             const _mf={...changedFile,customers:_merged};
             const _wrote=await saveFileChunked(_mf,_base); // 変わったチャンクだけ書く
             try{localStorage.setItem(STOR+'cf-'+safeName(changedFile.name),JSON.stringify(_mf));}catch(e){}
@@ -4544,7 +4694,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       if(!ok){alert(`⚠️ ${p.name} の再送もサーバーに届きませんでした。少し待ってからもう一度お試しください。`);return;}
       // 顧客ファイル側（status/entryDate）も入っていなければ入れ直す
       if(p.fileName&&p.cust){
-        const f=await loadFileChunked(p.fileName);
+        const f=await loadFileChunked(p.fileName,true);   // ★サーバーから読み直す
         if(f&&Array.isArray(f.customers)){
           const cur=f.customers.find(c=>c.custId===p.custId);
           if(!cur||cur.status!==p.cust.status||cur.entryDate!==p.cust.entryDate){
@@ -4827,13 +4977,17 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     const idSet=new Set(ids);
     const prev=f.customers;
     const nf={...f,customers:prev.map(c=>idSet.has(c.custId)?{...c,[key]:toSent}:c)};
+    // ★この PC が直した項目は、保存が行き渡るまで購読の値で上書きされないよう印を付ける（2026-11-12）
+    ids.forEach(id=>cfHoldMark(id,[key]));
     setFiles(p=>p.map((x,i)=>i===activeIdx?nf:x));
     try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(nf));}catch(e){}
     for(let a=0;a<3;a++){
       try{
         // 他のPCの更新を消さないよう、最新を読んでから印だけ付け直す
-        const latest=await loadFileChunked(f.name);
-        const base=(latest&&Array.isArray(latest.customers))?latest.customers:prev;
+        const latest=await loadFileChunked(f.name,true);   // ★サーバーから読み直す
+        // ★欠けて読めた時は手元で埋めない（短い行でサーバーを上書きしない・2026-11-12）
+        const base=(latest&&Array.isArray(latest.customers)&&latest._complete!==false)?latest.customers:null;
+        if(!base){await new Promise(r=>setTimeout(r,800*(a+1)));continue;}
         const mf={...f,customers:base.map(c=>idSet.has(c.custId)?{...c,[key]:toSent}:c)};
         if(await saveFileChunked(mf,base)){
           setFiles(p=>p.map((x,i)=>i===activeIdx?mf:x));
