@@ -220,6 +220,64 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   t('★隠した作業は選べない', !picks.some(x => x.indexOf('試乗') >= 0), picks);
   t('★項目の数は 11（12 のうち 1つを隠した）', picks.length === 11, picks.length);
 
+  head('⑨ ★設定で月数を足すと、予約カードでも聞かれる（2026-11-13 現場報告）');
+  // 報告：「有料点検に 6ヶ月 を設定したのに、一般の予約カードから入れると選べない」。
+  // 原因は applyWorkPick の「有点なら12」の決め打ち。★月数は【設定の mon】だけで決めること。
+  await login('?dash=1');
+  await openEdit();
+  await click('[data-weditmon="有点/6"]');
+  await page.waitForTimeout(300);
+  t('設定で 有料点検に 6ヶ月 を足せる', await page.evaluate(() => {
+    const e = document.querySelector('[data-weditmon="有点/6"]');
+    return !!e && getComputedStyle(e).color === 'rgb(255, 255, 255)';
+  }));
+  await click('[data-weditsave]');
+  await page.waitForTimeout(1800);
+  const yu = await page.evaluate(k => {
+    const a = window.__fakeFb.get(k) || []; const w = a.find(x => x && x.id === '有点');
+    return w ? JSON.parse(JSON.stringify(w.mon || [])) : null;
+  }, STOR + 'workItems');
+  t('★workItems の 有点 に 6 と 12 が入る', Array.isArray(yu) && yu.indexOf('6') >= 0 && yu.indexOf('12') >= 0, yu);
+
+  await login('');
+  await toSchedule();
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('tr')].find(r => r.innerText.indexOf('14:00') === 0);
+    if (!row) return false;
+    const inner = [...row.querySelectorAll('div,td')].find(e => /クリックして追加/.test(e.innerText || ''));
+    (inner || row).click(); return true;
+  });
+  await page.waitForTimeout(800);
+  for (let i = 0; i < 3; i++) {
+    if (await page.evaluate(() => !!document.querySelector('[data-wkid]'))) break;
+    await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+    await page.waitForTimeout(450);
+  }
+  await page.evaluate(() => {
+    const it = [...document.querySelectorAll('[data-wkid]')].find(e => (e.innerText || '').indexOf('有料点検') >= 0);
+    if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
+  t('★有料点検を押しても窓は閉じない（月数を聞く）', await page.evaluate(() => !!document.querySelector('[data-wkmodal]')));
+  const mons = await page.evaluate(() => [...document.querySelectorAll('[data-wkmon]')].map(e => e.getAttribute('data-wkmon')));
+  t('★6ヶ月 と 12ヶ月 の両方が出る', mons.indexOf('6') >= 0 && mons.indexOf('12') >= 0, mons);
+  // ★月数の札は onMouseDown で決まる作り＝click() では効かない
+  await page.evaluate(() => { const e=document.querySelector('[data-wkmon="6"]'); if(e)e.dispatchEvent(new MouseEvent('mousedown',{bubbles:true})); });
+  await page.waitForTimeout(600);
+  t('★6ヶ月 を選ぶと窓が閉じる', await page.evaluate(() => !document.querySelector('[data-wkmodal]')));
+  t('★カードの作業内容が「有料点検（6ヶ月）」になる', await page.evaluate(() => {
+    const d = document.querySelector('[data-kbkey="work"]'); return !!d && d.innerText.indexOf('6ヶ月') >= 0;
+  }), await txt('[data-kbkey="work"]'));
+  // ★月数が1つだけの作業（はじめの形の無料点検は 1／6 の2つなので、ここは 納車＝月数なし）は聞かない
+  await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+  await page.waitForTimeout(450);
+  await page.evaluate(() => {
+    const it = [...document.querySelectorAll('[data-wkid]')].find(e => (e.innerText || '').indexOf('納車') >= 0);
+    if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
+  t('★月数が無い作業は聞かずに閉じる（納車）', await page.evaluate(() => !document.querySelector('[data-wkmodal]')));
+
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
   await browser.close(); server.close();
 

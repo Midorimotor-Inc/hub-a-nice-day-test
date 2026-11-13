@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794533942830';
+    window.__APP_BUILD='build-1794539869597';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.114.0';
+const APP_VERSION = '3.114.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -992,9 +992,12 @@ const workGroups = () => {
 const applyWorkPick = (form, id) => {
   const next = { ...form, work: id };
   if (id !== 'Q') next.qkind = [];
-  // ★有料点検は12ヶ月しかないので自動で決める（2026-11-04 ユーザー決定）。
-  //   メンパ・無料点検は【選ぶまでポップを閉じられない】＝空のままにしない。
-  next.wkmon = (id === '有点') ? '12' : '';
+  // ★月数は【主作業の設定】の mon だけで決める（v3.114.1・2026-11-13）。
+  //   ★「有点なら12」のような決め打ちにしないこと。設定で月数を足しても聞かれなくなる。
+  //   ・月数が1つだけ＝自動で決める（既定の有料点検＝12ヶ月だけ）
+  //   ・2つ以上＝【選ぶまでポップを閉じられない】＝空のままにしない
+  const mons = workSubOf(id);
+  next.wkmon = (mons && mons.length === 1) ? mons[0] : '';
   return next;
 };
 const SHIMIS = [{id:'',name:'なし'},{id:'指',name:'指示書'},{id:'見',name:'見積'},{id:'両',name:'両方'}];
@@ -9095,7 +9098,8 @@ const withDeliveryNote = (entry, dk, isInsp) => {
 //   ★点検（メンパ・有料点検・無料点検）は【月数を選ばないと閉じられない】
 //     ＝バッジが M1／M6／M12・有12・無1／無6 になるので、月数が空のままだと役に立たない。
 //     逃げ道は「やめる（元に戻す）」1つだけ（開いた時の値に戻して閉じる）。
-//   ★有料点検は12ヶ月しかないので applyWorkPick が自動で入れる＝そのまま閉じる。
+//   ★月数が1つだけの作業（はじめの形の有料点検＝12ヶ月だけ）は applyWorkPick が自動で入れて、そのまま閉じる。
+//     ★「有点なら12」の決め打ちにしないこと（v3.114.1）。設定で月数を足しても聞かれなくなる。
 //   ★`data-wkid` と onMouseDown は残すこと（works_quick_test ほか既存の検査が押している）。
 //   ★この窓は予約カードの外（QuickMenuModal のとなり）に置く。カードの中だと transform で
 //     position:fixed が閉じ込められる。
@@ -10772,7 +10776,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       </div>
       {/* 🔧 作業内容の大きな窓（2026-11-04）。点検は月数を選ぶまで閉じられない */}
       <WorkPickModal isOpen={showWkPk} work={form.work} mon={workMonOf(form)} qk={qkindOf(form)}
-        onPick={id=>{setForm(p=>applyWorkPick(p,id));const s=workSubOf(id);if(!s||id==='有点')wkAfter();}}
+        onPick={id=>{setForm(p=>applyWorkPick(p,id));const s=workSubOf(id);
+          // ★月数が無い作業と、月数が1つだけの作業は、聞かずに次へ進む（v3.114.1）
+          if(!s||s.length===1)wkAfter();}}
         onPickMon={m=>{setForm(p=>({...p,wkmon:m}));wkAfter();}}
         onClose={()=>setShowWkPk(false)}
         onRestore={o=>setForm(p=>({...p,work:o.work,wkmon:o.mon,qkind:(o.qk||[]).slice()}))}/>

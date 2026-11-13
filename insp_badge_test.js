@@ -246,7 +246,8 @@ const seed = {
   for (const [nm, src] of [['スケジュール', ix], ['スマホ', mb]]) {
     t(nm + '：★主作業は設定から読む（WORK_REG）', (src.indexOf('let WORK_REG = {') >= 0 || src.indexOf('let WORK_REG={') >= 0) && src.indexOf('const workSubOf') >= 0);
     t(nm + '：workBadgeText がある', src.indexOf('const workBadgeText') >= 0);
-    t(nm + '：★有料点検は自動で12ヶ月', /next\.wkmon *= *\(id *=== *'有点'\) *\? *'12' *: *''/.test(src));
+    t(nm + '：★月数が1つだけの作業は自動で決める（決め打ちにしない）', src.indexOf('mons.length === 1') >= 0 || src.indexOf('mons.length===1') >= 0);
+    t(nm + '：★「有点なら12」の決め打ちが無い', src.indexOf("(id === '有点') ? '12'") < 0 && src.indexOf("(id==='有点')?'12'") < 0);
     t(nm + '：★バッジは 見分け字＋月数', src.indexOf('return m ? (b + m) : b') >= 0 || src.indexOf('return m?(b+m):b') >= 0);
   }
   t('スケジュール：blankSched に wkmon がある', /blankSched *= *\(\) *=> *\(\{[^)]*wkmon:''/.test(ix));

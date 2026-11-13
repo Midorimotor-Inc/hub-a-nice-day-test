@@ -1,7 +1,8 @@
 // バージョン一括更新ツール（システム全体で1バージョンを保証する）
 // index_dev.html(APP_VERSION) / mobile.html(MOBILE_VERSION) / customers.html(APP_VERSION) を必ず同値にする。
 //   使い方:
-//     node bump_version.js         → 現在値を +0.01（例 1.37 → 1.38）
+//     node bump_version.js         → 直し（3桁の右端 +1。例 3.114.0 → 3.114.1）
+//     node bump_version.js --feat  → 新機能（3桁の真ん中 +1。例 3.114.1 → 3.115.0）
 //     node bump_version.js 1.40    → 指定値に統一
 //     node bump_version.js --check → 3ファイルが揃っているか確認のみ（揃っていなければ exit 1）
 //     node bump_version.js --stamp → バージョンは変えず __APP_BUILD だけ打ち直す
@@ -42,7 +43,21 @@ if(new Set(cur).size!==1){
 }
 if(process.argv[2]==='--check'){ console.log(`✔ 全ファイル一致: v${cur[0]}`); process.exit(0); }
 if(process.argv[2]==='--stamp'){ stampBuild(); process.exit(0); }
-const next=process.argv[2]||(parseFloat(cur[0])+0.01).toFixed(2);
+// ★★2026-10-06 からバージョンは【3桁】（新機能＝真ん中+1／直し＝右端+1）。
+//   引数なしの「+0.01」は2桁時代の名残で、3桁だと **3.114.0 → 3.12** のように壊れる
+//   （2026-11-13 に実際に踏んだ）。3桁のときは 引数なし＝【右端+1（直し）】、
+//   新機能は `node bump_version.js --feat`（真ん中+1・右端は0に戻す）。
+const bumpAuto=(v,feat)=>{
+  const p=String(v).split('.');
+  if(p.length>=3){
+    const a=p[0],b=p[1],c=p[2];
+    return feat ? [a,String(Number(b)+1),'0'].join('.') : [a,b,String(Number(c)+1)].join('.');
+  }
+  return (parseFloat(v)+0.01).toFixed(2);   // 2桁時代の控え
+};
+const arg=process.argv[2];
+const feat=(arg==='--feat');
+const next=(!arg||feat)?bumpAuto(cur[0],feat):arg;
 files.forEach(x=>{
   const s=fs.readFileSync(x.f,'utf8');
   fs.writeFileSync(x.f, s.replace(x.re, x.tpl(next)));

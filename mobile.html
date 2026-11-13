@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794533942830';
+  window.__APP_BUILD='build-1794539869597';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.114.0';
+const MOBILE_VERSION='3.114.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -314,9 +314,11 @@ const workGroups=()=>{
 const applyWorkPick=(form,id)=>{
   const next={...form,work:id};
   if(id!=='Q')next.qkind=[];
-  // ★有料点検は12ヶ月しかないので自動で決める（2026-11-04 ユーザー決定）。
-  //   メンパ・無料点検は【選ぶまで保存できない】＝空のままにしない。
-  next.wkmon=(id==='有点')?'12':'';
+  // ★月数は【主作業の設定】の mon だけで決める（v3.114.1・2026-11-13）。
+  //   ★「有点なら12」のような決め打ちにしないこと。設定で月数を足しても聞かれなくなる。
+  //   月数が1つだけ＝自動で決める／2つ以上＝【選ぶまで保存できない】＝空のままにしない。
+  const mons=workSubOf(id);
+  next.wkmon=(mons&&mons.length===1)?mons[0]:'';
   return next;
 };
 // ★クイックメニューのグループ（PC版と同じ既定）
