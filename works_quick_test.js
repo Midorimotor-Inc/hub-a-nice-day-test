@@ -190,8 +190,13 @@ const GONE = ['12ヶ月点検', 'メンパ12ヶ月点検', 'メンパ6ヶ月点�
   t('★「無点」を選んでも空のまま', (await noteVal()) === '', await noteVal());
 
   // ══ ③ Q のときだけ リフト／ピット ════════════════════════
-  head('③ クイック整備・修理のときだけ「どこで作業するか」が出る');
-  t('Q 以外では出ていない', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
+  head('③ 「どこで作業するか」は【場所を分ける】作業で出る');
+  // ★2026-11-13 から 点検（メンパ・無料点検・有料点検）も「場所を分ける」＝出る。
+  // ここは「場所を分ける」が入っていない作業（鈑金塗装）で確かめること。
+  await page.evaluate(() => { const e = document.querySelector('[data-wkmon]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await page.waitForTimeout(400);
+  await pickWork('鈑金塗装');
+  t('場所を分けない作業では出ていない', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
   await pickWork('クイック整備');
   t('★Q を選ぶと出る', await page.evaluate(() => !!document.querySelector('[data-qkrow]')));
   const kinds = await page.evaluate(() => [...document.querySelectorAll('[data-qkind]')].map(e => ({ k: e.getAttribute('data-qkind'), txt: e.innerText.trim() })));
@@ -207,6 +212,13 @@ const GONE = ['12ヶ月点検', 'メンパ12ヶ月点検', 'メンパ6ヶ月点�
   t('★Q 以外に変えると消える', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
   await pickWork('クイック整備');
   t('★Q に戻すと選び直しから（えらんでいない）', await page.evaluate(() => [...document.querySelectorAll('[data-qkind]')].every(e => !/✓/.test(e.innerText))));
+  // ★点検でもえらべる（2026-11-13 ユーザー指示・任意）
+  await pickWork('無料点検');
+  await page.evaluate(() => { const e = document.querySelector('[data-wkmon="6"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await page.waitForTimeout(450);
+  t('★点検（無料点検）でも出る', await page.evaluate(() => !!document.querySelector('[data-qkrow]')));
+  t('★点検でも はじめは どちらもえらんでいない（任意）', await page.evaluate(() => [...document.querySelectorAll('[data-qkind]')].every(e => !/✓/.test(e.innerText))));
+  await pickWork('クイック整備');
   await closeCard();
 
   // ══ ④ 入庫制限の解除は Q だけ3通り ═══════════════════════

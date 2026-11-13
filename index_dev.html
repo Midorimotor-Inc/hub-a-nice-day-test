@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794539869597';
+    window.__APP_BUILD='build-1794547733407';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.114.1';
+const APP_VERSION = '3.115.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -883,18 +883,23 @@ const TOKUENS = [{id:'①',name:'1ヶ月前予約'},{id:'②',name:'2ヶ月前�
 //     この字で保存されているため。名前・バッジ・色・並び・グループは自由に変えてよい。
 //   ★★消すのではなく【隠す】（hide）。新しく選べなくなるだけで、昔の予定の表示はそのまま残る。
 //   ★ここを静的な配列に戻さないこと。戻すと現場が足した作業が消える。
+//   ★mon:true＝そのグループの作業だけ「何ヶ月か」を聞ける（v3.115.0・2026-11-13 ユーザー指示：
+//     「点検項目以外は何ヶ月というのはいりません」）。グループの帯の 🗓 で入り切りできる。
 const DEFAULT_WORK_GROUPS = [
-  {id:'g1',name:'点検',      col:'#0891b2'},
-  {id:'g2',name:'整備・修理', col:'#9333ea'},
-  {id:'g3',name:'その他',    col:'#64748b'}
+  {id:'g1',name:'点検',      col:'#0891b2',mon:true },
+  {id:'g2',name:'整備・修理', col:'#9333ea',mon:false},
+  {id:'g3',name:'その他',    col:'#64748b',mon:false}
 ];
 // 既定＝2026-10-31 ユーザー決定の11個。並び・字・色は今までとまったく同じ。
+//   ★点検3つ（メンパ・無料点検・有料点検）も place:true＝リフト作業／ピット作業をえらべる
+//     （v3.115.0・2026-11-13 ユーザー指示「その点検でもピット作業とリフト作業を選択できるように。任意でいい」）。
+//     ★すでに保存してある設定が勝つので、現場では【主作業の設定】の「場所を分ける」を ○ にしてもらうこと。
 //   ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
 const DEFAULT_WORK_ITEMS = [
   {id:'Q',    g:'g2',name:'クイック整備・修理',badge:'Q', col:'#0891b2',mon:[],             mach:true, place:true },
-  {id:'メンパ',g:'g1',name:'メンパ',          badge:'M', col:'#4f46e5',mon:['1','6','12'],mach:true, place:false},
-  {id:'無点', g:'g1',name:'無料点検',         badge:'無',col:'#2563eb',mon:['1','6'],     mach:true, place:false},
-  {id:'有点', g:'g1',name:'有料点検',         badge:'有',col:'#7c3aed',mon:['12'],        mach:true, place:false},
+  {id:'メンパ',g:'g1',name:'メンパ',          badge:'M', col:'#4f46e5',mon:['1','6','12'],mach:true, place:true },
+  {id:'無点', g:'g1',name:'無料点検',         badge:'無',col:'#2563eb',mon:['1','6'],     mach:true, place:true },
+  {id:'有点', g:'g1',name:'有料点検',         badge:'有',col:'#7c3aed',mon:['12'],        mach:true, place:true },
   {id:'B',    g:'g2',name:'鈑金塗装',         badge:'B', col:'#9333ea',mon:[],            mach:false,place:false},
   {id:'R',    g:'g2',name:'リコール',         badge:'R', col:'#be123c',mon:[],            mach:true, place:false},
   {id:'商',   g:'g3',name:'商談',            badge:'商',col:'#b45309',mon:[],            mach:false,place:false},
@@ -923,7 +928,9 @@ const workNormItems = (items) => {
 const workNormGroups = (gs) => {
   const a = Array.isArray(gs) ? gs.filter(g => g && g.id) : null;
   if (!a || !a.length) return DEFAULT_WORK_GROUPS;
-  return a.map(g => ({id:String(g.id), name:String(g.name||'（名前なし）'), col:String(g.col||'#64748b')}));
+  return a.map(g => ({id:String(g.id), name:String(g.name||'（名前なし）'), col:String(g.col||'#64748b'),
+    // ★印が無い古い控えは「点検（g1）だけ月数を聞く」とみなす（v3.115.0 の引っ越し）。
+    mon: (g.mon === undefined || g.mon === null) ? (String(g.id) === 'g1') : !!g.mon}));
 };
 let WORK_REG = {items:DEFAULT_WORK_ITEMS, groups:DEFAULT_WORK_GROUPS};
 const hubSetWorkDefs = (items, gs) => { WORK_REG = {items:workNormItems(items), groups:workNormGroups(gs)}; };
@@ -959,12 +966,17 @@ const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >=
 //   ★バッジのとなりに作業名を出さないこと（2026-11-04 ユーザー指示：バッジだけで分かる）。
 // ★「何ヶ月か」を聞く月数は【主作業の設定】の mon から出す（v3.114.0）。
 //   既定は メンパ 1/6/12・有料点検 12・無料点検 1/6＝今までとまったく同じ。
+// ★★月数を聞くのは【そのグループに 🗓 の印がある作業】だけ（v3.115.0・2026-11-13 ユーザー指示）。
+//   既定では「点検」のグループだけ＝点検以外では「何ヶ月か」を聞かない。
+const workGrpAsksMon = (w) => { if (!w || !w.g) return false;
+  const g = WORK_REG.groups.find(x => x.id === w.g); return !!(g && g.mon); };
 const workSubOf = (id) => { const w = workDef(id);
+  if (!workGrpAsksMon(w)) return null;
   return (w && Array.isArray(w.mon) && w.mon.length) ? w.mon : null; };
-const workMonOf = (row) => { const s = workSubOf(row && row.work); const m = String((row && row.wkmon) || '');
-  // ★設定から月数を外しても、すでに入っている予定のバッジは消さない（v3.114.0）。
-  //   「月数を聞く作業か」だけを見る＝一覧に無い月（昔の分）もそのまま出す。
-  return (s && m) ? m : ''; };
+// ★すでに入っている予定の月数は【何があっても消さない】（v3.114.0／v3.115.0）。
+//   設定から月数を外しても、グループの 🗓 を外しても、保存されている wkmon はそのまま出す。
+//   ★ここで workSubOf を見に行かないこと（外した時に昔のバッジから月数が消える）。
+const workMonOf = (row) => String((row && row.wkmon) || '');
 const workBadgeText = (row) => { const id = (row && row.work) || '', m = workMonOf(row);
   const w = workDef(id), b = (w && w.badge) || id;
   return m ? (b + m) : b; };
@@ -991,7 +1003,9 @@ const workGroups = () => {
 //   ・Q 以外にしたら「どこで作業する」は外す
 const applyWorkPick = (form, id) => {
   const next = { ...form, work: id };
-  if (id !== 'Q') next.qkind = [];
+  // ★「場所を分ける」が入っていない作業に変えたら、リフト／ピットの選びは外す（v3.115.0）。
+  //   ★id==='Q' の決め打ちにしないこと。点検でも「場所を分ける」を入れれば選べる。
+  if (!workPlaceOn(id)) next.qkind = [];
   // ★月数は【主作業の設定】の mon だけで決める（v3.114.1・2026-11-13）。
   //   ★「有点なら12」のような決め打ちにしないこと。設定で月数を足しても聞かれなくなる。
   //   ・月数が1つだけ＝自動で決める（既定の有料点検＝12ヶ月だけ）
@@ -9207,6 +9221,10 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
   },[isOpen]);
   if(!isOpen)return null;
   const used=(id)=>Number((useCount||{})[id]||0);
+  // ★月数を聞くのは【グループに 🗓 の印がある区画】だけ（v3.115.0）。既定は「点検」だけ。
+  const grpAsksMon=(gid)=>{const g=dGroups.find(x=>x.id===gid);return !!(g&&g.mon);};
+  const dMon=(w)=>grpAsksMon(w.g)?(w.mon||[]):[];   // 見え方は印のある区画だけ
+  const togGrpMon=(gid)=>setDGroups(p=>p.map(x=>x.id===gid?{...x,mon:!x.mon}:x));
   const upd=(id,patch)=>setDItems(p=>p.map(w=>w.id===id?{...w,...patch}:w));
   const mv=(id,d)=>setDItems(p=>{const i=p.findIndex(w=>w.id===id);const j=i+d;
     if(i<0||j<0||j>=p.length)return p;const a=p.slice();const t=a[i];a[i]=a[j];a[j]=t;return a;});
@@ -9237,7 +9255,7 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
   };
   const addGroup=()=>{ const nm=window.prompt('新しいグループの名前'); if(!nm||!nm.trim())return;
     const id='g'+Date.now();
-    setDGroups(p=>p.concat([{id,name:nm.trim(),col:WORK_PALETTE[p.length%WORK_PALETTE.length]}]));};
+    setDGroups(p=>p.concat([{id,name:nm.trim(),col:WORK_PALETTE[p.length%WORK_PALETTE.length],mon:false}]));};
   const renGroup=(gid)=>{ const g=dGroups.find(x=>x.id===gid); if(!g)return;
     const v=window.prompt('グループの名前',g.name); if(v==null)return;
     setDGroups(p=>p.map(x=>x.id===gid?{...x,name:v.trim()||x.name}:x));};
@@ -9260,7 +9278,8 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
     if(rest.length&&g.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
     return g; })();
   const pvBadges=[];
-  nowItems.forEach(w=>{ if((w.mon||[]).length)(w.mon||[]).forEach(m=>pvBadges.push({k:w.id+m,t:w.badge+m,c:w.col}));
+  nowItems.forEach(w=>{ const mm=dMon(w);
+    if(mm.length)mm.forEach(m=>pvBadges.push({k:w.id+m,t:w.badge+m,c:w.col}));
     else pvBadges.push({k:w.id,t:w.badge,c:w.col}); });
   const pvMach=[];
   dItems.forEach(w=>{ if(!w.mach)return; pvMach.push(w.place?(w.name+'（リフトまで。ピットは受けられます）'):w.name); });
@@ -9299,7 +9318,9 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
             color:'#92400e',fontWeight:700,lineHeight:1.7,marginBottom:11}}>
             ★ <b>消すボタンはありません。</b>「使う／隠す」で切り替えます。隠した作業は<b>新しく選べなくなるだけ</b>で、
             すでに入っている予定の表示はそのまま残ります。<br/>
-            ★ 名前やバッジを変えても、<b>すでに掛けてある入庫制限は壊れません</b>（内部の見分け字は変えない作りです）。
+            ★ 名前やバッジを変えても、<b>すでに掛けてある入庫制限は壊れません</b>（内部の見分け字は変えない作りです）。<br/>
+            ★ <b>「何ヶ月か」を聞くのは 🗓 を入れた区画だけ</b>（既定は点検）。<b>「場所を分ける」を入れると、その作業で
+            リフト作業・ピット作業をえらべます</b>（えらばなくても構いません）。
           </div>
           {/* ── グループ ── */}
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:9}}>
@@ -9309,6 +9330,9 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
                 style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 7px',borderRadius:8,
                   border:'2px solid '+g.col,background:g.col+'14',fontSize:12,fontWeight:800,color:g.col}}>
                 {g.name}
+                <button data-weditgmon={g.id} onClick={()=>togGrpMon(g.id)}
+                  title={g.mon?'この区画の作業は「何ヶ月か」を聞きます（点検など）':'この区画では「何ヶ月か」を聞きません'}
+                  style={{...ARROW,width:24,background:g.mon?g.col:'white',color:g.mon?'white':'#cbd5e1',borderColor:g.col}}>🗓</button>
                 <button data-weditgren={g.id} onClick={()=>renGroup(g.id)} title="名前を直す" style={{...ARROW,width:20}}>✎</button>
                 <button data-weditgcol={g.id} onClick={()=>colGroup(g.id)} title="色を変える"
                   style={{...ARROW,width:20,background:g.col,borderColor:g.col}}/>
@@ -9339,7 +9363,7 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
                     <input data-weditbadge={w.id} type="text" value={w.badge}
                       onChange={e=>upd(w.id,{badge:e.target.value.slice(0,4)})}
                       style={{...IN,width:46,textAlign:'center',fontWeight:900}}/>
-                    <div style={{marginTop:3}}><span style={BADGE(w.col)}>{w.badge+((w.mon||[])[0]||'')}</span></div>
+                    <div style={{marginTop:3}}><span style={BADGE(w.col)}>{w.badge+(dMon(w)[0]||'')}</span></div>
                   </td>
                   <td style={TDC}>
                     <button data-weditcol={w.id} onClick={()=>upd(w.id,{col:nextCol(w.col)})} title="押すと色が変わります"
@@ -9357,10 +9381,13 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
                     </select>
                   </td>
                   <td style={{...TD,whiteSpace:'nowrap'}}>
-                    {WORK_MONTHS.map(m=>(
+                    {grpAsksMon(w.g)?WORK_MONTHS.map(m=>(
                       <span key={m} data-weditmon={w.id+'/'+m} onClick={()=>togMon(w.id,m)}
                         style={CHIP((w.mon||[]).indexOf(m)>=0)}>{m}</span>
-                    ))}
+                    )):(
+                      <span data-weditnomon={w.id} style={{fontSize:11.5,color:'#cbd5e1',fontWeight:900}}
+                        title="「何ヶ月か」を聞くのは、グループの帯で 🗓 を入れた区画（既定は点検）だけです">—</span>
+                    )}
                   </td>
                   <td style={TDC}>
                     <button data-weditmach={w.id} onClick={()=>upd(w.id,{mach:!w.mach})}
@@ -10470,8 +10497,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 </span>
                 <span style={{fontSize:10,color:'#6b7280'}}>{showWkPk?'▲':'▼'}</span>
               </div>
-              {/* ★Q を選んだ時だけ「どこで作業する」。両方えらべる（2026-10-31 ユーザー指示） */}
-              {form.work==='Q'&&(
+              {/* ★「場所を分ける」が入っている作業だけ「どこで作業する」。両方えらべる（2026-10-31 ユーザー指示）。
+                  ★v3.115.0（2026-11-13 ユーザー指示）から【点検でも選べる】＝Q の決め打ちをやめた。任意（えらばなくてよい）。 */}
+              {workPlaceOn(form.work)&&(
                 <div style={{marginTop:7}}>
                   <div style={{display:'flex',gap:7}} data-qkrow="1">
                     {QKINDS.map(k=>{const on=qkindOf(form).indexOf(k.k)>=0;return(
@@ -10481,7 +10509,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                         {on?'✓ ':''}{k.name}
                       </button>);})}
                   </div>
-                  <div style={{fontSize:10,color:'#9ca3af',marginTop:4}}>どちらも選ばなければ ふつうのクイック整備・修理。入庫制限は3通りで別々に通せます</div>
+                  <div style={{fontSize:10,color:'#9ca3af',marginTop:4}}>どちらも選ばなければ ふつうの{workName(form.work)}（えらばなくて構いません）。入庫制限は3通りで別々に通せます</div>
                 </div>
               )}
             </div>

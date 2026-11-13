@@ -278,6 +278,70 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   await page.waitForTimeout(500);
   t('★月数が無い作業は聞かずに閉じる（納車）', await page.evaluate(() => !document.querySelector('[data-wkmodal]')));
 
+  head('⑩ ★月数を聞くのは「点検」のグループだけ（2026-11-13 ユーザー指示）');
+  // ユーザーの言葉：「点検項目以外は何ヶ月というのはいりません」
+  await login('?dash=1');
+  await openEdit();
+  t('点検の作業には月数の札が出る', await page.evaluate(() => !!document.querySelector('[data-weditmon="メンパ/1"]')));
+  t('★点検いがいの作業には出ない（鈑金塗装）', await page.evaluate(() => {
+    return !document.querySelector('[data-weditmon="B/1"]') && !!document.querySelector('[data-weditnomon="B"]');
+  }));
+  t('★その他の作業にも出ない（納車）', await page.evaluate(() => !!document.querySelector('[data-weditnomon="納"]')));
+  t('グループの帯に 🗓 の切り替えがある', await page.evaluate(() => !!document.querySelector('[data-weditgmon="g1"]')));
+  await click('[data-weditgmon="g1"]');
+  await page.waitForTimeout(300);
+  t('★🗓 を外すと点検からも月数の札が消える', await page.evaluate(() => {
+    return !document.querySelector('[data-weditmon="メンパ/1"]') && !!document.querySelector('[data-weditnomon="メンパ"]');
+  }));
+  await click('[data-weditgmon="g1"]');
+  await page.waitForTimeout(300);
+  t('★🗓 を入れ直すと戻る', await page.evaluate(() => !!document.querySelector('[data-weditmon="メンパ/1"]')));
+  await click('[data-weditclose]');
+  await page.waitForTimeout(500);
+
+  head('⑪ ★点検でもリフト作業・ピット作業をえらべる（任意）');
+  // ユーザーの言葉：「その点検でもピット作業とリフト作業を選択できるようにしたい。これは任意でいい」
+  await login('');
+  await toSchedule();
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('tr')].find(r => r.innerText.indexOf('15:00') === 0);
+    if (!row) return false;
+    const inner = [...row.querySelectorAll('div,td')].find(e => /クリックして追加/.test(e.innerText || ''));
+    (inner || row).click(); return true;
+  });
+  await page.waitForTimeout(800);
+  t('★はじめは「どこで作業する」は出ていない', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
+  for (let i = 0; i < 3; i++) {
+    if (await page.evaluate(() => !!document.querySelector('[data-wkid]'))) break;
+    await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+    await page.waitForTimeout(450);
+  }
+  await page.evaluate(() => {
+    const it = [...document.querySelectorAll('[data-wkid]')].find(e => (e.innerText || '').indexOf('メンテナンスパック') >= 0);
+    if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  });
+  await page.waitForTimeout(450);
+  await page.evaluate(() => { const e = document.querySelector('[data-wkmon="6"]'); if (e) e.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await page.waitForTimeout(600);
+  t('★点検（メンパ）でも「どこで作業する」が出る', await page.evaluate(() => !!document.querySelector('[data-qkrow]')));
+  const kinds = await page.evaluate(() => [...document.querySelectorAll('[data-qkind]')].map(e => e.getAttribute('data-qkind')));
+  t('★リフト作業・ピット作業の2つ', kinds.join(',') === 'lift,pit', kinds);
+  t('★はじめは どちらもえらんでいない（任意）', await page.evaluate(() =>
+    [...document.querySelectorAll('[data-qkind]')].every(e => e.innerText.indexOf('✓') < 0)));
+  await page.evaluate(() => { const b = document.querySelector('[data-qkind="pit"]'); if (b) b.click(); });
+  await page.waitForTimeout(300);
+  t('★ピット作業をえらべる', await page.evaluate(() =>
+    [...document.querySelectorAll('[data-qkind]')].filter(e => e.innerText.indexOf('✓') >= 0).length === 1));
+  // 「場所を分ける」が入っていない作業に変えると消える
+  await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+  await page.waitForTimeout(450);
+  await page.evaluate(() => {
+    const it = [...document.querySelectorAll('[data-wkid]')].find(e => (e.innerText || '').indexOf('鈑金塗装') >= 0);
+    if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
+  t('★「場所を分ける」が入っていない作業では出ない（鈑金塗装）', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
+
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
   await browser.close(); server.close();
 
@@ -311,6 +375,30 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   t('★昔の作業（WORKS_OLD）は残してある', ix.indexOf('WORKS_OLD') >= 0 && mb.indexOf('WORKS_OLD') >= 0);
   t('★マッハで止める作業は設定から作る', ix.indexOf('machBlockKeys') >= 0 && mb.indexOf('machBlockKeys') >= 0);
   t('★入庫制限の解除の一覧も設定から作る', ix.indexOf('EXEMPT_LIST = () =>') >= 0 && /worksNow\(\)\.forEach/.test(ix));
+
+  // ── 2026-11-13 の2つ（月数は点検だけ／点検でも場所を分ける）の見張り
+  const lineWith = (src, needle) => (src.split(String.fromCharCode(10)).find(l => l.indexOf(needle) >= 0) || '');
+  for (const [nm, src] of [['スケジュール', ix], ['スマホ', mb]]) {
+    t(nm + '：★グループに「月数を聞く」の印がある', src.indexOf('workGrpAsksMon') >= 0);
+    t(nm + '：★印の無い古い控えは g1（点検）だけ月数を聞く',
+      src.indexOf("String(g.id) === 'g1'") >= 0 || src.indexOf("String(g.id)==='g1'") >= 0);
+    t(nm + '：★workSubOf は印の無い区画では月数を返さない',
+      src.indexOf('if (!workGrpAsksMon(w)) return null') >= 0 || src.indexOf('if(!workGrpAsksMon(w))return null') >= 0);
+    t(nm + '：★workMonOf は wkmon をそのまま返す（昔のバッジの月数を消さない）',
+      src.indexOf("const workMonOf = (row) => String((row && row.wkmon) || '')") >= 0 ||
+      src.indexOf("const workMonOf=(row)=>String((row&&row.wkmon)||'')") >= 0);
+    for (const id of ['メンパ', '無点', '有点']) {
+      t(nm + '：★点検（' + id + '）は はじめから「場所を分ける」',
+        lineWith(src, "id:'" + id + "'").replace(/ /g, '').indexOf('place:true') >= 0,
+        lineWith(src, "id:'" + id + "'").trim().slice(0, 60));
+    }
+    t(nm + '：★カードは workPlaceOn で出す（作業の id を名指ししない）',
+      src.indexOf('{workPlaceOn(form.work)&&(') >= 0 || src.indexOf('{workPlaceOn(form.work) && (') >= 0);
+  }
+  t('★編集の表にグループの 🗓（月数を聞く）がある', ix.indexOf('data-weditgmon') >= 0 && ix.indexOf('togGrpMon') >= 0);
+  t('★月数を聞かない区画の行は「—」で出す', ix.indexOf('data-weditnomon') >= 0);
+  t('★作業の id を名指しした決め打ちを書かない（有点なら12 をやめた）',
+    ix.indexOf("id === '有点'") < 0 && mb.indexOf("id==='有点'") < 0);
 
   console.log(String.fromCharCode(10) + (fail ? '❌ FAIL' : '✅ PASS') + '  成功 ' + pass + ' / 失敗 ' + fail);
   process.exit(fail ? 1 : 0);

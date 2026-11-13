@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794539869597';
+  window.__APP_BUILD='build-1794547733407';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.114.1';
+const MOBILE_VERSION='3.115.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -233,17 +233,18 @@ const COURSES=[
 //   保存先は共有の2つのキー {STOR}workItems / {STOR}workGroups（どちらも配列＝丸ごと置き換え）。
 //   ★★内部の id は変えられない（過去の予約と入庫制限の解除がこの字で保存されている）。
 //   ★★消すのではなく【隠す】（hide）。昔の予定の表示はそのまま残る。
+//   ★mon:true＝そのグループの作業だけ「何ヶ月か」を聞ける（v3.115.0）。直すのは PC の設定画面。
 const DEFAULT_WORK_GROUPS=[
-  {id:'g1',name:'点検',col:'#0891b2'},
-  {id:'g2',name:'整備・修理',col:'#9333ea'},
-  {id:'g3',name:'その他',col:'#64748b'}
+  {id:'g1',name:'点検',col:'#0891b2',mon:true},
+  {id:'g2',name:'整備・修理',col:'#9333ea',mon:false},
+  {id:'g3',name:'その他',col:'#64748b',mon:false}
 ];
 // ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
 const DEFAULT_WORK_ITEMS=[
   {id:'Q',g:'g2',name:'クイック整備・修理',badge:'Q',col:'#0891b2',mon:[],mach:true,place:true},
-  {id:'メンパ',g:'g1',name:'メンパ',badge:'M',col:'#4f46e5',mon:['1','6','12'],mach:true,place:false},
-  {id:'無点',g:'g1',name:'無料点検',badge:'無',col:'#2563eb',mon:['1','6'],mach:true,place:false},
-  {id:'有点',g:'g1',name:'有料点検',badge:'有',col:'#7c3aed',mon:['12'],mach:true,place:false},
+  {id:'メンパ',g:'g1',name:'メンパ',badge:'M',col:'#4f46e5',mon:['1','6','12'],mach:true,place:true},
+  {id:'無点',g:'g1',name:'無料点検',badge:'無',col:'#2563eb',mon:['1','6'],mach:true,place:true},
+  {id:'有点',g:'g1',name:'有料点検',badge:'有',col:'#7c3aed',mon:['12'],mach:true,place:true},
   {id:'B',g:'g2',name:'鈑金塗装',badge:'B',col:'#9333ea',mon:[],mach:false,place:false},
   {id:'R',g:'g2',name:'リコール',badge:'R',col:'#be123c',mon:[],mach:true,place:false},
   {id:'商',g:'g3',name:'商談',badge:'商',col:'#b45309',mon:[],mach:false,place:false},
@@ -267,7 +268,9 @@ const workNormItems=(items)=>{
 const workNormGroups=(gs)=>{
   const a=Array.isArray(gs)?gs.filter(g=>g&&g.id):null;
   if(!a||!a.length)return DEFAULT_WORK_GROUPS;
-  return a.map(g=>({id:String(g.id),name:String(g.name||'（名前なし）'),col:String(g.col||'#64748b')}));};
+  return a.map(g=>({id:String(g.id),name:String(g.name||'（名前なし）'),col:String(g.col||'#64748b'),
+    // ★印が無い古い控えは「点検（g1）だけ月数を聞く」とみなす（v3.115.0 の引っ越し）
+    mon:(g.mon===undefined||g.mon===null)?(String(g.id)==='g1'):!!g.mon}));};
 let WORK_REG={items:DEFAULT_WORK_ITEMS,groups:DEFAULT_WORK_GROUPS};
 const hubSetWorkDefs=(items,gs)=>{WORK_REG={items:workNormItems(items),groups:workNormGroups(gs)};};
 const workItemsAll=()=>WORK_REG.items;
@@ -289,11 +292,14 @@ const toggleQkind=(row,k)=>{const a=qkindOf(row);return a.indexOf(k)>=0?a.filter
 //   バッジの字そのものを M1／M6／M12（メンパ）・有12（有料点検）・無1／無6（無料点検）にする。
 //   持ち物は wkmon だけ。work は メンパ／有点／無点 のまま＝入庫制限の解除もマッハの制限も今までどおり。
 //   昔の予約（work が M12 など）は書き換えない。バッジのとなりに作業名は出さない。
+// ★★月数を聞くのは【そのグループに 🗓 の印がある作業】だけ（v3.115.0・PC と同じ）。既定は点検だけ。
+const workGrpAsksMon=(w)=>{if(!w||!w.g)return false;
+  const g=WORK_REG.groups.find(x=>x.id===w.g);return !!(g&&g.mon);};
 const workSubOf=(id)=>{const w=workDef(id);
+  if(!workGrpAsksMon(w))return null;
   return (w&&Array.isArray(w.mon)&&w.mon.length)?w.mon:null;};
-const workMonOf=(row)=>{const s=workSubOf(row&&row.work);const m=String((row&&row.wkmon)||'');
-  // ★設定から月数を外しても、すでに入っている予定のバッジは消さない（v3.114.0・PC と同じ）
-  return (s&&m)?m:'';};
+// ★すでに入っている予定の月数は【何があっても消さない】。ここで workSubOf を見に行かないこと。
+const workMonOf=(row)=>String((row&&row.wkmon)||'');
 const workBadgeText=(row)=>{const id=(row&&row.work)||'',m=workMonOf(row);
   const w=workDef(id),b=(w&&w.badge)||id;
   return m?(b+m):b;};
@@ -313,7 +319,8 @@ const workGroups=()=>{
 //   入れると印刷の行が増えて2枚になる日が出るため。戻さないこと。
 const applyWorkPick=(form,id)=>{
   const next={...form,work:id};
-  if(id!=='Q')next.qkind=[];
+  // ★「場所を分ける」が入っていない作業に変えたら外す（v3.115.0）。id==='Q' の決め打ちにしないこと。
+  if(!workPlaceOn(id))next.qkind=[];
   // ★月数は【主作業の設定】の mon だけで決める（v3.114.1・2026-11-13）。
   //   ★「有点なら12」のような決め打ちにしないこと。設定で月数を足しても聞かれなくなる。
   //   月数が1つだけ＝自動で決める／2つ以上＝【選ぶまで保存できない】＝空のままにしない。
@@ -4394,7 +4401,8 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGro
               {/* ★クイック整備・修理を選んだ時だけ「どこで作業するか」（2026-10-31 ユーザー決定）。
                   リフト作業・ピット作業は【両方えらべる】。どちらも選ばなければ＝ふつう。
                   入庫制限は両方が解除になっていないと通さない（restrPasses）。 */}
-              {form.work==='Q'&&(
+              {/* ★v3.115.0（2026-11-13 ユーザー指示）から【点検でも選べる】＝Q の決め打ちをやめた。任意。 */}
+              {workPlaceOn(form.work)&&(
                 <div data-qkrow style={{marginTop:-2,padding:'8px 10px',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:10}}>
                   <div style={{fontSize:11,fontWeight:800,color:'#6d28d9',marginBottom:6}}>どこで作業しますか（えらばなければ「ふつう」）</div>
                   <div style={{display:'flex',gap:8}}>
