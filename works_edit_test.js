@@ -2,7 +2,7 @@
 //   ① 入口＝ダッシュボードの「設定・道具」→ 🔧 主作業の設定（管理者だけ）
 //   ② 表の形（並び▲▼・バッジ・色・名前・グループ・月数・マッハで止める・場所を分ける・いまの予定・使う）
 //   ③ ★内部の見分け字（id）は変えられない＝読み取り専用で「変えられません」と出す
-//   ④ ★消すボタンは無い。「使う／隠す」で切り替える（昔の予定の表示はそのまま残る）
+//   ④ ★消すボタンは無い。「表示中／隠し中」で切り替える（昔の予定の表示はそのまま残る）
 //   ⑤ 名前・バッジを直して保存すると、予約カードの作業内容と 1日表示のバッジに出る
 //   ⑥ 足した作業が選べるようになる／隠した作業は選べなくなる
 //   ⑦ 「こう出ます」（予約カード・バッジ・マッハで止まる作業と解除の一覧）
@@ -113,7 +113,7 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   t('★並びは Q → メンパ → 無点 → 有点（点検は メンパ→無料→有料）',
     rows[0] === 'Q' && rows[1] === 'メンパ' && rows[2] === '無点' && rows[3] === '有点', rows.slice(0, 4));
   const ths = await page.evaluate(() => [...document.querySelectorAll('[data-wedittable] th')].map(e => e.innerText.replace(/\s/g, '')));
-  for (const h of ['並び', 'バッジ', '色', '名前', 'グループ', '月数を聞く', 'マッハで止める', '場所を分ける', 'いまの予定', '使う']) {
+  for (const h of ['並び', 'バッジ', '色', '名前', 'グループ', '月数を聞く', 'マッハで止める', '場所を分ける', 'いまの予定', '表示']) {
     t('列「' + h + '」がある', ths.some(x => x.indexOf(h) >= 0), ths);
   }
   t('▲▼ で並べ替えられる', await page.evaluate(() => !!document.querySelector('[data-weditup="Q"]') && !!document.querySelector('[data-weditdown="Q"]')));
@@ -128,10 +128,10 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   }), await txt('[data-weditrow="メンパ"]'));
   t('★id を直す入力欄は無い', await page.evaluate(() => !document.querySelector('[data-weditid]')));
 
-  head('④ 消すボタンは無い（使う／隠す で切り替える）');
+  head('④ 消すボタンは無い（表示中／隠し中 で切り替える）');
   t('★作業を消すボタンは無い', await page.evaluate(() => !document.querySelector('[data-weditdel]')));
-  t('「使う／隠す」のボタンがある', await page.evaluate(() => {
-    const b = document.querySelector('[data-wedithide="試"]'); return !!b && /使う|隠す/.test(b.innerText);
+  t('★「表示中／隠し中」のボタンがある（2026-11-13 ユーザー決定＝②案）', await page.evaluate(() => {
+    const b = document.querySelector('[data-wedithide="試"]'); return !!b && /表示中|隠し中/.test(b.innerText);
   }));
   t('★入庫制限が壊れないことを画面で言っている', await page.evaluate(() => {
     const d = document.querySelector('[data-wedit]'); return !!d && d.innerText.indexOf('入庫制限は壊れません') >= 0;
@@ -342,6 +342,62 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
   await page.waitForTimeout(500);
   t('★「場所を分ける」が入っていない作業では出ない（鈑金塗装）', await page.evaluate(() => !document.querySelector('[data-qkrow]')));
 
+  head('⑫ ★予約カードの中でそのまま直せる（B案・2026-11-13 ユーザー決定）');
+  // ユーザーの言葉：「ダッシュボードで開かずに、クイックメニューのように予約カードの中で編集できるように」
+  await page.evaluate(() => { const d = document.querySelector('[data-kbkey="work"]'); if (d) d.click(); });
+  await page.waitForTimeout(550);
+  t('作業内容の窓が開いている', await page.evaluate(() => !!document.querySelector('[data-wkmodal]')));
+  t('★窓の中に「✎ 編集」がある', await page.evaluate(() => !!document.querySelector('[data-wkedit]')));
+  await click('[data-wkedit]');
+  await page.waitForTimeout(450);
+  t('★押すと札が編集の行に変わる', await page.evaluate(() =>
+    document.querySelectorAll('[data-wkerow]').length >= 10 && !document.querySelector('[data-wkid]')),
+    await page.evaluate(() => document.querySelectorAll('[data-wkerow]').length));
+  t('★隠し中の作業も出る（ここから戻せる）', await page.evaluate(() => !!document.querySelector('[data-wkerow="試"]')));
+  t('★ボタンの字は 表示中／隠し中（②案）', await page.evaluate(() => {
+    const a = document.querySelector('[data-wkehide="B"]'), b = document.querySelector('[data-wkehide="試"]');
+    return !!a && !!b && a.innerText.indexOf('表示中') >= 0 && b.innerText.indexOf('隠し中') >= 0;
+  }), await page.evaluate(() => {
+    const a = document.querySelector('[data-wkehide="B"]'), b = document.querySelector('[data-wkehide="試"]');
+    return [a ? a.innerText : null, b ? b.innerText : null];
+  }));
+  t('★月数は 🗓 の区画だけ（鈑金塗装は —）', await page.evaluate(() =>
+    !!document.querySelector('[data-wkemon="メンパ/1"]') && !!document.querySelector('[data-wkenomon="B"]')));
+  t('★マッハ・場所・グループは窓に入れない（それは表の方で）', await page.evaluate(() => {
+    const d = document.querySelector('[data-wkmodal]');
+    return !!d && !d.querySelector('[data-weditmach]') && !d.querySelector('[data-weditplace]') && !d.querySelector('[data-weditgname]');
+  }));
+  t('★id を直す入力欄は無い', await page.evaluate(() => !document.querySelector('[data-wkeid]')));
+  await setVal('[data-wkename="B"]', '鈑金・塗装');
+  await setVal('[data-wkebadge="B"]', 'BP');
+  await page.waitForTimeout(250);
+  await click('[data-wkesave]');
+  await page.waitForTimeout(1900);
+  t('★保存すると札の並びに戻る', await page.evaluate(() =>
+    !document.querySelector('[data-wkerow]') && !!document.querySelector('[data-wkid]')));
+  t('★直した名前がその場で出る', await page.evaluate(() => {
+    const e = document.querySelector('[data-wkid="B"]'); return !!e && e.innerText.indexOf('鈑金・塗装') >= 0;
+  }), await txt('[data-wkid="B"]'));
+  const bw = await page.evaluate(k => {
+    const a = window.__fakeFb.get(k) || []; const w = a.find(x => x && x.id === 'B');
+    return w ? { n: w.name, b: w.badge } : null;
+  }, STOR + 'workItems');
+  t('★共有の workItems にも入る（全員の画面に出る）', !!bw && bw.n === '鈑金・塗装' && bw.b === 'BP', bw);
+  // ＋足す もその場でできる
+  await click('[data-wkedit]');
+  await page.waitForTimeout(450);
+  await setVal('[data-wkenewname]', '室内クリーニング');
+  await setVal('[data-wkenewbadge]', '室');
+  await page.waitForTimeout(200);
+  await click('[data-wkeadd]');
+  await page.waitForTimeout(450);
+  t('★その場で足せる', await page.evaluate(() =>
+    [...document.querySelectorAll('[data-wkename]')].some(e => e.value === '室内クリーニング')));
+  await click('[data-wkesave]');
+  await page.waitForTimeout(1900);
+  t('★足した作業がすぐ選べる', await page.evaluate(() =>
+    [...document.querySelectorAll('[data-wkid]')].some(e => e.innerText.indexOf('室内クリーニング') >= 0)));
+
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
   await browser.close(); server.close();
 
@@ -395,6 +451,11 @@ const DK = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
     t(nm + '：★カードは workPlaceOn で出す（作業の id を名指ししない）',
       src.indexOf('{workPlaceOn(form.work)&&(') >= 0 || src.indexOf('{workPlaceOn(form.work) && (') >= 0);
   }
+  t('★予約カードの窓の中でも直せる（B案・2026-11-13）',
+    ix.indexOf('data-wkedit') >= 0 && ix.indexOf('data-wkerow') >= 0 && ix.indexOf('onSaveWorks') >= 0);
+  t('★窓の中の保存先は 表とまったく同じ2つのキー', /onSaveWorks={saveWorkDefs}/.test(ix));
+  t('★「表示中／隠し中」の字（②案・2026-11-13）', ix.indexOf("'隠し中':'表示中'") >= 0 && ix.indexOf('使う/隠す') < 0);
+  t('★窓の中では マッハ・場所・グループを直させない', ix.indexOf('data-wkemach') < 0 && ix.indexOf('data-wkeplace') < 0 && ix.indexOf('data-wkegname') < 0);
   t('★編集の表にグループの 🗓（月数を聞く）がある', ix.indexOf('data-weditgmon') >= 0 && ix.indexOf('togGrpMon') >= 0);
   t('★月数を聞かない区画の行は「—」で出す', ix.indexOf('data-weditnomon') >= 0);
   t('★作業の id を名指しした決め打ちを書かない（有点なら12 をやめた）',

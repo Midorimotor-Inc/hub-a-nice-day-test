@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794547733407';
+    window.__APP_BUILD='build-1794548833344';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.115.0';
+const APP_VERSION = '3.116.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -9118,22 +9118,140 @@ const withDeliveryNote = (entry, dk, isInsp) => {
 //   ★この窓は予約カードの外（QuickMenuModal のとなり）に置く。カードの中だと transform で
 //     position:fixed が閉じ込められる。
 // ============================================
-const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore})=>{
+// ──────────────────────────────────────────────────────────────
+//  🔧 作業内容の窓（2026-11-04）＋ その場で直す（v3.116.0・2026-11-13 ユーザー決定＝B案）
+//  見本は mock_works_inline_edit.html。A案（表を上に重ねる）・C案（軽く直す＋もっと細かく）は不採用。
+//  ★B案＝「✎ 編集」を押すと、作業の札が【そのまま編集の行に変わる】（クイックメニューと同じ考え方）。
+//    ここで直せるのは 名前・バッジ・色・並び・月数・表示中／隠し中・＋足す の7つだけ。
+//    「マッハで止める」「場所を分ける」「グループの名前・色・追加」は【ダッシュボードの表】で。
+//    ＝行が横に長くなりすぎないため。入れたくなったら表の方に足すこと。
+//  ★★内部の id は変えられない（過去の予約の work と入庫制限の解除がこの字）。消すボタンも作らない。
+//  ★保存先はダッシュボードの表とまったく同じ2つのキー（workItems / workGroups）。
+// ──────────────────────────────────────────────────────────────
+const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore,
+                           canEdit,allItems,allGroups,useCount,onSaveWorks})=>{
   const [warn,setWarn]=useState(false);
+  const [edit,setEdit]=useState(false);
+  const [dItems,setDItems]=useState([]);
+  const [dGroups,setDGroups]=useState([]);
+  const [nwName,setNwName]=useState('');
+  const [nwBadge,setNwBadge]=useState('');
+  const [nwGrp,setNwGrp]=useState('');
+  const [msg,setMsg]=useState('');
   const orig=useRef({work:'',mon:'',qk:[]});
-  useEffect(()=>{if(isOpen){orig.current={work:work||'',mon:mon||'',qk:(qk||[]).slice()};setWarn(false);}},[isOpen]);
+  useEffect(()=>{if(isOpen){orig.current={work:work||'',mon:mon||'',qk:(qk||[]).slice()};setWarn(false);setEdit(false);setMsg('');}},[isOpen]);
   if(!isOpen)return null;
   const sub=workSubOf(work), need=!!(sub&&!mon);
   const col=(work?workColor(work):'#0891b2');
-  const tryClose=()=>{if(need){setWarn(true);return;}onClose();};
-  const giveUp=()=>{if(onRestore)onRestore(orig.current);onClose();};
   const CH=(on,c)=>({padding:'10px 18px',borderRadius:22,border:'2px solid '+(on?c:'#e5e7eb'),
     background:on?c:'white',color:on?'white':'#334155',fontSize:15,fontWeight:800,cursor:'pointer',
     fontFamily:'inherit',whiteSpace:'nowrap',userSelect:'none'});
   const FBTN={padding:'10px 0',borderRadius:9,border:'none',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:'inherit'};
-  // ★縁は太く・まわりに輪（2026-11-04 ユーザー指示「青縁をもう少し太く目立つように」）。
-  //   細くしないこと＝点検を押した人に「ここを選ぶ」と分かってもらうための箱。
-  const monRow = !sub ? null : (
+
+  // ── ✎ 編集（B案）────────────────────────────────────────
+  const openEdit=()=>{
+    setDItems((allItems||workItemsAll()).map(w=>({...w,mon:(w.mon||[]).slice()})));
+    setDGroups((allGroups||workGroupsRaw()).map(g=>({...g})));
+    setNwName('');setNwBadge('');setNwGrp((((allGroups||workGroupsRaw())[0])||{}).id||'');
+    setMsg('');setWarn(false);setEdit(true);
+  };
+  const dirty=()=>{
+    try{
+      const a=JSON.stringify([(allItems||[]).map(w=>({...w,mon:(w.mon||[]).slice()})),(allGroups||[]).map(g=>({...g}))]);
+      return JSON.stringify([dItems,dGroups])!==a;
+    }catch(e){return true;}
+  };
+  const cancelEdit=()=>{setEdit(false);setMsg('');};
+  const askCancelEdit=()=>{
+    if(dirty()&&!window.confirm('直した内容を捨てますか？'))return false;
+    cancelEdit();return true;
+  };
+  const used=(id)=>Number((useCount||{})[id||'']||0);
+  const grpAsksMon=(gid)=>{const g=dGroups.find(x=>x.id===gid);return !!(g&&g.mon);};
+  const upd=(id,patch)=>setDItems(p=>p.map(w=>w.id===id?{...w,...patch}:w));
+  const mv=(id,d)=>setDItems(p=>{const i=p.findIndex(w=>w.id===id);const j=i+d;
+    if(i<0||j<0||j>=p.length)return p;const a=p.slice();const t=a[i];a[i]=a[j];a[j]=t;return a;});
+  const togMon=(id,m)=>setDItems(p=>p.map(w=>{ if(w.id!==id)return w;
+    const has=(w.mon||[]).indexOf(m)>=0;
+    const mm=(has?(w.mon||[]).filter(x=>x!==m):(w.mon||[]).concat([m])).sort((x,y)=>Number(x)-Number(y));
+    return {...w,mon:mm}; }));
+  const nextCol=(c)=>WORK_PALETTE[(WORK_PALETTE.indexOf(c)+1)%WORK_PALETTE.length];
+  const togHide=(id)=>{ const w=dItems.find(x=>x.id===id); if(!w)return;
+    if(!w.hide){
+      if(dItems.filter(x=>!x.hide).length<=1){setMsg('⚠ ぜんぶ隠すことはできません。1つは残してください。');return;}
+      const n=used(id);
+      const q=n>0
+        ? w.name+' は いまの予定 '+n+'件 が使っています。'+String.fromCharCode(10)
+          +'隠すと【新しく選べなくなる】だけで、入っている予定の表示はそのまま残ります。'+String.fromCharCode(10)+'隠しますか？'
+        : w.name+' を隠します（新しく選べなくなります）。よろしいですか？';
+      if(!window.confirm(q))return;
+    }
+    upd(id,{hide:!w.hide});setMsg('');
+  };
+  const addItem=()=>{ const nm=nwName.trim();
+    if(!nm){setMsg('⚠ 名前を入れてください。');return;}
+    const id='w'+Date.now();
+    setDItems(p=>p.concat([{id,g:nwGrp||((dGroups[0]||{}).id||''),name:nm,
+      badge:(nwBadge.trim()||nm).slice(0,4),col:WORK_PALETTE[p.length%WORK_PALETTE.length],
+      mon:[],mach:false,place:false,hide:false}]));
+    setNwName('');setNwBadge('');setMsg('✓ 足しました。下の「保存する」を押すと全員の画面に出ます。');
+  };
+  const saveEdit=()=>{ if(onSaveWorks)onSaveWorks(dItems,dGroups); setEdit(false);setMsg(''); };
+
+  // 編集中の並び：下書きのグループ順。どこにも属さない作業は最後のグループに寄せる
+  const eGroups=(()=>{
+    const g=dGroups.map(x=>({...x,items:dItems.filter(w=>w.g===x.id)}));
+    const rest=dItems.filter(w=>!dGroups.some(x=>x.id===w.g));
+    if(rest.length&&g.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
+    return g;
+  })();
+
+  const tryClose=()=>{
+    if(edit){ askCancelEdit(); return; }
+    if(need){setWarn(true);return;}
+    onClose();
+  };
+  const giveUp=()=>{if(onRestore)onRestore(orig.current);onClose();};
+
+  const EIN={padding:'5px 7px',borderRadius:6,border:'1px solid #cbd5e1',fontSize:13.5,fontFamily:'inherit'};
+  const ARROW={width:24,height:22,borderRadius:5,border:'1px solid #cbd5e1',background:'white',cursor:'pointer',fontSize:10,padding:0,fontFamily:'inherit'};
+  const MCHIP=(on)=>({display:'inline-block',padding:'3px 8px',borderRadius:6,fontSize:11.5,fontWeight:800,cursor:'pointer',
+    border:'1px solid '+(on?'#0891b2':'#cbd5e1'),background:on?'#0891b2':'white',color:on?'white':'#334155',userSelect:'none'});
+  // ★「使う／隠す」ではなく【表示中／隠し中】（2026-11-13 ユーザー決定＝②案）。
+  //   「使う」は押したら使うのか、いま使っているのか分からない、という声から。
+  const YN=(on)=>({padding:'4px 8px',minWidth:58,height:24,borderRadius:5,border:'1px solid '+(on?'#059669':'#cbd5e1'),
+    background:on?'#059669':'white',color:on?'white':'#64748b',fontSize:11.5,fontWeight:900,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'});
+
+  const eRow=(w)=>(
+    <div key={w.id} data-wkerow={w.id} style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',
+      padding:'6px 7px',borderRadius:8,border:'1px solid #e2e8f0',background:w.hide?'#f8fafc':'white',
+      marginBottom:6,opacity:w.hide?.75:1}}>
+      <button data-wkeup={w.id} onClick={()=>mv(w.id,-1)} title="上へ" style={ARROW}>▲</button>
+      <button data-wkedown={w.id} onClick={()=>mv(w.id,1)} title="下へ" style={ARROW}>▼</button>
+      <input data-wkebadge={w.id} value={w.badge||''} onChange={e=>upd(w.id,{badge:e.target.value.slice(0,4)})}
+        title="1日表示・週表示に出る短い字（4文字まで）"
+        style={{...EIN,width:56,textAlign:'center',fontWeight:900}}/>
+      <button data-wkecol={w.id} onClick={()=>upd(w.id,{col:nextCol(w.col)})} title="色を変える"
+        style={{width:24,height:22,borderRadius:5,border:'1px solid '+w.col,background:w.col,cursor:'pointer',padding:0}}/>
+      <input data-wkename={w.id} value={w.name||''} onChange={e=>upd(w.id,{name:e.target.value})}
+        style={{...EIN,flex:1,minWidth:130}}/>
+      <span style={{fontSize:11,color:'#94a3b8',fontWeight:900}}>月数</span>
+      {grpAsksMon(w.g)?WORK_MONTHS.map(m=>(
+        <span key={m} data-wkemon={w.id+'/'+m} onClick={()=>togMon(w.id,m)}
+          style={MCHIP((w.mon||[]).indexOf(m)>=0)}>{m}</span>
+      )):(
+        <span data-wkenomon={w.id} style={{fontSize:11.5,color:'#cbd5e1',fontWeight:900}}
+          title="「何ヶ月か」を聞くのは、ダッシュボードの表で 🗓 を入れた区画（既定は点検）だけです">—</span>
+      )}
+      <span data-wkeused={w.id} style={{fontSize:11.5,color:'#64748b',whiteSpace:'nowrap'}}>{used(w.id)}件</span>
+      <button data-wkehide={w.id} onClick={()=>togHide(w.id)}
+        title={w.hide?'新しく選べるように戻す':'新しく選べなくする（昔の予定は残ります）'}
+        style={YN(!w.hide)}>{w.hide?'隠し中':'表示中'}</button>
+    </div>
+  );
+
+  // ★縁は太く・まわりに輪（2026-11-04 ユーザー指示）。細くしないこと。
+  const monRow = (!sub||edit) ? null : (
     <div data-wkmonrow="1" style={{border:'4px solid '+col,boxShadow:'0 0 0 4px '+col+'33',borderRadius:12,
       padding:'11px 13px 13px',background:'#f8fafc',marginBottom:14}}>
       <div style={{fontSize:13,fontWeight:900,color:col,marginBottom:8}}>
@@ -9158,42 +9276,97 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
     <div data-wkmodal="1" onMouseDown={e=>e.preventDefault()} onClick={tryClose}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:4800,display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
       <div onClick={e=>e.stopPropagation()} className="modal-box"
-        style={{background:'white',borderRadius:16,width:'min(820px,96vw)',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
+        style={{background:'white',borderRadius:16,width:'min(980px,97vw)',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
         <div style={{padding:'14px 18px',background:'linear-gradient(135deg,#0e7490,#0891b2)',borderRadius:'16px 16px 0 0',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
           <div style={{flex:1}}>
-            <div style={{color:'white',fontWeight:900,fontSize:15}}>🔧 作業内容</div>
-            <div style={{color:'rgba(255,255,255,0.8)',fontSize:11}}>押すとその作業になります。点検は「何ヶ月か」まで選んでください。</div>
+            <div style={{color:'white',fontWeight:900,fontSize:15}}>🔧 作業内容{edit?'（直しています）':''}</div>
+            <div style={{color:'rgba(255,255,255,0.8)',fontSize:11}}>
+              {edit?'名前・バッジ・色・並び・月数・表示中／隠し中 をその場で直せます（保存すると全員の画面に出ます）'
+                   :'押すとその作業になります。点検は「何ヶ月か」まで選んでください。'}</div>
           </div>
+          {!!canEdit&&(
+            <button data-wkedit="1" onClick={()=>{if(edit){askCancelEdit();}else{openEdit();}}}
+              title={edit?'直すのをやめる':'この窓の中で項目を直す（名前・バッジ・色・並び・月数・表示中／隠し中）'}
+              style={{padding:'6px 11px',borderRadius:8,border:'2px solid rgba(255,255,255,0.9)',
+                background:edit?'white':'transparent',color:edit?'#0e7490':'white',
+                fontSize:12,fontWeight:900,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+              {edit?'✎ 直すのをやめる':'✎ 編集'}</button>
+          )}
           <button data-wkclose="1" onClick={tryClose} title="とじる"
             style={{width:32,height:26,border:'2px solid rgba(255,255,255,0.9)',background:'transparent',color:'white',borderRadius:7,fontSize:13,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
         </div>
         <div style={{padding:'14px 18px',overflowY:'auto'}}>
           {/* ★月数の箱は【点検の区画のすぐ下】に割って入れる（2026-11-04 ユーザー指示）。
               いちばん下だと、点検を押した人の目が追えない。整備・修理の区画より上に出すこと。 */}
-          {workGroups().map(g=>(
-            <React.Fragment key={g.id||g.name}>
-              <div data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
-                <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
-                  {g.items.map(w=>(
-                    <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
-                      style={CH(work===w.id,workColor(w.id))}>{w.name}</div>
-                  ))}
+          {edit?(
+            <React.Fragment>
+              {eGroups.map(g=>(
+                <div key={g.id||g.name} data-wkegrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 8px',marginBottom:12}}>
+                  <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
+                    {g.name}{g.mon?<span title="この区画の作業は「何ヶ月か」を聞きます">🗓</span>:null}
+                  </div>
+                  {g.items.map(eRow)}
+                  {!g.items.length&&<div style={{fontSize:12,color:'#94a3b8',padding:'2px 0 6px'}}>（この区画には何も入っていません）</div>}
                 </div>
+              ))}
+              <div data-wkeaddrow="1" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',
+                padding:'9px 11px',borderRadius:10,border:'2px dashed #cbd5e1',background:'#f8fafc',marginBottom:10}}>
+                <span style={{fontSize:12,fontWeight:900,color:'#334155'}}>＋ 足す</span>
+                <input data-wkenewname="1" value={nwName} onChange={e=>setNwName(e.target.value)}
+                  placeholder="名前（例：タイヤ交換）" style={{...EIN,width:210}}/>
+                <input data-wkenewbadge="1" value={nwBadge} onChange={e=>setNwBadge(e.target.value.slice(0,4))}
+                  placeholder="バッジ（例：タ）" style={{...EIN,width:120}}/>
+                <select data-wkenewgrp="1" value={nwGrp} onChange={e=>setNwGrp(e.target.value)}
+                  style={{...EIN,padding:'6px 7px'}}>
+                  {dGroups.map(g=>(<option key={g.id} value={g.id}>{g.name}</option>))}
+                </select>
+                <button data-wkeadd="1" onClick={addItem}
+                  style={{padding:'7px 13px',borderRadius:8,border:'none',background:'#059669',color:'white',fontSize:12.5,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>足す</button>
               </div>
-              {g.items.some(w=>w.id===work)&&monRow}
+              <div style={{fontSize:11.5,color:'#64748b',lineHeight:1.7}}>
+                ★ 内部の見分け字（id）は変えられません（昔の予約と入庫制限がこの字で入っているため）。消すボタンもありません＝「隠し中」にすると新しく選べなくなり、入っている予定はそのまま残ります。<br/>
+                ★「マッハで止める」「場所を分ける（リフト・ピット）」「グループの名前・色・追加」は、ダッシュボードの【🔧 主作業の設定】で直せます。
+              </div>
             </React.Fragment>
-          ))}
-          {warn&&(
+          ):(
+            workGroups().map(g=>(
+              <React.Fragment key={g.id||g.name}>
+                <div data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
+                  <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
+                    {g.items.map(w=>(
+                      <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
+                        style={CH(work===w.id,workColor(w.id))}>{w.name}</div>
+                    ))}
+                  </div>
+                </div>
+                {g.items.some(w=>w.id===work)&&monRow}
+              </React.Fragment>
+            ))
+          )}
+          {!!msg&&(
+            <div data-wkemsg="1" style={{marginTop:10,padding:'8px 11px',borderRadius:9,fontSize:12.5,fontWeight:800,
+              background:msg.indexOf('⚠')===0?'#fee2e2':'#dcfce7',
+              border:'2px solid '+(msg.indexOf('⚠')===0?'#fca5a5':'#86efac'),
+              color:msg.indexOf('⚠')===0?'#991b1b':'#166534'}}>{msg}</div>
+          )}
+          {warn&&!edit&&(
             <div data-wkwarn="1" style={{marginTop:10,padding:'9px 12px',background:'#fee2e2',border:'2px solid #fca5a5',borderRadius:10,color:'#991b1b',fontSize:12.5,fontWeight:800}}>
               ⚠ {workName(work)}の月数（{(sub||[]).join('・')}ヶ月）を選んでください。選ばずに閉じるなら「やめる（元に戻す）」を押してください。
             </div>
           )}
         </div>
-        <div style={{padding:'10px 18px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
-          <button data-wkgiveup="1" onClick={giveUp} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる（元に戻す）</button>
-          <button data-wkdone="1" onClick={tryClose} style={{...FBTN,flex:2,background:need?'#cbd5e1':'#0891b2',color:'white'}}>✓ これで決める</button>
-        </div>
+        {edit?(
+          <div style={{padding:'10px 18px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
+            <button data-wkecancel="1" onClick={askCancelEdit} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる</button>
+            <button data-wkesave="1" onClick={saveEdit} style={{...FBTN,flex:2,background:'#0891b2',color:'white'}}>✓ 保存する（全員の画面に出ます）</button>
+          </div>
+        ):(
+          <div style={{padding:'10px 18px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
+            <button data-wkgiveup="1" onClick={giveUp} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる（元に戻す）</button>
+            <button data-wkdone="1" onClick={tryClose} style={{...FBTN,flex:2,background:need?'#cbd5e1':'#0891b2',color:'white'}}>✓ これで決める</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -9205,7 +9378,8 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
 //    この字で保存されているため。表の「名前」「バッジ」「色」「並び」「グループ」は自由に変えてよい。
 //  ★★消すボタンは【作らない】。「隠す」だけ＝新しく選べなくなるが、昔の予定の表示はそのまま残る。
 //  ★保存は 2つの共有キー（workItems / workGroups）。どちらも配列＝丸ごと置き換え。
-//  ★入口はダッシュボードの「設定・道具」だけ（管理者のみ）。予約カードの中には置かない。
+//  ★入口は2つ（どちらも管理者だけ・v3.116.0）：ダッシュボードの「設定・道具」＝この表（全部直せる）と、
+//    予約カードの作業内容の窓の「✎ 編集」＝B案（名前・バッジ・色・並び・月数・表示中／隠し中 だけ）。保存先は同じ2つのキー。
 // ──────────────────────────────────────────────────────────────
 const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
   const [dItems,setDItems]=useState([]);
@@ -9316,7 +9490,7 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
         <div style={{padding:'12px 16px',overflowY:'auto'}}>
           <div style={{padding:'8px 11px',background:'#fffbeb',border:'2px solid #fcd34d',borderRadius:9,fontSize:12,
             color:'#92400e',fontWeight:700,lineHeight:1.7,marginBottom:11}}>
-            ★ <b>消すボタンはありません。</b>「使う／隠す」で切り替えます。隠した作業は<b>新しく選べなくなるだけ</b>で、
+            ★ <b>消すボタンはありません。</b>「表示中／隠し中」で切り替えます。隠した作業は<b>新しく選べなくなるだけ</b>で、
             すでに入っている予定の表示はそのまま残ります。<br/>
             ★ 名前やバッジを変えても、<b>すでに掛けてある入庫制限は壊れません</b>（内部の見分け字は変えない作りです）。<br/>
             ★ <b>「何ヶ月か」を聞くのは 🗓 を入れた区画だけ</b>（既定は点検）。<b>「場所を分ける」を入れると、その作業で
@@ -9350,7 +9524,7 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
               <th style={TH}>グループ</th><th style={TH}>月数を聞く</th>
               <th style={TH} title="マッハ車検の入庫から1時間は受けない">マッハ<br/>で止める</th>
               <th style={TH} title="リフト作業・ピット作業を分ける">場所を<br/>分ける</th>
-              <th style={TH}>いまの<br/>予定</th><th style={TH}>使う</th>
+              <th style={TH}>いまの<br/>予定</th><th style={TH}>表示</th>
             </tr></thead>
             <tbody>
               {dItems.map(w=>(
@@ -9403,7 +9577,7 @@ const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
                   <td style={TDC}>
                     <button data-wedithide={w.id} onClick={()=>togHide(w.id)}
                       title={w.hide?'新しく選べるように戻す':'新しく選べなくする（昔の予定は残ります）'}
-                      style={{...YN(!w.hide,'#059669'),width:46}}>{w.hide?'隠す':'使う'}</button>
+                      style={{...YN(!w.hide,'#059669'),width:58,minWidth:58,fontSize:11.5,padding:'0 4px'}}>{w.hide?'隠し中':'表示中'}</button>
                   </td>
                 </tr>
               ))}
@@ -9635,7 +9809,7 @@ const QuickMenuModal=memo(({isOpen,onClose,items,groups,value,onChangeValue,onSa
     </div>
   );
 });
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits,usrChk:bmUsrChk,onSetChecked:bmSetChecked})=>{
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits,usrChk:bmUsrChk,onSetChecked:bmSetChecked,canEditWorks,workUse,onSaveWorks})=>{
   const [form,setForm]=useState(initialData);
   const [showQuickMenu,setShowQuickMenu]=useState(false);   // ⚡ クイックメニュー（2026-10-31）
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
@@ -10809,7 +10983,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
           if(!s||s.length===1)wkAfter();}}
         onPickMon={m=>{setForm(p=>({...p,wkmon:m}));wkAfter();}}
         onClose={()=>setShowWkPk(false)}
-        onRestore={o=>setForm(p=>({...p,work:o.work,wkmon:o.mon,qkind:(o.qk||[]).slice()}))}/>
+        onRestore={o=>setForm(p=>({...p,work:o.work,wkmon:o.mon,qkind:(o.qk||[]).slice()}))}
+        canEdit={!!canEditWorks} allItems={workItemsAll()} allGroups={workGroupsRaw()}
+        useCount={workUse} onSaveWorks={onSaveWorks}/>
       {/* ⚡ クイックメニュー（2026-10-31）。内容の足し引きはその場で効く。
           ★車検の【備考】と一般整備の【内容】で【別の定型文】を持つ（2026-11-04 ユーザー指示）。混ぜないこと。 */}
       <QuickMenuModal isOpen={showQuickMenu} onClose={()=>setShowQuickMenu(false)}
@@ -19514,7 +19690,10 @@ function AppInner() {
         closedDays={closedDays}
         closedDates={closedDates}
         overrideOpenDates={Array.isArray(overrideOpenDates)?overrideOpenDates:[]}
-        inspLimits={inspLimits}/>
+        inspLimits={inspLimits}
+        canEditWorks={canRestore(currentUser)}
+        workUse={workUseCount}
+        onSaveWorks={saveWorkDefs}/>
 
       {/* -- 主作業の設定（v3.114.0・B案＝表で一覧）。入口はダッシュボードの「設定・道具」 -- */}
       <WorksEditModal isOpen={showWorksEdit} items={workItemsAll()} groups={workGroupsRaw()}
