@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794475017672';
+    window.__APP_BUILD='build-1794533942830';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.113.0';
+const APP_VERSION = '3.114.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -353,7 +353,7 @@ const WORK_COLORS = {
 const WorkBadge = ({id, mon, dim}) => {
   const w = workDef(id);
   if (!w) return <span style={{fontSize:13,color:'#374151'}}>{id||'—'}</span>;
-  const c = WORK_COLORS[id] || '#64748b';
+  const c = workColor(id);
   // ★点検は「何ヶ月か」までバッジに出す（M1／M6／M12・有12・無1／無6）。
   //   なぞると「メンパ（6ヶ月）」のように出るので、バッジのとなりに作業名は出さない。
   const row = {work:id, wkmon:mon};
@@ -875,12 +875,61 @@ const TOKUENS = [{id:'①',name:'1ヶ月前予約'},{id:'②',name:'2ヶ月前�
 //   ・12ヶ月点検・新車1ヶ月／6ヶ月点検 → 「有点（有料点検）」「無点（無料点検）」に寄せる
 //   ・「クイック整備・修理のリフト作業」「ピット作業」は**主作業には作らない**。
 //     Q を選んだ時だけ出る QKINDS（複数えらべる）で持ち、入庫制限の解除だけを分ける
-const WORKS = [
-  {id:'Q',name:'クイック整備・修理'},
-  // ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
-  {id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'},
-  {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
+// ★★【主作業は画面から足せる・直せる】（v3.114.0・2026-11-13 ユーザー要望・B案＝表で一覧）
+//   保存先は共有の2つのキー。どちらも【配列】なので mergeSharedObjects が丸ごと置き換える＝安全。
+//     {STOR}workItems  … [{id,g,name,badge,col,mon:[],mach,place,hide}]
+//     {STOR}workGroups … [{id,name,col}]
+//   ★★内部の id は【変えられない】。過去の予約（work）と入庫制限の解除（exemptWorks）が
+//     この字で保存されているため。名前・バッジ・色・並び・グループは自由に変えてよい。
+//   ★★消すのではなく【隠す】（hide）。新しく選べなくなるだけで、昔の予定の表示はそのまま残る。
+//   ★ここを静的な配列に戻さないこと。戻すと現場が足した作業が消える。
+const DEFAULT_WORK_GROUPS = [
+  {id:'g1',name:'点検',      col:'#0891b2'},
+  {id:'g2',name:'整備・修理', col:'#9333ea'},
+  {id:'g3',name:'その他',    col:'#64748b'}
 ];
+// 既定＝2026-10-31 ユーザー決定の11個。並び・字・色は今までとまったく同じ。
+//   ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
+const DEFAULT_WORK_ITEMS = [
+  {id:'Q',    g:'g2',name:'クイック整備・修理',badge:'Q', col:'#0891b2',mon:[],             mach:true, place:true },
+  {id:'メンパ',g:'g1',name:'メンパ',          badge:'M', col:'#4f46e5',mon:['1','6','12'],mach:true, place:false},
+  {id:'無点', g:'g1',name:'無料点検',         badge:'無',col:'#2563eb',mon:['1','6'],     mach:true, place:false},
+  {id:'有点', g:'g1',name:'有料点検',         badge:'有',col:'#7c3aed',mon:['12'],        mach:true, place:false},
+  {id:'B',    g:'g2',name:'鈑金塗装',         badge:'B', col:'#9333ea',mon:[],            mach:false,place:false},
+  {id:'R',    g:'g2',name:'リコール',         badge:'R', col:'#be123c',mon:[],            mach:true, place:false},
+  {id:'商',   g:'g3',name:'商談',            badge:'商',col:'#b45309',mon:[],            mach:false,place:false},
+  {id:'保',   g:'g3',name:'保険',            badge:'保',col:'#b45309',mon:[],            mach:false,place:false},
+  {id:'試',   g:'g3',name:'試乗',            badge:'試',col:'#b45309',mon:[],            mach:false,place:false},
+  {id:'納',   g:'g3',name:'納車',            badge:'納',col:'#047857',mon:[],            mach:false,place:false},
+  {id:'他',   g:'g3',name:'その他',          badge:'他',col:'#64748b',mon:[],            mach:false,place:false}
+];
+const WORK_MONTHS = ['1','6','12','18','24'];     // 「月数を聞く」で選べる月数
+const WORK_PALETTE = ['#0891b2','#4f46e5','#2563eb','#7c3aed','#9333ea','#be123c','#b45309','#047857','#64748b'];
+// ★画面ぜんぶ（1日表示・週表・印刷・スマホ）から読むので、受け皿は module の中に1つ持つ。
+//   App が useShared の値で hubSetWorkDefs を呼ぶ（描画の前）。こうしておけば BLOCK-C の
+//   InspRow / SchedRow は今までどおり workBadgeText(row) を呼ぶだけでよい＝BLOCK-C に手を入れない。
+const workNormItems = (items) => {
+  const a = Array.isArray(items) ? items : null;
+  if (!a || !a.length) return DEFAULT_WORK_ITEMS;
+  const out = [];
+  a.forEach(w => { if (!w || !w.id || out.some(x => x.id === w.id)) return;
+    out.push({id:String(w.id), g:String(w.g||''), name:String(w.name||w.id),
+      badge:String(w.badge||w.id).slice(0,4), col:String(w.col||'#64748b'),
+      mon:(Array.isArray(w.mon)?w.mon:[]).map(String).filter(m=>WORK_MONTHS.indexOf(m)>=0)
+        .sort((x,y)=>Number(x)-Number(y)),
+      mach:!!w.mach, place:!!w.place, hide:!!w.hide}); });
+  return out.length ? out : DEFAULT_WORK_ITEMS;
+};
+const workNormGroups = (gs) => {
+  const a = Array.isArray(gs) ? gs.filter(g => g && g.id) : null;
+  if (!a || !a.length) return DEFAULT_WORK_GROUPS;
+  return a.map(g => ({id:String(g.id), name:String(g.name||'（名前なし）'), col:String(g.col||'#64748b')}));
+};
+let WORK_REG = {items:DEFAULT_WORK_ITEMS, groups:DEFAULT_WORK_GROUPS};
+const hubSetWorkDefs = (items, gs) => { WORK_REG = {items:workNormItems(items), groups:workNormGroups(gs)}; };
+const workItemsAll = () => WORK_REG.items;                     // 隠した分も入る（設定の画面と制限の判定で使う）
+const workGroupsRaw = () => WORK_REG.groups;
+const worksNow = () => WORK_REG.items.filter(w => !w.hide);    // 新しく選べる作業
 // ★昔の予約がまだ持っている作業項目（2026-10-31 より前の分。本番に92件あった）。
 //   **データは書き換えない**＝保存されている字のまま出す。新しく選ぶ一覧には出さない。
 const WORKS_OLD = [
@@ -888,7 +937,12 @@ const WORKS_OLD = [
   {id:'M1',name:'メンパ1ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'}
 ];
 // 作業項目を引く時は必ずこれを通すこと（昔の分も引ける）
-const workDef = (id) => WORKS.find(x => x.id === id) || WORKS_OLD.find(x => x.id === id) || null;
+const workDef = (id) => WORK_REG.items.find(x => x.id === id) || WORKS_OLD.find(x => x.id === id) || null;
+// バッジの色（昔の作業項目は下の WORK_COLORS の表から拾う）
+const workColor = (id) => { const w = WORK_REG.items.find(x => x.id === id);
+  return (w && w.col) || WORK_COLORS[id] || '#64748b'; };
+// 「どこで作業するか（リフト／ピット）」を分ける作業か＝設定の「場所を分ける」
+const workPlaceOn = (id) => { const w = workDef(id); return !!(w && w.place); };
 const workName = (id) => { const w = workDef(id); return w ? w.name : (id || ''); };
 // ★Q（クイック整備・修理）を選んだ時だけ出る「どこで作業する」。両方えらべる。
 //   どちらも選ばなければ「ふつうのクイック整備・修理」。入庫制限の解除はこの3通りで分ける。
@@ -903,29 +957,32 @@ const toggleQkind = (row, k) => { const a = qkindOf(row); return a.indexOf(k) >=
 //     入庫制限の解除（restrPasses）とマッハの自動制限（MACH_BLOCK_WORKS）は今までどおり動く。
 //   ★昔の予約（work が M12／M6／M1 など）は【書き換えない】。保存されている字のまま出る。
 //   ★バッジのとなりに作業名を出さないこと（2026-11-04 ユーザー指示：バッジだけで分かる）。
-const WORK_SUB = {'メンパ':['1','6','12'],'有点':['12'],'無点':['1','6']};
-const workSubOf = (id) => WORK_SUB[id] || null;
+// ★「何ヶ月か」を聞く月数は【主作業の設定】の mon から出す（v3.114.0）。
+//   既定は メンパ 1/6/12・有料点検 12・無料点検 1/6＝今までとまったく同じ。
+const workSubOf = (id) => { const w = workDef(id);
+  return (w && Array.isArray(w.mon) && w.mon.length) ? w.mon : null; };
 const workMonOf = (row) => { const s = workSubOf(row && row.work); const m = String((row && row.wkmon) || '');
-  return (s && s.indexOf(m) >= 0) ? m : ''; };
+  // ★設定から月数を外しても、すでに入っている予定のバッジは消さない（v3.114.0）。
+  //   「月数を聞く作業か」だけを見る＝一覧に無い月（昔の分）もそのまま出す。
+  return (s && m) ? m : ''; };
 const workBadgeText = (row) => { const id = (row && row.work) || '', m = workMonOf(row);
-  if (!m) return id;
-  if (id === 'メンパ') return 'M' + m;
-  if (id === '有点') return '有' + m;
-  if (id === '無点') return '無' + m;
-  return id; };
+  const w = workDef(id), b = (w && w.badge) || id;
+  return m ? (b + m) : b; };
 const workFullName = (row) => { const id = (row && row.work) || '', m = workMonOf(row);
   return id ? (workName(id) + (m ? '（' + m + 'ヶ月）' : '')) : ''; };
 // ★作業内容の並べ方（2026-11-04 ユーザー決定）。この3つの箱に分けて大きく出す。
 //   表に入れ忘れた作業は最後の箱に回るので、WORKS に足しても画面から消えない。
-const WORK_GROUPS = [
-  {name:'点検',      col:'#0891b2', ids:['メンパ','無点','有点']},
-  {name:'整備・修理', col:'#9333ea', ids:['Q','B','R']},
-  {name:'その他',    col:'#64748b', ids:['商','保','試','納','他']}
-];
-const workGroups = () => { const g = WORK_GROUPS.map(x => ({...x, items: x.ids.map(id => WORKS.find(w => w.id === id)).filter(Boolean)}));
-  const rest = WORKS.filter(w => !WORK_GROUPS.some(x => x.ids.indexOf(w.id) >= 0));
-  if (rest.length) g[g.length - 1].items = g[g.length - 1].items.concat(rest);
-  return g; };
+// ★作業内容の並べ方＝【主作業の設定】のグループ（v3.114.0）。
+//   どのグループにも入っていない作業は最後の箱に回るので、足しても画面から消えない。
+const workGroups = () => {
+  const items = worksNow(), gs = workGroupsRaw();
+  const g = gs.map(x => ({id:x.id, name:x.name, col:x.col,
+    ids: items.filter(w => w.g === x.id).map(w => w.id),
+    items: items.filter(w => w.g === x.id)}));
+  const rest = items.filter(w => !gs.some(x => x.id === w.g));
+  if (rest.length && g.length) g[g.length - 1].items = g[g.length - 1].items.concat(rest);
+  return g;
+};
 // ★作業項目を選んだ時の決まり
 //   ・★内容（整備）／備考（車検）には【入れない】（2026-11-04 ユーザー指示で見直し）。
 //     2026-10-31 は「空のときだけ作業名を入れる」にしていたが、**1行増えるぶん印刷が2枚になる**日が出た。
@@ -1010,21 +1067,25 @@ const restrHas = r => restrRanges(r).length > 0;
 //   クイック整備・修理だけ3通りに分ける：'Q'＝ふつう／'Q:lift'＝リフト作業／'Q:pit'＝ピット作業。
 //   ★昔の 'Q' はそのまま「ふつう」として効く（入れ直し不要）。
 //   ★その予約が何に当たるかは restrKeysOf で出すこと。中の形を直接見ないこと。
-const QK_PLAIN = 'Q', QK_PRE = 'Q:';
+const QK_SEP = ':';
+const qkKey = (id, k) => id + QK_SEP + k;
+// ★昔の 'Q'（ふつう）・'Q:lift'・'Q:pit' はそのまま効く（入れ直し不要）。
+//   ★隠した作業は一覧に出さない＝昔の作業項目（WORKS_OLD）と同じ扱いになる。
 const EXEMPT_LIST = () => {
   const out = [];
-  WORKS.forEach(w => {
-    if (w.id === 'Q') { out.push({key:'Q', label:'クイック整備・修理（リフトもピットも使わない）'});
-      QKINDS.forEach(k => out.push({key:QK_PRE+k.k, label:'クイック整備・修理の'+k.name})); }
+  worksNow().forEach(w => {
+    if (w.place) { out.push({key:w.id, label:w.name+'（リフトもピットも使わない）', wide:true});
+      QKINDS.forEach(k => out.push({key:qkKey(w.id,k.k), label:w.name+'の'+k.name, wide:true})); }
     else out.push({key:w.id, label:w.id+' '+w.name});
   });
   return out;
 };
 // その予約が通るために要る解除キー（両方えらんだ時は両方が解除されていないと通さない）
 const restrKeysOf = (row) => {
-  if (!row || row.work !== 'Q') return [row && row.work];
+  const id = row && row.work;
+  if (!id || !workPlaceOn(id)) return [id];
   const ks = qkindOf(row);
-  return ks.length ? ks.map(k => QK_PRE+k) : [QK_PLAIN];
+  return ks.length ? ks.map(k => qkKey(id, k)) : [id];
 };
 const restrPasses = (r, row) => { const need = restrKeysOf(row); const ex = restrExempt(r);
   return need.length > 0 && need.every(k => ex.indexOf(k) >= 0); };
@@ -1039,7 +1100,7 @@ const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime
 // ── マッハ車検の自動入庫制限（本店のみ・2026-10-05 ユーザー指示）──
 //   マッハ車検は複数人がかかるので、入庫から1時間は一般のクイック整備・各種点検・リコールを止める。
 //   ★必ずこの関数を通して出すこと（中の形を直接見ない）。手動の制限と同じ形にして返す。
-//   ・止める作業＝MACH_BLOCK_WORKS。通せる作業＝それ以外（＝制限解除項目の既定値）
+//   ・止める作業＝machBlockKeys()（主作業の設定の「マッハで止める」）。通せる作業＝それ以外
 //   ・1件につき1区間（同じ時間に2台は無い前提・2026-10-05 ユーザー確認）
 //   ・手で消した／時間を変えた分は machOff / machEdit に残す。ただし **マッハの入庫時間が
 //     変わったら作り直す**（base と今の時刻が違えば、その手直しは無かったことにする）
@@ -1047,9 +1108,17 @@ const MACH_COURSE = 1;                 // コース：1＝マッハ車検
 const MACH_STORE  = 'honten';          // 本店だけ
 const MACH_SPAN_MIN = 60;              // 入庫から1時間
 // ★ピット作業（Q:pit）は止めない＝マッハ車検中でもピットなら受けられる（2026-10-31 ユーザー指示）
-const MACH_BLOCK_WORKS = ['Q','Q:lift','メンパ','有点','無点','R',
-  '⑫','M12','M6','M1','N1','N6'];   // クイック整備（ピット以外）・全ての点検・リコール（昔の分も止める）
-const machDefaultExempt = () => EXEMPT_LIST().map(x => x.key).filter(k => MACH_BLOCK_WORKS.indexOf(k) < 0);
+// ★止める作業は【主作業の設定】の「マッハで止める」から作る（v3.114.0）。
+//   ★「場所を分ける」作業のピット側（{id}:pit）は止めない＝マッハ車検中でもピットなら受けられる
+//     （2026-10-31 ユーザー指示）。ここを変えるとピット作業が受けられなくなる。
+const MACH_BLOCK_OLD = ['⑫','M12','M6','M1','N1','N6'];   // 昔の作業項目（いまは選べないが止める）
+const machBlockKeys = () => { const out = [];
+  workItemsAll().forEach(w => { if (!w.mach) return;
+    out.push(w.id);
+    if (w.place) out.push(qkKey(w.id, 'lift')); });
+  return out.concat(MACH_BLOCK_OLD); };
+const machDefaultExempt = () => { const bl = machBlockKeys();
+  return EXEMPT_LIST().map(x => x.key).filter(k => bl.indexOf(k) < 0); };
 const machAddMin = (t, add) => {
   const n = restrMin(t); if (n < 0) return '';
   const m = Math.min(n + add, 23 * 60 + 59);
@@ -3683,7 +3752,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems','workItems','workGroups',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops',
   'usrchk'];   // ★車検証の使用者を確認した印（2026-10-29）
@@ -5295,9 +5364,9 @@ const WeekScheduleModal = memo(({isOpen,onClose,weekStart,onWeek,fromToday,onFro
                 ...(ri>0?{marginTop:2,paddingTop:2,borderTop:'1px dotted #e2e8f0'}:{})}}>
               {/* ★点検は月数までバッジに出す（M1／M6／M12・有12・無1／無6）。
                   バッジのとなりに作業名は出さない（2026-11-04 ユーザー指示：バッジだけで分かる）。 */}
-              <span data-wwork={workBadgeText(r)||''} title={workFullName(r)||((WORKS.find(w=>w.id===r.work)||{}).name||'')}
+              <span data-wwork={workBadgeText(r)||''} title={workFullName(r)||workName(r.work)}
                 style={{flexShrink:0,fontSize:BIG?12:9.5,fontWeight:900,color:'white',borderRadius:3,padding:BIG?'0 5px':'0 4px',
-                  lineHeight:BIG?'19px':'15px',background:WORK_COLORS[r.work]||'#64748b'}}>{workBadgeText(r)||'—'}</span>
+                  lineHeight:BIG?'19px':'15px',background:workColor(r.work)}}>{workBadgeText(r)||'—'}</span>
               {/* ★④ なぞると「いつ・誰が予約を入れたか」（2026-10-29 ユーザー指示）。
                   週表には担当者のバッジが無い（2026-10-23 に内容を出すため外した）ので、お名前をなぞる。 */}
               <span data-wentnm="1"
@@ -5713,7 +5782,7 @@ const dashStamp = (o) => {
 };
 
 const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPickDay,storeName,headColor,
-    vehAlert,canAdmin,onOpenVehicle,onOpenStaff,onOpenHoliday,onOpenRestore,onOpenOffline})=>{
+    vehAlert,canAdmin,onOpenVehicle,onOpenStaff,onOpenHoliday,onOpenRestore,onOpenOffline,onOpenWorks})=>{
   // ★フックは「早い return」より前に置くこと（React の決まり）
   const [mon,setMon]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
   const [filt,setFilt]=useState('all');
@@ -5895,6 +5964,7 @@ const DashboardModal = memo(({isOpen,onClose,inspData,usrChk,onSetChecked,onPick
                     ['staff','👥','スタッフ管理','名前・番号・バッジ・週表示の1文字',onOpenStaff,true],
                     ['holiday','⚙','休業日の設定','定休日・第2火曜・臨時の休み',onOpenHoliday,true],
                     ['restore','🕒','データ復旧','時点保存から戻す（開けるのは決まった人だけ）',onOpenRestore,true],
+                    ['works','🔧','主作業の設定','作業内容の項目・バッジ・色・月数・入庫制限の扱い',onOpenWorks,true],
                     ['offline','💾','オフライン予定表の控え','ネットが止まった時に紙で使う控えを出す',onOpenOffline,false],
                   ].filter(x=>!x[5]||canAdmin).map(([id,ic,ttl,txt,fn])=>(
                     <div key={id} data-dashtool={id} onClick={()=>fn&&fn()} title={ttl}
@@ -8195,7 +8265,7 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,autoRanges
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,maxHeight:280,overflowY:'auto'}}>
             {EXEMPT_LIST().map(x=>{
               const on=exemptWorks.includes(x.key);
-              const wide=x.key===QK_PLAIN||x.key.indexOf(QK_PRE)===0;   // クイック整備の3つは横いっぱい
+              const wide=!!x.wide;   // 場所を分ける作業（クイック整備など）の3つは横いっぱい
               return(
                 <button key={x.key} onClick={()=>toggleWork(x.key)}
                   style={{padding:'8px 12px',border:`2px solid ${on?'#10b981':'#d1d5db'}`,borderRadius:8,background:on?'#d1fae5':'white',cursor:'pointer',textAlign:'left',fontSize:12,fontWeight:600,color:on?'#065f46':'#6b7280',
@@ -9036,7 +9106,7 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
   useEffect(()=>{if(isOpen){orig.current={work:work||'',mon:mon||'',qk:(qk||[]).slice()};setWarn(false);}},[isOpen]);
   if(!isOpen)return null;
   const sub=workSubOf(work), need=!!(sub&&!mon);
-  const col=WORK_COLORS[work]||'#0891b2';
+  const col=(work?workColor(work):'#0891b2');
   const tryClose=()=>{if(need){setWarn(true);return;}onClose();};
   const giveUp=()=>{if(onRestore)onRestore(orig.current);onClose();};
   const CH=(on,c)=>({padding:'10px 18px',borderRadius:22,border:'2px solid '+(on?c:'#e5e7eb'),
@@ -9083,17 +9153,17 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
           {/* ★月数の箱は【点検の区画のすぐ下】に割って入れる（2026-11-04 ユーザー指示）。
               いちばん下だと、点検を押した人の目が追えない。整備・修理の区画より上に出すこと。 */}
           {workGroups().map(g=>(
-            <React.Fragment key={g.name}>
+            <React.Fragment key={g.id||g.name}>
               <div data-wkgrp={g.name} style={{border:'2px solid '+g.col+'55',borderRadius:12,padding:'10px 12px 12px',marginBottom:12}}>
                 <div style={{fontSize:12,fontWeight:900,color:g.col,marginBottom:8}}>{g.name}</div>
                 <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
                   {g.items.map(w=>(
                     <div key={w.id} data-wkid={w.id} onMouseDown={e=>{e.preventDefault();onPick(w.id);}}
-                      style={CH(work===w.id,WORK_COLORS[w.id]||g.col)}>{w.name}</div>
+                      style={CH(work===w.id,workColor(w.id))}>{w.name}</div>
                   ))}
                 </div>
               </div>
-              {g.name==='点検'&&monRow}
+              {g.items.some(w=>w.id===work)&&monRow}
             </React.Fragment>
           ))}
           {warn&&(
@@ -9105,6 +9175,257 @@ const WorkPickModal=memo(({isOpen,work,mon,qk,onPick,onPickMon,onClose,onRestore
         <div style={{padding:'10px 18px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
           <button data-wkgiveup="1" onClick={giveUp} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる（元に戻す）</button>
           <button data-wkdone="1" onClick={tryClose} style={{...FBTN,flex:2,background:need?'#cbd5e1':'#0891b2',color:'white'}}>✓ これで決める</button>
+        </div>
+      </div>
+    </div>
+  );
+});
+// ──────────────────────────────────────────────────────────────
+//  主作業の設定（v3.114.0・2026-11-13 ユーザー決定＝B案「表で一覧を直す」）
+//  見本は mock_works_edit.html。A案（クイックメニューと同じ区画）・C案（区画＋引き出し）は不採用。
+//  ★★内部の id は【変えられない】。過去の予約（sched の work）と入庫制限の解除（exemptWorks）が
+//    この字で保存されているため。表の「名前」「バッジ」「色」「並び」「グループ」は自由に変えてよい。
+//  ★★消すボタンは【作らない】。「隠す」だけ＝新しく選べなくなるが、昔の予定の表示はそのまま残る。
+//  ★保存は 2つの共有キー（workItems / workGroups）。どちらも配列＝丸ごと置き換え。
+//  ★入口はダッシュボードの「設定・道具」だけ（管理者のみ）。予約カードの中には置かない。
+// ──────────────────────────────────────────────────────────────
+const WorksEditModal=memo(({isOpen,items,groups,useCount,onSave,onClose})=>{
+  const [dItems,setDItems]=useState([]);
+  const [dGroups,setDGroups]=useState([]);
+  const [nwName,setNwName]=useState('');
+  const [nwBadge,setNwBadge]=useState('');
+  const [nwGrp,setNwGrp]=useState('');
+  const [msg,setMsg]=useState('');
+  useEffect(()=>{ if(!isOpen)return;
+    setDItems((items||[]).map(w=>({...w,mon:(w.mon||[]).slice()})));
+    setDGroups((groups||[]).map(g=>({...g})));
+    setNwName('');setNwBadge('');setNwGrp(((groups||[])[0]||{}).id||'');setMsg('');
+  },[isOpen]);
+  if(!isOpen)return null;
+  const used=(id)=>Number((useCount||{})[id]||0);
+  const upd=(id,patch)=>setDItems(p=>p.map(w=>w.id===id?{...w,...patch}:w));
+  const mv=(id,d)=>setDItems(p=>{const i=p.findIndex(w=>w.id===id);const j=i+d;
+    if(i<0||j<0||j>=p.length)return p;const a=p.slice();const t=a[i];a[i]=a[j];a[j]=t;return a;});
+  const togMon=(id,m)=>setDItems(p=>p.map(w=>{ if(w.id!==id)return w;
+    const has=(w.mon||[]).indexOf(m)>=0;
+    const mon=(has?(w.mon||[]).filter(x=>x!==m):(w.mon||[]).concat([m])).sort((x,y)=>Number(x)-Number(y));
+    return {...w,mon}; }));
+  const nextCol=(c)=>WORK_PALETTE[(WORK_PALETTE.indexOf(c)+1)%WORK_PALETTE.length];
+  const togHide=(id)=>{ const w=dItems.find(x=>x.id===id); if(!w)return;
+    if(!w.hide){
+      if(dItems.filter(x=>!x.hide).length<=1){setMsg('⚠ ぜんぶ隠すことはできません。1つは残してください。');return;}
+      const n=used(id);
+      const q=n>0
+        ? w.name+' は いまの予定 '+n+'件 が使っています。'+String.fromCharCode(10)
+          +'隠すと【新しく選べなくなる】だけで、入っている予定の表示はそのまま残ります。'+String.fromCharCode(10)+'隠しますか？'
+        : w.name+' を隠します（新しく選べなくなります）。よろしいですか？';
+      if(!window.confirm(q))return;
+    }
+    upd(id,{hide:!w.hide});setMsg('');
+  };
+  const addItem=()=>{ const nm=nwName.trim();
+    if(!nm){setMsg('⚠ 名前を入れてください。');return;}
+    const id='w'+Date.now();
+    setDItems(p=>p.concat([{id,g:nwGrp||((dGroups[0]||{}).id||''),name:nm,
+      badge:(nwBadge.trim()||nm).slice(0,4),col:WORK_PALETTE[p.length%WORK_PALETTE.length],
+      mon:[],mach:false,place:false,hide:false}]));
+    setNwName('');setNwBadge('');setMsg('✓ 足しました。下の「保存する」を押すと全員の画面に出ます。');
+  };
+  const addGroup=()=>{ const nm=window.prompt('新しいグループの名前'); if(!nm||!nm.trim())return;
+    const id='g'+Date.now();
+    setDGroups(p=>p.concat([{id,name:nm.trim(),col:WORK_PALETTE[p.length%WORK_PALETTE.length]}]));};
+  const renGroup=(gid)=>{ const g=dGroups.find(x=>x.id===gid); if(!g)return;
+    const v=window.prompt('グループの名前',g.name); if(v==null)return;
+    setDGroups(p=>p.map(x=>x.id===gid?{...x,name:v.trim()||x.name}:x));};
+  const colGroup=(gid)=>setDGroups(p=>p.map(x=>x.id===gid?{...x,col:nextCol(x.col)}:x));
+  const delGroup=(gid)=>{ const n=dItems.filter(w=>w.g===gid).length;
+    if(dGroups.length<=1){setMsg('⚠ グループは1つ以上必要です。');return;}
+    if(n>0&&!window.confirm('このグループには '+n+'件 の作業が入っています。'+String.fromCharCode(10)
+      +'消すと、その作業は最後のグループに移ります。消しますか？'))return;
+    setDGroups(p=>p.filter(x=>x.id!==gid));};
+  const toDefault=()=>{ if(!window.confirm('はじめの11項目・3グループに戻します。'+String.fromCharCode(10)
+    +'（いまの設定は保存を押さなければ元のままです）'))return;
+    setDItems(DEFAULT_WORK_ITEMS.map(w=>({...w,mon:(w.mon||[]).slice()})));
+    setDGroups(DEFAULT_WORK_GROUPS.map(g=>({...g})));setMsg('はじめの形に戻しました。保存すると全員に反映されます。');};
+  const save=()=>{ if(onSave)onSave(dItems,dGroups); onClose(); };
+
+  // ── 見え方のプレビュー（下書きから作る。本物の画面と同じ決まりで並べる）──
+  const nowItems=dItems.filter(w=>!w.hide);
+  const pvGroups=(()=>{ const g=dGroups.map(x=>({...x,items:nowItems.filter(w=>w.g===x.id)}));
+    const rest=nowItems.filter(w=>!dGroups.some(x=>x.id===w.g));
+    if(rest.length&&g.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
+    return g; })();
+  const pvBadges=[];
+  nowItems.forEach(w=>{ if((w.mon||[]).length)(w.mon||[]).forEach(m=>pvBadges.push({k:w.id+m,t:w.badge+m,c:w.col}));
+    else pvBadges.push({k:w.id,t:w.badge,c:w.col}); });
+  const pvMach=[];
+  dItems.forEach(w=>{ if(!w.mach)return; pvMach.push(w.place?(w.name+'（リフトまで。ピットは受けられます）'):w.name); });
+  const pvExempt=[];
+  nowItems.forEach(w=>{ if(w.place){pvExempt.push(w.name+'（リフトもピットも使わない）');
+      QKINDS.forEach(k=>pvExempt.push(w.name+'の'+k.name)); } else pvExempt.push(w.name); });
+
+  const TH={border:'1px solid #94a3b8',padding:'5px 7px',background:'#f1f5f9',fontSize:11.5,fontWeight:900,whiteSpace:'nowrap',textAlign:'left'};
+  const TD={border:'1px solid #cbd5e1',padding:'5px 7px',fontSize:13,verticalAlign:'middle'};
+  const TDC={...TD,textAlign:'center'};
+  const IN={width:'100%',padding:'4px 6px',borderRadius:5,border:'1px solid #cbd5e1',fontSize:13,fontFamily:'inherit'};
+  const ARROW={width:22,height:20,borderRadius:4,border:'1px solid #cbd5e1',background:'white',cursor:'pointer',fontSize:10,padding:0,fontFamily:'inherit'};
+  const CHIP=(on)=>({display:'inline-block',padding:'2px 7px',borderRadius:5,fontSize:11,fontWeight:800,margin:1,cursor:'pointer',
+    border:'1px solid '+(on?'#0891b2':'#cbd5e1'),background:on?'#0891b2':'white',color:on?'white':'#334155',userSelect:'none'});
+  const YN=(on,c)=>({width:30,height:24,borderRadius:5,border:'1px solid '+(on?(c||'#dc2626'):'#cbd5e1'),
+    background:on?(c||'#dc2626'):'white',color:on?'white':'#334155',fontSize:12,fontWeight:900,cursor:'pointer',fontFamily:'inherit'});
+  const FBTN={padding:'10px 0',borderRadius:9,border:'none',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:'inherit'};
+  const BADGE=(c)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:24,height:20,padding:'0 5px',
+    borderRadius:6,background:c,color:'white',fontSize:11,fontWeight:800,whiteSpace:'nowrap'});
+
+  return(
+    <div data-wedit="1" onClick={onClose}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:5200,display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
+      <div onClick={e=>e.stopPropagation()} className="modal-box"
+        style={{background:'white',borderRadius:16,width:'min(1180px,97vw)',maxHeight:'94vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
+        <div style={{padding:'14px 18px',background:'linear-gradient(135deg,#0e7490,#0891b2)',borderRadius:'16px 16px 0 0',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <div style={{flex:1}}>
+            <div style={{color:'white',fontWeight:900,fontSize:15}}>🔧 主作業の設定</div>
+            <div style={{color:'rgba(255,255,255,0.8)',fontSize:11}}>一般整備の「作業内容」に出る項目です。名前・バッジ・色・並び・グループを直せます。</div>
+          </div>
+          <button data-weditcancel="1" onClick={onClose} title="とじる（直した分は保存しません）"
+            style={{width:32,height:26,border:'2px solid rgba(255,255,255,0.9)',background:'transparent',color:'white',borderRadius:7,fontSize:13,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+        </div>
+        <div style={{padding:'12px 16px',overflowY:'auto'}}>
+          <div style={{padding:'8px 11px',background:'#fffbeb',border:'2px solid #fcd34d',borderRadius:9,fontSize:12,
+            color:'#92400e',fontWeight:700,lineHeight:1.7,marginBottom:11}}>
+            ★ <b>消すボタンはありません。</b>「使う／隠す」で切り替えます。隠した作業は<b>新しく選べなくなるだけ</b>で、
+            すでに入っている予定の表示はそのまま残ります。<br/>
+            ★ 名前やバッジを変えても、<b>すでに掛けてある入庫制限は壊れません</b>（内部の見分け字は変えない作りです）。
+          </div>
+          {/* ── グループ ── */}
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:9}}>
+            <span style={{fontSize:12,fontWeight:900,color:'#334155'}}>グループ</span>
+            {dGroups.map(g=>(
+              <span key={g.id} data-weditgname={g.id}
+                style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 7px',borderRadius:8,
+                  border:'2px solid '+g.col,background:g.col+'14',fontSize:12,fontWeight:800,color:g.col}}>
+                {g.name}
+                <button data-weditgren={g.id} onClick={()=>renGroup(g.id)} title="名前を直す" style={{...ARROW,width:20}}>✎</button>
+                <button data-weditgcol={g.id} onClick={()=>colGroup(g.id)} title="色を変える"
+                  style={{...ARROW,width:20,background:g.col,borderColor:g.col}}/>
+                <button data-weditgdel={g.id} onClick={()=>delGroup(g.id)} title="グループを消す" style={{...ARROW,width:20}}>✕</button>
+              </span>
+            ))}
+            <button data-weditaddgrp="1" onClick={addGroup}
+              style={{padding:'5px 10px',borderRadius:8,border:'none',background:'#1d4ed8',color:'white',fontSize:12,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>＋ グループ</button>
+          </div>
+          {/* ── 表（B案） ── */}
+          <div style={{overflowX:'auto'}}>
+          <table data-wedittable="1" style={{borderCollapse:'collapse',width:'100%'}}>
+            <thead><tr>
+              <th style={TH}>並び</th><th style={TH}>バッジ</th><th style={TH}>色</th><th style={TH}>名前</th>
+              <th style={TH}>グループ</th><th style={TH}>月数を聞く</th>
+              <th style={TH} title="マッハ車検の入庫から1時間は受けない">マッハ<br/>で止める</th>
+              <th style={TH} title="リフト作業・ピット作業を分ける">場所を<br/>分ける</th>
+              <th style={TH}>いまの<br/>予定</th><th style={TH}>使う</th>
+            </tr></thead>
+            <tbody>
+              {dItems.map(w=>(
+                <tr key={w.id} data-weditrow={w.id} style={w.hide?{opacity:.45}:{}}>
+                  <td style={TDC}>
+                    <button data-weditup={w.id} onClick={()=>mv(w.id,-1)} title="前へ" style={ARROW}>▲</button>
+                    <button data-weditdown={w.id} onClick={()=>mv(w.id,1)} title="後へ" style={ARROW}>▼</button>
+                  </td>
+                  <td style={TDC}>
+                    <input data-weditbadge={w.id} type="text" value={w.badge}
+                      onChange={e=>upd(w.id,{badge:e.target.value.slice(0,4)})}
+                      style={{...IN,width:46,textAlign:'center',fontWeight:900}}/>
+                    <div style={{marginTop:3}}><span style={BADGE(w.col)}>{w.badge+((w.mon||[])[0]||'')}</span></div>
+                  </td>
+                  <td style={TDC}>
+                    <button data-weditcol={w.id} onClick={()=>upd(w.id,{col:nextCol(w.col)})} title="押すと色が変わります"
+                      style={{width:26,height:22,borderRadius:5,border:'1px solid '+w.col,background:w.col,cursor:'pointer'}}/>
+                  </td>
+                  <td style={{...TD,minWidth:150}}>
+                    <input data-weditname={w.id} type="text" value={w.name}
+                      onChange={e=>upd(w.id,{name:e.target.value})} style={IN}/>
+                    <div style={{fontSize:10.5,color:'#94a3b8',marginTop:2}}>見分け字 {w.id}（変えられません）</div>
+                  </td>
+                  <td style={TD}>
+                    <select data-weditgrp={w.id} value={w.g} onChange={e=>upd(w.id,{g:e.target.value})}
+                      style={{...IN,padding:'4px 4px'}}>
+                      {dGroups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                  </td>
+                  <td style={{...TD,whiteSpace:'nowrap'}}>
+                    {WORK_MONTHS.map(m=>(
+                      <span key={m} data-weditmon={w.id+'/'+m} onClick={()=>togMon(w.id,m)}
+                        style={CHIP((w.mon||[]).indexOf(m)>=0)}>{m}</span>
+                    ))}
+                  </td>
+                  <td style={TDC}>
+                    <button data-weditmach={w.id} onClick={()=>upd(w.id,{mach:!w.mach})}
+                      title={w.mach?'マッハ車検の入庫から1時間は受けない':'マッハ車検中でも受けられる'}
+                      style={YN(w.mach)}>{w.mach?'止':'可'}</button>
+                  </td>
+                  <td style={TDC}>
+                    <button data-weditplace={w.id} onClick={()=>upd(w.id,{place:!w.place})}
+                      title="リフト作業・ピット作業を分けて、入庫制限の解除も分ける"
+                      style={YN(w.place,'#6d28d9')}>{w.place?'○':'—'}</button>
+                  </td>
+                  <td style={{...TDC,fontSize:12,color:'#64748b'}} data-weditused={w.id}>{used(w.id)}件</td>
+                  <td style={TDC}>
+                    <button data-wedithide={w.id} onClick={()=>togHide(w.id)}
+                      title={w.hide?'新しく選べるように戻す':'新しく選べなくする（昔の予定は残ります）'}
+                      style={{...YN(!w.hide,'#059669'),width:46}}>{w.hide?'隠す':'使う'}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+          {/* ── 足す ── */}
+          <div style={{display:'flex',gap:7,flexWrap:'wrap',alignItems:'center',marginTop:9,paddingTop:10,borderTop:'1px dashed #cbd5e1'}}>
+            <span style={{fontSize:12,fontWeight:900}}>＋ 足す</span>
+            <input data-weditnewname="1" type="text" value={nwName} onChange={e=>setNwName(e.target.value)}
+              placeholder="名前（例：タイヤ交換）" style={{...IN,width:210}}/>
+            <input data-weditnewbadge="1" type="text" value={nwBadge} onChange={e=>setNwBadge(e.target.value.slice(0,4))}
+              placeholder="バッジの字（例：タ）" style={{...IN,width:140}}/>
+            <select data-weditnewgrp="1" value={nwGrp} onChange={e=>setNwGrp(e.target.value)} style={{...IN,width:150,padding:'4px 4px'}}>
+              {dGroups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <button data-weditadd="1" onClick={addItem}
+              style={{padding:'7px 13px',borderRadius:8,border:'none',background:'#059669',color:'white',fontSize:12,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>足す</button>
+          </div>
+          {!!msg&&(
+            <div data-weditmsg="1" style={{marginTop:9,padding:'8px 11px',background:'#eff6ff',border:'2px solid #93c5fd',
+              borderRadius:9,fontSize:12.5,fontWeight:800,color:'#1e3a8a'}}>{msg}</div>
+          )}
+          {/* ── 見え方 ── */}
+          <div style={{marginTop:13,border:'2px solid #e2e8f0',borderRadius:10,padding:'10px 12px',background:'#f8fafc'}}>
+            <div style={{fontSize:12,fontWeight:900,color:'#334155',marginBottom:7}}>こう出ます</div>
+            <div style={{fontSize:11.5,color:'#475569',marginBottom:3}}>予約カードの「作業内容」</div>
+            <div data-weditpv1="1" style={{display:'flex',flexWrap:'wrap',gap:6,alignItems:'center',marginBottom:9}}>
+              {pvGroups.map(g=>(
+                <React.Fragment key={g.id}>
+                  <span style={{fontSize:10.5,fontWeight:900,color:g.col}}>{g.name}</span>
+                  {g.items.map(w=>(
+                    <span key={w.id} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 8px',borderRadius:16,
+                      border:'2px solid '+w.col+'55',background:'white',fontSize:12,fontWeight:800,color:'#334155'}}>
+                      <span style={BADGE(w.col)}>{w.badge}</span>{w.name}</span>
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
+            <div style={{fontSize:11.5,color:'#475569',marginBottom:3}}>週間カレンダー・1日表示のバッジ</div>
+            <div data-weditpv2="1" style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:9}}>
+              {pvBadges.map(b=><span key={b.k} style={BADGE(b.c)}>{b.t}</span>)}
+            </div>
+            <div data-weditpv3="1" style={{fontSize:11.5,color:'#475569',lineHeight:1.8}}>
+              <b>マッハ車検の入庫から1時間は受けない作業</b>：{pvMach.length?pvMach.join('・'):'（なし）'}<br/>
+              <b>入庫制限で「解除できる作業」</b>（{pvExempt.length}通り）：{pvExempt.join('／')}
+            </div>
+          </div>
+        </div>
+        <div style={{padding:'10px 16px 14px',display:'flex',gap:9,flexShrink:0,borderTop:'1px solid #e5e7eb'}}>
+          <button data-weditreset="1" onClick={toDefault} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>はじめの形に戻す</button>
+          <button data-weditclose="1" onClick={onClose} style={{...FBTN,flex:1,background:'#f3f4f6',color:'#374151'}}>やめる</button>
+          <button data-weditsave="1" onClick={save} style={{...FBTN,flex:2,background:'#0891b2',color:'white'}}>✓ 保存する（全員の画面に出ます）</button>
         </div>
       </div>
     </div>
@@ -9549,7 +9870,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   // ★点検（メンパ・有料点検・無料点検）で月数がまだ空か
   const wkNeedMon=!!(workSubOf(form.work)&&!workMonOf(form));
   const wkAfter=()=>{setShowWkPk(false);setKbField('shimi');setTimeout(()=>document.querySelector('[data-kbkey="shimi"]')?.focus(),30);};
-  const WIDS=WORKS.map(w=>w.id);
+  const WIDS=worksNow().map(w=>w.id);
   const onWorkKb=(e)=>{
     if(!showWkPk){if(e.key==='Enter'){e.preventDefault();setShowWkPk(true);}
       else if(e.key==='ArrowDown'){e.preventDefault();goNext('work');}
@@ -14753,6 +15074,7 @@ function AppInner() {
   const loanerResView=useMemo(()=>dropPendRes(loanerRes,pendLoanerDrop),[loanerRes,pendLoanerDrop]);
   const rentalResView=useMemo(()=>dropPendRes(rentalResData,pendRentalDrop),[rentalResData,pendRentalDrop]);
   const [savedModalData, setSavedModalData] =useState(null);
+  const [showWorksEdit,  setShowWorksEdit]  =useState(false);   // 主作業の設定（v3.114.0）
   const [showHoliday,    setShowHoliday]    =useState(false);
   const [showRestore,    setShowRestore]    =useState(false);
   const [showDayOff,     setShowDayOff]     =useState(false);
@@ -14900,6 +15222,27 @@ function AppInner() {
   const saveQuickMenuInsp = useCallback((items,groups)=>{
     setInspItemsRaw(items); setInspGroupsRaw(groups);
   },[setInspItemsRaw,setInspGroupsRaw]);
+  // ★★主作業（作業内容）の設定（v3.114.0・2026-11-13）。項目とグループを【別のキー】に持つ。
+  //   どちらも配列なので mergeSharedObjects が丸ごと置き換える＝他の人の編集と混ざらない。
+  const [workItemsRaw, setWorkItemsRaw] = useShared(STOR+'workItems', DEFAULT_WORK_ITEMS);
+  const [workGroupsShared, setWorkGroupsShared] = useShared(STOR+'workGroups', DEFAULT_WORK_GROUPS);
+  // ★描画の【前】に受け皿へ入れる（useMemo は描画の途中で走るので、子より先に必ず入る）。
+  //   こうしておけば BLOCK-C（InspRow / SchedRow）は今までどおり workBadgeText(row) を呼ぶだけでよい。
+  //   ★useEffect にしないこと。effect は描画の【後】なので、最初の1回が古い定義で描かれる。
+  useMemo(()=>{ hubSetWorkDefs(workItemsRaw, workGroupsShared); return 1; },[workItemsRaw,workGroupsShared]);
+  const saveWorkDefs = useCallback((items,groups)=>{
+    setWorkItemsRaw(items); setWorkGroupsShared(groups);
+  },[setWorkItemsRaw,setWorkGroupsShared]);
+  // 「隠す」時に出す「過去の予約 N件 が使っています」の数。
+  //   ★作業内容（work）を持つのは【整備（sched）】の行だけ（車検はコースで分ける）。両店を数える。
+  const workUseCount = useMemo(()=>{
+    const n = {};
+    [schedDataH, schedDataS].forEach(sd=>{ Object.keys(sd||{}).forEach(dk=>{
+      const day = sd[dk]||{};
+      Object.keys(day).forEach(sk=>{ const r = day[sk]; const id = r && r.work;
+        if (id) n[id] = (n[id]||0) + 1; }); }); });
+    return n;
+  },[schedDataH,schedDataS]);
   // 備考・メモ用クイックアイテム（スケジュール内容欄とは独立）
   const [memoItemsRaw, setMemoItemsRaw] = useShared(STOR+'memoItems', DEFAULT_MEMO_ITEMS);
   const memoItems = useMemo(()=>{
@@ -19139,6 +19482,10 @@ function AppInner() {
         overrideOpenDates={Array.isArray(overrideOpenDates)?overrideOpenDates:[]}
         inspLimits={inspLimits}/>
 
+      {/* -- 主作業の設定（v3.114.0・B案＝表で一覧）。入口はダッシュボードの「設定・道具」 -- */}
+      <WorksEditModal isOpen={showWorksEdit} items={workItemsAll()} groups={workGroupsRaw()}
+        useCount={workUseCount} onSave={saveWorkDefs} onClose={()=>setShowWorksEdit(false)}/>
+
       {/* -- 休業日設定 -- */}
       <HolidayModal isOpen={showHoliday} onClose={()=>setShowHoliday(false)}
         closedDays={closedDays} setClosedDays={setClosedDays}
@@ -19247,6 +19594,7 @@ function AppInner() {
         onOpenHoliday={()=>setShowHoliday(true)}
         onOpenRestore={()=>setShowRestore(true)}
         onOpenOffline={()=>{setOfflineMsg('');setOfflineOpen(true);}}
+        onOpenWorks={()=>setShowWorksEdit(true)}
         storeName={vsStore.name}
         headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setDashOpen(false);}}/>

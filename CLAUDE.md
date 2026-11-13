@@ -3314,3 +3314,50 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - **見つかった残骸：`nfo@midori-m.com`**（`info@` の打ち間違い。2026-11-12 14:35 に控えが作られ、
   正しい `info@` は同日 17:14 に作り直されている）。**許可簿に無いのでログインはできない**＝害は無いが、
   Auth のアカウントと `users` の行が残っている。**消すにはユーザーの承認が要る**（未処理）。
+
+### 主作業（作業内容）を画面から足せる・直せる（v3.114.0・2026-11-13・B案）
+- ユーザー指示「**② 主作業のカスタマイズ — できます。見本を3案つくりました。はB案でお願いします**」。
+  見本は `mock_works_edit.html`（A＝カード並び／B＝表で一覧／C＝1件ずつ）。**B案＝表で一覧**に決定。
+- **入口はダッシュボードの「設定・道具」→ 🔧 主作業の設定**（`data-dashtool="works"`・**管理者だけ**）。
+  画面は `WorksEditModal`（zIndex 5200）。**直すのは PC だけ。スマホは読むだけ**（クイックメニューと同じ決まり）。
+- **表の列**＝並び（▲▼）／バッジ／色／名前／グループ／月数を聞く／マッハで止める／場所を分ける／いまの予定／使う。
+  下に「＋ 足す」の行、その下に**「こう出ます」**（予約カードの見え方・バッジ・マッハで止まる作業と入庫制限の解除の一覧）。
+  グループは帯で出し、✎ 名前・色・✕・「＋ グループ」ができる。
+- ★★**内部の見分け字（id）は変えられない。** 過去の予約の `work` と入庫制限の `exemptWorks` が**この字で保存されている**ため。
+  画面にも「見分け字 ◯（変えられません）」と出す。**名前・バッジ・色・グループ・月数だけを直せる作り。**
+- ★★**消すボタンは作らない。「使う／隠す」で切り替える**（`hide`）。隠すと**新しく選べなくなるだけ**で、
+  すでに入っている予定の表示はそのまま残る（`workItemsAll()` は隠した分も含み、`worksNow()` が選べる分）。
+  隠す時は**「いまの予定 N件 が使っています」**と件数つきでたずねる。**ぜんぶ隠すことはできない**（1つは残す）。
+- ★★**作りの要は「module レベルの受け皿」**：`let WORK_REG = {items,groups}` ＋ `hubSetWorkDefs(items,groups)`。
+  App は共有キーを読んだら **`useMemo` で描画の【前】に受け皿へ入れる**。
+  ★**`useEffect` にしないこと**（effect は描画の【後】なので、最初の1回が古い定義で描かれる）。
+  こうしておけば **BLOCK-C（`InspRow` / `SchedRow`）は今までどおり `workBadgeText(row)` を呼ぶだけ**＝手を入れずに済む。
+- **保存先は共有の【2つのキー】`{STOR}workItems` / `{STOR}workGroups`**。
+  ★**どちらも配列**なので `mergeSharedObjects` が丸ごと置き換える＝他の人の編集と混ざらない
+  （クイックメニューの `setItems`/`setGroups` と同じ作法）。**1つのキーにまとめないこと。**
+  `SNAP_KEYS_COMMON`（index_dev・mobile）・`MOBILE_KEYS`・`fb_snap_keycheck.js` の表にも足してある。
+- **1項目の形**：`{id,g,name,badge,col,mon:[],mach,place,hide}`。`mon` は「月数を聞く」月（`WORK_MONTHS`＝1/6/12/18/24）。
+  `mach`＝マッハ車検の入庫から1時間は受けない／`place`＝リフト作業・ピット作業を分ける（`QKINDS`）。
+  既定は `DEFAULT_WORK_ITEMS`（11項目）＋`DEFAULT_WORK_GROUPS`（点検／整備・修理／その他）。
+  ★**点検の並びは メンパ → 無料点検 → 有料点検**（2026-11-04 ユーザー指示）。既定を入れ替えないこと。
+- **読む所は必ず道具を通すこと**（PC・スマホの2ファイルに同じものを置く）：
+  `workDef(id)`（隠した分と `WORKS_OLD` も見る）／`workName`／`workColor`／`workBadgeText(row)`／`workFullName(row)`／
+  `workSubOf`／`workMonOf`／`workGroups()`／`worksNow()`／`workItemsAll()`／`EXEMPT_LIST()`／`restrKeysOf`／
+  `machBlockKeys()`／`machDefaultExempt()`。★**`WORKS.find` のように配列を直に引かないこと**（昔の予約が「—」になる）。
+- ★**「マッハで止める」から止める鍵を作る**（`machBlockKeys`）＝`mach` な作業の id ＋ `place` なら `{id}:lift` **だけ**。
+  **ピット作業（`{id}:pit`）は止めない**（2026-10-31 ユーザー指示のまま）。昔の id は `MACH_BLOCK_OLD` に残してある。
+- ★**設定から月数を外しても、すでに入っている予定のバッジから月数は消さない**（`workMonOf` は `(s && m) ? m : ''`）。
+  外した月の予定が「メンパ」だけになって何ヶ月か分からなくなるのを防ぐため。
+- ★**入庫制限の解除の一覧（`EXEMPT_LIST`）は `place` な作業だけ3通り**（ふつう／リフト／ピット）。
+  画面の解除項目で横いっぱいに出すかは、一覧が返す **`wide`** で決める（`QK_PLAIN`/`QK_PRE` は廃止した）。
+- **紙の控え（`hub_paper.js`）も設定から名前を引く**：`P('workItems')` → `WORK_ITEMS_P` / `workDefP`。
+  控えに無い時だけ古い表（`WORKS_OLD_P` / `WORK_SUB_OLD_P`）を使う。★**古い表から昔の id を消さないこと。**
+- **検査は `node works_edit_test.js`（74件・PORT 8479）**。入口・表の形・id が変えられないこと・消すボタンが無いこと・
+  名前とバッジを直して保存すると 1日表示のバッジと予約カードに出ること・足した作業が選べること・
+  隠した作業は選べないが昔の予定には残ること・保存先が配列2本であること を見ている。
+  ★**種データに `workItems`/`workGroups` を入れないこと**（毎回の読み込みで種が上書きし、「保存が残るか」が見られない）。
+  あわせて PASS を確認：`works_quick_test`(64) `insp_badge_test`(69) `mach_restrict_test`(31)
+  `restriction_save_test`(15) `card_pop_test`(46) `collapsed_add_test`(19) `quick_split_test`(43)
+  `print_insp_time_test`(49) `paper_test`(79)。
+- ★**`insp_badge_test.js` の中身の見張りは作りに合わせて直した**（`WORK_SUB` → `WORK_REG`＋`workSubOf`、
+  バッジは「見分け字＋月数」、紙は `WORK_ITEMS_P`、点検の並びは `DEFAULT_WORK_ITEMS` の順で見る）。

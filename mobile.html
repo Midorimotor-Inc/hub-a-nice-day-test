@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794475017672';
+  window.__APP_BUILD='build-1794533942830';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.113.0';
+const MOBILE_VERSION='3.114.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -195,7 +195,9 @@ const MOBILE_KEYS=()=>[STOR+'insp',storKey('sched','honten'),storKey('sched','sa
   STOR+'setGroups',   // ★クイックメニューのグループ（2026-10-31）
   STOR+'inspItems',   // ★車検の【備考】のクイック項目（一般整備とは別・2026-11-04）
   STOR+'inspGroups', // ★車検のクイックメニューのグループ（2026-11-04）
-  storKey('training','honten'),storKey('training','sanda')];  // ★研修（2026-11-04）。休みではないが出勤で不在
+  storKey('training','honten'),storKey('training','sanda'),   // ★研修（2026-11-04）。休みではないが出勤で不在
+  STOR+'workItems',   // ★主作業の設定（v3.114.0）。直すのは PC だけ・スマホは読むだけ
+  STOR+'workGroups'];  // ★主作業のグループ
 
 // ── データ復旧（GAS v10スナップショット）。PC版と同じ4名のみ ──
 const RESTORE_ALLOWED=[{uid:'h0',name:'見取勇一'},{uid:'h1',name:'見取大介'},{uid:'s10',name:'藤原昭人'},{uid:'h7',name:'江川京志'}];
@@ -226,18 +228,58 @@ const COURSES=[
 // PC版（index_dev.html）と同一の選択肢定義
 // ★2026-10-31 ユーザー決定で11個に整理。月数は内容欄（⚡ クイックメニュー）で書く。
 //   「リフト作業」「ピット作業」は主作業に作らず、Q を選んだ時の QKINDS（複数えらべる）で持つ。
-const WORKS=[
-  {id:'Q',name:'クイック整備・修理'},
-  // ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
-  {id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'},
-  {id:'B',name:'鈑金塗装'},{id:'R',name:'リコール'},{id:'商',name:'商談'},{id:'保',name:'保険'},{id:'試',name:'試乗'},{id:'納',name:'納車'},{id:'他',name:'その他'}
+// ★★【主作業は画面から足せる・直せる】（v3.114.0・2026-11-13・B案）。PC と同じものを置くこと。
+//   直すのは PC の ダッシュボード →「🔧 主作業の設定」だけ（スマホは読むだけ。クイックメニューと同じ決まり）。
+//   保存先は共有の2つのキー {STOR}workItems / {STOR}workGroups（どちらも配列＝丸ごと置き換え）。
+//   ★★内部の id は変えられない（過去の予約と入庫制限の解除がこの字で保存されている）。
+//   ★★消すのではなく【隠す】（hide）。昔の予定の表示はそのまま残る。
+const DEFAULT_WORK_GROUPS=[
+  {id:'g1',name:'点検',col:'#0891b2'},
+  {id:'g2',name:'整備・修理',col:'#9333ea'},
+  {id:'g3',name:'その他',col:'#64748b'}
 ];
+// ★点検の並びは メンパ → 無料点検 → 有料点検（2026-11-04 ユーザー指示）。入れ替えないこと
+const DEFAULT_WORK_ITEMS=[
+  {id:'Q',g:'g2',name:'クイック整備・修理',badge:'Q',col:'#0891b2',mon:[],mach:true,place:true},
+  {id:'メンパ',g:'g1',name:'メンパ',badge:'M',col:'#4f46e5',mon:['1','6','12'],mach:true,place:false},
+  {id:'無点',g:'g1',name:'無料点検',badge:'無',col:'#2563eb',mon:['1','6'],mach:true,place:false},
+  {id:'有点',g:'g1',name:'有料点検',badge:'有',col:'#7c3aed',mon:['12'],mach:true,place:false},
+  {id:'B',g:'g2',name:'鈑金塗装',badge:'B',col:'#9333ea',mon:[],mach:false,place:false},
+  {id:'R',g:'g2',name:'リコール',badge:'R',col:'#be123c',mon:[],mach:true,place:false},
+  {id:'商',g:'g3',name:'商談',badge:'商',col:'#b45309',mon:[],mach:false,place:false},
+  {id:'保',g:'g3',name:'保険',badge:'保',col:'#b45309',mon:[],mach:false,place:false},
+  {id:'試',g:'g3',name:'試乗',badge:'試',col:'#b45309',mon:[],mach:false,place:false},
+  {id:'納',g:'g3',name:'納車',badge:'納',col:'#047857',mon:[],mach:false,place:false},
+  {id:'他',g:'g3',name:'その他',badge:'他',col:'#64748b',mon:[],mach:false,place:false}
+];
+const WORK_MONTHS=['1','6','12','18','24'];
+const workNormItems=(items)=>{
+  const a=Array.isArray(items)?items:null;
+  if(!a||!a.length)return DEFAULT_WORK_ITEMS;
+  const out=[];
+  a.forEach(w=>{ if(!w||!w.id||out.some(x=>x.id===w.id))return;
+    out.push({id:String(w.id),g:String(w.g||''),name:String(w.name||w.id),
+      badge:String(w.badge||w.id).slice(0,4),col:String(w.col||'#64748b'),
+      mon:(Array.isArray(w.mon)?w.mon:[]).map(String).filter(m=>WORK_MONTHS.indexOf(m)>=0)
+        .sort((x,y)=>Number(x)-Number(y)),
+      mach:!!w.mach,place:!!w.place,hide:!!w.hide}); });
+  return out.length?out:DEFAULT_WORK_ITEMS;};
+const workNormGroups=(gs)=>{
+  const a=Array.isArray(gs)?gs.filter(g=>g&&g.id):null;
+  if(!a||!a.length)return DEFAULT_WORK_GROUPS;
+  return a.map(g=>({id:String(g.id),name:String(g.name||'（名前なし）'),col:String(g.col||'#64748b')}));};
+let WORK_REG={items:DEFAULT_WORK_ITEMS,groups:DEFAULT_WORK_GROUPS};
+const hubSetWorkDefs=(items,gs)=>{WORK_REG={items:workNormItems(items),groups:workNormGroups(gs)};};
+const workItemsAll=()=>WORK_REG.items;
+const workGroupsRaw=()=>WORK_REG.groups;
+const worksNow=()=>WORK_REG.items.filter(w=>!w.hide);
 // ★昔の予約がまだ持っている作業項目（データは書き換えない＝保存されている字のまま出す）
 const WORKS_OLD=[
   {id:'⑫',name:'12ヶ月点検'},{id:'M12',name:'メンパ12ヶ月点検'},{id:'M6',name:'メンパ6ヶ月点検'},
   {id:'M1',name:'メンパ1ヶ月点検'},{id:'N1',name:'新車1ヶ月点検'},{id:'N6',name:'新車6ヶ月点検'}
 ];
-const workDef=(id)=>WORKS.find(x=>x.id===id)||WORKS_OLD.find(x=>x.id===id)||null;
+const workDef=(id)=>WORK_REG.items.find(x=>x.id===id)||WORKS_OLD.find(x=>x.id===id)||null;
+const workPlaceOn=(id)=>{const w=workDef(id);return !!(w&&w.place);};
 const workName=(id)=>{const w=workDef(id);return w?w.name:(id||'');};
 const QKINDS=[{k:'lift',name:'リフト作業'},{k:'pit',name:'ピット作業'}];
 const qkindOf=(row)=>Array.isArray(row&&row.qkind)?row.qkind.filter(k=>QKINDS.some(x=>x.k===k)):[];
@@ -247,27 +289,25 @@ const toggleQkind=(row,k)=>{const a=qkindOf(row);return a.indexOf(k)>=0?a.filter
 //   バッジの字そのものを M1／M6／M12（メンパ）・有12（有料点検）・無1／無6（無料点検）にする。
 //   持ち物は wkmon だけ。work は メンパ／有点／無点 のまま＝入庫制限の解除もマッハの制限も今までどおり。
 //   昔の予約（work が M12 など）は書き換えない。バッジのとなりに作業名は出さない。
-const WORK_SUB={'メンパ':['1','6','12'],'有点':['12'],'無点':['1','6']};
-const workSubOf=(id)=>WORK_SUB[id]||null;
+const workSubOf=(id)=>{const w=workDef(id);
+  return (w&&Array.isArray(w.mon)&&w.mon.length)?w.mon:null;};
 const workMonOf=(row)=>{const s=workSubOf(row&&row.work);const m=String((row&&row.wkmon)||'');
-  return (s&&s.indexOf(m)>=0)?m:'';};
+  // ★設定から月数を外しても、すでに入っている予定のバッジは消さない（v3.114.0・PC と同じ）
+  return (s&&m)?m:'';};
 const workBadgeText=(row)=>{const id=(row&&row.work)||'',m=workMonOf(row);
-  if(!m)return id;
-  if(id==='メンパ')return 'M'+m;
-  if(id==='有点')return '有'+m;
-  if(id==='無点')return '無'+m;
-  return id;};
+  const w=workDef(id),b=(w&&w.badge)||id;
+  return m?(b+m):b;};
 const workFullName=(row)=>{const id=(row&&row.work)||'',m=workMonOf(row);
   return id?(workName(id)+(m?'（'+m+'ヶ月）':'')):'';};
 // ★作業内容の並べ方（2026-11-04 ユーザー指示。PC と同じ区画・同じ順にすること）
-const WORK_GROUPS=[
-  {name:'点検',col:'#0891b2',ids:['メンパ','無点','有点']},
-  {name:'整備・修理',col:'#9333ea',ids:['Q','B','R']},
-  {name:'その他',col:'#64748b',ids:['商','保','試','納','他']}
-];
-const workGroups=()=>{const g=WORK_GROUPS.map(x=>({...x,items:x.ids.map(id=>WORKS.find(w=>w.id===id)).filter(Boolean)}));
-  const rest=WORKS.filter(w=>!WORK_GROUPS.some(x=>x.ids.indexOf(w.id)>=0));
-  if(rest.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
+// ★作業内容の並べ方＝【主作業の設定】のグループ（PC と同じ）
+const workGroups=()=>{
+  const items=worksNow(),gs=workGroupsRaw();
+  const g=gs.map(x=>({id:x.id,name:x.name,col:x.col,
+    ids:items.filter(w=>w.g===x.id).map(w=>w.id),
+    items:items.filter(w=>w.g===x.id)}));
+  const rest=items.filter(w=>!gs.some(x=>x.id===w.g));
+  if(rest.length&&g.length)g[g.length-1].items=g[g.length-1].items.concat(rest);
   return g;};
 // ★作業項目を選んでも【内容欄には入れない】（2026-11-04 ユーザー指示。PC と同じ）。
 //   入れると印刷の行が増えて2枚になる日が出るため。戻さないこと。
@@ -337,20 +377,23 @@ const restrRanges = r => {
 const restrExempt = r => (r && Array.isArray(r.exemptWorks)) ? r.exemptWorks : [];
 // ── 制限解除項目のキー（2026-10-31・PC版と同じ）──────────────────
 //   クイック整備・修理だけ3通り：'Q'＝ふつう／'Q:lift'／'Q:pit'。昔の 'Q' はそのまま「ふつう」。
-const QK_PLAIN = 'Q', QK_PRE = 'Q:';
+const QK_SEP = ':';
+const qkKey = (id, k) => id + QK_SEP + k;
+// ★昔の 'Q'（ふつう）・'Q:lift'・'Q:pit' はそのまま効く。隠した作業は一覧に出さない。
 const EXEMPT_LIST = () => {
   const out = [];
-  WORKS.forEach(w => {
-    if (w.id === 'Q') { out.push({key:'Q', label:'クイック整備・修理（リフトもピットも使わない）'});
-      QKINDS.forEach(k => out.push({key:QK_PRE+k.k, label:'クイック整備・修理の'+k.name})); }
+  worksNow().forEach(w => {
+    if (w.place) { out.push({key:w.id, label:w.name+'（リフトもピットも使わない）', wide:true});
+      QKINDS.forEach(k => out.push({key:qkKey(w.id,k.k), label:w.name+'の'+k.name, wide:true})); }
     else out.push({key:w.id, label:w.id+' '+w.name});
   });
   return out;
 };
 const restrKeysOf = (row) => {
-  if (!row || row.work !== 'Q') return [row && row.work];
+  const id = row && row.work;
+  if (!id || !workPlaceOn(id)) return [id];
   const ks = qkindOf(row);
-  return ks.length ? ks.map(k => QK_PRE+k) : [QK_PLAIN];
+  return ks.length ? ks.map(k => qkKey(id, k)) : [id];
 };
 const restrPasses = (r, row) => { const need = restrKeysOf(row); const ex = restrExempt(r);
   return need.length > 0 && need.every(k => ex.indexOf(k) >= 0); };
@@ -366,7 +409,7 @@ const restrLabels = r => restrRanges(r).map(g => g.startTime + '〜' + g.endTime
 // ── マッハ車検の自動入庫制限（本店のみ・2026-10-05 ユーザー指示）──
 //   マッハ車検は複数人がかかるので、入庫から1時間は一般のクイック整備・各種点検・リコールを止める。
 //   ★必ずこの関数を通して出すこと（中の形を直接見ない）。手動の制限と同じ形にして返す。
-//   ・止める作業＝MACH_BLOCK_WORKS。通せる作業＝それ以外（＝制限解除項目の既定値）
+//   ・止める作業＝machBlockKeys()（主作業の設定の「マッハで止める」）。通せる作業＝それ以外
 //   ・1件につき1区間（同じ時間に2台は無い前提・2026-10-05 ユーザー確認）
 //   ・手で消した／時間を変えた分は machOff / machEdit に残す。ただし **マッハの入庫時間が
 //     変わったら作り直す**（base と今の時刻が違えば、その手直しは無かったことにする）
@@ -374,9 +417,16 @@ const MACH_COURSE = 1;                 // コース：1＝マッハ車検
 const MACH_STORE  = 'honten';          // 本店だけ
 const MACH_SPAN_MIN = 60;              // 入庫から1時間
 // ★ピット作業（Q:pit）は止めない＝マッハ車検中でもピットなら受けられる（2026-10-31 ユーザー指示）
-const MACH_BLOCK_WORKS = ['Q','Q:lift','メンパ','有点','無点','R',
-  '⑫','M12','M6','M1','N1','N6'];   // クイック整備（ピット以外）・全ての点検・リコール（昔の分も止める）
-const machDefaultExempt = () => EXEMPT_LIST().map(x => x.key).filter(k => MACH_BLOCK_WORKS.indexOf(k) < 0);
+// ★止める作業は【主作業の設定】の「マッハで止める」から作る（v3.114.0・PC と同じ）。
+//   ★「場所を分ける」作業のピット側（{id}:pit）は止めない（2026-10-31 ユーザー指示）。
+const MACH_BLOCK_OLD = ['⑫','M12','M6','M1','N1','N6'];   // 昔の作業項目（いまは選べないが止める）
+const machBlockKeys = () => { const out = [];
+  workItemsAll().forEach(w => { if (!w.mach) return;
+    out.push(w.id);
+    if (w.place) out.push(qkKey(w.id, 'lift')); });
+  return out.concat(MACH_BLOCK_OLD); };
+const machDefaultExempt = () => { const bl = machBlockKeys();
+  return EXEMPT_LIST().map(x => x.key).filter(k => bl.indexOf(k) < 0); };
 const machAddMin = (t, add) => {
   const n = restrMin(t); if (n < 0) return '';
   const m = Math.min(n + add, 23 * 60 + 59);
@@ -1097,7 +1147,7 @@ const snapStamp = d => { const p = n => String(n).padStart(2, '0'); return d.get
 //   マイスケジュール（myprv-*）は入れない。本人しか読めないうえ、復旧で他人の分を上書きしないため。
 //   **新しい種類のキーを足した時は SNAP_KEYS_COMMON / SNAP_KEYS_STORE にも足すこと。**
 const SNAP_KEYS_COMMON = ['insp','insp-arch','custbk','rres','rentalcars','tiredata','rentaloc',
-  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems',
+  'vehicles','vehicles-v2','inspLimits','mholidays','mysched','setItems','setGroups','inspItems','inspGroups','memoItems','workItems','workGroups',
   'cf-index','cf-search-index','override-open','desktops-honten','desktops-sanda',
   'notify-emails','auth-devnames','schedRestrictions','gasping','custStatus','desktops'];
 const SNAP_KEYS_STORE = ['sched','memo','lres','dayoff','pleave','training','offnote','cdow','cdow-v2','cdate',
@@ -6650,6 +6700,11 @@ const App=()=>{
   // ★車検の【備考】のクイックは一般整備の【内容】とは別のキー（2026-11-04 ユーザー指示）。1つに戻さないこと。
   const [inspItemsRaw,setInspItemsRaw]=useState([]);   // 車検の【備考】欄のクイック項目
   const [inspGroupsRaw,setInspGroupsRaw]=useState([]); // 車検のクイックメニューのグループ
+  // ★★主作業（作業内容）の設定（v3.114.0）。PC の「🔧 主作業の設定」で作ったものを読むだけ。
+  const [workItemsSh,setWorkItemsSh]=useState(null);
+  const [workGroupsSh,setWorkGroupsSh]=useState(null);
+  // ★描画の【前】に受け皿へ入れる（useEffect は描画の後なので、最初の1回が古い定義で描かれる）。
+  useMemo(()=>{hubSetWorkDefs(workItemsSh,workGroupsSh);return 1;},[workItemsSh,workGroupsSh]);
   const [memoEdit,setMemoEdit]=useState(null);         // 備考・メモの追加／編集 {dk,idx}（idx=null で新規）
   const [loanerResH,setLoanerResH]=useState({});
   const [rentalCars,setRentalCars]=useState([]);
@@ -6806,7 +6861,7 @@ const App=()=>{
       // まとめ読み1リクエスト（GAS未対応の間は従来の並列GETへ自動フォールバック）
       let vals=await sGetMany(KEYS);
       if(!vals)vals=await Promise.all(KEYS.map(k=>sGet(k)));
-      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups,iitems,igroups,trnH,trnS]=vals;
+      const [insp,sh,ss,mh,ms,lh,ls,cdh,cds,cdateH,cdateS,ov,rcars,rres,carsH,carsS,limits,restr,restrS,doH,doS,stH,stS,plH,plS,mhol,onH,onS,msch,mitems,sitems,sgroups,iitems,igroups,trnH,trnS,witems,wgroups]=vals;
       if(writeGuardRef.current>0&&!force){setLoading(false);return;} // 取得中に保存が始まった場合も反映しない
       if(isPlainObj(insp))setInspData(applyOverlays(STOR+'insp',insp));
       if(isPlainObj(sh))setSchedDataH(applyOverlays(storKey('sched','honten'),sh));
@@ -6844,6 +6899,9 @@ const App=()=>{
       // ★車検の備考のクイックは一般整備とは別のキー（2026-11-04 ユーザー指示）
       if(Array.isArray(iitems))setInspItemsRaw(iitems);
       if(Array.isArray(igroups))setInspGroupsRaw(igroups);
+      // ★主作業の設定（v3.114.0）
+      if(Array.isArray(witems))setWorkItemsSh(witems);
+      if(Array.isArray(wgroups))setWorkGroupsSh(wgroups);
       // ★研修（2026-11-04）
       if(isPlainObj(trnH))setTrainingH(trnH);
       if(isPlainObj(trnS))setTrainingS(trnS);

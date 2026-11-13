@@ -244,19 +244,22 @@ const seed = {
   const mb = fs.readFileSync(path.join(DIR, 'mobile.html'), 'utf8');
   const hp = fs.readFileSync(path.join(DIR, 'hub_paper.js'), 'utf8');
   for (const [nm, src] of [['スケジュール', ix], ['スマホ', mb]]) {
-    t(nm + '：WORK_SUB がある', /const WORK_SUB *= *\{/.test(src));
+    t(nm + '：★主作業は設定から読む（WORK_REG）', (src.indexOf('let WORK_REG = {') >= 0 || src.indexOf('let WORK_REG={') >= 0) && src.indexOf('const workSubOf') >= 0);
     t(nm + '：workBadgeText がある', src.indexOf('const workBadgeText') >= 0);
     t(nm + '：★有料点検は自動で12ヶ月', /next\.wkmon *= *\(id *=== *'有点'\) *\? *'12' *: *''/.test(src));
-    t(nm + '：★メンパは M＋月数', src.indexOf("return 'M' + m") >= 0 || src.indexOf("return 'M'+m") >= 0);
+    t(nm + '：★バッジは 見分け字＋月数', src.indexOf('return m ? (b + m) : b') >= 0 || src.indexOf('return m?(b+m):b') >= 0);
   }
   t('スケジュール：blankSched に wkmon がある', /blankSched *= *\(\) *=> *\(\{[^)]*wkmon:''/.test(ix));
   t('スマホ：整備の初期値に wkmon がある', mb.indexOf("qkind:[],wkmon:''") >= 0);
   t('スマホ：★月数を選ばないと保存できない', mb.indexOf('workSubOf(form.work)&&!workMonOf(form)') >= 0);
   t('スマホ：月数の段がある', mb.indexOf('data-wkmonrow') >= 0);
-  t('紙の控え：点検の月数まで出す', hp.indexOf('workNameP') >= 0 && /WORK_SUB_P/.test(hp));
+  t('紙の控え：点検の月数まで出す', hp.indexOf('workNameP') >= 0 && /WORK_SUB_OLD_P/.test(hp));
+  t('紙の控え：★主作業は控えの workItems から引く', /WORK_ITEMS_P/.test(hp) && hp.indexOf("P('workItems')") >= 0);
   for (const [nm, src] of [['スケジュール', ix], ['スマホ', mb]]) {
-    t(nm + '：★点検の並びは メンパ→無点→有点', /ids: *\['メンパ', *'無点', *'有点'\]|ids:\['メンパ','無点','有点'\]/.test(src));
-    t(nm + '：WORKS も同じ並び', src.indexOf("{id:'メンパ',name:'メンパ'},{id:'無点',name:'無料点検'},{id:'有点',name:'有料点検'}") >= 0);
+    const iM = src.indexOf("{id:'メンパ'"), iN = src.indexOf("{id:'無点'"), iY = src.indexOf("{id:'有点'");
+    t(nm + '：★点検の並びは メンパ→無点→有点', iM > 0 && iM < iN && iN < iY);
+    const tight = src.split(' ').join('');   // 並びの字下げは無視して見る
+    t(nm + '：3つとも 点検のグループ（g1）', tight.indexOf("{id:'メンパ',g:'g1'") >= 0 && tight.indexOf("{id:'無点',g:'g1'") >= 0 && tight.indexOf("{id:'有点',g:'g1'") >= 0);
   }
   t('スマホ：★車検の備考にも ⚡ クイックメニュー', /isInsp\?'note':'content'/.test(mb) && (mb.match(/data-quickmenu/g) || []).length >= 2);
   t('スマホ：区画の見出しを出せる（data-pkhdr）', mb.indexOf('data-pkhdr') >= 0);

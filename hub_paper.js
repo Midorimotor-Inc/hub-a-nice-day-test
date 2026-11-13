@@ -112,13 +112,20 @@ const COURSES = { 1: 'マッハ', 2: 'クイック', 3: 'レギュラー' };
 //   注文済み＝「(部)✓」／未注文＝「(部)」／ほかのコースは空。
 //   ★同じものが index_dev.html（partsTextMark）にもある。片方だけ変えないこと。
 const partsTextMark = function (r) { return (Number(r && r.course) === 1) ? ((r && r.parts) ? '(部)✓' : '(部)') : ''; };
-// ★昔の予約は保存されている字のまま出す（2026-10-31）。古い id も残しておくこと
-const WORKS = { Q: 'クイック整備・修理', 'メンパ': 'メンパ', '有点': '有料点検', '無点': '無料点検', '⑫': '12ヶ月点検', M12: 'メンパ12ヶ月', M6: 'メンパ6ヶ月', M1: 'メンパ1ヶ月', N1: '新車1ヶ月', N6: '新車6ヶ月', B: '鈑金塗装', R: 'リコール', 商: '商談', 保: '保険', 試: '試乗', 納: '納車', 他: 'その他' };
-const WORK_SUB_P = { 'メンパ': ['1', '6', '12'], '有点': ['12'], '無点': ['1', '6'] };
+// ★★主作業は PC の「🔧 主作業の設定」から足せる（v3.114.0）。名前と月数は控えの workItems から引く。
+//   控えに無い時（古い控え・昔の id）だけ下の古い表を使う。★昔の id をこの表から消さないこと。
+const WORKS_OLD_P = { Q: 'クイック整備・修理', 'メンパ': 'メンパ', '有点': '有料点検', '無点': '無料点検', '⑫': '12ヶ月点検', M12: 'メンパ12ヶ月', M6: 'メンパ6ヶ月', M1: 'メンパ1ヶ月', N1: '新車1ヶ月', N6: '新車6ヶ月', B: '鈑金塗装', R: 'リコール', 商: '商談', 保: '保険', 試: '試乗', 納: '納車', 他: 'その他' };
+const WORK_SUB_OLD_P = { 'メンパ': ['1', '6', '12'], '有点': ['12'], '無点': ['1', '6'] };
+const WORK_ITEMS_P = (function () { const a = P('workItems'); return Array.isArray(a) ? a : []; })();
+const workDefP = (id) => WORK_ITEMS_P.find(w => w && String(w.id) === id) || null;
 // ★点検は「何ヶ月か」まで出す（2026-11-04）。画面のバッジは M1／M6／M12・有12・無1／無6、紙は言葉で出す。
+//   ★設定から月数を外しても、すでに入っている予定の月数は消さない（画面の workMonOf と同じ決まり）。
 const workNameP = (r) => { const id = String((r && r.work) || ''); if (!id) return '';
-  const nm = WORKS[id] || id; const sub = WORK_SUB_P[id]; const m = String((r && r.wkmon) || '');
-  return (sub && sub.indexOf(m) >= 0) ? (nm + '（' + m + 'ヶ月）') : nm; };
+  const w = workDefP(id);
+  const nm = (w && w.name) || WORKS_OLD_P[id] || id;
+  const sub = (w && Array.isArray(w.mon) && w.mon.length) ? w.mon : WORK_SUB_OLD_P[id];
+  const m = String((r && r.wkmon) || '');
+  return (sub && m) ? (nm + '（' + m + 'ヶ月）') : nm; };
 const STORES = [{ id: 'honten', name: '本店' }, { id: 'sanda', name: '三田店' }];
 // ★フルナンバー（2026-11-04）。地名＋分類番号＋かな＋4桁。無ければ4桁のまま（Hub の画面と同じ決まり）。
 const plateFullP = (r) => { const n = String((r && r.no) == null ? '' : r.no);
