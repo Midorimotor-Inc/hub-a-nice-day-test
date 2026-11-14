@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794619464275';
+    window.__APP_BUILD='build-1794623033739';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.117.0';
+const APP_VERSION = '3.117.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -13403,6 +13403,11 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   const [rsDrag,setRsDrag]=useState(null);   // {kind,carId,res,side:'start'|'end',num}
   const rsJust=useRef(false);                // 伸ばした直後の click（＝中身を出す）を無視する
   const RS_W=8;                              // つかむ所の幅（px）
+  // ★白い棒の太さ。お名前のすきま（左右とも RS_BAR）がそのまま棒の場所になる。
+  //   帯は 1日44px だが、表の罫線をたたむので実際の幅は 日数*44-1。
+  //   2日の帯＝87px。「藤明建設工業 様」は 82px 要るので、左右に取れるのは 2px ずつが限度。
+  //   ★3px に戻すと、この社名の「様」が 1px 欠ける（2026-11-14 に実測）。
+  const RS_BAR=2;
   // ★帯の角の丸み（2026-11-02 ユーザー決定。なし/3/5/7/10 を mock_loaner_round.html で見比べて 5px）。
   //   ★表は border-collapse なので、セル（td）に角丸を指定しても【効かない】。
   //     そのため帯の色はセルの背景ではなく、中に敷いた箱（position:absolute）で塗っている。
@@ -13486,7 +13491,14 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       style={{position:'absolute',top:0,bottom:0,width:RS_W,zIndex:5,cursor:'ew-resize',
         ...(side==='end'?{right:0}:{left:0}),
         display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <span style={{width:3,height:16,borderRadius:2,background:'rgba(255,255,255,.95)',
+      {/* ★★白い棒は【帯のいちばん端】に寄せること（2026-11-14 現場報告）。
+          つかむ所（透明・RS_W=8px）の真ん中に置くと、お名前のために左右10pxずつ空けねばならず、
+          2日などの短い貸出で**お名前の終わりが欠けた**（「藤明建設工業 様」の「様」が消えた）。
+          端に寄せれば、お名前のすきま（RS_BAR）の中に収まる＝場所を取らず、文字にも重ならない。
+          ★つかむ所（当たり判定）は8pxのまま。細いのは【見た目の棒】だけ。 */}
+      <span style={{position:'absolute',top:'50%',transform:'translateY(-50%)',
+        ...(side==='end'?{right:0}:{left:0}),
+        width:RS_BAR,height:18,borderRadius:1.5,background:'rgba(255,255,255,.95)',
         boxShadow:'0 0 3px rgba(0,0,0,.6)',pointerEvents:'none'}}/>
     </div>
   );
@@ -13804,14 +13816,10 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                     const showName=isObj&&(isStart||!_leftSt||(typeof _leftSt==='object'&&_leftSt.id!==st.id)||(!!_prevD&&_prevD.month!==month));
                     let nameSpan=1;
                     if(showName){for(let j=i+1;j<dateRange.length;j++){const s=getState(car.id,dateRange[j]);if(s&&typeof s==='object'&&s.id===st.id)nameSpan++;else break;}}
-                    // ★お名前は「つかむ所」（帯の端の白い棒）をよけて出す（2026-11-02 現場報告）。
-                    //   v3.86.0 で帯の端をつかんで伸ばせるようにした時、白い棒が【お名前の1文字目の上】に
-                    //   重なり、「芝田」の芝が線で消されたように見えていた＝「名前の出方が以前と変わっておかしい」。
-                    //   つかむ所がある側（始まり／終わり）だけ、その幅ぶん内側に寄せる。
-                    const _runLast=showName?dateRange[i+nameSpan-1]:null;
-                    const runHasEnd=!!(_runLast&&isObj&&_runLast.day===st.td&&_runLast.month===st.tm&&_runLast.year===st.ty);
-                    const nameLeft=(!pickMode&&isStart)?RS_W+2:3;
-                    const nameW=Math.max(14,nameSpan*44-nameLeft-((!pickMode&&runHasEnd)?RS_W+1:3));
+                    // ★お名前は【帯の端から RS_BAR ぶん】。左右とも同じ（2026-11-14）。
+                    //   つかむ所の白い棒はこの3pxのすきまに収まるので、場所を空ける必要はない。
+                    //   ★ここで RS_W ぶんを空ける作りに戻さないこと。短い貸出でお名前の終わりが欠ける。
+                    const nameLeft=RS_BAR, nameW=Math.max(14,nameSpan*44-1-RS_BAR*2);
                     // ★この端末が「たった今」登録した予約か（保存の完了は待たない）
                     const isJust=isObj&&justAddedIds&&justAddedIds.indexOf(st.id)>=0;
                     return (
@@ -14246,11 +14254,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                           // 貸出2日以上は日数分のセルを1枠として名前を横に広げる（尻切れ可）
                           let rNameSpan=1;
                           if(isObj&&isStart){for(let j=i+1;j<dateRange.length;j++){const s=getRDragState(car.id,dateRange[j]);if(s&&typeof s==='object'&&s.id===st.id)rNameSpan++;else break;}}
-                          // ★代車の帯と同じ。お名前は「つかむ所」の白い棒をよけて出す（2026-11-02）
-                          const _rRunLast=(isObj&&isStart)?dateRange[i+rNameSpan-1]:null;
-                          const rRunHasEnd=!!(_rRunLast&&isObj&&_rRunLast.day===st.td&&_rRunLast.month===st.tm&&_rRunLast.year===st.ty);
-                          const rNameLeft=(!pickMode&&isStart)?RS_W+2:3;
-                          const rNameW=Math.max(14,rNameSpan*44-rNameLeft-((!pickMode&&rRunHasEnd)?RS_W+1:3));
+                          // ★代車の帯と同じ。お名前は帯の端から RS_BAR ぶん（白い棒はそのすきまに収まる・2026-11-14）
+                          const rNameLeft=RS_BAR, rNameW=Math.max(14,rNameSpan*44-1-RS_BAR*2);
                           return (
                             <td key={i}
                               onMouseDown={e=>{e.preventDefault();if(!isBlocked)rHandleMD(car.id,dateObj);if(isObj)mvDown('rental',car.id,st,e);}}

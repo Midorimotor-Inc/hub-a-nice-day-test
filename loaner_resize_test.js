@@ -70,6 +70,7 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     [STOR + 'honten-lres']: {
       '1': {
         r1: { id: 1001, user: '辻井　博', fy: F1.y, fm: F1.m, fd: F1.d, ty: T1.y, tm: T1.m, td: T1.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk1, locked: true },
+        r8: { id: 1008, user: '藤明建設工業株式会社', fy: F9.y, fm: F9.m, fd: F9.d + 3, ty: T9.y, tm: T9.m, td: T9.d + 3, carName: 'ハスラー', carNum: '7074' },
         r9: { id: 1009, user: '先約　さん', fy: F9.y, fm: F9.m, fd: F9.d, ty: T9.y, tm: T9.m, td: T9.d, carName: 'ハスラー', carNum: '7074' },
       },
       '2': {
@@ -256,7 +257,8 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     });
     return bad;
   });
-  t('★お名前の左端が「つかむ所」より右にある', over.length === 0, over);
+  // ★2026-11-14：白い棒は帯のいちばん端へ寄せた。つかむ所（当たり判定8px）の中に
+  //   お名前が入るのが正しい形になったので、見張りは ⑨ の「白い棒に重ならない」に移した。
 
   head('⑪ ★レンタカーの表は本日を右寄りに出す（2026-11-02 ユーザー指示）');
   // 「レンタカーは何を出しているかを見たいので過去を見ることが多い」＝左に過去を広く出す。
@@ -291,6 +293,33 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     !!(pos.loaner && pos.rental) && pos.rental.after < pos.loaner.after, pos);
   t('★本日より右は7日ぶんまで（いちばん左まで戻っている時を除く）',
     !!pos.rental && (pos.rental.after <= 7 || pos.rental.left === 0), pos.rental);
+
+  head('⑨ つかむ所の白い棒が、お名前に掛からない');
+  // ★2026-11-14 現場報告。白い棒を「つかむ所（8px）の真ん中」に置いていたため、
+  //   お名前のために左右10pxずつ空けることになり、短い貸出でお名前の終わりが欠けていた
+  //   （「藤明建設工業 様」の「様」が消える）。棒を帯のいちばん端に寄せて直した。
+  const look = await page.evaluate(() => {
+    const out = { names: [], bars: [], hit: [] };
+    document.querySelectorAll('[data-rsgrip]').forEach(g => {
+      const r = g.getBoundingClientRect(); if (r.width <= 0) return;
+      out.hit.push(Math.round(r.width));
+      const sp = g.querySelector('span'); if (!sp) return;
+      const b = sp.getBoundingClientRect();
+      out.bars.push({ side: g.getAttribute('data-rsgrip'), x: b.x, r: b.right, w: Math.round(b.width) });
+    });
+    document.querySelectorAll('td > div').forEach(d => {
+      const c = getComputedStyle(d);
+      if (c.position !== 'absolute' || c.color !== 'rgb(255, 255, 255)' || !d.innerText.trim()) return;
+      const r = d.getBoundingClientRect();
+      out.names.push({ txt: d.innerText.replace(/s+/g, ' '), x: r.x, r: r.right, cut: d.scrollWidth > d.clientWidth + 1 });
+    });
+    return out;
+  });
+  t('★お名前が1つも欠けていない', look.names.length >= 3 && !look.names.some(n => n.cut), look.names);
+  t('★長い社名も終わりまで出る（2日だけの貸出）', look.names.some(n => /藤明建設工業 様$/.test(n.txt)), look.names.map(n => n.txt));
+  t('★白い棒がお名前の字に重なっていない',
+    look.bars.length >= 2 && !look.bars.some(b => look.names.some(n => b.x < n.r - 0.5 && b.r > n.x + 0.5)), { bars: look.bars, names: look.names });
+  t('★つかむ所（当たり判定）は8pxのまま（細くしていない）', look.hit.length > 0 && look.hit.every(w => w >= 8), look.hit);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
