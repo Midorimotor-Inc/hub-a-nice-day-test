@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>代車の帯の「つかむ所」3案</title>
+<style>
+ body{margin:0;padding:18px 16px 60px;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:#f8fafc;color:#1b2129}
+ h1{font-size:17px;margin:0 0 4px}
+ .lead{font-size:13px;color:#475569;margin:0 0 16px;line-height:1.7}
+ .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+ .tab{padding:9px 16px;border:2px solid #cbd5e1;background:white;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer}
+ .tab.on{background:#0891b2;border-color:#0891b2;color:white}
+ .card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px 18px;margin-bottom:16px}
+ .card h2{font-size:15px;margin:0 0 2px}
+ .card p{font-size:12.5px;color:#475569;margin:0 0 12px;line-height:1.7}
+ table{border-collapse:collapse}
+ th,td{border:1px solid #e5e7eb;box-sizing:border-box}
+ th.h{width:100px;background:#fff7ed;font-size:11px;text-align:left;padding:4px 8px;font-weight:700}
+ th.d{width:44px;min-width:44px;background:#fff7ed;font-size:10px;color:#475569;padding:2px 0;font-weight:700}
+ td.c{width:44px;min-width:44px;height:40px;padding:0;position:relative;overflow:visible}
+ td.n{width:100px;background:#fff;font-size:11px;padding:4px 8px;line-height:1.3}
+ td.n b{display:block;font-size:11.5px}
+ .bar{position:absolute;inset:0;z-index:0}
+ .nm{position:absolute;top:50%;transform:translateY(-50%);font-size:11px;color:#fff;font-weight:800;white-space:nowrap;overflow:hidden;z-index:2;pointer-events:none;
+     text-shadow:-1px -1px 1px rgba(0,0,0,.85),1px -1px 1px rgba(0,0,0,.85),-1px 1px 1px rgba(0,0,0,.85),1px 1px 1px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9)}
+ .grip{position:absolute;top:0;bottom:0;width:8px;z-index:5;cursor:ew-resize;display:flex;align-items:center;justify-content:center}
+ .grip span{width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,.95);box-shadow:0 0 3px rgba(0,0,0,.6)}
+ .note{font-size:12px;color:#334155;background:#f1f5f9;border-left:4px solid #0891b2;padding:9px 12px;border-radius:0 8px 8px 0;line-height:1.75;margin-top:12px}
+ .bad{border-left-color:#dc2626;background:#fef2f2}
+ .hint{font-size:11.5px;color:#64748b;margin-top:8px}
+</style></head><body>
+<h1>代車の帯の「つかむ所」（白い縦の棒）3案</h1>
+<p class="lead">白い棒は <b>v3.86.0（2026-10-30）で入れた「帯の端をつかんで貸出期間を変える」取っ手</b>です。<br>
+ところが <b>短い貸出だと、お名前に重なって文字が欠けます</b>（いまの形＝下の「藤明建設工業 様」が切れています）。<br>
+3つ並べました。帯に<b>マウスを乗せて</b>見比べてください。</p>
+
+<div class="tabs">
+ <button class="tab on" data-k="now">いまの形（棒がずっと出る）</button>
+ <button class="tab" data-k="a">A案：なぞった時だけ出す</button>
+ <button class="tab" data-k="b">B案：棒は出さない（端でカーソルが ⇔）</button>
+ <button class="tab" data-k="c">C案：角に小さく出す</button>
+</div>
+
+<div id="stage"></div>
+
+<script>
+// ───────── 見本のデータ（日数の違うもの・長い社名を入れてある）
+var ROWS = [
+  { car:'ハスラー', num:'7074', bands:[
+      {s:3, len:4, name:'🔒 辻井　博 様', col:'#0e7490'},
+      {s:11,len:2, name:'先約　さん 様', col:'#be185d'},
+      {s:15,len:2, name:'藤明建設工業 様', col:'#c2410c'} ]},
+  { car:'スペーシア', num:'8967', bands:[
+      {s:1, len:4, name:'大山　明 様', col:'#4338ca'},
+      {s:9, len:1, name:'中島　様', col:'#047857'} ]},
+];
+var DAYS = 20, W = 44, GR = 8, MODE = 'now';
+
+function cell(){ var td=document.createElement('td'); td.className='c'; return td; }
+
+function draw(){
+  var st=document.getElementById('stage'); st.innerHTML='';
+  var card=document.createElement('div'); card.className='card';
+  var ttl={now:['いまの形（棒がずっと出る）','帯の左右に白い棒が出たままです。短い貸出だと、お名前の場所を棒が取ってしまい、<b>文字が欠けます</b>。'],
+           a:['A案：なぞった時だけ出す','ふだんは棒を出しません。<b>お名前は端まで使えます。</b>帯にマウスを乗せた時だけ棒が出て、つかんで引っぱれます。'],
+           b:['B案：棒は出さない','棒そのものを出しません。帯の端にマウスを近づけると<b>カーソルが ⇔ に変わる</b>ので、そのまま引っぱれます。'],
+           c:['C案：角に小さく出す','棒をやめて、帯の上下の角に小さな三角を出します。ずっと見えますが、お名前の高さには掛かりません。']}[MODE];
+  card.innerHTML='<h2>'+ttl[0]+'</h2><p>'+ttl[1]+'</p>';
+  var tb=document.createElement('table');
+  var hr=document.createElement('tr');
+  var h0=document.createElement('th'); h0.className='h'; h0.textContent='代車'; hr.appendChild(h0);
+  for(var d=0;d<DAYS;d++){ var th=document.createElement('th'); th.className='d'; th.innerHTML=(11+d)+'<br>'+'日月火水木金土'[(d+2)%7]; hr.appendChild(th); }
+  tb.appendChild(hr);
+
+  ROWS.forEach(function(row){
+    var tr=document.createElement('tr');
+    var tdn=document.createElement('td'); tdn.className='n'; tdn.innerHTML='<b>'+row.car+'</b>'+row.num; tr.appendChild(tdn);
+    var cells=[]; for(var d=0;d<DAYS;d++){ var c=cell(); cells.push(c); tr.appendChild(c); }
+    row.bands.forEach(function(b){
+      for(var k=0;k<b.len;k++){
+        var c=cells[b.s+k], isS=(k===0), isE=(k===b.len-1);
+        var bar=document.createElement('div'); bar.className='bar'; bar.style.background=b.col;
+        if(isS){bar.style.borderTopLeftRadius='5px';bar.style.borderBottomLeftRadius='5px';}
+        if(isE){bar.style.borderTopRightRadius='5px';bar.style.borderBottomRightRadius='5px';}
+        c.appendChild(bar);
+        c.dataset.band=b.name;
+        if(isS){
+          var left = (MODE==='now')? GR+2 : 3;
+          var right= (MODE==='now')? GR+1 : 3;
+          var nm=document.createElement('div'); nm.className='nm'; nm.innerHTML=b.name;
+          nm.style.left=left+'px'; nm.style.width=Math.max(14,b.len*W-left-right)+'px';
+          c.appendChild(nm);
+        }
+        if(isS||isE){
+          if(MODE==='now'||MODE==='a'){
+            var g=document.createElement('div'); g.className='grip'; g.dataset.g='1';
+            g.style[isE?'right':'left']='0'; g.innerHTML='<span></span>';
+            if(MODE==='a') g.style.display='none';
+            c.appendChild(g);
+          } else if(MODE==='c'){
+            var g2=document.createElement('div'); g2.className='grip'; g2.style[isE?'right':'left']='0';
+            g2.innerHTML='<span style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid rgba(255,255,255,.95);position:absolute;top:2px;box-shadow:none;background:none"></span>'
+                       +'<span style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid rgba(255,255,255,.95);position:absolute;bottom:2px;box-shadow:none;background:none"></span>';
+            c.appendChild(g2);
+          } else {
+            var g3=document.createElement('div'); g3.className='grip'; g3.style[isE?'right':'left']='0'; c.appendChild(g3);
+          }
+        }
+      }
+    });
+    tb.appendChild(tr);
+  });
+  card.appendChild(tb);
+  var n=document.createElement('div'); n.className='note'+(MODE==='now'?' bad':'');
+  n.innerHTML = MODE==='now' ? '✖ 「藤明建設工業 様」の<b>「様」が棒に食われて見えません</b>。1日だけの貸出（中島 様）では、お名前がほとんど出ません。'
+              : MODE==='a' ? '✔ お名前は端まで出ます。<b>なぞった帯にだけ</b>棒が出ます（お名前の位置は動きません）。'
+              : MODE==='b' ? '✔ お名前は端まで出ます。棒は一切出ません。※<b>引っぱれることに気づきにくい</b>のが弱点です。'
+              : '✔ お名前は端まで出ます。角の三角はずっと見えるので、引っぱれることが分かります。';
+  card.appendChild(n);
+  var h=document.createElement('div'); h.className='hint'; h.textContent='※ 見本です。実際には引っぱれません。帯にマウスを乗せて見比べてください。';
+  card.appendChild(h);
+  st.appendChild(card);
+
+  // なぞった時だけ出す（A案）
+  if(MODE==='a'){
+    [].forEach.call(st.querySelectorAll('tr'),function(tr){
+      [].forEach.call(tr.querySelectorAll('td.c'),function(c){
+        c.addEventListener('mouseenter',function(){ show(tr,c.dataset.band,true); });
+        c.addEventListener('mouseleave',function(){ show(tr,c.dataset.band,false); });
+      });
+    });
+  }
+}
+function show(tr,name,on){
+  if(!name)return;
+  [].forEach.call(tr.querySelectorAll('td.c'),function(c){
+    if(c.dataset.band!==name)return;
+    [].forEach.call(c.querySelectorAll('[data-g]'),function(g){ g.style.display=on?'flex':'none'; });
+  });
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest('.tab'); if(!b)return;
+  [].forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.remove('on');});
+  b.classList.add('on'); MODE=b.dataset.k; draw();
+});
+draw();
+</script>
+</body></html>
