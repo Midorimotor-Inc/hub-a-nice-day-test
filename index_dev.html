@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794623033739';
+    window.__APP_BUILD='build-1794635176377';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.117.1';
+const APP_VERSION = '3.117.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -13408,6 +13408,12 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   //   2日の帯＝87px。「藤明建設工業 様」は 82px 要るので、左右に取れるのは 2px ずつが限度。
   //   ★3px に戻すと、この社名の「様」が 1px 欠ける（2026-11-14 に実測）。
   const RS_BAR=2;
+  // ★代車・レンタカーの【車名の列】（position:sticky）の重なりの高さ。
+  //   つかむ所（RsGrip・zIndex:5）と同じ 5 にしていたため、同じ高さは【後ろに書いた方が上】という
+  //   決まりで、表の外（左）へスクロールした帯のつかむ所が【車名の列の上に出て】、
+  //   タイヤの札（夏・冬）に白い棒が重なって見えた（2026-11-14 現場報告）。
+  //   車名の列はいつでも一番上。つかむ所（5）より高く、見出し（20）より低くすること。
+  const NAMECOL_Z=12;
   // ★帯の角の丸み（2026-11-02 ユーザー決定。なし/3/5/7/10 を mock_loaner_round.html で見比べて 5px）。
   //   ★表は border-collapse なので、セル（td）に角丸を指定しても【効かない】。
   //     そのため帯の色はセルの背景ではなく、中に敷いた箱（position:absolute）で塗っている。
@@ -13775,7 +13781,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
             {LOANERS_LOCAL.map((car,carIdx)=>{
               return (
                 <tr key={car.id}>
-                  <td style={{background:'#f9fafb',border:'1px solid #e5e7eb',padding:'5px 9px',fontWeight:600,fontSize:11,whiteSpace:'nowrap',position:'sticky',left:0,zIndex:5,transform:'translateZ(0)',backfaceVisibility:'hidden',height:40,boxSizing:'border-box'}}>
+                  <td style={{background:'#f9fafb',border:'1px solid #e5e7eb',padding:'5px 9px',fontWeight:600,fontSize:11,whiteSpace:'nowrap',position:'sticky',left:0,zIndex:NAMECOL_Z,transform:'translateZ(0)',backfaceVisibility:'hidden',height:40,boxSizing:'border-box'}}>
                     {(()=>{
                       const tireId=tireData&&tireData[String(car.id)];
                       const tireInfo=TIRE_TYPES.find(x=>x.id===tireId);
@@ -14226,7 +14232,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                     const locId=locationData?locationData[String(car.id)]:null;
                     return (
                       <tr key={car.id}>
-                        <td style={{background:'#f0fdf4',border:'1px solid #a7f3d0',padding:'5px 9px',fontWeight:600,fontSize:11,whiteSpace:'nowrap',position:'sticky',left:0,zIndex:5,height:40,boxSizing:'border-box'}}>
+                        <td style={{background:'#f0fdf4',border:'1px solid #a7f3d0',padding:'5px 9px',fontWeight:600,fontSize:11,whiteSpace:'nowrap',position:'sticky',left:0,zIndex:NAMECOL_Z,height:40,boxSizing:'border-box'}}>
                           <div style={{display:'flex',alignItems:'center',gap:4,flexWrap:'nowrap',overflow:'hidden'}}>
                             {tireInfo&&<span title={tireInfo.label} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:16,borderRadius:3,background:tireInfo.bg,color:tireInfo.color,fontSize:9,fontWeight:900,flexShrink:0}}>{tireInfo.icon}</span>}
                             <div style={{minWidth:0,overflow:'hidden'}}>

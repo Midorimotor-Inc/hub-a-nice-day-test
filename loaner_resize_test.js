@@ -321,6 +321,42 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
     look.bars.length >= 2 && !look.bars.some(b => look.names.some(n => b.x < n.r - 0.5 && b.r > n.x + 0.5)), { bars: look.bars, names: look.names });
   t('★つかむ所（当たり判定）は8pxのまま（細くしていない）', look.hit.length > 0 && look.hit.every(w => w >= 8), look.hit);
 
+  head('⑩ ★つかむ所が【車名の列】の上に出ない（2026-11-14 現場報告）');
+  // 表を横に送ると、左へ流れた帯のつかむ所が車名の列（position:sticky）の下に入る。
+  // ここで重なりの高さ（zIndex）が同じだと【後ろに書いた方が上】になり、
+  // つかむ所の白い棒がタイヤの札（夏・冬）や車名の上に出てしまっていた。
+  const cover = await page.evaluate(() => {
+    const sc = document.querySelector('th[data-ldaynum]').closest('table').parentElement;
+    sc.scrollLeft = sc.scrollLeft + 420;      // 帯のいくつかを車名の列の下へ送る
+    const grips = [...document.querySelectorAll('[data-rsgrip]')];
+    const out = { under: 0, nameZ: null, gripZ: null, topIsName: null, top: null };
+    for (const g of grips) {
+      const r = g.getBoundingClientRect(); if (r.width <= 0) continue;
+      const nm = g.closest('tr') && g.closest('tr').querySelector('td'); if (!nm) continue;
+      const nb = nm.getBoundingClientRect();
+      // ★【本当に重なっている】ものだけを見ること。左へ行き過ぎて車名の列より外に出たものは、
+      //   重なっていないので点が表の外に落ちる（見張りにならない）。
+      if (r.x >= nb.right - 1 || r.right <= nb.x + 1) continue;
+      out.under++;
+      if (out.topIsName === null) {
+        out.nameZ = getComputedStyle(nm).zIndex;
+        out.gripZ = getComputedStyle(g).zIndex;
+        // ★点は【つかむ所と車名の列が重なっている所】の真ん中に取ること。
+        //   はみ出した所を押すと、壊れていても車名の列が受けてしまい見張りにならない。
+        const x = (Math.max(nb.x, r.x) + Math.min(nb.right, r.right)) / 2;
+        const top = document.elementFromPoint(x, r.y + r.height / 2);
+        out.top = top ? (top.tagName + '/' + (top.getAttribute('data-rsgrip') || '')) : null;
+        out.topIsName = !!(top && top.closest('td') === nm);
+      }
+    }
+    return out;
+  });
+  // SHOT2=<保存先.png> で【横に送った時の車名の列】の見た目を撮る
+  if (process.env.SHOT2) await page.screenshot({ path: process.env.SHOT2 });
+  t('つかむ所が車名の列の下に入っている（検査の前提）', cover.under > 0, cover);
+  t('★車名の列の方が上に出る（重なりの高さ）',
+    Number(cover.nameZ) > Number(cover.gripZ), { 車名: cover.nameZ, つかむ所: cover.gripZ });
+  t('★車名の列の上に棒が出ていない（押しても車名の列が受ける）', cover.topIsName === true, cover);
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 
   await ctx.close(); await browser.close(); server.close();
