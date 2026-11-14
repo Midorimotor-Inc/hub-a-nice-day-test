@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794548833344';
+  window.__APP_BUILD='build-1794619464275';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.116.0';
+const MOBILE_VERSION='3.117.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -846,6 +846,23 @@ const hubDevId = () => {
   } catch (e) { return 'nodev'; }
 };
 const fbDeviceRef = () => fbDb.collection('devices').doc(hubDevId());
+// ★この画面の版を台帳に記す（どのPCが古い版を開いたままか、管理コンソールで分かるように）。
+//   項目は vS/vL/vM（スケジュール・リスト・モバイル）と、その版を初めて開いた時刻 vSat/vLat/vMat。
+//   ★update で書く＝管理者が取り消した（消えた）行を作り直さない。
+//   ★同じ版を何度も書かないよう、書けたら端末に印を残す（印は画面ごとに別のキー＝互いに上書きしない）。
+//     ＝1台につき1回の配信で1書き込みだけ。
+const HUB_APP_TAG = 'M';
+const HUB_VER_MARK = STOR + 'auth-ver-' + HUB_APP_TAG;
+const hubVerNow = () => String(MOBILE_VERSION || '');
+const hubVerDoc = () => { const o = {}; o['v' + HUB_APP_TAG] = hubVerNow(); o['v' + HUB_APP_TAG + 'at'] = Date.now(); return o; };
+const hubStampVer = async () => {
+  if (!fbAuth || !fbUser || !fbDb) return;
+  if (!hubLoadMine().length) return;                                  // 登録の無い端末は台帳に行が無い
+  try { if (localStorage.getItem(HUB_VER_MARK) === hubVerNow()) return; } catch (e) {}
+  try { await fbDeviceRef().update(hubVerDoc()); } catch (e) { return; }
+  try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {}
+};
+const hubStampVerLater = () => { if (!fbAuth) return; fbWhenUser(() => { hubStampVer(); }); };
 // 台帳に書く（登録時・種類や名前を変えた時）。管理者コンソールの端末一覧はこれを読む
 const hubWriteDevice = async (extra) => {
   if (!fbAuth || !fbUser) return;
@@ -853,11 +870,12 @@ const hubWriteDevice = async (extra) => {
   const dev = mine.find(x => x.isDevice);
   const doc = Object.assign({ env: STOR, e: fbUser.email || '', n: dev ? dev.name : (mine.map(x => x.name).join('・') || ''),
     names: mine.map(x => x.name), s: (mine[0] && mine[0].store) || 'honten', k: hubKind() || '', l: hubLabel() || '',
-    ua: String(navigator.userAgent || '').slice(0, 160), dev: dev ? 1 : 0, last: Date.now() }, extra || {});
+    ua: String(navigator.userAgent || '').slice(0, 160), dev: dev ? 1 : 0, last: Date.now() }, hubVerDoc(), extra || {});
   try {
     const s = await fbDeviceRef().get();
     if (!s.exists) doc.at = Date.now();
     await fbDeviceRef().set(doc, { merge: true });
+    try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {}   // ★版も書いたので印を付ける
   } catch (e) { console.warn('[FB] 台帳に書けません', e && e.message); }
 };
 // 起動時：台帳から消されていれば（管理者の「取り消し」）この端末の登録を捨てる。許可簿から外れた人も一覧から外す。
@@ -870,7 +888,12 @@ const hubCheckDevice = async () => {
     const s = await fbDeviceRef().get();
     if (!s.exists) { hubSaveMine([]); hubKeepClear(); try { await fbAuth.signOut(); } catch (e) {} return false; }
     const d = s.data() || {};
-    if (!d.last || Date.now() - d.last > 86400000) fbDeviceRef().update({ last: Date.now() }).catch(() => {});   // update：消された行を作り直さない
+    //   ★版が変わった時も一緒に記す（開きっぱなしの古いタブを見つけるため）。印も付け替える。
+    const _vd = hubVerDoc(), _vk = 'v' + HUB_APP_TAG, _vNew = d[_vk] !== _vd[_vk];
+    if (!d.last || Date.now() - d.last > 86400000 || _vNew) {
+      fbDeviceRef().update(Object.assign({ last: Date.now() }, _vd)).catch(() => {});   // update：消された行を作り直さない
+      if (_vNew) { try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {} }
+    }
   } catch (e) { return true; }   // 読めない（回線）時は何も変えない
   // 合言葉の控えが無い人（リンクで登録した）は作っておく。古いサインインでは作れないことがある（その時は次の登録時に）
   //   ★控えは「開くたびに」最新に合わせる（v3.94.1）。空の時だけ配る作りだと、

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794548833344';
+    window.__APP_BUILD='build-1794619464275';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false;
       function runningVer(){
@@ -132,7 +132,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.116.0';
+const APP_VERSION = '3.117.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3051,6 +3051,13 @@ const patchInspBooking = (base, dk, target, patch)=>{
 //   構造は {carId:{キー:予約}}。キー名自体に意味はなく、予約は id / bookingKey で特定する。
 //   どれも base を壊さずに新しいオブジェクトを返す（base には毎回サーバー最新値が渡される）。
 const _resObj = b => (b&&typeof b==='object'&&!Array.isArray(b))?b:{};
+// 日にちの足し引き（代車の帯を『動かした日数ぶん』ずらすのに使う）。
+//   ★toNum（y*10000+m*100+d）は引き算に使えない（月をまたぐと桁が飛ぶ）ので、こちらを使うこと。
+const dkToDays = (dk) => { const q = String(dk || '').split('-').map(Number);
+  if (q.length !== 3 || q.some(isNaN)) return null; return Math.round(Date.UTC(q[0], q[1] - 1, q[2]) / 86400000); };
+const resFromDays = (r) => (r && r.fy != null) ? Math.round(Date.UTC(r.fy, r.fm, r.fd) / 86400000) : null;
+const resToDays   = (r) => (r && r.fy != null) ? Math.round(Date.UTC(r.ty == null ? r.fy : r.ty, r.tm == null ? r.fm : r.tm, r.td == null ? r.fd : r.td) / 86400000) : null;
+const daysToYmd = (n) => { const d = new Date(n * 86400000); return { y: d.getUTCFullYear(), m0: d.getUTCMonth(), d: d.getUTCDate() }; };
 // 指定 bookingKey（複数可）の予約を全車から取り除く
 const removeResByBk=(base,bks)=>{
   const want=(Array.isArray(bks)?bks:[bks]).filter(Boolean);
@@ -3432,6 +3439,23 @@ const hubDevId = () => {
   } catch (e) { return 'nodev'; }
 };
 const fbDeviceRef = () => fbDb.collection('devices').doc(hubDevId());
+// ★この画面の版を台帳に記す（どのPCが古い版を開いたままか、管理コンソールで分かるように）。
+//   項目は vS/vL/vM（スケジュール・リスト・モバイル）と、その版を初めて開いた時刻 vSat/vLat/vMat。
+//   ★update で書く＝管理者が取り消した（消えた）行を作り直さない。
+//   ★同じ版を何度も書かないよう、書けたら端末に印を残す（印は画面ごとに別のキー＝互いに上書きしない）。
+//     ＝1台につき1回の配信で1書き込みだけ。
+const HUB_APP_TAG = 'S';
+const HUB_VER_MARK = STOR + 'auth-ver-' + HUB_APP_TAG;
+const hubVerNow = () => String(APP_VERSION || '');
+const hubVerDoc = () => { const o = {}; o['v' + HUB_APP_TAG] = hubVerNow(); o['v' + HUB_APP_TAG + 'at'] = Date.now(); return o; };
+const hubStampVer = async () => {
+  if (!fbAuth || !fbUser || !fbDb) return;
+  if (!hubLoadMine().length) return;                                  // 登録の無い端末は台帳に行が無い
+  try { if (localStorage.getItem(HUB_VER_MARK) === hubVerNow()) return; } catch (e) {}
+  try { await fbDeviceRef().update(hubVerDoc()); } catch (e) { return; }
+  try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {}
+};
+const hubStampVerLater = () => { if (!fbAuth) return; fbWhenUser(() => { hubStampVer(); }); };
 // 台帳に書く（登録時・種類や名前を変えた時）。管理者コンソールの端末一覧はこれを読む
 const hubWriteDevice = async (extra) => {
   if (!fbAuth || !fbUser) return;
@@ -3439,11 +3463,12 @@ const hubWriteDevice = async (extra) => {
   const dev = mine.find(x => x.isDevice);
   const doc = Object.assign({ env: STOR, e: fbUser.email || '', n: dev ? dev.name : (mine.map(x => x.name).join('・') || ''),
     names: mine.map(x => x.name), s: (mine[0] && mine[0].store) || 'honten', k: hubKind() || '', l: hubLabel() || '',
-    ua: String(navigator.userAgent || '').slice(0, 160), dev: dev ? 1 : 0, last: Date.now() }, extra || {});
+    ua: String(navigator.userAgent || '').slice(0, 160), dev: dev ? 1 : 0, last: Date.now() }, hubVerDoc(), extra || {});
   try {
     const s = await fbDeviceRef().get();
     if (!s.exists) doc.at = Date.now();
     await fbDeviceRef().set(doc, { merge: true });
+    try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {}   // ★版も書いたので印を付ける
   } catch (e) { console.warn('[FB] 台帳に書けません', e && e.message); }
 };
 // 起動時：台帳から消されていれば（管理者の「取り消し」）この端末の登録を捨てる。許可簿から外れた人も一覧から外す。
@@ -3456,7 +3481,12 @@ const hubCheckDevice = async () => {
     const s = await fbDeviceRef().get();
     if (!s.exists) { hubSaveMine([]); hubKeepClear(); try { await fbAuth.signOut(); } catch (e) {} return false; }
     const d = s.data() || {};
-    if (!d.last || Date.now() - d.last > 86400000) fbDeviceRef().update({ last: Date.now() }).catch(() => {});   // update：消された行を作り直さない
+    //   ★版が変わった時も一緒に記す（開きっぱなしの古いタブを見つけるため）。印も付け替える。
+    const _vd = hubVerDoc(), _vk = 'v' + HUB_APP_TAG, _vNew = d[_vk] !== _vd[_vk];
+    if (!d.last || Date.now() - d.last > 86400000 || _vNew) {
+      fbDeviceRef().update(Object.assign({ last: Date.now() }, _vd)).catch(() => {});   // update：消された行を作り直さない
+      if (_vNew) { try { localStorage.setItem(HUB_VER_MARK, hubVerNow()); } catch (e) {} }
+    }
   } catch (e) { return true; }   // 読めない（回線）時は何も変えない
   // 合言葉の控えが無い人（リンクで登録した）は作っておく。古いサインインでは作れないことがある（その時は次の登録時に）
   //   ★控えは「開くたびに」最新に合わせる（v3.94.1）。空の時だけ配る作りだと、
@@ -9809,7 +9839,7 @@ const QuickMenuModal=memo(({isOpen,onClose,items,groups,value,onChangeValue,onSa
     </div>
   );
 });
-const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits,usrChk:bmUsrChk,onSetChecked:bmSetChecked,canEditWorks,workUse,onSaveWorks})=>{
+const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabel,timeSlot,onSave,onDelete,onDateChange,onOpenLoanerPicker,pendingLoanerId,pendingLoanerData,pendingRentalId,pendingRentalRec,rentalCarsData,loanerRes,modalDk,modalIdx:modalIdxProp,openSeq,onDeleteLoaner,onToggleLoanerLock,onTogglePendingLoanerLock,currentUser,setItems,setGroups,onSaveQuick,inspItems,inspGroups,onSaveQuickInsp,onOpenSetItemEdit,allCars,fromCustList,savedModalData,staffHere,staffAll,inspData:bmInspData,closedDays:bmClosedDays,closedDates:bmClosedDates,overrideOpenDates:bmOverrideOpen,inspLimits:bmInspLimits,usrChk:bmUsrChk,onSetChecked:bmSetChecked,canEditWorks,workUse,onSaveWorks})=>{
   const [form,setForm]=useState(initialData);
   const [showQuickMenu,setShowQuickMenu]=useState(false);   // ⚡ クイックメニュー（2026-10-31）
   // ★入庫店舗（2026-10-02 ユーザー指示）。開いた時はその予約が今入っている店。
@@ -9858,7 +9888,11 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const baseMonth=()=>{const p=baseDk?baseDk.split('-').map(Number):null;const now=new Date();return p?{year:p[0],month:p[1]-1}:{year:now.getFullYear(),month:now.getMonth()};};
   const baseMd=baseDk?(()=>{const p=baseDk.split('-');return `${p[1]}/${p[2]}`;})():'';
   // モーダルオープン時に元のdkを保持
-  useEffect(()=>{ if(isOpen){ originalDkRef.current=''; localTargetDkRef.current=''; } },[isOpen]);
+  // ★★【重要】依存に openSeq を入れること（v3.117.0・2026-11-14）。
+  //   カードを閉じずに別の予約を開くと isOpen が true のままなので、これが無いと
+  //   「日にち変更の元の日」が前の予約のまま残り、**別の人の代車の帯を動かしてしまう**。
+  //   ★modalDk を依存に入れてはいけない（日にちを選ぶと modalDk が変わるので、元の日が消える）。
+  useEffect(()=>{ if(isOpen){ originalDkRef.current=''; localTargetDkRef.current=''; } },[isOpen,openSeq]);
   const [pickerMonth,setPickerMonth]=useState(null);
   const localTargetDkRef=useRef('');
   const originalDkRef=useRef('');
@@ -10142,7 +10176,18 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
         r=Object.values(loanerRes[cid]||{}).find(x=>wantKeys.includes(x.bookingKey));
         if(r)break;
       }
-      if(r){loanFrom=toNum(r.fy,r.fm,r.fd);loanTo=toNum(r.ty,r.tm,r.td);}
+      if(r){
+        // ★車検の日にちを変えた時、帯は《同じ長さのまま動かした日数ぶんずれて》保存される（v3.117.0）。
+        //   見比べる時も同じだけずらす。ずらさないと、一緒に動くのに「期間が一致しません」と
+        //   毎回たずねてしまい、しかも文面の日付が動かす前のものになる。
+        //   ★整備（sched）は bookingKey だけ付け替えて期間は動かさないので、ずらさない。
+        let _rf=resFromDays(r), _rt=resToDays(r);
+        const _od=origDk?dkToDays(origDk):null, _nd=dkToDays(localTargetDkRef.current||modalDk);
+        const _moves=!!(type==='insp'&&origBk&&String(r.bookingKey||'')===origBk&&_od!=null&&_nd!=null&&_rf!=null&&_rt!=null);
+        if(_moves){ _rf+=_nd-_od; _rt+=_nd-_od; }
+        if(_rf!=null&&_rt!=null){ const _a=daysToYmd(_rf), _b=daysToYmd(_rt);
+          loanFrom=toNum(_a.y,_a.m0,_a.d); loanTo=toNum(_b.y,_b.m0,_b.d); }
+      }
     }
     if(loanFrom==null)return null; // 代車無し＝チェック対象外（代車削除で解除）
     // 予定期間は schedSpan（純関数・単体テスト済み）で求める。
@@ -12984,7 +13029,7 @@ const LoanerSettingsModal = memo(({isOpen, onClose, listH, listS, onSaveH, onSav
 // ============================================
 //  代車管理グリッド（閲覧専用 + モーダル編集）
 // ============================================
-const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,schedOther,loanerResOther,loanersOther,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onMoveLoanerRes,onMoveRentalRes,onFixSync,onDropSync,pendingDeleteBk='',justAddedIds=[]})=>{
+const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onReplaceRes,onUndo,selDate,onBack,onPickLoaner,pickMode,locks,currentUser,onLockCar,onUnlockCar,savedModalData,inspData,schedData,schedOther,loanerResOther,loanersOther,onOpenBooking,pinnedRes,setPinnedRes,hoverRes,setHoverRes,storeLoaners,storeInfo,rentalCars,rentalRes,onAddRentalRes,onDeleteRentalRes,onReplaceRentalRes,onPickRental,onOpenSettings,tireData,locationData,onOpenTireEdit,onOpenLocationEdit,onMoveLoanerRes,onMoveRentalRes,onFixSync,onDropSync,onMakeSync,pendingDeleteBk='',justAddedIds=[]})=>{
   const LOANERS_LOCAL=storeLoaners||LOANERS;
   const RENTAL_LOCAL=rentalCars||DEFAULT_RENTAL_CARS;
   // 表示色：期間の重なる予約どうしは必ず違う色（同じお客様は同じ色）。描画のたびに全予約から決める
@@ -13222,7 +13267,10 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       if(!lbl&&!rlbl)return;
       const bk=kind+'-'+dk+'-'+at;
       if(seen[bk])return;
+      // ★「代車管理に貸出を作る」ために、どの車・どの期間かを一緒に持たせる（v3.117.0）
       out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,endNum:dkNum(dk),
+        carIdWant:(row.loanerId==null?'':row.loanerId), rcarIdWant:(row.rentalCarId==null?'':row.rentalCarId),
+        ent:(row.entryDate||''), del:(row.deliveryDate||''), course:(row.course==null?'':row.course),
         text:'予約カードに'+(rlbl?'レンタカー':'代車')+'名があるのに、代車管理に貸出がありません'});
     };
     Object.keys(inspData||{}).forEach(dk=>((inspData[dk]||[]).forEach((row,i)=>rev(dk,String(i),row,'insp'))));
@@ -13960,7 +14008,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
               <div style={{fontWeight:900,fontSize:15}}>{syncIssues.length?'⚠ スケジュールとのズレ':'✓ スケジュールと一致しています'}</div>
               <div style={{fontSize:11,opacity:.9,marginTop:3}}>代車管理の貸出と、予約カードに書かれている代車名を突き合わせました</div>
             </div>
-            <div style={{flex:1,overflowY:'auto',padding:'14px 18px'}}>
+            <div data-synclist="1" style={{flex:1,overflowY:'auto',padding:'14px 18px'}}>
               {syncIssues.length===0?(
                 <div style={{textAlign:'center',padding:'26px 10px',color:'#047857'}}>
                   <div style={{fontSize:34}}>✓</div>
@@ -13995,7 +14043,20 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                         ✓ 直す（予約カードを「{it.want}」にする）
                       </button>
                     )}
-                    {it.type!=='label'&&(
+                    {/* ★type:'bar' ＝ お客様に代車が要るのに、車が1台もおさえられていない＝一番危ない（v3.117.0） */}
+                    {it.type==='bar'&&(
+                      <div data-syncdanger style={{fontSize:12,color:'#991b1b',fontWeight:800,marginTop:6,lineHeight:1.7,
+                        background:'#fee2e2',border:'1.5px solid #dc2626',borderRadius:8,padding:'7px 10px'}}>
+                        ⚠ このままだと、{it.kind==='rental'?'レンタカー':'代車'}が要るお客様が当日来られても、渡す車が1台もおさえられていません。
+                      </div>
+                    )}
+                    {it.type==='bar'&&onMakeSync&&(
+                      <button data-syncmake onClick={()=>onMakeSync(it)}
+                        style={{marginTop:8,padding:'7px 16px',borderRadius:8,border:'none',background:'#059669',color:'white',fontWeight:800,fontSize:12,cursor:'pointer'}}>
+                        ＋ 代車管理に「{it.have}」の貸出を作る
+                      </button>
+                    )}
+                    {it.type==='row'&&(
                       <div style={{fontSize:11,color:'#92400e',marginTop:6,lineHeight:1.7}}>
                         片方にしか無いので自動では直せません。手で合わせるか、下の「消す」で片方だけ残っている分を消せます。
                       </div>
@@ -14008,7 +14069,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                     {it.type!=='label'&&onDropSync&&!(it.type==='row'&&it.barStore&&it.barStore!==vsId)&&(
                       <button onClick={()=>{if(dropAsk(it))onDropSync(it);}}
                         style={{marginTop:8,padding:'7px 16px',borderRadius:8,border:'1.5px solid #dc2626',background:'white',color:'#b91c1c',fontWeight:800,fontSize:12,cursor:'pointer'}}>
-                        🗑 {it.type==='row'?'この貸出を消す（代車管理から）':'予約カードの代車名を消す'}
+                        🗑 {it.type==='row'?'この貸出を消す（代車管理から）':'代車は要らない（カードの代車名を消す）'}
                       </button>
                     )}
                   </div>
@@ -15132,6 +15193,13 @@ function AppInner() {
     persistRes(STOR+'rres',updateLocalRres,mutate,confirmFn,
       {label:'レンタカー予約',getLocal:()=>rresRef.current,...(opts||{})}),
     [persistRes,updateLocalRres]);
+  // ★店を指定して代車の表に書く。**代車は店をまたいで貸す**ので、他店の帯を動かす時はこちらを使う
+  //   （persistLres は『いま見ている店』にしか書かない＝他店の帯には届かない）。
+  const persistLresOf = useCallback((store,mutate,confirmFn,opts)=>{
+    const _st=hubNormStore(store)||vsId;
+    return persistRes(storKey('lres',_st),_st==='honten'?updateLocalLresH:updateLocalLresS,mutate,confirmFn,
+      {label:'代車予約',getLocal:()=>(_st==='honten'?lresHRef.current:lresSRef.current),...(opts||{})});
+  },[persistRes,updateLocalLresH,updateLocalLresS,vsId]);
   const addRentalRes    = useCallback((carId,rec) => persistRres(base=>putResRec(base,carId,String(rec.id),rec),back=>resHasRec(back,carId,rec.id),{verb:'登録',name:rec?.user}),[persistRres]);
   // ★帯を消したら、予約カードの代車名も消す（2026-10-14 に作り直し）。
   //   それまでの欠陥：① **氏名を確かめず行番号だけで消していた**（行がずれていると**別人の代車名を消す**）
@@ -15263,6 +15331,7 @@ function AppInner() {
   const [modalDk,    setModalDk]   =useState('');
   const modalDkRef=useRef('');
   const originalModalDkRef=useRef('');
+  const [modalOpenSeq,setModalOpenSeq]=useState(0);   // 予約カードを開いた回数（開き直しの合図）
   const selDateRef=useRef(null);
   const [modalIdx,   setModalIdx]  =useState(0);
   const [modalSlot,  setModalSlot] =useState('');
@@ -16273,7 +16342,7 @@ function AppInner() {
     const lk=locks[key];
     if(lk&&Date.now()-lk.lockedAt<LOCK_TTL&&lk.lockedBy!==currentUser.name)return;
     acquireLock(key,currentUser.name);setCurLockKey(key);
-    setModalType(type);setModalDk(dk);setModalIdx(idx||0);setModalSlot(slot||'');originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;
+    setModalType(type);setModalDk(dk);setModalIdx(idx||0);setModalSlot(slot||'');setModalOpenSeq(q=>q+1);originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;originalModalDkRef.current=dk;
     setModalIsNew(isNew);
     const data=isNew
       ?(type==='insp'?{...blankInsp(),...(preset||{}),_idx:idx||0}:{...blankSched(),...(preset||{}),_slot:slot||''})
@@ -16576,6 +16645,72 @@ function AppInner() {
     // この保存で代車／レンタカーを _dcPlaceIdx のbookingKeyで登録するか（後で付け替えるかの判断に使う）
     const _hadLoanerForBk=!!pendingLoanerData;
     const _hadRentalForBk=!!(pendingRentalId!=null&&pendingRentalRec);
+
+    // ★★【重大】車検の日にちを変えた時、代車の帯を《消さずに一緒に動かす》（v3.117.0・2026-11-14）
+    //   〈それまでの不具合〉下の「旧予約分の解除」が、日にちを変えるだけで帯を消していた。
+    //   行の loaner（代車名）は消さないので、**カードに代車名があるのに代車管理に貸出が無い**
+    //   状態が残る＝これが「スケジュールとズレ」の一番危ない形。画面はカードの文字を出すので、
+    //   **代車が要るお客様が当日来られても、車が1台もおさえられていない**。
+    //   実例：2026-11-23 の本店の予約（12/23 から変更）。帯が消え、カードの代車名だけが
+    //   残っていた（2026-11-14 に本番の実データで確認）。
+    //   ★スマホ（mobile.html）は最初から「同じ車を新しい日付で付け替える」作りで、PC だけ抜けていた。
+    //   〈直し〉新しい代車を選んでいない／外していない時は、**同じ車・同じ長さのまま、
+    //   動かした日数ぶんずらして**付け替える。移した先でその車が別の人に使われていたら
+    //   **保存そのものを止めて**、何と重なるか・どうすればよいかを出す（黙って消さない）。
+    //   ★代車は店をまたいで貸すので両店の表を見て、見つけた店へ書く（persistLresOf）。
+    //   ★レンタカーは期間を動かさず bookingKey だけ付け替える（整備と同じ）。長期貸しが多く、
+    //     スケジュールと期間が合わないのがふつうなので、動かすとかえって壊す。
+    let _mvLo=null;   // 動かす帯（決まったら下の「解除」はしない）
+    if(modalType==='insp'&&_dcIsDateChange&&!_hadLoanerForBk&&!pendLoanerDrop&&!pendingLoanerDeleteBk){
+      const _mvOldBk=`insp-${_dcOrigDk}-${modalIdx}`;
+      const _mvNewBk=`insp-${_dcTargetDk}-${_dcPlaceIdx}`;
+      const _mvIdent={dk:_dcOrigDk,name:cleanData.name,custId:cleanData.custId};
+      // ★bookingKey の行番号はずれることがあるので、氏名（custId）でも探す（_lrMatch）
+      const _mvFind=(obj)=>{
+        for(const cid of Object.keys(obj||{})){
+          for(const k of Object.keys(obj[cid]||{})){
+            const r=obj[cid][k];
+            if(r&&(r.bookingKey===_mvOldBk||_lrMatch(r,_mvIdent)))return {carId:cid,rec:r};
+          }
+        }
+        return null;
+      };
+      for(const _st of ['honten','sanda']){
+        const _obj=(_st==='honten'?lresHRef.current:lresSRef.current)||{};
+        const _hit=_mvFind(_obj);
+        if(_hit){ _mvLo={store:_st,carId:_hit.carId,rec:_hit.rec}; break; }
+      }
+      const _shift=(dkToDays(_dcTargetDk)!=null&&dkToDays(_dcOrigDk)!=null)?(dkToDays(_dcTargetDk)-dkToDays(_dcOrigDk)):null;
+      const _f0=_mvLo?resFromDays(_mvLo.rec):null, _t0=_mvLo?resToDays(_mvLo.rec):null;
+      if(_mvLo&&(_shift==null||_f0==null||_t0==null))_mvLo=null;   // 期間の分からない帯は動かせない（今までどおり）
+      if(_mvLo){
+        const _nf=daysToYmd(_f0+_shift), _nt=daysToYmd(_t0+_shift);
+        const _obj=(_mvLo.store==='honten'?lresHRef.current:lresSRef.current)||{};
+        const _nF=_f0+_shift, _nT=_t0+_shift;
+        const _clash=Object.values(_obj[_mvLo.carId]||{}).filter(r=>r&&r.id!==_mvLo.rec.id
+          &&r.bookingKey!==_mvOldBk&&!_lrMatch(r,_mvIdent)
+          &&resFromDays(r)!=null&&_nF<=resToDays(r)&&_nT>=resFromDays(r));
+        if(_clash.length){
+          const _lbl=`${_mvLo.rec.carName||'代車'}${_mvLo.rec.carNum?` (${_mvLo.rec.carNum})`:''}`;
+          const _who=_clash.map(r=>`${r.user||'(名前なし)'}（${r.fm+1}/${r.fd}〜${(r.tm==null?r.fm:r.tm)+1}/${r.td==null?r.fd:r.td}）`).join('、');
+          alert(`⚠ 日にちを変えられません（代車が空いていません）
+
+${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使います。
+
+この予約には代車が付いているので、日にちだけ変えると
+「カードに代車名はあるのに、車が1台もおさえられていない」状態になります。
+
+先に【代車】の「変更」で別の車を選び直すか、代車を外してから日にちを変えてください。`);
+          return;   // ★1文字も書かずに止める
+        }
+        _mvLo.plan={oldBk:_mvOldBk,newBk:_mvNewBk,ident:_mvIdent,from:_nf,to:_nt};
+        // ★帯があるのにカードの代車名が空なら、ここで入れておく（逆向きのズレも消す）
+        if(!cleanData.loaner&&_mvLo.rec.carName){
+          cleanData.loaner=`${_mvLo.rec.carName}${_mvLo.rec.carNum?` (${_mvLo.rec.carNum})`:''}`;
+          cleanData.loanerId=_mvLo.carId;
+        }
+      }
+    }
 
     // ★修正1: モーダル確定時にpendingLoanerDataをloanerResに書き込む
     if(pendingLoanerData){
@@ -16911,7 +17046,17 @@ function AppInner() {
         const _delIdent=_isDcForDel
           ?{dk:_origDkForDel,name:cleanData.name,custId:cleanData.custId}
           :null;
-        if(_delBk||_delIdent){
+        if(_mvLo&&_mvLo.plan){
+          // ★消さずに動かす（同じ車・同じ長さ・新しい日付・新しい bookingKey）
+          const _P=_mvLo.plan, _R=_mvLo.rec, _CID=_mvLo.carId;
+          const _newRec={..._R,fy:_P.from.y,fm:_P.from.m0,fd:_P.from.d,ty:_P.to.y,tm:_P.to.m0,td:_P.to.d,bookingKey:_P.newBk};
+          persistLresOf(_mvLo.store,
+            base=>putResRec(removeResByBooking(removeResByBk(base,[_P.oldBk]),_P.ident),_CID,`${_newRec.fy}-${_newRec.fm}-${_newRec.fd}`,_newRec),
+            back=>resHasBk(back,_P.newBk),
+            {verb:'日にち変更にあわせた付け替え',name:_R.user}
+          );
+          setPendingLoanerDeleteBk('');
+        }else if(_delBk||_delIdent){
           const oldBk=_delBk;
           const _gone=b=>!(oldBk&&resHasBk(b,oldBk))&&!resHasBooking(b,_delIdent);
           persistLres(
@@ -16922,6 +17067,14 @@ function AppInner() {
             {verb:'旧予約分の解除'}
           );
           setPendingLoanerDeleteBk('');
+        }
+        // ★レンタカーは期間を動かさず bookingKey だけ付け替える（整備と同じ）。
+        //   付け替えないと、帯は元の日の行を指したまま＝両方が「ズレ」に出る。
+        if(_isDcForDel&&!_hadRentalForBk&&!pendRentalDrop){
+          const _rOld=`insp-${_origDkForDel}-${modalIdx}`, _rNew=`insp-${_dcTargetDk}-${_dcPlaceIdx}`;
+          if(_rOld!==_rNew&&resHasBk(rresRef.current||{},_rOld))
+            persistRres(base=>resHasBk(base,_rOld)?retagResBk(base,_rOld,_rNew):undefined,
+              back=>!resHasBk(back,_rOld),{verb:'紐付けの更新'});
         }
         // ★日付を変えた時は、保管箱（14日より前の分）に残る同じ予約も外す（2026-10-04）
         if(_isDcForDel&&cleanData.custId){
@@ -17062,7 +17215,7 @@ function AppInner() {
     setCurLockKey(null);
     setTimeout(()=>releaseLock(keyToRelease),200);
     setFromCustList(false);setCustModalMeta(null);
-  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,pendLoanerDrop,pendRentalDrop,persistRres,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
+  },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,pendLoanerDrop,pendRentalDrop,persistRres,persistLresOf,pendingLoanerDeleteBk,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
 
   const handleDeleteModal=useCallback(()=>{
     // bookingKeyを特定してloanerRes・rentalResも連動削除
@@ -17635,6 +17788,58 @@ function AppInner() {
     }
   },[persistLres,persistRres,persistInsp,setSchedData,setSchedDataH,setSchedDataS]);
 
+  // ── ズレの「危ない方」を本当に直す：代車管理に貸出を作る（v3.117.0・2026-11-14 ユーザー指示）──
+  //   type:'bar'（予約カードに代車名があるのに帯が無い）は、**代車が要るお客様の車が
+  //   1台もおさえられていない**状態＝当日お客様が来られても渡す車が無い。
+  //   それまで押せるのは「🗑 予約カードの代車名を消す」だけ＝**問題を隠すだけ**だった。
+  //   ここでは、カードに書かれているその車で帯を作る。期間はスケジュール（入庫日→納車日）。
+  //   ★空いていなければ作らない。誰が使っているかを出して、代車管理で選び直してもらう。
+  //   ★カードの代車名は書き換えない（帯を作るだけ）＝取り違えようがない。
+  const makeLoanerBand=useCallback((it)=>{
+    if(!it||it.type!=='bar')return;
+    const B=String.fromCharCode(10);
+    const isR=it.kind==='rental';
+    const lbl=c=>c?((c.name||'')+(c.num?(' ('+c.num+')'):'')):'';
+    const find=(list,wantId)=>{
+      const l=Array.isArray(list)?list:[];
+      const byId=(wantId!=null&&wantId!=='')?l.find(c=>String(c.id)===String(wantId)):null;
+      if(byId)return byId;
+      return l.find(c=>sameCarLabel(lbl(c),it.have))||null;   // id が無い古い予約はカードの文字で探す
+    };
+    let car=null, store=null;
+    if(isR)car=find(dynRentalCars,it.rcarIdWant);
+    else for(const st of ['honten','sanda']){        // ★代車は店をまたいで貸すので両店の名簿を見る
+      const c=find(st==='honten'?loanerListH:loanerListS,it.carIdWant);
+      if(c){car=c;store=st;break;}
+    }
+    if(!car){
+      alert('⚠ 貸出を作れません'+B+B+'予約カードの「'+(it.have||'')+'」が、いまの'
+        +(isR?'レンタカー':'代車')+'の名簿に見つかりません。'+B+B+'代車管理の表から車を選び直してください。');
+      return;
+    }
+    const sp=schedSpan({inspDk:it.dk,entryDate:it.ent,deliveryDate:it.del,course:it.course});
+    if(sp.from==null||sp.to==null){alert('⚠ 期間が分かりません。代車管理の表から入れてください。');return;}
+    const n2y=n=>({y:Math.floor(n/10000),m0:(Math.floor(n/100)%100)-1,d:n%100});
+    const f=n2y(sp.from), e=n2y(sp.to);
+    const dnum=(a)=>Math.round(Date.UTC(a.y,a.m0,a.d)/86400000);
+    const nF=dnum(f), nT=dnum(e);
+    const cur=isR?(rresRef.current||{}):((store==='honten'?lresHRef.current:lresSRef.current)||{});
+    const clash=Object.values(cur[car.id]||{}).filter(r=>r&&resFromDays(r)!=null&&nF<=resToDays(r)&&nT>=resFromDays(r));
+    if(clash.length){
+      const who=clash.map(r=>(r.user||'(名前なし)')+'（'+(r.fm+1)+'/'+r.fd+'〜'+((r.tm==null?r.fm:r.tm)+1)+'/'+(r.td==null?r.fd:r.td)+'）').join('、');
+      alert('⚠ '+lbl(car)+' は空いていません'+B+B
+        +'この期間（'+(f.m0+1)+'/'+f.d+'〜'+(e.m0+1)+'/'+e.d+'）には '+who+' が使います。'+B+B
+        +'代車管理の表で空いている車を選び、'+(it.user||'')+' さんの貸出を入れてください。'+B
+        +'（予約カードの'+(isR?'レンタカー':'代車')+'名はそのまま残してあります）');
+      return;
+    }
+    const rec={id:Date.now(),fy:f.y,fm:f.m0,fd:f.d,ty:e.y,tm:e.m0,td:e.d,
+      user:it.user,color:resColorOf({user:it.user}),bookingKey:it.bk,carName:car.name,carNum:car.num};
+    if(isR)persistRres(base=>putResRec(base,car.id,String(rec.id),rec),
+      back=>resHasRec(back,car.id,rec.id),{verb:'貸出の作成',name:it.user});
+    else persistLresOf(store,base=>putResRec(base,car.id,rec.fy+'-'+rec.fm+'-'+rec.fd,rec),
+      back=>resHasRec(back,car.id,rec.id),{verb:'貸出の作成',name:it.user});
+  },[persistRres,persistLresOf,loanerListH,loanerListS,dynRentalCars]);
   const applyLoanerMove=useCallback((newLoanerRes,moves)=>{
     setLoanerUndo(u=>[...u,{prevState:loanerRes}]);
     persistLres(()=>newLoanerRes,back=>JSON.stringify(back)===JSON.stringify(newLoanerRes),{verb:'最適化の適用'});
@@ -19501,7 +19706,7 @@ function AppInner() {
               locationData={rentalLocData}
               onMoveLoanerRes={moveLoanerResCar}
               onMoveRentalRes={moveRentalResCar}
-              onFixSync={fixLoanerSync} onDropSync={dropLoanerSync}
+              onFixSync={fixLoanerSync} onDropSync={dropLoanerSync} onMakeSync={makeLoanerBand}
               onOpenTireEdit={()=>setShowTireEdit(true)}
               onOpenLocationEdit={()=>setShowLocationEdit(true)}
               justAddedIds={justAddedIds}/>
@@ -19665,6 +19870,7 @@ function AppInner() {
         savedModalData={savedModalData}
         dateLabel={dateLabel} timeSlot={modalSlot}
         storeId={vsId}
+        openSeq={modalOpenSeq}
         onSave={handleSaveModal} onDelete={handleDeleteModal} onDateChange={handleDateChangeModal}
         modalIdx={modalIdx} onOpenLoanerPicker={handleOpenLoanerPicker} pendingLoanerId={pendingLoanerId}
         pendingLoanerData={pendingLoanerData}

@@ -41,6 +41,15 @@
     id, __col: col, __id: id,
     get: async () => { stats.reads++; if (!canRead(col, id)) throw denied(); return snapOf(col, id); },
     set: async (d, opts) => { if (!canWrite(col, id)) throw denied(); writeDoc(col, id, d, opts); },
+    // ★本物と同じ update（2026-11-14 に足した）。項目を足す／差し替えるだけで、
+    //   ★その行が無い時は失敗する（＝取り消された端末の行を作り直さない）。
+    //   これが無いと、update で書くコード（端末台帳の最終利用・開いている版）が
+    //   検査では黙って失敗し、本物では動くのに検査では見られない状態になる。
+    update: async (d) => {
+      if (!canWrite(col, id)) throw denied();
+      if (!store[key(col, id)]) { const e = new Error('No document to update'); e.code = 'not-found'; throw e; }
+      writeDoc(col, id, d, { merge: true });
+    },
     delete: async () => { if (!(col === 'devices' ? isAdmin() : canWrite(col, id))) throw denied(); delete store[key(col, id)]; save(); notify(col, id); },
     collection: sub => collection(col + '/' + id + '/' + sub),   // サブコレクション（snaps/{id}/kv）
     onSnapshot: (opts, next, err) => {
