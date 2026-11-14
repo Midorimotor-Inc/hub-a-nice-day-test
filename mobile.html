@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794635176377';
+  window.__APP_BUILD='build-1794642105757';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false;
     function runningVer(){
@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.117.2';
+const MOBILE_VERSION='3.117.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -610,6 +610,13 @@ const getDefaultCapabilities=(badge)=>{
 // ★配色は【赤】（2026-10-30 ユーザー決定・PC版と同値）。オレンジだとスタッフ休日と地続きに見えた。
 const CLOSED_BG='#fecaca', CLOSED_FG='#991b1b', CLOSED_BAR='inset 4px 0 0 #b91c1c', CLOSED_LABEL='休業日';
 const CLOSED_TAG_BG='#dc2626', CLOSED_TAG_FG='#ffffff';
+// ★代車・レンタカーの表の【車名の列】（position:sticky・left:0）の重なりの高さ。
+//   2 にしていたため、表を左へスワイプすると、日付のセルからはみ出したお客模のお名前の帯
+//   （zIndex:3）が【車名の列の上に重なって】見えた（2026-11-14 現場報告）。
+//   車名の列はいつでもお名前より上。お名前の帯（3）より高く、日付の見出しの行（10）より低くすること。
+//   ※PC（index）の NAMECOL_Z は 12 だが、あちらは「つかむ所（5）より上・見出し（20）より下」で
+//     階層の数字そのものが違う。値を写し合わないこと。
+const NAMECOL_Z=6;
 // ── 研修バッジ（v3.99.0・2026-11-04 ユーザー指示・B案）─────────────────
 //   意味は「**出勤しているけれど研修で不在**」。index_dev.html と同じものを置くこと。
 //   ★★研修は【休みではない】。休日の日数・繰り越しの計算には絶対に入れないこと。
@@ -5375,7 +5382,7 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
           style={{display:'flex',borderBottom:'1px solid #f1f5f9',
             ...(mv&&mv.kind===kind&&String(mv.overCar)===String(car.id)
               ?{outline:'3px solid '+(mv.ok?'#22c55e':'#dc2626'),outlineOffset:'-3px',background:mv.ok?'#dcfce7':'#fee2e2'}:{})}}>
-          <div style={{width:80,minWidth:80,padding:'6px 7px',background:'#f8fafc',borderRight:'2px solid #e5e7eb',display:'flex',flexDirection:'column',justifyContent:'center',position:'sticky',left:0,zIndex:2}}>
+          <div style={{width:80,minWidth:80,padding:'6px 7px',background:'#f8fafc',borderRight:'2px solid #e5e7eb',display:'flex',flexDirection:'column',justifyContent:'center',position:'sticky',left:0,zIndex:NAMECOL_Z}}>
             <div style={{fontWeight:700,fontSize:10,color:'#1e293b',lineHeight:1.3}}>{car.name}</div>
             <div style={{fontSize:10,color:'#111827',fontWeight:800}}>{car.num}</div>
           </div>

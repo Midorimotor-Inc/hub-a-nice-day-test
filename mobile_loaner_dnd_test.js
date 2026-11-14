@@ -278,6 +278,63 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
       await page.evaluate(() => document.body.innerText.slice(0, 200)));
   }
 
+  head('⑦ ★左へスワイプしても【車名の列】がお名前の帯の上に出る（2026-11-14 現場報告）');
+  // 代車の表を左へ送ると、日付のセルからはみ出したお客様のお名前の帯が
+  // 車名の列（position:sticky・left:0）の上に重なって見えていた＝重なりの高さが
+  // 車名の列 2 ／お名前の帯 3 で、お名前の方が上だったため。
+  // ★お名前の帯は pointerEvents:none なので elementFromPoint では見張れない。
+  //   見た目の話なので【重なりの高さ】と【同じ階層で比べられているか】を見る。
+  const findScroller = () => page.evaluate(() => {
+    const row = document.querySelector('[data-lcar]');
+    if (!row) return false;
+    let sc = row.parentElement;
+    while (sc && sc.scrollWidth <= sc.clientWidth + 2) sc = sc.parentElement;
+    if (!sc) return false;
+    sc.setAttribute('data-lscroll', '1');
+    return true;
+  });
+  const overlapInfo = (dx) => page.evaluate(x => {
+    const sc = document.querySelector('[data-lscroll]');
+    if (sc) sc.scrollLeft = x;
+    const out = { under: 0, nameZ: null, barZ: null, rowZ: null, cellZ: null, scrolled: sc ? sc.scrollLeft : -1 };
+    for (const row of document.querySelectorAll('[data-lcar]')) {
+      const nm = row.firstElementChild; if (!nm) continue;
+      const nb = nm.getBoundingClientRect();
+      const labs = [...row.querySelectorAll('div')].filter(d =>
+        getComputedStyle(d).position === 'absolute' && (d.textContent || '').trim());
+      for (const lb of labs) {
+        const r = lb.getBoundingClientRect();
+        if (r.width <= 0) continue;
+        // ★【本当に重なっている】ものだけを見ること。左へ行き過ぎて車名の列より外に出た帯は
+        //   重なっていないので見張りにならない。
+        if (r.x >= nb.right - 1 || r.right <= nb.x + 1) continue;
+        out.under++;
+        if (out.nameZ === null) {
+          out.nameZ = getComputedStyle(nm).zIndex;
+          out.barZ = getComputedStyle(lb).zIndex;
+          out.rowZ = getComputedStyle(row).zIndex;           // 行＝auto でないと同じ階層で比べられない
+          out.cellZ = getComputedStyle(lb.parentElement).zIndex;
+        }
+      }
+    }
+    return out;
+  }, dx);
+
+  t('横に送れる表が見つかる', await findScroller());
+  let cov = { under: 0 };
+  for (const dx of [300, 600, 900, 1200, 1800]) {       // 帯が車名の列の下に入るまで送る
+    cov = await overlapInfo(dx);
+    if (cov.under > 0) break;
+  }
+  if (process.env.SHOT3) await page.screenshot({ path: process.env.SHOT3 });
+  t('お名前の帯が車名の列の下に入っている（検査の前提）', cov.under > 0, cov);
+  t('★車名の列の方が上に出る（重なりの高さ）', Number(cov.nameZ) > Number(cov.barZ),
+    { 車名の列: cov.nameZ, お名前の帯: cov.barZ });
+  t('同じ階層で比べられている（行とセルに重なりの高さを付けていない）',
+    cov.rowZ === 'auto' && cov.cellZ === 'auto', { 行: cov.rowZ, セル: cov.cellZ });
+  t('日付の見出しの行より下にある（縦に送った時に見出しを突き抜けない）',
+    Number(cov.nameZ) < 10, { 車名の列: cov.nameZ });
+
   t('画面のエラーは出ていない', errs.length === 0, errs.slice(0, 3));
 
   await browser.close();
