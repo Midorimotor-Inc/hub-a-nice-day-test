@@ -20,9 +20,9 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794642105757';
+  window.__APP_BUILD='build-1794646226527';
   (function(){
-    var RUNNING=window.__APP_BUILD, shown=false, checking=false;
+    var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
       try{ var s=document.querySelectorAll('script');   /* モバイルは変換結果を別scriptに入れ直すので、種類を問わず全部見る */
         for(var i=0;i<s.length;i++){ var mm=s[i].textContent.match(/(?:APP_VERSION|MOBILE_VERSION)\s*=\s*'([^']+)'/); if(mm)return mm[1]; } }catch(e){}
@@ -61,6 +61,11 @@
           // ★ビルド識別子だけでなく、バージョン番号の違いでも出す（識別子の更新忘れ対策・2026-09-12）。
           var mv=t.match(/(?:APP_VERSION|MOBILE_VERSION)\s*=\s*'([^']+)'/), rv=runningVer();
           if((m&&m[1]!==RUNNING)||(mv&&rv&&mv[1]!==rv))banner();
+          // ★版がまだ読めていない（CDN の読み込み待ちで runningVer() が空）時は、
+          //   「違わない」ではなく「まだ分からない」。そのままだと次は 15 分後になり、
+          //   あけたままの画面に帯が出ない（検査が時々落ちる原因だった・2026-11-14）。
+          //   ※版を上げれば __APP_BUILD も変わるので通常は上の条件で出るが、ここはその保険。
+          else if(mv&&!rv&&vretry<8){ vretry++; setTimeout(check,2000); }
         }
       }catch(e){}
       checking=false;
@@ -165,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.117.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.117.4'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換

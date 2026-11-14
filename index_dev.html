@@ -22,9 +22,9 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794642105757';
+    window.__APP_BUILD='build-1794646226527';
     (function(){
-      var RUNNING=window.__APP_BUILD, shown=false, checking=false;
+      var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
         try{ var s=document.querySelectorAll('script');   /* モバイルは変換結果を別scriptに入れ直すので、種類を問わず全部見る */
           for(var i=0;i<s.length;i++){ var mm=s[i].textContent.match(/(?:APP_VERSION|MOBILE_VERSION)\s*=\s*'([^']+)'/); if(mm)return mm[1]; } }catch(e){}
@@ -63,6 +63,11 @@
             //   識別子の更新を忘れると帯が出ず、スタッフが古い画面を使い続けていた（2026-09-12）。
             var mv=t.match(/(?:APP_VERSION|MOBILE_VERSION)\s*=\s*'([^']+)'/), rv=runningVer();
             if((m&&m[1]!==RUNNING)||(mv&&rv&&mv[1]!==rv))banner();
+            // ★版がまだ読めていない（CDN の読み込み待ちで runningVer() が空）時は、
+            //   「違わない」ではなく「まだ分からない」。そのままだと次は 15 分後になり、
+            //   あけたままの画面に帯が出ない（検査が時々落ちる原因だった・2026-11-14）。
+            //   ※版を上げれば __APP_BUILD も変わるので通常は上の条件で出るが、ここはその保険。
+            else if(mv&&!rv&&vretry<8){ vretry++; setTimeout(check,2000); }
           }
         }catch(e){}
         checking=false;
@@ -132,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.117.3';
+const APP_VERSION = '3.117.4';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。

@@ -32,7 +32,14 @@ const seeText = async (page, s, ms = 8000) => { try { await page.waitForFunction
     .replace(/const BACKEND = '[a-z]+';/, "const BACKEND = 'gas';");   // この検査は GAS を模擬するので保存先を GAS に固定（2026-09-18）
         // 帯の確認用の取得（?_v=）にだけ、バージョン番号を1つ上げた版を返す
         if (qs && /_v=/.test(qs) && served[p] && served[p].bumpVersion) {
-          out = out.replace(/(APP_VERSION|MOBILE_VERSION)(\s*=\s*)'(\d+)\.(\d+)'/, (m, k, eq, a, b) => `${k}${eq}'${a}.${Number(b) + 1}'`);
+          // ★版は【桁数を問わず】最後の数字を＋1 すること。
+          //   2026-10-06 に版が 3 桁（3.117.3）になったのに、ここが 2 桁（3.117）前提のままだったため
+          //   【新しい版を返せていなかった】＝帯の見張りが 3 画面とも素通りしていた（2026-11-14 発見）。
+          out = out.replace(/(APP_VERSION|MOBILE_VERSION)(\s*=\s*)'([^']+)'/, (m, k, eq, v) => {
+            const ps = String(v).split('.');
+            ps[ps.length - 1] = String(Number(ps[ps.length - 1]) + 1);
+            return k + eq + "'" + ps.join('.') + "'";
+          });
         }
         // 帯は 8 秒後の確認で出る。テストでは待ち時間を 1 秒に縮める
         out = out.replace('setTimeout(check,8000);', 'setTimeout(check,1000);');
@@ -68,9 +75,9 @@ const seeText = async (page, s, ms = 8000) => { try { await page.waitForFunction
     await r2.ctx.close();
   }
 
-  // ── ② 開いた直後の「全画面で使いますか？」（2026-09-24 変更）──
-  //   以前は画面のどこを触っても全画面に入ったため、意図しない時に入っていた。
-  //   いまは案内を出し、そのワンクリックだけで入る。「このまま使う」を押したらそのタブでは出さない。
+  // ── ② 開いた直後は【聞かない】（v3.94.0・2026-11-02 ユーザー決定）──
+  //   ★聞く作りに戻さないこと。開くたびに1クリック増える。
+  //   全画面に入る道はヘッダー右上の ⛶ ボタンだけ。
   //   headless では requestFullscreen が拒否されることがあるので、呼ばれたかどうかを記録して確かめる
   const spy = () => {
     window.__fsCalls = 0;
@@ -88,27 +95,13 @@ const seeText = async (page, s, ms = 8000) => { try { await page.waitForFunction
     const { ctx, page } = await open('index_dev.html');
     await page.evaluate(spy);
     await login(page);
-    t('ログインすると「全画面で使いますか？」の案内が出る', await askShown(page), await page.evaluate(() => document.body.innerText.slice(0, 160)));
-    t('案内が出るまでは、画面を触っても全画面に入らない', (await page.evaluate(() => window.__fsCalls)) === 0);
-    await page.mouse.click(700, 500);      // 案内の上をワンクリック
-    await page.waitForTimeout(400);
-    t('案内をクリックすると全画面に入ろうとする', (await page.evaluate(() => window.__fsCalls)) >= 1);
-    t('クリックしたら案内は消える', !(await askShown(page)));
-    t('文字が青く選ばれない（選択なし）', (await page.evaluate(() => String(window.getSelection()))) === '');
-    await ctx.close();
-  }
-  {
-    const { ctx, page } = await open('index_dev.html');
-    await page.evaluate(spy);
-    await login(page);
-    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.includes('このまま使う')); if (b) b.click(); });
-    await page.waitForTimeout(300);
-    t('「このまま使う」で案内が消える', !(await askShown(page)));
-    t('「このまま使う」では全画面に入らない', (await page.evaluate(() => window.__fsCalls)) === 0);
+    t('★開いても「全画面で使いますか？」は聞かない（v3.94.0 で廃止）', !(await askShown(page)),
+      await page.evaluate(() => document.body.innerText.slice(0, 120)));
+    t('勝手に全画面に入らない', (await page.evaluate(() => window.__fsCalls)) === 0);
     await page.mouse.click(700, 500);
-    await page.waitForTimeout(300);
-    t('そのあと画面を触っても勝手に全画面にならない', (await page.evaluate(() => window.__fsCalls)) === 0);
-    t('このタブでは「聞かない」と覚える', (await page.evaluate(() => sessionStorage.getItem('hub-v8-dev-fs-pref2'))) === 'off');
+    await page.waitForTimeout(400);
+    t('画面を触っても全画面に入らない', (await page.evaluate(() => window.__fsCalls)) === 0);
+    t('文字が青く選ばれない（選択なし）', (await page.evaluate(() => String(window.getSelection()))) === '');
     await ctx.close();
   }
   {
@@ -116,7 +109,6 @@ const seeText = async (page, s, ms = 8000) => { try { await page.waitForFunction
     const { ctx, page } = await open('index_dev.html', { before: () => { try { localStorage.setItem('hub-v8-dev-fs-pref2', 'off'); } catch (e) {} } });
     await page.evaluate(spy);
     await login(page);
-    t('古い localStorage の off が残っていても案内は出る', await askShown(page));
     t('古い localStorage の off は消される', (await page.evaluate(() => localStorage.getItem('hub-v8-dev-fs-pref2'))) === null);
     await ctx.close();
   }

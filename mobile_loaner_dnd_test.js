@@ -42,6 +42,7 @@ const F2 = d(-2), T2 = d(-1);    // 過去（動かせない）。既定の表�
 // ジムニーは「片方だけ残った貸出」の置き場（入れ替えの行き先には使わない）
 const CARS = [{ id: 1, name: 'ハスラー', num: '7074' }, { id: 2, name: 'スペーシア', num: '8967' }, { id: 3, name: 'ジムニー', num: '3504' }];
 const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以降の「スケジュールに予約が無い貸出」
+const OF = d(16), OT = d(17);     // ★他店（三田店）の代車を、本店の予約に貸している分
 
 (async () => {
   const bk1 = 'insp-' + dk(F1) + '-0', bk2 = 'insp-' + dk(F2) + '-0';
@@ -49,6 +50,8 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
     [STOR + 'insp']: {
       [dk(F1)]: [{ name: '辻井　博', carType: 'アルト', time: '09:00', course: 2, store: 'honten', seq: 1, id: 1, loaner: 'ハスラー (7074)', loanerId: 1 }],
       [dk(F2)]: [{ name: '大山　明', carType: 'ワゴンR', time: '09:00', course: 2, store: 'honten', seq: 2, id: 2, loaner: 'ハスラー (7074)', loanerId: 1 }],
+      // ★他店（三田店）の代車を借りている予約。代車は会社の車なので店をまたいで貸す
+      [dk(OF)]: [{ name: '他店　一郎', carType: 'ラパン', time: '09:00', course: 2, store: 'honten', seq: 4, id: 4, loaner: 'ワゴンR (1122)', loanerId: 11 }],
       // ★わざとズラしてある：代車管理では「ハスラー」なのに、予約カードには「スペーシア」と書いてある
       [dk(F3)]: [{ name: '芝田　一郎', carType: 'アルト', time: '09:00', course: 2, store: 'honten', seq: 3, id: 3, loaner: 'スペーシア (8967)', loanerId: 2 }],
     },
@@ -56,7 +59,7 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
     [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, badge: 'bodywork', store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
-    [STOR + 'honten-cars']: CARS, [STOR + 'sanda-cars']: [], [STOR + 'rentalcars']: [],
+    [STOR + 'honten-cars']: CARS, [STOR + 'sanda-cars']: [{ id: 11, name: 'ワゴンR', num: '1122' }], [STOR + 'rentalcars']: [],
     [STOR + 'honten-lres']: {
       '1': {
         r1: { id: 2001, user: '辻井　博', fy: F1.y, fm: F1.m, fd: F1.d, ty: T1.y, tm: T1.m, td: T1.d, carName: 'ハスラー', carNum: '7074', bookingKey: bk1 },
@@ -69,7 +72,11 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
         rn: { id: 2098, user: '未来　花子', fy: NF.y, fm: NF.m, fd: NF.d, ty: NT.y, tm: NT.m, td: NT.d, carName: 'ジムニー', carNum: '3504', bookingKey: 'insp-' + dk(NF) + '-9' },
       }
     },
-    [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
+    // ★他店の代車の帯。本店の画面から見ると「他店の表」にある
+    [STOR + 'sanda-lres']: {
+      '11': { rs1: { id: 2097, user: '他店　一郎', fy: OF.y, fm: OF.m, fd: OF.d, ty: OT.y, tm: OT.m, td: OT.d, carName: 'ワゴンR', carNum: '1122', bookingKey: 'insp-' + dk(OF) + '-0' } }
+    },
+    [STOR + 'rres']: {},
   };
   const server = http.createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]).replace(/^\//, '');
@@ -276,6 +283,27 @@ const PF = d(-30), PT = d(-25), NF = d(20), NT = d(22);   // 過去／本日以�
       Object.values((L3 && L3['1']) || {}).map(r => r.user));
     t('理由を画面に出す', await seeText(page, '過去の予約は入れ替えできません', 4000),
       await page.evaluate(() => document.body.innerText.slice(0, 200)));
+  }
+
+  head('⑧ ★他店の代車を貸している予約を「ズレ」にしない（2026-11-14 現場報告）');
+  // 代車は会社の車なので、店をまたいで貸す。PC は両店の代車の表を突き合わせるのに、
+  // スマホは【見ている店の表しか見ていなかった】ため、他店の代車を借りている予約が
+  // 全部「代車管理に貸出がありません」に数えられていた（本番でスマホだけ 本店22件・三田店17件）。
+  {
+    const txt = await page.evaluate(() => document.body.innerText);
+    t('★他店の代車の予約はズレに数えない',
+      txt.indexOf('他店　一郎') < 0 && txt.indexOf('スケジュールとズレ') < 0,
+      txt.indexOf('スケジュールと一致') >= 0 ? '一致' : '（ズレが残っている）');
+    // ★中身の見張りはファイルを読んで行う（画面からは読み取れないため）
+    const SRC = fs.readFileSync(path.join(DIR, 'mobile.html'), 'utf8');
+    t('★他店の代車の表も突き合わせている',
+      SRC.indexOf("scan('loaner',vsId==='honten'?loanerResS:loanerResH") >= 0);
+    // ★他店の帯の「消す」は出さないこと。dropSyncM の書き先は【見ている店の代車】に
+    //   決め打ちなので、他店の帯を消させると別の店の貸出を消しかねない（PC と同じ守り）。
+    t('★他店の帯には「消す」を出さない（別の店の貸出を消さない）',
+      SRC.indexOf("onDropSync&&!(it.type==='row'&&it.barStore&&it.barStore!==vsId)") >= 0);
+    t('他店の帯には「そちらの画面から」と案内する',
+      SRC.indexOf('入っています。消す時はそちらの画面から') >= 0);
   }
 
   head('⑦ ★左へスワイプしても【車名の列】がお名前の帯の上に出る（2026-11-14 現場報告）');
