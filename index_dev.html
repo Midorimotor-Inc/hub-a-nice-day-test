@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794724290533';
+    window.__APP_BUILD='build-1794725730513';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.117.5';
+const APP_VERSION = '3.117.6';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -195,15 +195,34 @@ class ErrorBoundary extends React.Component {
 // ============================================
 //  祝日・マスターデータ
 // ============================================
-const HOLIDAYS_2026 = new Set([
+const HOLIDAYS = new Set([
+  // ── 2026年（令和8年）
   '2026-1-1','2026-1-12','2026-2-11','2026-2-23','2026-3-20','2026-4-29',
-  '2026-5-3','2026-5-4','2026-5-5','2026-7-20','2026-8-11',
-  '2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23'
-  // ★ 12/23 は【平成の】天皇誕生日。**2019年から祝日ではない**（令和は 2/23）。
+  '2026-5-3','2026-5-4','2026-5-5','2026-5-6','2026-7-20','2026-8-11',
+  '2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23',
+  // ★5/6 は振替休日（5/3 憲法記念日が日曜のため）。2026-11-15 まで抜けていた分を足した。
+  // ★２０２６年に１２月の祝日は無い。足し直さないこと。
+  //   12/23 は【平成の】天皇誕生日で、**2019年から祝日ではない**（令和は 2/23）。
   //   ここに残っていたため 12/23 が赤く出ていた（2026-11-15 現場指摘で外した）。
-  //   ★２０２６年に１２月の祝日は無い。足し直さないこと。
+
+  // ── 2027年（令和9年）＝国立天文台の暦要項（令和8年2月2日 発表）どおり
+  '2027-1-1','2027-1-11','2027-2-11','2027-2-23',
+  '2027-3-21','2027-3-22',
+  '2027-4-29','2027-5-3','2027-5-4','2027-5-5',
+  '2027-7-19','2027-8-11','2027-9-20','2027-9-23',
+  '2027-10-11','2027-11-3','2027-11-23'
+  // ★3/21（春分の日）は日曜なので 3/22（月）が振替休日。ここに両方入れてある。
+  //   ★2027年に 12月の祝日は無い。9/21・9/22 も祝日ではない
+  //     （国民の休日は「祝日に1日だけはさまれた日」の決まりなので、2日あく年は付かない）。
 ]);
-const isHoliday = (y,m,d) => HOLIDAYS_2026.has(`${y}-${m+1}-${d}`);
+// ★★【次の年を足す時】春分の日と秋分の日は年によって動く。祝日法に日付が書かれておらず、
+//   毎年2月に国立天文台が発表する【暦要項】で翌年の日付が決まる。
+//   必ず https://eco.mtk.nao.ac.jp/koyomi/yoko/<年>/rekiyou271.html を見てから足すこと（推測で入れない）。
+//   ★**振替休日も一緒に入れる**（祝日が日曜に当たった時の翌平日）。暦要項にも「○月○日は休日になる」と出る。
+//   ★このリストは index_dev.html と mobile.html の2か所にある。必ず同じ中身にそろえること。
+//   ★祝日は【日付の色と「祝」の字】だけに使う。休業日の判定（calIsClosed＝定休曜日・手動休業日・第2火曜）には使っていない。
+//   見張りは node holiday_test.js。
+const isHoliday = (y,m,d) => HOLIDAYS.has(`${y}-${m+1}-${d}`);
 
 // 店舗定義
 
@@ -7482,7 +7501,7 @@ const HolidayModal=memo(({isOpen,onClose,closedDays,setClosedDays,closedDates,se
                     if(!day) return <div key={di} style={{minHeight:36,borderTop:wi>0?'1px solid #f3f4f6':'none',borderLeft:di>0?'1px solid #f3f4f6':'none',background:'#f9fafb'}}/>;
                     const ds=fmt(cy,cm,day);
                     const dow=new Date(cy,cm,day).getDay();
-                    const isHol=HOLIDAYS_2026.has(`${cy}-${cm+1}-${day}`);
+                    const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
                     const isWeeklyClosed=closedDays.includes(dow);
                     const isManualClosed=closedDates.includes(ds);
                     const isSecTue=isSecondTuesdayHoliday(cy,cm,day,overrideOpenDates||[]);
@@ -8632,7 +8651,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
                   if(!day)return <div key={di} style={{minHeight:80,borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:'#f9fafb'}}/>;
                   const dkk=`${cy}-${cm+1}-${day}`;
                   const dow=new Date(cy,cm,day).getDay();
-                  const isHol=HOLIDAYS_2026.has(`${cy}-${cm+1}-${day}`);
+                  const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
                   const numCol=(isHol||dow===0)?'#dc2626':dow===6?'#1d4ed8':'#111';
                   const isToday=day===today.getDate()&&cm===today.getMonth()&&cy===today.getFullYear();
                   const isCl=isStoreClosed(cy,cm,day); // 店舗休業日
@@ -18661,7 +18680,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                       const dkk=`${cy}-${cm+1}-${day}`;
                       const irows=(inspData[dkk]||[]).filter(r=>r&&r.name&&r.bookingStatus!=='cancelled');
                       const dow=new Date(cy,cm,day).getDay();
-                      const isHol=HOLIDAYS_2026.has(`${cy}-${cm+1}-${day}`);
+                      const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
                       const isSecTue=isSecondTuesdayHoliday(cy,cm,day,ovOpen);
                       const isCl=calIsClosed(new Date(cy,cm,day));
                       const numCol=(isHol||dow===0)?'#dc2626':dow===6?'#1d4ed8':'#111';
@@ -18832,7 +18851,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                             if(!day)return <div key={di} style={{minHeight:120,borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:'#f9fafb'}}/>;
                             const dkk=`${cy}-${cm+1}-${day}`;
                             const dow=new Date(cy,cm,day).getDay();
-                            const isHol=HOLIDAYS_2026.has(`${cy}-${cm+1}-${day}`);
+                            const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
                             const isSecTue2=isSecondTuesdayHoliday(cy,cm,day,ovOpen);
                             const isCl=calIsClosed(new Date(cy,cm,day));
                             const numCol=(isHol||dow===0)?'#dc2626':dow===6?'#1d4ed8':'#111';
