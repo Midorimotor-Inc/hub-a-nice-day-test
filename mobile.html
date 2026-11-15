@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794646226527';
+  window.__APP_BUILD='build-1794724290533';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.117.4';
+const MOBILE_VERSION='3.117.5';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -368,7 +368,11 @@ const CarColorChip=({hex,label,size})=>{ const h=hex||''; if(!h)return null; con
     border:'1px solid rgba(0,0,0,.35)',boxShadow:'inset 0 0 0 1px rgba(255,255,255,.35)',flexShrink:0,verticalAlign:'middle'}}/>; };
 const SHIMIS=[{id:'',name:'なし'},{id:'指',name:'指示書'},{id:'見',name:'見積'},{id:'両',name:'両方'}];
 const TOKUENS=[{id:'①',name:'1ヶ月前予約'},{id:'②',name:'2ヶ月前予約'},{id:'-',name:'なし'}];
-const HOLIDAYS_2026=new Set(['2026-1-1','2026-1-12','2026-2-11','2026-2-23','2026-3-20','2026-4-29','2026-5-3','2026-5-4','2026-5-5','2026-7-20','2026-8-11','2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23','2026-12-23']);
+const HOLIDAYS_2026=new Set(['2026-1-1','2026-1-12','2026-2-11','2026-2-23','2026-3-20','2026-4-29','2026-5-3','2026-5-4','2026-5-5','2026-7-20','2026-8-11','2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23']);
+// ★ 12/23 は【平成の】天皇誕生日。**2019年から祝日ではない**（令和は 2/23）。
+//   ★２０２６年に１２月の祝日は無い。足し直さないこと（2026-11-15 現場指摘）。
+//   ★ index_dev.html の HOLIDAYS_2026 と必ず同じ中身にそろえること。
+
 const isHoliday=(y,m,d)=>HOLIDAYS_2026.has(`${y}-${m+1}-${d}`);
 const DOW=['日','月','火','水','木','金','土'];
 const TIME_SLOTS=(()=>{const s=[];for(let h=9;h<=18;h++)for(let m=0;m<60;m+=30)s.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);return s;})();

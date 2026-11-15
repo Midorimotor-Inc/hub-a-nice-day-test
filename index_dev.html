@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794646226527';
+    window.__APP_BUILD='build-1794724290533';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.117.4';
+const APP_VERSION = '3.117.5';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -198,7 +198,10 @@ class ErrorBoundary extends React.Component {
 const HOLIDAYS_2026 = new Set([
   '2026-1-1','2026-1-12','2026-2-11','2026-2-23','2026-3-20','2026-4-29',
   '2026-5-3','2026-5-4','2026-5-5','2026-7-20','2026-8-11',
-  '2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23','2026-12-23'
+  '2026-9-21','2026-9-22','2026-9-23','2026-10-12','2026-11-3','2026-11-23'
+  // ★ 12/23 は【平成の】天皇誕生日。**2019年から祝日ではない**（令和は 2/23）。
+  //   ここに残っていたため 12/23 が赤く出ていた（2026-11-15 現場指摘で外した）。
+  //   ★２０２６年に１２月の祝日は無い。足し直さないこと。
 ]);
 const isHoliday = (y,m,d) => HOLIDAYS_2026.has(`${y}-${m+1}-${d}`);
 
@@ -18673,7 +18676,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                       });
                       const cellLimit=inspLimits[dkk]??6;
                       return (
-                        <div key={di}
+                        <div key={di} data-calday={dkk} data-calhol={isHol?'1':'0'}
                           onClick={()=>{if(!isCl){setSelDate(new Date(cy,cm,day));setView('schedule');setTimeout(()=>window.scrollTo({top:0,behavior:'instant'}),50);}}}
                           style={{minHeight:105,padding:'5px',cursor:isCl?'not-allowed':'pointer',borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:cellBg,boxShadow:isCl?CLOSED_BAR:'none',position:'relative',...(isToday?TODAY_CELL:{})}}
                           onMouseEnter={e=>{if(!isCl)e.currentTarget.style.background='#f0f0ff';}}
