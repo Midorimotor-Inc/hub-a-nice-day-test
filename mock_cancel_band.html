@@ -1,0 +1,263 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>キャンセル・日にち変更の帯（見本）</title>
+<style>
+:root{--ink:#1b2129}
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;color:var(--ink);
+  font-family:"Yu Gothic UI","Meiryo",system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+h1{font-size:20px;margin:0 0 4px}
+.lead{font-size:13px;color:#475569;line-height:1.8;margin:0 0 18px}
+.sec{background:white;border-radius:12px;border:2px solid #e2e8f0;margin:0 0 20px;overflow:hidden}
+.sec>h2{margin:0;padding:11px 14px;font-size:15px;background:#0e7490;color:white}
+.sec>.body{padding:14px}
+.pick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.pick button{padding:7px 14px;border-radius:9px;border:2px solid #cbd5e1;background:white;
+  font-weight:700;font-size:13px;cursor:pointer;color:#334155}
+.pick button.on{background:#0891b2;border-color:#0891b2;color:white}
+.why{font-size:12.5px;color:#475569;background:#f8fafc;border-left:4px solid #94a3b8;
+  padding:8px 11px;border-radius:0 6px 6px 0;margin:0 0 12px;line-height:1.75}
+/* ── 本物の車検表に合わせた見た目 ── */
+table.insp{border-collapse:collapse;width:100%;background:white}
+table.insp th{padding:7px 8px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;
+  background:linear-gradient(90deg,#9a3412,#ea580c);color:white}
+table.insp td{padding:6px 8px;font-size:12px;border-bottom:1px solid #eef2f6;border-right:1px solid #eef2f6;
+  white-space:nowrap}
+.no{text-align:center;font-weight:700;color:#2563eb;border-left:3px solid #2563eb}
+.nm{font-weight:700}
+.cs{display:inline-block;padding:1px 7px;border-radius:4px;font-weight:800;font-size:11px}
+.c1{background:#fee2e2;color:#991b1b}.c2{background:#dbeafe;color:#1e40af}.c3{background:#dcfce7;color:#166534}
+tr.live:nth-child(even) td{background:#f8f7ff}
+/* 台数制限超過の帯（本物） */
+td.limitband{padding:7px 14px;background:linear-gradient(90deg,#fee2e2,#fff1f2);
+  border:2px solid #fca5a5;text-align:center;font-size:12px;font-weight:800;color:#dc2626}
+/* キャンセルの帯 */
+.cxrow td{background:#fee2e2}
+.cxno{text-align:center;border-left:3px solid #dc2626}
+.cxbig{font-weight:900;color:#991b1b;letter-spacing:1px}
+.cxband{padding:6px 14px;background:#fee2e2;border-top:2px solid #fca5a5;border-bottom:2px solid #fca5a5}
+.cxband .t{font-size:17px;font-weight:900;color:#991b1b;letter-spacing:3px}
+.cxband .d{font-size:13px;font-weight:800;color:#b91c1c;margin-left:10px}
+.strike{text-decoration:line-through;text-decoration-color:#dc2626}
+/* 日にち変更の帯 */
+.mvband{padding:6px 14px;background:#dc2626;color:white}
+.mvband .t{font-size:16px;font-weight:900;letter-spacing:3px}
+.mvband .d{font-size:14px;font-weight:800;margin-left:10px}
+.mvrow td{background:#fecaca}
+.mvno{text-align:center;border-left:3px solid #b91c1c}
+/* カレンダーのマス */
+.cal{display:grid;grid-template-columns:repeat(4,1fr);border:2px solid #e5e7eb;border-radius:9px;overflow:hidden;max-width:640px}
+.cell{min-height:105px;padding:5px;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;background:white}
+.cell .dnum{font-weight:800;font-size:15px;margin-bottom:3px}
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
+.koma{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:14px;background:#f3f4f6;border:1.5px solid #e5e7eb;color:#ddd}
+.koma.k1{background:#fee2e2cc;border-color:#991b1b66;color:#991b1b}
+.koma.k2{background:#dbeafecc;border-color:#1e40af66;color:#1e40af}
+.koma.k3{background:#dcfce7cc;border-color:#16653466;color:#166534}
+.calcx{margin-top:3px;padding:1px 4px;border-radius:3px;background:#fee2e2;border:1.5px solid #fca5a5;
+  font-size:9px;font-weight:900;color:#991b1b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calmv{margin-top:2px;padding:1px 4px;border-radius:3px;background:#dc2626;
+  font-size:9px;font-weight:900;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hide{display:none}
+.note{font-size:12px;color:#7f1d1d;background:#fff1f2;border:1px solid #fecaca;border-radius:8px;
+  padding:9px 12px;line-height:1.8;margin-top:12px}
+.ok{font-size:12px;color:#14532d;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;
+  padding:9px 12px;line-height:1.8;margin-top:12px}
+</style>
+<div class="wrap">
+<h1>キャンセル・日にち変更を、スケジュールに残す（見本）</h1>
+<p class="lead">
+いまは顧客リストで「キャンセル」を押しても、<b>スケジュールの予約には一切触っていません</b>
+（確認の文にも「スケジュールに入っている予約は消えません」と出ます）。これが「どっちが正しいか分からない」の元です。<br>
+これからは <b>キャンセルした事実と、した日にちをスケジュールに残す</b> ようにします。
+下の案を押して見比べて、番号でお知らせください。<b>この見本は押しても何も保存されません。</b>
+</p>
+
+<div class="sec">
+  <h2>① キャンセル ― 1日表示の車検表（いちばん大事なところ）</h2>
+  <div class="body">
+    <div class="pick" id="p1">
+      <button class="on" data-v="a">A案　行そのものを帯にする</button>
+      <button data-v="b">B案　見出しの帯＋番号なしの行</button>
+      <button data-v="c">C案　帯の上に大きく重ねる</button>
+    </div>
+    <div class="why" id="w1"></div>
+    <table class="insp">
+      <thead><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>特典</th><th>入庫</th><th>備考</th></tr></thead>
+      <tbody id="t1"></tbody>
+    </table>
+    <div class="ok">
+      どの案でも共通：<b>キャンセルした分は「6台」の数に入りません</b>（＝台数制限にも効きません）。
+      いままで通り6台まで受けられます。並びも 1〜6番 の下へずらすので、上の表は今と同じ見え方です。
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <h2>② 日にち変更 ― 元の日に「どこへ動いたか」を残す</h2>
+  <div class="body">
+    <div class="pick" id="p2">
+      <button class="on" data-v="a">A案　移った先だけ</button>
+      <button data-v="b">B案　移った先＋変更した日</button>
+      <button data-v="c">C案　薄い赤（キャンセルと同じ濃さ）</button>
+    </div>
+    <div class="why" id="w2"></div>
+    <table class="insp">
+      <thead><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>特典</th><th>入庫</th><th>備考</th></tr></thead>
+      <tbody id="t2"></tbody>
+    </table>
+    <div class="note">
+      ★<b>移った先の日（12/20）には、ふつうの予約として今までどおり出ます。</b>
+      ここに出すのは「元の日（11/18）を見た人が、動いたことに気づけるように」するためです。
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <h2>③ 車検カレンダーのマス（6コマの下）</h2>
+  <div class="body">
+    <div class="pick" id="p3">
+      <button class="on" data-v="a">A案　小さな帯で出す</button>
+      <button data-v="b">B案　件数だけ出す</button>
+      <button data-v="c">C案　カレンダーには出さない</button>
+    </div>
+    <div class="why" id="w3"></div>
+    <div class="cal" id="t3"></div>
+    <div class="note">
+      カレンダーの日のマスは <b>3×2 の6コマ固定</b>です（現場が見慣れているので中身は変えません）。
+      キャンセルした分はもともと6コマに出ないので、<b>コマの下に帯を足すかどうか</b>だけのご判断です。
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+var LIVE=[
+ {no:1,nm:'見本　一郎',car:'ワゴンR',cs:'ク',c:'c2',ln:'アルト',tk:'②',t:'09:00',memo:''},
+ {no:2,nm:'見本　花子',car:'ハスラー',cs:'マ',c:'c1',ln:'-',tk:'①',t:'10:00',memo:'代車あり'},
+ {no:3,nm:'サンプル商事',car:'ハイエース',cs:'レ',c:'c3',ln:'スペーシア',tk:'-',t:'11:00',memo:''},
+ {no:4,nm:'見本　次郎',car:'N-BOX',cs:'ク',c:'c2',ln:'-',tk:'②',t:'13:00',memo:''},
+ {no:5,nm:'見本　三郎',car:'タント',cs:'ク',c:'c2',ln:'-',tk:'-',t:'14:00',memo:''},
+ {no:6,nm:'見本　四郎',car:'ジムニー',cs:'マ',c:'c1',ln:'ミライース',tk:'①',t:'15:30',memo:''}
+];
+var CX=[
+ {nm:'見本　五郎',car:'スイフト',cs:'ク',c:'c2',ln:'-',tk:'②',t:'10:30',on:'11/16',memo:'都合が悪くなった'},
+ {nm:'見本　六郎',car:'デイズ',cs:'レ',c:'c3',ln:'-',tk:'-',t:'16:00',on:'11/14',memo:''}
+];
+var MV={nm:'見本　七郎',car:'フィット',cs:'ク',c:'c2',ln:'アルト',tk:'②',t:'09:30',to:'12/20',on:'11/11'};
+
+function cell(v,cls){return '<td'+(cls?' class="'+cls+'"':'')+'>'+(v===''||v==null?'<span style="color:#cbd5e1">-</span>':v)+'</td>';}
+function liveRow(r){
+  return '<tr class="live"><td class="no">'+r.no+'</td>'+
+    '<td class="nm">'+r.nm+' 様</td>'+cell(r.car)+
+    '<td><span class="cs '+r.c+'">'+r.cs+'</span></td>'+cell(r.ln)+cell(r.tk)+cell(r.t)+cell(r.memo)+'</tr>';
+}
+function body(r,strike){
+  var s=strike?' class="strike"':'';
+  return '<td'+s+' style="font-weight:700">'+r.nm+' 様</td><td'+s+'>'+r.car+'</td>'+
+    '<td><span class="cs '+r.c+'">'+r.cs+'</span></td>'+cell(r.ln)+cell(r.tk)+cell(r.t)+cell(r.memo);
+}
+
+var W1={
+ a:'A案＝キャンセルした予約の行そのものを <b>薄い赤の帯</b> にして、1〜6番の下へずらします。番号の代わりに「キャンセル」と、した日にちを大きく出します。<b>1行で済む＝印刷でも場所を取りません。</b>',
+ b:'B案＝まず「キャンセル」の帯を1本出し、その下に<b>番号なしの行</b>を並べます。キャンセルが何件あっても帯は1本。<b>した日にちは行ごと</b>に出ます。',
+ c:'C案＝行いっぱいに薄い赤を敷き、氏名の上に「キャンセル 11/16」を<b>いちばん大きく重ねて</b>出します。見落としはほぼありませんが、<b>行が1段高くなります</b>。'
+};
+var W2={
+ a:'A案＝「日にち変更 → 12/20」だけを出します。いちばん短く、印刷でも場所を取りません。',
+ b:'B案＝「11/11 に 12/20 へ日にち変更」。<b>いつ動かしたか</b>も分かるので、食い違いの時にどちらが新しいか判断できます。',
+ c:'C案＝キャンセルと同じ <b>薄い赤</b> にそろえます。赤帯が強すぎると感じる場合はこちら。'
+};
+var W3={
+ a:'A案＝6コマの下に小さな帯で「✕ キャンセル 11/16」「→ 12/20 へ変更」を出します。カレンダーを見ただけで気づけます。',
+ b:'B案＝「キャンセル2件」のように件数だけ。マスが狭くならず、押せばその日の表で中身が読めます。',
+ c:'C案＝カレンダーには何も出しません（1日表示と印刷にだけ残す）。マスの見た目は今とまったく同じです。'
+};
+
+function draw1(v){
+  var h=LIVE.map(liveRow).join('');
+  if(v==='a'){
+    h+=CX.map(function(r){
+      return '<tr class="cxrow"><td class="cxno"><span class="cxbig" style="font-size:12px">✕</span></td>'+
+        '<td colspan="7" style="padding:0">'+
+          '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 8px">'+
+            '<span class="cxbig" style="font-size:16px;letter-spacing:3px">キャンセル</span>'+
+            '<span style="font-size:13px;font-weight:800;color:#b91c1c">'+r.on+' に取消</span>'+
+            '<span class="strike" style="font-weight:700">'+r.nm+' 様</span>'+
+            '<span class="strike">'+r.car+'</span>'+
+            '<span class="cs '+r.c+'">'+r.cs+'</span>'+
+            '<span style="color:#7f1d1d">'+r.t+' 入庫</span>'+
+            (r.memo?'<span style="color:#7f1d1d">'+r.memo+'</span>':'')+
+          '</div>'+
+        '</td></tr>';
+    }).join('');
+  }else if(v==='b'){
+    h+='<tr><td colspan="8" class="cxband" style="text-align:center">'+
+        '<span class="t">キャンセル</span><span class="d">'+CX.length+'件</span></td></tr>';
+    h+=CX.map(function(r){
+      return '<tr class="cxrow"><td class="cxno" style="font-size:11px;font-weight:900;color:#991b1b">'+r.on+'</td>'+body(r,true)+'</tr>';
+    }).join('');
+  }else{
+    h+=CX.map(function(r){
+      return '<tr class="cxrow"><td class="cxno"></td><td colspan="7" style="padding:0">'+
+        '<div style="padding:4px 8px">'+
+          '<div><span class="cxbig" style="font-size:19px;letter-spacing:4px">キャンセル</span>'+
+            '<span style="font-size:15px;font-weight:900;color:#b91c1c;margin-left:10px">'+r.on+'</span></div>'+
+          '<div class="strike" style="font-size:12px;color:#7f1d1d;margin-top:2px">'+
+            r.nm+' 様　'+r.car+'　'+r.t+' 入庫'+(r.memo?'　'+r.memo:'')+'</div>'+
+        '</div></td></tr>';
+    }).join('');
+  }
+  document.getElementById('t1').innerHTML=h;
+  document.getElementById('w1').innerHTML=W1[v];
+}
+function draw2(v){
+  var h=LIVE.slice(0,4).map(liveRow).join('');
+  var r=MV;
+  var txt=(v==='b')?('<span class="t">日にち変更</span><span class="d">'+r.on+' に　'+r.to+' へ</span>')
+                   :('<span class="t">日にち変更</span><span class="d">→ '+r.to+'</span>');
+  if(v==='c'){
+    h+='<tr><td colspan="8" class="cxband" style="text-align:center">'+
+       '<span class="t">日にち変更</span><span class="d">→ '+r.to+'</span></td></tr>';
+    h+='<tr class="cxrow"><td class="cxno"></td>'+body(r,true)+'</tr>';
+  }else{
+    h+='<tr><td colspan="8" class="mvband" style="text-align:center">'+txt+'</td></tr>';
+    h+='<tr class="mvrow"><td class="mvno"></td>'+body(r,true)+'</tr>';
+  }
+  document.getElementById('t2').innerHTML=h;
+  document.getElementById('w2').innerHTML=W2[v];
+}
+function draw3(v){
+  var days=[17,18,19,20];
+  var h=days.map(function(d){
+    var komas=['k2','k1','k3','k2','',''];
+    var ini={k1:'マ',k2:'ク',k3:'レ'};
+    var g=komas.map(function(k){return '<div class="koma '+(k||'')+'">'+(k?ini[k]:'')+'</div>';}).join('');
+    var extra='';
+    if(d===18){
+      if(v==='a')extra='<div class="calcx">✕ キャンセル 11/16</div><div class="calmv">→ 12/20 へ変更</div>';
+      if(v==='b')extra='<div class="calcx">キャンセル1・変更1</div>';
+    }
+    if(d===20){
+      if(v==='a')extra='<div class="calcx">✕ キャンセル 11/14</div>';
+      if(v==='b')extra='<div class="calcx">キャンセル1</div>';
+    }
+    return '<div class="cell"><div class="dnum">'+d+'</div><div class="grid6">'+g+'</div>'+extra+'</div>';
+  }).join('');
+  document.getElementById('t3').innerHTML=h;
+  document.getElementById('w3').innerHTML=W3[v];
+}
+function wire(id,fn){
+  var box=document.getElementById(id);
+  box.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    [].forEach.call(box.querySelectorAll('button'),function(x){x.classList.remove('on');});
+    b.classList.add('on'); fn(b.getAttribute('data-v'));
+  });
+}
+wire('p1',draw1);wire('p2',draw2);wire('p3',draw3);
+draw1('a');draw2('a');draw3('a');
+</script>
