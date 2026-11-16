@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794794156687';
+  window.__APP_BUILD='build-1794802849466';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.118.1';
+const MOBILE_VERSION='3.119.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1664,6 +1664,32 @@ const hubUnarchiveDay = async (dk) => {
 // ★保管箱（insp-arch）の「その日」から、削除した予約だけを外す（2026-10-04）。
 //   削除は insp にしか書かないので、14日より前の予約は画面から消えても読み直すと戻っていた。
 //   本人確認は custId → seq → 氏名＋ナンバーの順（画面の削除と同じ規約）。行は詰めずに null。
+// ╔══════════════════════════════════════════════════════════════════╗
+// ★★キャンセル／日にち変更の「帯」（v3.119.0・2026-11-16 ユーザー決定）
+//   ★index_dev.html・customers.html と【同じものを置く】こと。
+//   取り消した予約・日にちを動かした予約を【消さずに】元の日に残す。
+//   スマホの一覧は もともと cancelled を外すので帯は出ない（帯を出すのは PC の1日表示だけ）。
+//   ここで印を付けるのは【PC の画面に帯を出すため】＝スマホで取り消しても記録が残る。
+const cxToday=()=>{const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;};
+const cxIsTrace=(r)=>!!(r&&r.name&&r.bookingStatus==='cancelled'&&(r.cxAt||r.cxTo));
+const cxPatch=({dk,to,by})=>({bookingStatus:'cancelled',approved:false,pendingApproval:false,
+  cxAt:cxToday(),cxBy:by||'',cxFrom:dk||'',cxTo:to||''});
+const cxMark=(row,o)=>({...(row||{}),...cxPatch(o)});
+// 保管箱のその日の予約1件に帯の印を付ける（消さない）
+const archMarkOneBooking=(arch,dk,tgt,o)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const rows=arch[dk];
+  if(!Array.isArray(rows))return undefined;
+  const same=r=>{
+    if(!r||!r.name||r.bookingStatus==='cancelled')return false;
+    if(tgt.custId)return r.custId===tgt.custId;
+    if(tgt.seq!=null&&r.seq!=null)return r.seq===tgt.seq;
+    return r.name===tgt.name&&String(r.no||'')===String(tgt.no||'');
+  };
+  let hit=false;
+  const next=rows.map(r=>same(r)?(hit=true,cxMark(r,o)):r);
+  return hit?{...arch,[dk]:next}:undefined;
+};
 const archDropOneBooking=(arch,dk,tgt)=>{
   if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
   const rows=arch[dk];
@@ -7650,7 +7676,10 @@ const App=()=>{
         // 元の日の枠を空ける（空いた分だけ、その日の承認待ちが繰り上がる）
         if(isMove){
           const oldRows=[...(out[req.dk]||[])];
-          if(oldRows[req.idx])oldRows[req.idx]=blankInsp();
+          // ★元の日は空きに戻さず【日にち変更の帯】を残す（2026-11-16 ユーザー指示）
+          const _or=oldRows[req.idx];
+          if(_or&&_or.name&&!cxIsTrace(_or))oldRows[req.idx]=cxMark(_or,{dk:req.dk,to:tDk,by:_opName});
+          else if(_or&&!cxIsTrace(_or))oldRows[req.idx]=blankInsp();
           out[req.dk]=recomputeInspApproval(oldRows,inspLimits[req.dk]??6);
         }
         return out;
@@ -7659,7 +7688,7 @@ const App=()=>{
         const okNew=!!r&&r.name===entry.name&&r.seq===placedSeq;
         if(!isMove)return okNew;
         const oldR=(echo[req.dk]||[])[req.idx];
-        return okNew&&!(oldR&&oldR.name);   // 移り先に入って、元の枠が空いていること
+        return okNew&&!(oldR&&oldR.name&&oldR.bookingStatus!=='cancelled');   // 移り先に入って、元の枠が空いた（or 帯になった）こと
       },true);
       // ★日を動かした時のあと始末（2026-10-04）
       if(isMove){
@@ -7932,19 +7961,29 @@ const App=()=>{
     if(req.type==='insp'){
       await writeShared(STOR+'insp',hotInsp,base=>{
         const rows=((base[req.dk]||[]).map(r=>r||blankInsp()));
-        if(req.idx<rows.length)rows[req.idx]=blankInsp();
+        // ★★キャンセルは【消さずに帯の印を付ける】（2026-11-16 ユーザー指示）。
+        //   消すと「顧客リストは赤なのにスケジュールには何も無い」＝どちらが正しいか分からなくなる。
+        //   bookingStatus:'cancelled' なので台数・6コマ・承認の数え方からは自動で外れる。
+        const _cxBy=(user&&user.name)||'';
+        if(req.idx<rows.length){
+          const _r=rows[req.idx];
+          rows[req.idx]=(_r&&_r.name&&!cxIsTrace(_r))?cxMark(_r,{dk:req.dk,by:_cxBy}):blankInsp();
+        }
         while(rows.length>0&&!rows[rows.length-1]?.name)rows.pop();
         const recomputed=recomputeInspApproval(rows,inspLimits[req.dk]??6);
         return{...base,[req.dk]:recomputed.length>0?recomputed:[]};
       },setInspData,echo=>{
         const r=(echo[req.dk]||[])[req.idx];
+        // ★帯になっていれば「取り消せた」とみなす（行は残るが bookingStatus が cancelled）
+        if(r&&r.bookingStatus==='cancelled')return true;
         return !r||!r.name||(deletedSeq!=null?r.seq!==deletedSeq:r.name!==deletedName);
       },true);
       // ★保管箱（14日より前の分）にも同じ予約があれば外す（2026-10-04）。
       //   外さないと、画面から消えても読み直すと戻ってくる。
       try{
         const _a=await sGet(STOR+'insp-arch');
-        const _n=archDropOneBooking(_a,req.dk,{custId:req.initial&&req.initial.custId,seq:deletedSeq,name:deletedName,no:req.initial&&req.initial.no});
+        const _tg={custId:req.initial&&req.initial.custId,seq:deletedSeq,name:deletedName,no:req.initial&&req.initial.no};
+        const _n=archMarkOneBooking(_a,req.dk,_tg,{dk:req.dk,by:(user&&user.name)||''})||archDropOneBooking(_a,req.dk,_tg);
         if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
       }catch(e){}
       // ★★顧客リストにも「この予約は消えました」と知らせる（2026-11-07）。

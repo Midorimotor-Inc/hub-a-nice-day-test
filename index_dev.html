@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794794156687';
+    window.__APP_BUILD='build-1794802849466';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.118.1';
+const APP_VERSION = '3.119.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2623,6 +2623,23 @@ const isDateChanged = (origDk, targetDk) => !!(origDk && targetDk && String(orig
 //   枠外でも本店が手動承認(approved)した行だけは確定維持（承認済みバッジ）。
 // seq の無い旧データは配列インデックス順（＝従来の並び）にフォールバックするので、
 // 既存予約の並び・確定状態は変わらない。表示順(店舗優先・入庫時間)とは独立。
+// ╔══════════════════════════════════════════════════════════════════╗
+// ★★キャンセル／日にち変更の「帯」（v3.119.0・2026-11-16 ユーザー決定）
+//   見本：mock_cancel_band.html（①A案）／mock_move_band.html（②ウ案）
+//   ねらい：顧客リストとスケジュールの【どちらが正しいか分からない】のを防ぐ。
+//   取り消した予約・日にちを動かした予約を【消さずに】元の日に帯で残す。
+//   ★台数ロジック（BLOCK-C）には一切触らない。帯の行は bookingStatus:'cancelled' なので
+//     6コマ・台数カウント・承認の数え方からもともと外れる＝それを流用しただけ。
+//   ★cxTo があれば「日にち変更」（濃い赤・白ぬき）、無ければ「キャンセル」（薄い赤）。
+//   ★帯の行は 1〜6番の【下】に番号なしで並ぶ（見た目は CxBand）。
+const cxToday=()=>{const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;};
+const cxMD=(dk)=>{const p=String(dk||'').split('-');return (p.length===3&&p[1])?`${Number(p[1])}/${Number(p[2])}`:String(dk||'');};
+//   帯の行かどうか。★ふつうの『キャンセル』行（昔のデータ）と見分けるため cxAt/cxTo を見る。
+const cxIsTrace=(r)=>!!(r&&r.name&&r.bookingStatus==='cancelled'&&(r.cxAt||r.cxTo));
+//   予約の行に当てる印。dk=その帯が出る日／to=移った日（日にち変更の時だけ）／by=操作した人
+const cxPatch=({dk,to,by})=>({bookingStatus:'cancelled',approved:false,pendingApproval:false,
+  cxAt:cxToday(),cxBy:by||'',cxFrom:dk||'',cxTo:to||''});
+const cxMark=(row,o)=>({...(row||{}),...cxPatch(o)});
 const recomputeInspApproval = (rows, limit) => {
   const lim = (limit!=null) ? limit : 6;
   const out = rows.map(r => (r ? {...r} : r));
@@ -2903,7 +2920,11 @@ const buildInspSave = (base, p)=>{
   const result={...data,[p.targetDk]:rows};
   if(p.origDk&&p.origDk!==p.targetDk&&data[p.origDk]){
     let oldRows=[...(data[p.origDk]||[])];
-    if(oldRows[p.modalIdx])oldRows[p.modalIdx]=blankInsp();
+    // ★日にち変更＝元の日は空きに戻さず【日にち変更の帯】を残す（2026-11-16 ユーザー指示）。
+    //   bookingStatus:'cancelled' なので 6コマ・台数カウントからは自動で外れる。
+    const _oldRow=oldRows[p.modalIdx];
+    if(_oldRow&&_oldRow.name&&!cxIsTrace(_oldRow))oldRows[p.modalIdx]=cxMark(_oldRow,{dk:p.origDk,to:p.targetDk,by:p.cxBy});
+    else if(_oldRow&&!cxIsTrace(_oldRow))oldRows[p.modalIdx]=blankInsp();
     // 日付変更で空いた旧日の枠も再計算（空いた分だけ承認待ちを昇格）
     oldRows=recomputeInspApproval(oldRows,p.limits[p.origDk]??6);
     result[p.origDk]=oldRows;
@@ -3005,6 +3026,21 @@ const archDropOneBooking=(arch,dk,tgt)=>{
   };
   let hit=false;
   const next=rows.map(r=>same(r)?(hit=true,null):r);
+  return hit?{...arch,[dk]:next}:undefined;
+};
+// 保管箱のその日の予約1件に【帯の印】を付ける（消さない）。見つからなければ undefined。
+const archMarkOneBooking=(arch,dk,tgt,o)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const rows=arch[dk];
+  if(!Array.isArray(rows))return undefined;
+  const same=r=>{
+    if(!r||!r.name||r.bookingStatus==='cancelled')return false;
+    if(tgt.custId)return r.custId===tgt.custId;
+    if(tgt.seq!=null&&r.seq!=null)return r.seq===tgt.seq;
+    return r.name===tgt.name&&String(r.no||'')===String(tgt.no||'');
+  };
+  let hit=false;
+  const next=rows.map(r=>same(r)?(hit=true,cxMark(r,o)):r);
   return hit?{...arch,[dk]:next}:undefined;
 };
 const archDropSameBooking=(arch,custId,keepDk)=>{
@@ -11040,7 +11076,9 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
             <div style={{display:'flex',gap:8}}>
               {canDelete&&(
                 <button onClick={handleDelete} style={{flex:1,padding:'10px 0',background:'#fee2e2',color:'#dc2626',border:'2px solid #fca5a5',borderRadius:8,fontWeight:700,cursor:'pointer',fontSize:12}}>
-                  🗑 削除
+                  {/* ★車検は【消えずにキャンセルの帯になる】ので字も「予約キャンセル」にする（2026-11-16）。
+                      整備は今までどおり消えるので「削除」のまま。 */}
+                  {isInsp?'🗑 予約を取り消す':'🗑 削除'}
                 </button>
               )}
               <button onClick={onClose} style={{flex:1,padding:'10px 0',background:'#f3f4f6',border:'none',borderRadius:8,fontWeight:600,cursor:'pointer',color:'#374151',fontSize:12}}>キャンセル</button>
@@ -11215,6 +11253,58 @@ const MeigiBang=({row,done,dim})=>{
       width:MEIGI_SZ,height:MEIGI_SZ,borderRadius:'50%',background:done?MEIGI_OK:CALBANG_YEL,color:'#000',
       fontSize:Math.round(MEIGI_SZ*0.7),fontWeight:900,lineHeight:1,
       boxShadow:'0 1px 3px rgba(0,0,0,.35)',cursor:'help',opacity:dim?0.45:1}}>！</span>;
+};
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ★★キャンセル／日にち変更の帯（1行）― CxBand（v3.119.0・2026-11-16 ユーザー決定）
+//   ① キャンセル＝A案（薄い赤・1行）。「キャンセル」＋取り消した日＋担当者＋お名前など
+//      （お名前と車種に取り消し線）
+//   ② 日にち変更＝ウ案（濃い赤に白ぬき・1行）。「日にち変更」＋【元の日 → 移った日】＋担当者
+//   ③ 車検カレンダーのマスには出さない（1日表示だけ）
+//   ★番号は付けない。1〜6番の【下】に並ぶ。
+//   ★BLOCK-C（InspRow）は使わない＝台数・並び・承認の決まりには触らない。
+//   ★行の高さは ふつうの行とほぼ同じ（1行型）＝【印刷の「1日が1枚」は崩れない】。
+const CX_BG='#fee2e2';       // キャンセルの帯（薄い赤）
+const CX_MV_BG='#dc2626';    // 日にち変更の帯（濃い赤・白ぬき）
+const CxBand=({row,dk,onOpen,onDrop})=>{
+  const mv=!!row.cxTo;
+  const bg=mv?CX_MV_BG:CX_BG;
+  const big=mv?{color:'white'}:{color:'#991b1b'};
+  const sub=mv?{color:'#fee2e2'}:{color:'#7f1d1d'};
+  const strike={textDecoration:'line-through',textDecorationColor:mv?'#fecaca':'#dc2626'};
+  const c=COURSES.find(x=>x.id===Number(row.course));
+  const when=row.cxAt?cxMD(row.cxAt):'';
+  const btn={padding:'2px 8px',borderRadius:7,fontSize:10.5,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap',
+    border:mv?'1.5px solid rgba(255,255,255,.75)':'1.5px solid #b91c1c',
+    background:mv?'rgba(255,255,255,.14)':'white',color:mv?'white':'#991b1b'};
+  return (
+    <tr data-cxband={mv?'move':'cancel'}>
+      <td style={{textAlign:'center',padding:'6px 4px',background:bg,fontWeight:900,fontSize:12,
+        borderLeft:`3px solid ${mv?'#7f1d1d':'#dc2626'}`,borderBottom:'1px solid #eef2f6',...big}}>{mv?'⇄':'✕'}</td>
+      <td colSpan={7} style={{padding:0,background:bg,borderBottom:'1px solid #eef2f6'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'5px 8px'}}>
+          <span data-cxtitle="1" style={{fontSize:16,fontWeight:900,letterSpacing:3,...big}}>{mv?'日にち変更':'キャンセル'}</span>
+          {mv
+            ?<span data-cxdate="1" style={{fontSize:14,fontWeight:900,...big}}>{cxMD(row.cxFrom||dk)} → {cxMD(row.cxTo)}</span>
+            :<span data-cxdate="1" style={{fontSize:13,fontWeight:800,color:'#b91c1c'}}>{when?`${when} に取消`:'取消'}</span>}
+          {(row.cxBy||(mv&&when))&&(
+            <span data-cxby="1" style={{fontSize:12,fontWeight:800,...sub}}>
+              {mv?`${when?when+' 変更':''}${row.cxBy?(when?'・':'')+row.cxBy:''}`:`（${row.cxBy}）`}</span>)}
+          <span data-cxnm="1" style={{fontWeight:700,...sub,...strike}}>{sama(shortenCorpName(row.name))}</span>
+          {row.carType&&<span style={{...sub,...strike}}>{row.carType}</span>}
+          {c&&<span style={{display:'inline-block',padding:'1px 7px',borderRadius:4,fontWeight:800,fontSize:11,
+            background:c.bg,color:c.color}}>{c.initial}</span>}
+          {row.time&&<span style={{...sub}}>{specialSlotLabel(row.time)} 入庫</span>}
+          {row.note&&<span style={{...sub,fontSize:11.5}}>{row.note}</span>}
+          <span style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+            {onOpen&&<button data-cxopen="1" title="この予約の中身を見る" style={btn}
+              onClick={e=>{e.stopPropagation();onOpen();}}>🗒 中身</button>}
+            {onDrop&&<button data-cxdrop="1" title="この記録そのものを消す（入力し間違えた時）" style={btn}
+              onClick={e=>{e.stopPropagation();onDrop();}}>🗑 記録を消す</button>}
+          </span>
+        </div>
+      </td>
+    </tr>);
 };
 
 // ║  BLOCK-C: コアロジック・行表示                                  ║
@@ -15768,8 +15858,13 @@ function AppInner() {
     const otherRows = inspRows.filter(r=>r&&r.name&&normSt(r.store)&&normSt(r.store)!==vsId);
     const noStoreRows = inspRows.filter(r=>r&&r.name&&!normSt(r.store));
     const sortedInsp = [...myRows, ...noStoreRows, ...otherRows];
+    // ★キャンセル／日にち変更の帯は【生きている予約と分けて】いちばん下に刷る（2026-11-16 ユーザー指示）。
+    //   1行型なので行は増えても1本ずつ。詰めて刷る判定（dense）には帯も数えて
+    //   【1日が1枚に収まる】を守る。
+    const liveInsp = sortedInsp.filter(r=>!cxIsTrace(r));
+    const cxInsp   = sortedInsp.filter(cxIsTrace);
 
-    const inspDense = sortedInsp.length>=7;   // 7台以上の日は詰めて刷る（字 13px → 11px）
+    const inspDense = (liveInsp.length+cxInsp.length)>=7;   // 7行以上の日は詰めて刷る（字 13px → 11px）
     const courseLabel = id => {const c=COURSES.find(c=>c.id===Number(id));return c?c.name:'';};
     const courseBadge = id => {const c=COURSES.find(c=>c.id===Number(id));if(!c)return '';return c.id===1?`<span class="course-badge course-ma">${c.initial}</span>`:`<span class="course-badge course-other" style="color:${c.color}">${c.initial}</span>`;};
     // 代車表記：車種名（番号）。文字量で段階縮小（fitクラスは各表の文字サイズにem追従）
@@ -15963,6 +16058,16 @@ function AppInner() {
   .insp-table th.insp-time { text-align: center; padding-left: 2px; padding-right: 2px; }
   /* 入庫制限の枠（2026-11-02 ユーザー要望：紙にも出す）。画面の1日表示と同じ ベタの薄い赤 */
   .sched-table tr.slot-restr td { background: #fee2e2; }
+  /* ★キャンセル／日にち変更の帯（1行）。生きている予約の下に刷る */
+  .insp-table tr.cx-cx td { background: #fee2e2; color:#7f1d1d; }
+  .insp-table tr.cx-mv td { background: #dc2626; color:#ffffff; }
+  .cx-big { font-weight:900; letter-spacing:2px; margin-right:8px; }
+  .cx-dt  { font-weight:900; margin-right:8px; }
+  .cx-nm  { font-weight:700; text-decoration:line-through; margin-right:8px; }
+  .cx-sub { font-weight:600; }
+  @media print and (monochrome){
+    .insp-table tr.cx-cx td, .insp-table tr.cx-mv td { background:#ffffff; color:#000 !important; border-top:2px solid #000; }
+  }
   .restr-lab { font-weight: 800; color: #b91c1c; white-space: normal; font-size: 11px; }
   @media print and (monochrome){ .sched-table tr.slot-restr td { background: #e5e5e5; } .restr-lab { color: #000 !important; } }
   /* 車検コース：一文字を〇バッジで（マ＝赤丸白字／他は丸枠のみ） */
@@ -16042,7 +16147,7 @@ function AppInner() {
     </div>
 
     <div class="section-box">
-      <h2 class="insp-head">🚗 車検（${sortedInsp.length}台）</h2>
+      <h2 class="insp-head">🚗 車検（${liveInsp.length}台）${cxInsp.length>0?`<span style="font-size:10px;font-weight:700;color:#991b1b;margin-left:6px">＋ 取消・日にち変更 ${cxInsp.length}件</span>`:''}</h2>
       <table class="insp-table${inspDense?' dense':''}">
         <thead><tr class="insp-head">
           <th style="width:20px">No</th>
@@ -16055,8 +16160,8 @@ function AppInner() {
           <th>備考</th>
         </tr></thead>
         <tbody>
-          ${sortedInsp.length===0?'<tr><td colspan="8" style="text-align:center;color:#64748b;padding:8px">予約なし</td></tr>':
-            sortedInsp.map((r,i)=>{
+          ${(liveInsp.length===0&&cxInsp.length===0)?'<tr><td colspan="8" style="text-align:center;color:#64748b;padding:8px">予約なし</td></tr>':
+            liveInsp.map((r,i)=>{
               const isOther = normSt(r.store)&&normSt(r.store)!==vsId;
               const storeTag = normSt(r.store)==='honten'?'本':normSt(r.store)==='sanda'?'三':'';
               const loaner = getLoanerLabel(r.name, `insp-${dk}-${r._idx}`);
@@ -16070,6 +16175,19 @@ function AppInner() {
                 <td class="loaner-wrap">${loaner}</td>
                 <td style="text-align:center">${r.tokuten||'-'}</td>
                 <td>${r.note||''}</td>
+              </tr>`;
+            }).join('')+cxInsp.map(r=>{
+              const mv=!!r.cxTo;
+              const when=r.cxAt?cxMD(r.cxAt):'';
+              const dt=mv?`${cxMD(r.cxFrom||dk)} → ${cxMD(r.cxTo)}`:(when?`${when} に取消`:'取消');
+              const by=r.cxBy?`（${r.cxBy}）`:'';
+              return `<tr class="${mv?'cx-mv':'cx-cx'}">
+                <td style="text-align:center;font-weight:900">${mv?'⇄':'✕'}</td>
+                <td colspan="7"><span class="cx-big">${mv?'日にち変更':'キャンセル'}</span>
+                  <span class="cx-dt">${dt}${by}</span>
+                  <span class="cx-nm">${r.name||''}</span>
+                  <span class="cx-sub">${r.carType||''}${r.time?'　'+printInspTime(r.time)+' 入庫':''}${r.note?'　'+r.note:''}</span>
+                </td>
               </tr>`;
             }).join('')
           }
@@ -16230,7 +16348,7 @@ function AppInner() {
     const keys={};const add=dk=>{if(dk&&dkNum(dk)>=fromN)keys[dk]=1;};
     add(madeDk);
     // ★車検は【両店あわせて】出すので、他店にしか予約が無い日も1枚つくる（2026-11-04 ユーザー指示）
-    Object.keys(inspData||{}).forEach(dk=>{if((inspData[dk]||[]).some(r=>r&&r.name))add(dk);});
+    Object.keys(inspData||{}).forEach(dk=>{if((inspData[dk]||[]).some(r=>r&&r.name&&r.bookingStatus!=='cancelled'))add(dk);});
     Object.keys(sched||{}).forEach(dk=>{if(Object.values(sched[dk]||{}).some(r=>r&&r.name))add(dk);});
     Object.keys(memo||{}).forEach(dk=>{if((memo[dk]||[]).some(m=>m&&m.content))add(dk);});
     Object.keys(dayoff).forEach(add);Object.keys(pleave).forEach(add);Object.keys(training).forEach(add);
@@ -16262,7 +16380,7 @@ function AppInner() {
         course:[cName(r.course),partsTextMark(r)].filter(Boolean).join("　"),
         noChi:r.noChi||"",noBun:r.noBun||"",noKana:r.noKana||"",   // ★フルナンバーを出すのに要る（plateFull）
         phone:r.phone||"",loaner:r.loaner||r.rentalLabel||"",staff:r.staff||"",note:r.note||"",other:!!other});
-      const inspAll=(inspData[dk]||[]).filter(r=>r&&r.name);
+      const inspAll=(inspData[dk]||[]).filter(r=>r&&r.name&&r.bookingStatus!=='cancelled');  // ★帯（取消・日にち変更）は出さない
       const inspMine =inspAll.filter(r=>(r.store||"honten")===sid).map(r=>inspRow(r,false));
       const inspOther=inspAll.filter(r=>(r.store||"honten")!==sid).map(r=>inspRow(r,true));
       const insp=inspMine.concat(inspOther);
@@ -16953,6 +17071,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
           row:{...cleanWithStore},
           limits:inspLimits,
           seq:Date.now(),
+          cxBy:(currentUser&&currentUser.name)||'',   // ★日にち変更の帯に出す『変更した人』
         };
         let _pendingNow=false;
         updateLocalInspData(prev=>{
@@ -17255,6 +17374,29 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     setFromCustList(false);setCustModalMeta(null);
   },[modalType,modalDk,modalIdx,modalSlot,vsId,curLockKey,releaseLock,setInspData,updateLocalInspData,setSchedData,schedData,schedDataH,schedDataS,setSchedDataH,setSchedDataS,persistLres,selDate,schedRestrictions,setModalOpen,inspLimits,pendingRentalId,pendingRentalRec,pendingLoanerId,pendingLoanerData,pendLoanerDrop,pendRentalDrop,persistRres,persistLresOf,pendingLoanerDeleteBk,dynRentalCars,fromCustList,custModalMeta,setCustBookings,setCustFiles,inspData]);
 
+  // ★帯（キャンセル／日にち変更の記録）そのものを消す。入力し間違えた時だけ使う。
+  //   ★顧客リストには何も知らせない（リスト側の帯の色は現場が ✎ 編集で直す）。
+  const handleDropCxBand=useCallback((dk,idx,row)=>{
+    const what=row.cxTo?'日にち変更':'キャンセル';
+    if(!window.confirm(`${cxMD(dk)} の「${what}」の記録（${row.name}）を消しますか？`+String.fromCharCode(10)+'この行は表から消えます（予約は作り直されません）。'))return;
+    const same=r=>cxIsTrace(r)&&r.name===row.name&&String(r.cxAt||'')===String(row.cxAt||'')&&String(r.cxTo||'')===String(row.cxTo||'');
+    persistInsp(
+      base=>{
+        const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
+        if(!Array.isArray(data[dk]))return base;   // その日が insp に無い＝保管箱の分。触らない
+        const rows=data[dk].map(r=>r||blankInsp());
+        const j=(rows[idx]&&same(rows[idx]))?idx:rows.findIndex(same);
+        if(j<0)return base;
+        rows[j]=blankInsp();
+        while(rows.length>0&&!(rows[rows.length-1]&&rows[rows.length-1].name))rows.pop();
+        data[dk]=rows;
+        return data;
+      },
+      back=>!(((back&&back[dk])||[]).some(same)),
+      {name:row.name,verb:'記録の削除',dk}
+    );
+  },[persistInsp]);
+
   const handleDeleteModal=useCallback(()=>{
     // bookingKeyを特定してloanerRes・rentalResも連動削除
     console.log('handleDeleteModal called', {modalType, modalDk, modalIdx, modalSlot});
@@ -17276,17 +17418,25 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         ?(inspData[modalDk]||[]).filter((r,i)=>i!==modalIdx&&r&&r.bookingStatus!=='cancelled'&&r.name===cancelName&&String(r.no||'')===String(cancelNo||'')).length
         :0;
       const _delTgt={custId:cancelCustId,seq:cancelSeq,name:cancelName,no:cancelNo,idx:modalIdx,others:_delOthers,limit:inspLimits[modalDk]??6};
+      // ★★キャンセルは【消さずに帯の印を付ける】（2026-11-16 ユーザー指示）。
+      //   消してしまうと「顧客リストは赤なのにスケジュールには何も無い」＝どちらが正しいか分からなくなる。
+      //   bookingStatus:'cancelled' なので 6コマ・台数カウント・承認の数え方からは自動で外れる
+      //   ＝台数ロジック（BLOCK-C）には一切触っていない。
+      //   氏名が無い行（空の枠を押しただけ）は今までどおり空きに戻す。
+      const _cxBy=(currentUser&&currentUser.name)||'';
       persistInsp(
-        base=>removeInspBooking(base,modalDk,_delTgt),
+        base=>(cancelledRow&&cancelledRow.name)
+          ?patchInspBooking(base,modalDk,_delTgt,cxPatch({dk:modalDk,by:_cxBy}))
+          :removeInspBooking(base,modalDk,_delTgt),
         back=>!inspBookingPresent(back,modalDk,_delTgt),
-        {name:cancelName,verb:'削除',dk:modalDk}
+        {name:cancelName,verb:'キャンセル',dk:modalDk}
       );
       // ★保管箱（14日より前の分）にある予約も外す（2026-10-04）。
       //   ここを外さないと、画面から消えても読み直すと戻ってくる。
       (async()=>{
         try{
           const _a=await sGet(STOR+'insp-arch');
-          const _n=archDropOneBooking(_a,modalDk,_delTgt);
+          const _n=archMarkOneBooking(_a,modalDk,_delTgt,{dk:modalDk,by:_cxBy})||archDropOneBooking(_a,modalDk,_delTgt);
           if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
         }catch(e){}
       })();
@@ -19155,7 +19305,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 };
 
                 // 自店舗の車検を枠別にカウント（承認済みのみ）（9:00〜9:29 → 9時枠、9:30〜9:59 → 9:30枠）
-                const myInsps=(inspData[dk]||[]).filter(r=>r?.name&&!r.pendingApproval&&(r.store===vsId||(r.store==null&&vsId==='honten')));
+                //   ★帯（キャンセル／日にち変更）は数えない（2026-11-16）
+                const myInsps=(inspData[dk]||[]).filter(r=>r?.name&&!r.pendingApproval&&r.bookingStatus!=='cancelled'&&(r.store===vsId||(r.store==null&&vsId==='honten')));
                 const insp900=myInsps.filter(r=>{const m=toMin(r.time);return m!=null&&m>=9*60&&m<9*60+30;}).length;
                 const insp930=myInsps.filter(r=>{const m=toMin(r.time);return m!=null&&m>=9*60+30&&m<10*60;}).length;
 
@@ -19289,7 +19440,9 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
 
                         // 追加行のインデックス
                         const usedIdxs=new Set(validRows.map(r=>r._origIdx));
-                        const recycledIdx=allRows.findIndex((r,i)=>!usedIdxs.has(i)&&(!r||!r.name||r.bookingStatus==='cancelled'));
+                        // ★帯の行（キャンセル／日にち変更の記録）は空きとして使い回さない。
+                        //   使い回すと、新しい予約がその行を上書きして記録が消える（2026-11-16）。
+                        const recycledIdx=allRows.findIndex((r,i)=>!usedIdxs.has(i)&&!cxIsTrace(r)&&(!r||!r.name||r.bookingStatus==='cancelled'));
                         const addIdx=recycledIdx>=0?recycledIdx:allRows.length;
 
                         const rows=[];
@@ -19323,6 +19476,16 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                             <InspRow key={`waiting-${origIdx}-${pi}`} row={applyArrivedOv(dk,displayRow,origIdx)} idx={origIdx} dispNo={normalRows.length+pi+1} dk={dk} onOpenModal={handleOpenModal} lockInfo={getInspLock(dk,origIdx)} loanerRes={loanerRes} loanerResH={loanerResH} loanerResS={loanerResS} vsId={vsId} onApprove={handleApprove} onToggleArrived={toggleInspArrived} onToggleParts={toggleInspParts} isOverLimit={false} setItems={inspItems} meigiDone={meigiDoneOf(dk,displayRow,origIdx)}/>
                           );
                         });
+                        // ③-2 キャンセル／日にち変更の帯（2026-11-16 ユーザー指示）。
+                        //   1〜6番の【下】に番号なしで並ぶ。取り消した日が新しいものを先に。
+                        allMapped.filter(cxIsTrace)
+                          .sort((a,b)=>String(b.cxAt||'').localeCompare(String(a.cxAt||'')))
+                          .forEach(row=>{
+                            const origIdx=row._origIdx;
+                            const {_origIdx,...cleanRow}=row;
+                            rows.push(<CxBand key={`cx-${origIdx}`} row={cleanRow} dk={dk}
+                              onDrop={()=>handleDropCxBand(dk,origIdx,cleanRow)}/>);
+                          });
                         // ④ 追加行（isNew=trueで開く）。台数制限を掛けた日で上限に達していたら「予約不可」
                         const addDispNo=normalRows.length+waitingRows.length+1;
                         const _limitFull=(inspLimits[dk]!=null&&validRows.length>=dayInspLimit)?dayInspLimit:null;

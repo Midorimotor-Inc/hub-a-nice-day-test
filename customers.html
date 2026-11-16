@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794794156687';
+  window.__APP_BUILD='build-1794802849466';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -170,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.118.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.119.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -614,6 +614,35 @@ const archDropSameBooking=(arch,custId,keepDk)=>{
 //       最後に自分の行を足し直す。こちらは足さないので詰めてはいけない。
 //   ・キャンセルの行（bookingStatus==='cancelled'）は触らない＝履歴として残す。
 //   ・照合は custId と「同じ車（氏名＋ナンバー＋車種）」の両方（取り込み直しで custId が変わるため）。
+// ╔══════════════════════════════════════════════════════════════════╗
+// ★★キャンセル／日にち変更の「帯」（v3.119.0・2026-11-16 ユーザー決定）
+//   ★index_dev.html と【同じものを置く】こと（cxToday/cxMD/cxIsTrace/cxPatch/cxMark）。
+//   取り消した予約・日にちを動かした予約を【消さずに】元の日に帯で残す。
+//   bookingStatus:'cancelled' なので 6コマ・台数カウント・承認の数え方からは自動で外れる。
+const cxToday=()=>{const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;};
+const cxMD=(dk)=>{const p=String(dk||'').split('-');return (p.length===3&&p[1])?`${Number(p[1])}/${Number(p[2])}`:String(dk||'');};
+const cxIsTrace=(r)=>!!(r&&r.name&&r.bookingStatus==='cancelled'&&(r.cxAt||r.cxTo));
+const cxPatch=({dk,to,by})=>({bookingStatus:'cancelled',approved:false,pendingApproval:false,
+  cxAt:cxToday(),cxBy:by||'',cxFrom:dk||'',cxTo:to||''});
+const cxMark=(row,o)=>({...(row||{}),...cxPatch(o)});
+// ★【リストでキャンセルにした】時に、スケジュールの予約を帯に変える純関数（2026-11-16 ユーザー指示）。
+//   それまでリストのキャンセルは insp に一切触らず、「リストは赤・スケジュールは本予約」のまま
+//   食い違っていた＝『どっちが正しいか分からない』の元。
+//   ・行は詰めずにその場で印を付ける＝後ろの行の bookingKey（代車の紐付け）を壊さない。
+//   ・すでに帯になっている行には触らない。
+const markBookingRows=(base,customer,inspLimits,by)=>{
+  if(!base||typeof base!=='object'||Array.isArray(base))return undefined;
+  const sameBooking=r=>!!r&&r.name&&r.bookingStatus!=='cancelled'&&(
+    (!!customer.custId&&r.custId===customer.custId)||isSameVehicleRow(r,customer));
+  const out={};let hit=false;
+  Object.keys(base).forEach(d=>{
+    const rows=base[d];
+    if(!Array.isArray(rows)||!rows.some(sameBooking)){out[d]=rows;return;}
+    hit=true;
+    out[d]=recomputeInspApproval(rows.map(r=>sameBooking(r)?cxMark(r,{dk:d,by}):r),(inspLimits&&inspLimits[d])??6);
+  });
+  return hit?out:undefined;
+};
 const dropBookingRows=(base,customer,inspLimits)=>{
   if(!base||typeof base!=='object'||Array.isArray(base))return undefined;
   const sameBooking=r=>!!r&&r.name&&r.bookingStatus!=='cancelled'&&(
@@ -628,7 +657,7 @@ const dropBookingRows=(base,customer,inspLimits)=>{
   });
   return hit?{data:out,spots}:undefined;
 };
-const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})=>{
+const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson,cxBy})=>{
   const data=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};
   const recalc=new Set();
   let oldRow=null,oldDk=null;
@@ -642,8 +671,20 @@ const applyBookingToInsp=(base,{customer,dkFormatted,row,inspLimits,movePerson})
       (movePerson&&r.bookingStatus!=='cancelled'&&isSameVehicleRow(r,customer)));
     const hit=data[d].find(r=>sameBooking(r)&&r.bookingStatus!=='cancelled');
     if(hit){oldRow=hit;oldDk=d;}
-    data[d]=data[d].filter(r=>!sameBooking(r)); // 入庫日変更に対応（旧行を除去）
-    if(data[d].length!==before)recalc.add(d);
+    if(d!==dkFormatted){
+      // ★日にち変更＝元の日は消さずに【日にち変更の帯】を残す（2026-11-16 ユーザー指示）。
+      //   行は詰めない＝後ろの行の bookingKey（代車の紐付け）を壊さない。
+      //   すでに帯になっている行はそのまま（取り消しの履歴を消さない）。
+      data[d]=data[d].map(r=>{
+        if(!sameBooking(r)||cxIsTrace(r))return r;
+        if(r.bookingStatus==='cancelled')return null;   // 昔のキャンセル行（印なし）は今までどおり外す
+        return cxMark(r,{dk:d,to:dkFormatted,by:cxBy});
+      });
+    }else{
+      // 同じ日への保存し直しは、この後で行を足し直すので古い行を外す（帯は残す）
+      data[d]=data[d].filter(r=>!sameBooking(r)||cxIsTrace(r));
+    }
+    if(hit||data[d].length!==before)recalc.add(d);
   }
   const sameDay=!!(oldRow&&oldDk===dkFormatted);
   // 同じ日への再保存は予約順(seq)と手動承認(approved)を引き継ぐ。日付変更は移動先の最後尾＝新seq
@@ -3160,7 +3201,7 @@ const BandEditModal=({customer,onApply,onSaveNote,onOpenCancelCard,onClose})=>{
                 </div>)}
               {(ask.to==='cancel'||ask.revert)&&hasBooking&&(
                 <div style={{fontSize:11.5,fontWeight:700,color:'#7f1d1d'}}>
-                  ※ スケジュールに入っている予約は消えません（必要ならスケジュール側で消してください）。
+                  ※ スケジュールの予約は「キャンセル」の帯になって元の日に残ります（番号なし・薄い赤）。
                 </div>)}
             </div>
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',padding:'0 14px 14px'}}>
@@ -3626,6 +3667,9 @@ const App=()=>{
   // 帯の色を変える。★書くのは【顧客リストの行だけ】＝スケジュール(insp)にも代車にも触らない。
   //   黄（初回車検）は備考に「初回車検」を入れる。緑・青はこのあと予約カードが開くので、
   //   入庫日・コース・代車はそちらで入れて保存する。
+  // ★cancelOnSchedule は inspLimits より後ろで作る（前に置くと『初期化前に使えない』で真っ白）。
+  //   applyBand からは この入れ物（ref）越しに呼ぶ。
+  const cxSchedRef=useRef(null);
   const applyBand=useCallback((customer,status,note)=>{
     let n=String(note==null?'':note);
     if(status==='new_car'&&n.indexOf('初回車検')<0)n=(n?n+'　':'')+'初回車検';
@@ -3641,6 +3685,8 @@ const App=()=>{
       return{...f,customers:custs};
     }));
     setBandEdit(null);
+    // ★キャンセルにしたら、スケジュール側の予約も帯に変える（2026-11-16）
+    if(status==='cancel'&&cxSchedRef.current)cxSchedRef.current(customer);
     if(status==='temp'||status==='confirm')openBookingModal(updated);
   },[openBookingModal,cfSaveRowFields0]);
   // 色は変えずに備考だけ保存する
@@ -3663,6 +3709,36 @@ const App=()=>{
   const [closedDatesS,setClosedDatesS]=useState([]);
   const [overrideOpen,setOverrideOpen]=useState([]);
   const [inspLimits,setInspLimits]=useState({});
+  // ★★【リスト → スケジュール】キャンセルにしたら、スケジュールの予約を帯に変える
+  //   （2026-11-16 ユーザー指示「キャンセルの場合はリスト側で赤にキャンセルになって…」の裏返し）。
+  //   それまでリストのキャンセルは insp に一切触らず、スケジュールには本予約が残ったままだった。
+  //   ・予約そのものは消さない＝帯（薄い赤・番号なし）になって元の日に残る
+  //   ・代車の貸出・custbk には触らない（必要なら今までどおりスケジュール側で外す）
+  const cancelOnSchedule=useCallback(async(customer)=>{
+    const by=(currentUser&&currentUser.name)||'';
+    const here=[hotInsp,inspArch].some(src=>Object.keys(src||{}).some(d=>
+      Array.isArray(src[d])&&src[d].some(r=>!!r&&r.name&&r.bookingStatus!=='cancelled'&&(
+        (!!customer.custId&&r.custId===customer.custId)||isSameVehicleRow(r,customer)))));
+    if(!here)return;   // スケジュールにその予約が無い（仮予約だけ）＝何もしない
+    let _marked=null;
+    try{
+      await writeVerified(STOR+'insp',
+        base=>{const n=markBookingRows(base,customer,inspLimits,by);if(!n)return undefined;_marked=n;return n;},
+        back=>!markBookingRows(back,customer,inspLimits,by),
+        3,{requireBase:true}   // 読めなかったサーバー値を「空」とみなして書かない
+      );
+      if(_marked){setInspData(_marked);inspWriteRef.current=Date.now();}
+    }catch(e){console.error('[CX] スケジュールの帯を付けられませんでした',e);}
+    // 保管箱（14日より前の分）も同じように印を付ける
+    try{
+      const _a=await sGet(STOR+'insp-arch');
+      const _n=markBookingRows(_a,customer,inspLimits,by);
+      if(_n){await sSet(STOR+'insp-arch',_n);setInspArch(_n);}
+    }catch(e){}
+    try{ if(IS_EMBED)window.parent.postMessage({type:'hub-reload-main'},location.origin); }catch(_e){}
+  },[hotInsp,inspArch,inspLimits,currentUser]);
+  useEffect(()=>{cxSchedRef.current=cancelOnSchedule;},[cancelOnSchedule]);
+
   const [syncDialog,setSyncDialog]=useState(null);
   const [syncing,setSyncing]=useState(false);
   const fileInputRef=useRef();
@@ -4469,7 +4545,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         await hubUnarchiveDay(dkFormatted);
         const inspOk=await writeVerified(STOR+'insp',
           base=>{
-            const r=applyBookingToInsp(base,{customer,dkFormatted,row:rowBase,inspLimits,movePerson});
+            const r=applyBookingToInsp(base,{customer,dkFormatted,row:rowBase,inspLimits,movePerson,cxBy:(currentUser&&currentUser.name)||''});
             bKey=r.bKey;localInsp=r.data;
             return r.data;
           },

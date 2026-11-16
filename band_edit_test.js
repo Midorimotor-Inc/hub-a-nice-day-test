@@ -203,8 +203,10 @@ const openState = page => page.evaluate(() => ({
   o = await openState(page);
   t('★確認のポップが出た', o.ask, o);
   t('★文面が「本予約 → キャンセル に変更しますか？」', o.askTxt.indexOf('本予約') >= 0 && o.askTxt.indexOf('キャンセル に変更') >= 0, o.askTxt);
-  t('★予約が入っているので「スケジュールの予約は消えません」と出る',
-    (await page.evaluate(() => (document.querySelector('[data-bandask]') || {}).innerText || '')).indexOf('消えません') >= 0);
+  // ★v3.119.0 から、リストでキャンセルにするとスケジュールの予約は【キャンセルの帯】になって元の日に残る。
+  //   以前の「スケジュールに入っている予約は消えません」は動きと食い違っていたので文を直した。
+  t('★予約が入っているので「キャンセルの帯になって元の日に残ります」と出る',
+    (await page.evaluate(() => (document.querySelector('[data-bandask]') || {}).innerText || '')).indexOf('帯になって元の日に残ります') >= 0);
   await page.evaluate(() => { const b = document.querySelector('[data-bandno]'); if (b) b.click(); });
   await page.waitForTimeout(500);
   o = await openState(page);

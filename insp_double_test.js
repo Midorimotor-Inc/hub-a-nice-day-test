@@ -27,7 +27,7 @@ const grab = (name, src) => {
   }
   throw new Error(name + ' の終わりが分かりません');
 };
-const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'archDropSameBooking', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
+const code = ['bkNorm', 'isSameVehicleRow', 'findOtherDayRows', 'resDropForMove', 'cxToday', 'cxIsTrace', 'cxPatch', 'cxMark', 'archDropSameBooking', 'applyBookingToInsp', 'recomputeInspApproval', 'applyMahPendingRule']
   .map(n => grab(n)).join(String.fromCharCode(10)) + String.fromCharCode(10) + grab('archDropOneBooking', SRC_PC);
 const sandbox = {};
 new Function('exports', code + String.fromCharCode(10) +

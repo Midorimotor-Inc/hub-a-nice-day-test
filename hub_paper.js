@@ -184,7 +184,7 @@ const dayKeys = (sid) => {
   const set = {};
   const add = dk => { if (okDk(dk) && norm(dk) >= from) set[norm(dk)] = 1; };
   // ★車検は【両店あわせて】出すので、他店にしか予約が無い日も1枚つくる（2026-11-04 ユーザー指示）
-  Object.keys(insp).forEach(dk => { if ((insp[dk] || []).some(r => r && r.name)) add(dk); });
+  Object.keys(insp).forEach(dk => { if ((insp[dk] || []).some(r => r && r.name && r.bookingStatus !== 'cancelled')) add(dk); });
   Object.keys(sched[sid]).forEach(add);
   Object.keys(memo[sid]).forEach(dk => { if ((pick2(memo[sid], dk) || []).length) add(dk); });
   Object.keys(dayoff[sid]).forEach(dk => { if ((pick2(dayoff[sid], dk) || []).length) add(dk); });
@@ -207,7 +207,8 @@ const dayOf = (sid, dk) => {
     note: [r.note, r.entryDate ? '前日入庫 ' + r.entryDate : '', r.deliveryDate ? '納車 ' + r.deliveryDate + ' ' + (r.deliveryTime || '') : ''].filter(Boolean).join(' / ')
   });
   const byTime = (a, b) => cmp(a.time || a.bookingTime || 'zz', b.time || b.bookingTime || 'zz');
-  const iAll = (pick2(insp, dk) || []).filter(r => r && r.name);
+  // ★帯（キャンセル／日にち変更の記録）は紙には出さない（2026-11-16）
+  const iAll = (pick2(insp, dk) || []).filter(r => r && r.name && r.bookingStatus !== 'cancelled');
   const iMine = iAll.filter(r => (r.store || 'honten') === sid).sort(byTime).map(r => inspRow(r, false));
   const iOther = iAll.filter(r => (r.store || 'honten') !== sid).sort(byTime).map(r => inspRow(r, true));
   const il = iMine.concat(iOther);

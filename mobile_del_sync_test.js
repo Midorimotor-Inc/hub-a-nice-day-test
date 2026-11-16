@@ -80,9 +80,14 @@ const TODAY = (now.getFullYear()) + '-' + (now.getMonth() + 1) + '-' + now.getDa
   await page.waitForTimeout(6000);
 
   const insp = await page.evaluate(k => window.__fakeFb.get(k + 'insp'), STOR);
-  const names = ((insp && insp[TODAY]) || []).filter(r => r && r.name).map(r => r.name);
-  t('消した予約はスケジュールから消える', !names.some(n => /清原/.test(n)), names);
-  t('ほかの人の予約は残る', names.some(n => /残る/.test(n)), names);
+  const rowsAll = ((insp && insp[TODAY]) || []).filter(r => r && r.name);
+  // v3.119.0 から、取り消した予約は消えずに「キャンセルの帯」として元の日に残る
+  const live = rowsAll.filter(r => r.bookingStatus !== 'cancelled').map(r => r.name);
+  const band = rowsAll.filter(r => r.bookingStatus === 'cancelled');
+  t('消した予約はスケジュールから消える（生きている予約から外れる）', !live.some(n => /清原/.test(n)), live);
+  t('★取り消した予約はキャンセルの帯として残る', band.some(r => /清原/.test(String(r.name || ''))), band.map(r => r.name));
+  t('★帯に取り消した日（cxAt）が入る', band.some(r => /清原/.test(String(r.name || '')) && !!r.cxAt), band);
+  t('ほかの人の予約は残る', live.some(n => /残る/.test(n)), live);
 
   const q = await page.evaluate(k => window.__fakeFb.get(k + 'cust-updates'), STOR);
   const u = (Array.isArray(q) ? q : []).find(x => x && (x.custId === 'c1' || /清原/.test(String(x.name || ''))));

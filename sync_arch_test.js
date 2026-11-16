@@ -129,12 +129,17 @@ const seed = {
   const names = dk => ((after && after[dk]) || []).filter(r => r && r.name).map(r => r.name).join('・');
   t('本物の漏れ（消えた　次郎）は追加された', /消えた/.test(names('2026-10-30')), names('2026-10-30'));
   t('★別の日に予約がある人（動いた　三郎）は追加しない（二重予約にしない）', !/動いた/.test(names('2026-10-30')), names('2026-10-30'));
-  t('★保管箱の日（10/5）には1行も書かない', !(after && after['2026-10-5']), after && Object.keys(after));
+  // ★2026-11-09 から、保管箱にしか無い日は【見送らずに insp へ引き戻してから足す】。
+  //   手で入れても同じ事故（その日の過去の車検が画面から消える）が起きるため。
+  t('★保管箱の日（10/5）は insp へ引き戻される', !!(after && after['2026-10-5']), after && Object.keys(after));
+  t('★引き戻した日に保管箱の2件がそのまま入っている', /保管　太郎/.test(names('2026-10-5')) && /ほかの　予約/.test(names('2026-10-5')), names('2026-10-5'));
+  t('★その日の漏れ（欠け　五郎）も足される', /欠け/.test(names('2026-10-5')), names('2026-10-5'));
   const arch = await page.evaluate(k => window.__fakeFb.get(k + 'insp-arch'), STOR);
-  t('保管箱の10/5の予約は2件のまま', ((arch && arch['2026-10-5']) || []).length === 2, arch && arch['2026-10-5'] && arch['2026-10-5'].map(r => r.name));
+  t('★引き戻した日は保管箱から外れる（二重に持たない）', !(arch && arch['2026-10-5'] && arch['2026-10-5'].some(r => r && r.name)), arch && Object.keys(arch));
   const dlg2 = await readDlg();
   t('自動で直さなかった分を画面に出す', /自動では直さなかった分/.test(dlg2), dlg2.slice(0, 400));
-  t('見送った理由に「保管箱の日なので手で入れてください」が出る', /保管箱の日なので手で入れて/.test(dlg2), (dlg2.match(/.{0,20}保管箱の日.{0,30}/) || [''])[0]);
+  t('★保管箱の日は見送らない（「手で入れてください」と言わない）', !/保管箱の日なので手で入れて/.test(dlg2), (dlg2.match(/.{0,20}保管箱の日.{0,30}/) || [''])[0]);
+  t('見送った理由に「別の日」（動いた　三郎）が出る', /別の日/.test(dlg2), (dlg2.match(/.{0,20}別の日.{0,30}/) || [''])[0]);
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-sync-arch.png') });
