@@ -1,0 +1,187 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>日にち変更の帯（見本・1行）</title>
+<style>
+:root{--ink:#1b2129}
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;color:var(--ink);
+  font-family:"Yu Gothic UI","Meiryo",system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+h1{font-size:20px;margin:0 0 4px}
+.lead{font-size:13px;color:#475569;line-height:1.8;margin:0 0 16px}
+.done{font-size:13px;background:#f0fdf4;border:2px solid #86efac;border-radius:10px;
+  padding:10px 13px;line-height:1.9;margin:0 0 18px;color:#14532d}
+.sec{background:white;border-radius:12px;border:2px solid #e2e8f0;margin:0 0 20px;overflow:hidden}
+.sec>h2{margin:0;padding:11px 14px;font-size:15px;background:#0e7490;color:white}
+.sec>.body{padding:14px}
+.pick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.pick button{padding:7px 14px;border-radius:9px;border:2px solid #cbd5e1;background:white;
+  font-weight:700;font-size:13px;cursor:pointer;color:#334155}
+.pick button.on{background:#0891b2;border-color:#0891b2;color:white}
+.why{font-size:12.5px;color:#475569;background:#f8fafc;border-left:4px solid #94a3b8;
+  padding:8px 11px;border-radius:0 6px 6px 0;margin:0 0 12px;line-height:1.75}
+table.insp{border-collapse:collapse;width:100%;background:white}
+table.insp th{padding:7px 8px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;
+  background:linear-gradient(90deg,#9a3412,#ea580c);color:white}
+table.insp td{padding:6px 8px;font-size:12px;border-bottom:1px solid #eef2f6;border-right:1px solid #eef2f6;
+  white-space:nowrap}
+.no{text-align:center;font-weight:700;color:#2563eb;border-left:3px solid #2563eb}
+.nm{font-weight:700}
+.cs{display:inline-block;padding:1px 7px;border-radius:4px;font-weight:800;font-size:11px}
+.c1{background:#fee2e2;color:#991b1b}.c2{background:#dbeafe;color:#1e40af}.c3{background:#dcfce7;color:#166534}
+tr.live:nth-child(even) td{background:#f8f7ff}
+.cxrow td{background:#fee2e2}
+.cxno{text-align:center;border-left:3px solid #dc2626}
+.cxbig{font-weight:900;color:#991b1b}
+.mvrow td{background:#fecaca}
+.mvno{text-align:center;border-left:3px solid #b91c1c}
+.mvrowdeep td{background:#dc2626;color:white;border-bottom-color:#b91c1c;border-right-color:#b91c1c}
+.mvnodeep{text-align:center;border-left:3px solid #7f1d1d}
+.strike{text-decoration:line-through;text-decoration-color:#dc2626}
+.note{font-size:12px;color:#7f1d1d;background:#fff1f2;border:1px solid #fecaca;border-radius:8px;
+  padding:9px 12px;line-height:1.8;margin-top:12px}
+.q{font-size:13px;background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;
+  padding:10px 13px;line-height:1.9;margin-top:14px;color:#78350f}
+</style>
+<div class="wrap">
+<h1>日にち変更の帯（1行）― 見本</h1>
+
+<div class="done">
+<b>決まったこと</b><br>
+① キャンセル＝<b>A案</b>（1行に「キャンセル」＋取り消した日＋お客様のお名前など）<br>
+③ 車検カレンダーのマス＝<b>C案</b>（カレンダーには出さない。1日表示に残す）<br>
+② 日にち変更も<b>①と同じ「1行」の形</b>にして、「日にち変更」＋<b>移った日にち</b>を出します。← ここを見比べてください
+</div>
+
+<p class="lead">
+下の表は <b>11月18日（元の日）</b> を開いたところです。1〜6番はふつうの予約、その下に
+「キャンセル」と「日にち変更」の帯が番号なしで並びます。<b>押しても何も保存されません。</b>
+</p>
+
+<div class="sec">
+  <h2>② 日にち変更 ― 1行の形を選んでください</h2>
+  <div class="body">
+    <div class="pick" id="p1">
+      <button class="on" data-v="a">ア案　薄い赤・取り消し線なし</button>
+      <button data-v="b">イ案　薄い赤・取り消し線あり</button>
+      <button data-v="c">ウ案　濃い赤・白ぬき</button>
+    </div>
+    <div class="why" id="w1"></div>
+    <div class="pick" id="p2">
+      <button class="on" data-v="to">移った日にちだけ　→ 12/20</button>
+      <button data-v="both">元の日も　11/18 → 12/20</button>
+      <button data-v="when">変更した日も　→ 12/20（11/11 変更）</button>
+    </div>
+    <div class="why" id="w2"></div>
+    <div class="pick" id="p3">
+      <button class="on" data-v="on">担当者を入れる</button>
+      <button data-v="off">担当者を入れない</button>
+    </div>
+    <div class="why" id="w3"></div>
+    <table class="insp">
+      <thead><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>代車</th><th>特典</th><th>入庫</th><th>備考</th></tr></thead>
+      <tbody id="t1"></tbody>
+    </table>
+    <div class="note">
+      ★<b>移った先の日（12/20）には、ふつうの予約として今までどおり出ます。</b>
+      ここに出すのは「元の日を見た人が、動いたことに気づけるように」するためです。<br>
+      ★キャンセルも日にち変更も<b>「6台」の数には入りません</b>（台数制限にも効きません）。
+    </div>
+    <div class="q">
+      <b>あわせてご判断ください</b><br>
+      ・<b>印刷にも出しますか。</b> この1行の形なら「1日が1枚」は崩れません（上の見本と同じ高さです）。<br>
+      ・<b>いつまで残しますか。</b> ずっと残す／その日が過ぎたら消す／30日たったら消す のどれが良いですか。
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+var LIVE=[
+ {no:1,nm:'見本　一郎',car:'ワゴンR',cs:'ク',c:'c2',ln:'アルト',tk:'②',t:'09:00',memo:''},
+ {no:2,nm:'見本　花子',car:'ハスラー',cs:'マ',c:'c1',ln:'-',tk:'①',t:'10:00',memo:'代車あり'},
+ {no:3,nm:'サンプル商事',car:'ハイエース',cs:'レ',c:'c3',ln:'スペーシア',tk:'-',t:'11:00',memo:''},
+ {no:4,nm:'見本　次郎',car:'N-BOX',cs:'ク',c:'c2',ln:'-',tk:'②',t:'13:00',memo:''}
+];
+var CX={nm:'見本　五郎',car:'スイフト',cs:'ク',c:'c2',t:'10:30',on:'11/16',by:'魚住',memo:'都合が悪くなった'};
+var MV={nm:'見本　七郎',car:'フィット',cs:'ク',c:'c2',t:'09:30',from:'11/18',to:'12/20',on:'11/11',by:'見取'};
+
+function liveRow(r){
+  return '<tr class="live"><td class="no">'+r.no+'</td>'+
+    '<td class="nm">'+r.nm+' 様</td><td>'+r.car+'</td>'+
+    '<td><span class="cs '+r.c+'">'+r.cs+'</span></td><td>'+r.ln+'</td><td>'+r.tk+'</td><td>'+r.t+'</td>'+
+    '<td>'+(r.memo||'<span style="color:#cbd5e1">-</span>')+'</td></tr>';
+}
+/* ① キャンセル＝決定した A案（1行）。見比べの土台として必ず出す */
+function cancelRow(withBy){
+  var r=CX;
+  return '<tr class="cxrow"><td class="cxno"><span class="cxbig" style="font-size:12px">✕</span></td>'+
+    '<td colspan="7" style="padding:0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 8px">'+
+      '<span class="cxbig" style="font-size:16px;letter-spacing:3px">キャンセル</span>'+
+      '<span style="font-size:13px;font-weight:800;color:#b91c1c">'+r.on+' に取消'+(withBy?'（'+r.by+'）':'')+'</span>'+
+      '<span class="strike" style="font-weight:700">'+r.nm+' 様</span>'+
+      '<span class="strike">'+r.car+'</span>'+
+      '<span class="cs '+r.c+'">'+r.cs+'</span>'+
+      '<span style="color:#7f1d1d">'+r.t+' 入庫</span>'+
+      '<span style="color:#7f1d1d">'+r.memo+'</span>'+
+    '</div></td></tr>';
+}
+function moveRow(look,dateMode,withBy){
+  var r=MV;
+  var deep=(look==='c');
+  var strike=(look==='b');
+  var rowCls=deep?'mvrowdeep':'mvrow';
+  var noCls=deep?'mvnodeep':'mvno';
+  var big=deep?'color:white':'color:#7f1d1d';
+  var sub=deep?'color:#fee2e2':'color:#991b1b';
+  var dateTxt=(dateMode==='both')?(r.from+' → '+r.to)
+            :(dateMode==='when')?('→ '+r.to+'（'+r.on+' 変更'+(withBy?'・'+r.by:'')+'）')
+            :('→ '+r.to);
+  if(dateMode!=='when'&&withBy)dateTxt+='（'+r.by+'）';
+  var sc=strike?' class="strike"':'';
+  return '<tr class="'+rowCls+'"><td class="'+noCls+'"><span style="font-weight:900;font-size:12px;'+big+'">⇄</span></td>'+
+    '<td colspan="7" style="padding:0"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 8px">'+
+      '<span style="font-size:16px;font-weight:900;letter-spacing:3px;'+big+'">日にち変更</span>'+
+      '<span style="font-size:14px;font-weight:900;'+big+'">'+dateTxt+'</span>'+
+      '<span'+sc+' style="font-weight:700;'+sub+'">'+r.nm+' 様</span>'+
+      '<span'+sc+' style="'+sub+'">'+r.car+'</span>'+
+      '<span class="cs '+r.c+'">'+r.cs+'</span>'+
+      '<span style="'+sub+'">'+r.t+' 入庫</span>'+
+    '</div></td></tr>';
+}
+var W1={
+ a:'ア案＝キャンセルの帯より<b>少し濃い薄赤</b>。お名前に取り消し線を入れません（予約そのものは <b>12/20 に生きている</b>ので、消えた予約と見分けやすい）。',
+ b:'イ案＝お名前と車種に<b>取り消し線</b>。「この日にはもう無い」がはっきりしますが、キャンセルと見た目が近づきます。',
+ c:'ウ案＝<b>濃い赤に白ぬき</b>。いちばん目立ちます。キャンセル（薄い赤）と<b>ひと目で区別</b>できますが、表の中で強く出ます。'
+};
+var W2={
+ to:'「→ 12/20」＝<b>移った日にちだけ</b>。いちばん短く、ご指示に一番近い形です。',
+ both:'「11/18 → 12/20」＝元の日も出します。元の日を見ている時は少し重なりますが、印刷して持ち歩く時に分かりやすいです。',
+ when:'「→ 12/20（11/11 変更）」＝<b>いつ動かしたか</b>も出します。食い違いが起きた時に<b>どちらが新しいか</b>判断できます。'
+};
+var W3={
+ on:'担当者を入れる＝食い違いが起きた時に<b>聞きに行く相手</b>が分かります（キャンセルの行にも入ります）。',
+ off:'担当者を入れない＝1行が短くなります。'
+};
+var S={look:'a',date:'to',by:'on'};
+function draw(){
+  var h=LIVE.map(liveRow).join('');
+  h+=cancelRow(S.by==='on');
+  h+=moveRow(S.look,S.date,S.by==='on');
+  document.getElementById('t1').innerHTML=h;
+  document.getElementById('w1').innerHTML=W1[S.look];
+  document.getElementById('w2').innerHTML=W2[S.date];
+  document.getElementById('w3').innerHTML=W3[S.by];
+}
+function wire(id,key){
+  var box=document.getElementById(id);
+  box.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    [].forEach.call(box.querySelectorAll('button'),function(x){x.classList.remove('on');});
+    b.classList.add('on'); S[key]=b.getAttribute('data-v'); draw();
+  });
+}
+wire('p1','look');wire('p2','date');wire('p3','by');
+draw();
+</script>
