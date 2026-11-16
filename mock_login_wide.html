@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ログイン画面を全体表示に（見本）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,sans-serif;background:#111}
+  /* ── 上の操作バー（見本だけのもの。本物には出ません） ── */
+  #bar{position:fixed;left:0;right:0;top:0;height:46px;background:#0f172a;color:#fff;display:flex;
+       align-items:center;gap:10px;padding:0 12px;z-index:100;font-size:13px}
+  #bar b{font-size:13px}
+  #bar button{padding:6px 14px;border-radius:8px;border:2px solid #475569;background:#1e293b;color:#cbd5e1;
+       font-weight:800;font-size:13px;cursor:pointer}
+  #bar button.on{background:#f97316;border-color:#fdba74;color:#fff}
+  #info{margin-left:auto;font-size:12px;font-weight:700}
+  #info .ok{color:#4ade80}
+  #info .ng{color:#fca5a5}
+  /* ── ログイン画面（本物と同じ見た目） ── */
+  #stage{position:fixed;inset:46px 0 0 0;background:linear-gradient(140deg,#7c2d12,#EA580C,#f97316);
+       display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+  .card{background:#fff;border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.4);width:100%}
+  .ttl{font-size:22px;font-weight:900;color:#111827;margin:0}
+  .sub{font-size:12px;color:#6b7280;margin-top:4px}
+  .ver{display:inline-block;padding:2px 10px;border-radius:20px;background:#eff6ff;border:1px solid #bfdbfe;
+       color:#1d4ed8;font-size:11px;font-weight:700}
+  .devbox{border:2px solid #1e3a34;border-radius:0 12px 12px 12px;padding:12px 15px;background:#f4f8f6;
+       font-size:12.5px;color:#31544c;line-height:1.8}
+  .devtab{display:inline-flex;align-items:center;gap:6px;padding:6px 16px 5px;background:#1e3a34;color:#fff;
+       border-radius:10px 10px 0 0;font-weight:800;font-size:13px}
+  .panel{flex:1;border:2px solid #e5e7eb;border-radius:14px;padding:16px 14px;background:#fafafa;min-width:0}
+  .pill{display:inline-block;padding:3px 14px;border-radius:20px;color:#fff;font-weight:800;font-size:13px}
+  .nm{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:9px;border:2px solid #e5e7eb;
+      background:#fff;color:#374151;font-weight:500;font-size:13px;cursor:pointer;width:100%;text-align:left;
+      font-family:inherit}
+  .nm span.t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nm .bg{width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;
+      font-size:10px;font-weight:900;flex:none}
+  .nm.sel{color:#fff;font-weight:800}
+  .go{width:100%;padding:14px 0;border:none;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer;
+      background:#e5e7eb;color:#9ca3af;font-family:inherit}
+  .go.on{color:#fff}
+  .set{padding:10px 18px;background:#f8fafc;border:2px solid #94a3b8;border-radius:10px;font-weight:700;
+      font-size:13px;color:#475569;cursor:pointer;font-family:inherit}
+  .lbl{font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px}
+  .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .col{display:flex;flex-direction:column;gap:7px}
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>ログイン画面の見本</b>
+  <button data-p="now" class="on">いまの形</button>
+  <button data-p="a">A案 2列</button>
+  <button data-p="b">B案 全員1枚</button>
+  <button data-p="c">C案 左右2段</button>
+  <div id="info"></div>
+</div>
+<div id="stage"><div id="card" class="card"></div></div>
+<script>
+var STORES={honten:{name:'本店',color:'#2563eb',accent:'#1d4ed8',bg:'#eff6ff'},
+            sanda:{name:'三田店',color:'#dc2626',accent:'#b91c1c',bg:'#fef2f2'}};
+var BADGE={president:{i:'代',c:'#92400e',b:'#fef3c7'},manager:{i:'店',c:'#0f766e',b:'#f0fdfa'},
+  foreman:{i:'工',c:'#1e40af',b:'#eff6ff'},inspector:{i:'検',c:'#7c3aed',b:'#ede9fe'},
+  mechanic:{i:'整',c:'#2563eb',b:'#eff6ff'},bodywork:{i:'BP',c:'#d97706',b:'#fffbeb'},
+  office:{i:'事',c:'#059669',b:'#ecfdf5'},assistant:{i:'助',c:'#dc2626',b:'#fef2f2'},
+  sales:{i:'販',c:'#0891b2',b:'#ecfeff'}};
+var H=[['見取大介','inspector'],['岡上秀一','inspector'],['竹林直行','inspector'],['幸田桂紀','mechanic'],
+       ['魚住圭','mechanic'],['舟田祥子','office'],['江川京志','bodywork'],['ダク','assistant'],['カビン','assistant']];
+var S=[['藤原昭人','sales'],['中井啓介','sales'],['芦田昌則','mechanic'],['長谷川昌彦','mechanic'],
+       ['石井光','mechanic'],['両澤ちよう','sales'],['野呂遥奈','sales'],['河合よっちゃん','assistant']];
+var PRES=['見取勇一','president'];
+var sel=null, plan='now';
+
+function nameBtn(p,storeId){
+  var st=STORES[storeId], bd=BADGE[p[1]]||BADGE.mechanic;
+  var on=sel&&sel.n===p[0];
+  var b=document.createElement('button');
+  b.className='nm'+(on?' sel':'');
+  if(on){b.style.background=st.color;b.style.borderColor=st.color;}
+  b.innerHTML='<span class="t"></span><span class="bg" style="background:'+bd.b+';color:'+bd.c+'">'+bd.i+'</span>';
+  b.querySelector('.t').textContent=p[0];
+  b.onclick=function(){sel={n:p[0],s:storeId};draw();};
+  return b;
+}
+function h(tag,cls,css,html){var e=document.createElement(tag);if(cls)e.className=cls;
+  if(css)e.setAttribute('style',css);if(html!=null)e.innerHTML=html;return e;}
+function listInto(box,arr,storeId){arr.forEach(function(p){box.appendChild(nameBtn(p,storeId));});}
+
+function head(compact){
+  var d=h('div','', compact?'display:flex;align-items:center;gap:12px;margin-bottom:14px'
+                          :'text-align:center;margin-bottom:24px');
+  d.innerHTML=compact
+    ? '<div style="font-size:30px">🚗</div><div><h1 class="ttl" style="font-size:19px">Hub a Nice day</h1></div>'
+      +'<span class="ver" style="margin-left:auto">v3.119.1</span>'
+    : '<div style="font-size:44px;margin-bottom:6px">🚗</div><h1 class="ttl">Hub a Nice day</h1>'
+      +'<p class="sub">統合管理システム</p><span class="ver" style="margin-top:6px">v3.119.1</span>';
+  return d;
+}
+function devBox(compact){
+  var d=h('div','', 'margin-bottom:'+(compact?12:18)+'px');
+  d.appendChild(h('div','devtab',null,'<span style="font-size:15px">🖥️</span>共有PC'));
+  d.appendChild(h('div','devbox',null, compact
+    ? 'このPCは<b>共有端末として登録済み</b>です（本店）。下から<b>担当者を選ぶだけ</b>で使えます。'
+    : 'このPCは<b>共有端末として登録済み</b>です（本店）。<br>下から<b>担当者を選ぶだけ</b>で使えます。追加の登録は要りません。'));
+  return d;
+}
+function presArea(wide){
+  var d=h('div','', 'margin-bottom:16px');
+  d.appendChild(h('div','lbl',null,'代表取締役'));
+  var w=h('div','', wide?'max-width:300px':'');
+  w.appendChild(nameBtn(PRES,'sanda'));
+  d.appendChild(w);
+  return d;
+}
+function goBtn(){
+  var st=sel?STORES[sel.s]:null;
+  var b=h('button','go'+(sel?' on':''),null,
+    sel?('【'+st.name+'】'+sel.n+' でログイン →'):'担当者を選択してください');
+  if(sel)b.style.background='linear-gradient(135deg,'+st.color+','+st.accent+')';
+  return b;
+}
+function panel(storeId,arr,cols){
+  var st=STORES[storeId], on=sel&&sel.s===storeId;
+  var p=h('div','panel');
+  if(on){p.style.borderColor=st.color;p.style.background=st.bg;}
+  p.appendChild(h('div','', 'text-align:center;margin-bottom:12px',
+    '<span class="pill" style="background:'+st.color+'">'+st.name+'</span>'));
+  var box=h('div',cols===1?'col':(cols===2?'grid2':(cols===3?'grid3':'grid4')));
+  listInto(box,arr,storeId);
+  p.appendChild(box);
+  return p;
+}
+
+function draw(){
+  var c=document.getElementById('card');
+  c.innerHTML='';
+  if(plan==='now'){
+    c.style.maxWidth='680px';c.style.padding='32px 36px';
+    c.appendChild(head(false));
+    c.appendChild(devBox(false));
+    c.appendChild(presArea(false));
+    var row=h('div','', 'display:flex;gap:14px;margin-bottom:16px');
+    row.appendChild(panel('honten',H,1));row.appendChild(panel('sanda',S,1));
+    c.appendChild(row);
+    c.appendChild(goBtn());
+    var f=h('div','', 'display:flex;gap:8px;margin-top:10px');
+    f.appendChild(h('button','set','flex:1','⚙️ 設定'));c.appendChild(f);
+  }
+  if(plan==='a'){
+    c.style.maxWidth='1040px';c.style.padding='22px 26px';
+    c.appendChild(head(true));
+    c.appendChild(devBox(true));
+    c.appendChild(presArea(true));
+    var row2=h('div','', 'display:flex;gap:14px;margin-bottom:14px');
+    row2.appendChild(panel('honten',H,2));row2.appendChild(panel('sanda',S,2));
+    c.appendChild(row2);
+    c.appendChild(goBtn());
+    var f2=h('div','', 'display:flex;gap:8px;margin-top:10px');
+    f2.appendChild(h('button','set','flex:1','⚙️ 設定'));c.appendChild(f2);
+  }
+  if(plan==='b'){
+    c.style.maxWidth='1240px';c.style.padding='20px 24px';
+    c.appendChild(head(true));
+    c.appendChild(devBox(true));
+    c.appendChild(presArea(true));
+    ['honten','sanda'].forEach(function(id){
+      var st=STORES[id];
+      var sec=h('div','', 'margin-bottom:12px');
+      sec.appendChild(h('div','', 'margin-bottom:8px',
+        '<span class="pill" style="background:'+st.color+'">'+st.name+'</span>'));
+      var g=h('div','grid4');
+      listInto(g,id==='honten'?H:S,id);
+      sec.appendChild(g);c.appendChild(sec);
+    });
+    c.appendChild(goBtn());
+    var f3=h('div','', 'display:flex;gap:8px;margin-top:10px');
+    f3.appendChild(h('button','set','flex:1','⚙️ 設定'));c.appendChild(f3);
+  }
+  if(plan==='c'){
+    c.style.maxWidth='1320px';c.style.padding='20px 24px';
+    var wrap=h('div','', 'display:flex;gap:22px;align-items:flex-start');
+    var left=h('div','', 'width:310px;flex:none');
+    left.appendChild(head(false));
+    left.appendChild(devBox(true));
+    left.appendChild(goBtn());
+    var f4=h('div','', 'display:flex;gap:8px;margin-top:10px');
+    f4.appendChild(h('button','set','flex:1','⚙️ 設定'));left.appendChild(f4);
+    var right=h('div','', 'flex:1;min-width:0');
+    right.appendChild(presArea(true));
+    ['honten','sanda'].forEach(function(id){
+      var st=STORES[id];
+      var sec=h('div','', 'margin-bottom:12px');
+      sec.appendChild(h('div','', 'margin-bottom:8px',
+        '<span class="pill" style="background:'+st.color+'">'+st.name+'</span>'));
+      var g=h('div','grid3');
+      listInto(g,id==='honten'?H:S,id);
+      sec.appendChild(g);right.appendChild(sec);
+    });
+    wrap.appendChild(left);wrap.appendChild(right);c.appendChild(wrap);
+  }
+  setTimeout(measure,0);
+}
+function measure(){
+  var st=document.getElementById('stage'),c=document.getElementById('card');
+  var over=st.scrollHeight-st.clientHeight;
+  document.getElementById('info').innerHTML=
+    'この画面 '+window.innerWidth+'×'+window.innerHeight+'　／　カードの高さ '+Math.round(c.getBoundingClientRect().height)+'px　／　'
+    +(over>0?'<span class="ng">はみ出し '+over+'px（スクロールが要ります）</span>'
+            :'<span class="ok">✔ 全部そのまま見えます</span>');
+}
+[].forEach.call(document.querySelectorAll('#bar button'),function(b){
+  b.onclick=function(){
+    plan=b.getAttribute('data-p');
+    [].forEach.call(document.querySelectorAll('#bar button'),function(x){x.className=(x===b?'on':'');});
+    draw();
+  };
+});
+window.addEventListener('resize',measure);
+draw();
+</script>
+</body>
+</html>
