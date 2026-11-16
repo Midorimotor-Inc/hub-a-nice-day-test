@@ -16,7 +16,7 @@ if (!chromium) { console.error('playwright が見つかりません'); process.e
 
 const NL = String.fromCharCode(10);
 const DIR = __dirname, PORT = 8497, STOR = 'hub-v8-dev-';
-const MV_BG = 'rgb(220, 38, 38)';
+const MV_BG = 'rgb(254, 226, 226)';   // 日にち変更＝薄い赤（2026-11-17 入れ替え）
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 320)); } };
 const head = s => console.log(NL + '■ ' + s);
@@ -163,7 +163,7 @@ const ARCH_ROWS = [
   })));
   const mv = band.find(x => x.kind === 'move') || {};
   t('★日にち変更の帯が1本出る', band.filter(x => x.kind === 'move').length === 1, band);
-  t('★濃い赤（#dc2626）', mv.bg === MV_BG, mv.bg);
+  t('★薄い赤（#fee2e2）', mv.bg === MV_BG, mv.bg);
   t('★元の日 → 移った日 の形', mv.date === MD(T0) + '→' + T0.m + '/' + WANT_D, { got: mv.date, want: MD(T0) + '→' + T0.m + '/' + WANT_D });
   t('★お名前と担当者が出る', (mv.txt || '').indexOf('客2') >= 0 && (mv.by || '').indexOf('江川京志') >= 0, mv);
   t('生きている2件（客1・客3）は番号付きで残る', await page.evaluate(() =>

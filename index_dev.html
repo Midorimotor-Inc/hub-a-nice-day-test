@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794821415483';
+    window.__APP_BUILD='build-1794871317000';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.121.0';
+const APP_VERSION = '3.121.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -11316,8 +11316,12 @@ const MeigiBang=({row,done,dim})=>{
 //   ★番号は付けない。1〜6番の【下】に並ぶ。
 //   ★BLOCK-C（InspRow）は使わない＝台数・並び・承認の決まりには触らない。
 //   ★行の高さは ふつうの行とほぼ同じ（1行型）＝【印刷の「1日が1枚」は崩れない】。
-const CX_BG='#fee2e2';       // キャンセルの帯（薄い赤）
-const CX_MV_BG='#dc2626';    // 日にち変更の帯（濃い赤・白ぬき）
+// ★★色は【キャンセル＝濃い赤に白ぬき／日にち変更＝薄い赤】
+//   （v3.121.1・2026-11-17 ユーザー指示で丸ごと入れ替えた。v3.119.0〜v3.121.0 は逆だった）。
+//   ★名前は「どちらの帯か」ではなく【濃い／薄い】で付けてある。入れ替えの指示が来た時に
+//     使う所を1行ずつ直さなくて済むようにするため。色を変える時はこの2つだけを直すこと。
+const CX_LOUD='#dc2626';     // 濃い赤・白ぬき ＝ いまは【キャンセル】
+const CX_SOFT='#fee2e2';     // 薄い赤　　　　 ＝ いまは【日にち変更】
 // ★同じ日に再予約された帯の見え方（③イ案・2026-11-16 ユーザー決定）。
 //   帯は【消さずに薄く残し】「✓ 再予約済み」の印を付ける。消すと「一度キャンセルがあった」
 //   ことが分からなくなり、お客様から問い合わせがあった時に説明できない。
@@ -11326,20 +11330,23 @@ const CX_RE_OP=0.68;         // 再予約済みの帯の濃さ
 const CxBand=({row,dk,onOpen,onDrop,onRe,onJump,reDone})=>{
   const mv=!!row.cxTo;
   // ★reDone＝同じ日に再予約された時の【生きている行】。あれば薄くして印を付ける（③イ案）。
-  const bg=mv?CX_MV_BG:(reDone?CX_RE_BG:CX_BG);
+  // ★濃い側で出すのは【キャンセル】だけ（2026-11-17 ユーザー指示）。
+  //   ★再予約済みの帯は【薄い側】で出すこと。濃い赤を薄くすると白ぬきの字が読めなくなる。
+  const dark=!mv&&!reDone;
+  const bg=dark?CX_LOUD:(reDone?CX_RE_BG:CX_SOFT);
   const op=reDone?CX_RE_OP:1;
-  const big=mv?{color:'white'}:{color:'#991b1b'};
-  const sub=mv?{color:'#fee2e2'}:{color:'#7f1d1d'};
-  const strike={textDecoration:'line-through',textDecorationColor:mv?'#fecaca':'#dc2626'};
+  const big=dark?{color:'white'}:{color:'#991b1b'};
+  const sub=dark?{color:'#fee2e2'}:{color:'#7f1d1d'};
+  const strike={textDecoration:'line-through',textDecorationColor:dark?'#fecaca':'#dc2626'};
   const c=COURSES.find(x=>x.id===Number(row.course));
   const when=row.cxAt?cxMD(row.cxAt):'';
   const btn={padding:'2px 8px',borderRadius:7,fontSize:10.5,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap',
-    border:mv?'1.5px solid rgba(255,255,255,.75)':'1.5px solid #b91c1c',
-    background:mv?'rgba(255,255,255,.14)':'white',color:mv?'white':'#991b1b'};
+    border:dark?'1.5px solid rgba(255,255,255,.75)':'1.5px solid #b91c1c',
+    background:dark?'rgba(255,255,255,.14)':'white',color:dark?'white':'#991b1b'};
   return (
     <tr data-cxband={mv?'move':'cancel'}>
       <td style={{textAlign:'center',padding:'6px 4px',background:bg,fontWeight:900,fontSize:12,opacity:op,
-        borderLeft:`3px solid ${mv?'#7f1d1d':'#dc2626'}`,borderBottom:'1px solid #eef2f6',...big}}>{mv?'⇄':'✕'}</td>
+        borderLeft:`3px solid ${dark?'#7f1d1d':'#dc2626'}`,borderBottom:'1px solid #eef2f6',...big}}>{mv?'⇄':'✕'}</td>
       <td colSpan={7} style={{padding:0,background:bg,borderBottom:'1px solid #eef2f6',opacity:op}}>
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'5px 8px'}}>
           <span data-cxtitle="1" style={{fontSize:16,fontWeight:900,letterSpacing:3,...big}}>{mv?'日にち変更':'キャンセル'}</span>
@@ -16149,8 +16156,9 @@ function AppInner() {
   /* 入庫制限の枠（2026-11-02 ユーザー要望：紙にも出す）。画面の1日表示と同じ ベタの薄い赤 */
   .sched-table tr.slot-restr td { background: #fee2e2; }
   /* ★キャンセル／日にち変更の帯（1行）。生きている予約の下に刷る */
-  .insp-table tr.cx-cx td { background: #fee2e2; color:#7f1d1d; }
-  .insp-table tr.cx-mv td { background: #dc2626; color:#ffffff; }
+  /* ★印刷も画面と同じ色（キャンセル＝濃い赤／日にち変更＝薄い赤。2026-11-17 入れ替え） */
+  .insp-table tr.cx-cx td { background: #dc2626; color:#ffffff; }
+  .insp-table tr.cx-mv td { background: #fee2e2; color:#7f1d1d; }
   .cx-big { font-weight:900; letter-spacing:2px; margin-right:8px; }
   .cx-dt  { font-weight:900; margin-right:8px; }
   .cx-nm  { font-weight:700; text-decoration:line-through; margin-right:8px; }

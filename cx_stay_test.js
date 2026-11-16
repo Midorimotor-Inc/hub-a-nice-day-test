@@ -15,7 +15,7 @@ if (!chromium) { console.error('playwright が見つかりません'); process.e
 
 const NL = String.fromCharCode(10);
 const DIR = __dirname, PORT = 8509, STOR = 'hub-v8-dev-';
-const MV_BG = 'rgb(220, 38, 38)';
+const MV_BG = 'rgb(254, 226, 226)';   // 日にち変更＝薄い赤（2026-11-17 入れ替え）
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 320)); } };
 const head = s => console.log(NL + '■ ' + s);
@@ -138,7 +138,7 @@ const ROWS = [
   const bs = await bands();
   t('帯が1本出ている', bs.length === 1, bs);
   t('種類が「日にち変更」', bs[0] && bs[0].kind === 'move', bs);
-  t('濃い赤（#dc2626）', bs[0] && bs[0].bg === MV_BG, bs[0] && bs[0].bg);
+  t('薄い赤（#fee2e2）', bs[0] && bs[0].bg === MV_BG, bs[0] && bs[0].bg);
   t('「日にち変更」と出ている', !!(bs[0] && bs[0].txt.indexOf('日にち変更') >= 0), bs);
   t('元の日 → 移り先 が出ている', !!(bs[0] && bs[0].txt.indexOf(MD(T0) + ' → ' + MDT) >= 0), bs);
   t('動かした人の名前が出ている', !!(bs[0] && bs[0].txt.indexOf('客2') >= 0), bs);

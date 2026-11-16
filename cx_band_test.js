@@ -1,6 +1,6 @@
 // 2026-11-16 ユーザー決定「キャンセル／日にち変更の帯」を見張る検査
-//   ① キャンセル＝A案（1行・薄い赤 #fee2e2）。「キャンセル」＋取り消した日＋担当者＋お名前（取り消し線）
-//   ② 日にち変更＝ウ案（1行・濃い赤 #dc2626 に白ぬき）。「日にち変更」＋【元の日 → 移った日】＋担当者
+//   ① キャンセル＝A案（1行・濃い赤 #dc2626 に白ぬき。2026-11-17 に入れ替え）。「キャンセル」＋取り消した日＋担当者＋お名前（取り消し線）
+//   ② 日にち変更＝ウ案（1行・薄い赤 #fee2e2。2026-11-17 に入れ替え）。「日にち変更」＋【元の日 → 移った日】＋担当者
 //   ③ 車検カレンダーのマスには出さない（1日表示だけ）
 //   ★帯は 1〜6番の【下】に番号なしで並ぶ。台数にも6コマにも数えない。
 //   ★予約カードの「🗑 予約を取り消す」で、予約が【消えずに帯になる】こと。
@@ -16,8 +16,8 @@ if (!chromium) { console.error('playwright が見つかりません'); process.e
 
 const NL = String.fromCharCode(10);
 const DIR = __dirname, PORT = 8493, STOR = 'hub-v8-dev-';
-const CX_BG = 'rgb(254, 226, 226)';   // #fee2e2
-const MV_BG = 'rgb(220, 38, 38)';     // #dc2626
+const CX_BG = 'rgb(220, 38, 38)';     // #dc2626（キャンセル＝濃い赤・2026-11-17 入れ替え）
+const MV_BG = 'rgb(254, 226, 226)';   // #fee2e2（日にち変更＝薄い赤・2026-11-17 入れ替え）
 let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 320)); } };
 const head = s => console.log(NL + '■ ' + s);
@@ -130,8 +130,9 @@ const ROWS = [
   t('★1行型（残りの7列をまとめている）', cxB.cols === '7' && mvB.cols === '7', [cxB.cols, mvB.cols]);
   t('★行の高さがふつうの行とほぼ同じ（印刷の1枚が崩れない）', band.rowH > 0 && cxB.h <= band.rowH + 12 && mvB.h <= band.rowH + 12, { rowH: band.rowH, cx: cxB.h, mv: mvB.h });
 
-  head('② キャンセルの帯＝A案（薄い赤・取り消した日・担当者・取り消し線）');
-  t('★地色が #fee2e2', cxB.bg === CX_BG, cxB.bg);
+  head('② キャンセルの帯＝A案（濃い赤に白ぬき・取り消した日・担当者・取り消し線）');
+  t('★地色が #dc2626（濃い赤）', cxB.bg === CX_BG, cxB.bg);
+  t('★文字が白ぬき', cxB.fg === 'rgb(255, 255, 255)', cxB.fg);
   t('「キャンセル」と大きく出る', /キャンセル/.test(cxB.title || ''), cxB.title);
   t('★取り消した日が出る', (cxB.date||'').indexOf(MD(T0) + 'に取消') >= 0, cxB.date);
   t('★担当者が出る', (cxB.by||'').indexOf('魚住') >= 0, cxB.by);
@@ -139,9 +140,9 @@ const ROWS = [
   t('★お名前に取り消し線', /line-through/.test(cxB.strike || ''), cxB.strike);
   t('入庫時間と備考も出る', (cxB.txt||'').indexOf('10:30') >= 0 && (cxB.txt||'').indexOf('都合が悪くなった') >= 0, cxB.txt);
 
-  head('③ 日にち変更の帯＝ウ案（濃い赤に白ぬき・元の日 → 移った日・担当者）');
-  t('★地色が #dc2626（濃い赤）', mvB.bg === MV_BG, mvB.bg);
-  t('★文字が白ぬき', mvB.fg === 'rgb(255, 255, 255)', mvB.fg);
+  head('③ 日にち変更の帯＝ウ案（薄い赤・元の日 → 移った日・担当者）');
+  t('★地色が #fee2e2（薄い赤）', mvB.bg === MV_BG, mvB.bg);
+  t('★文字は濃い赤（白ぬきにしない）', mvB.fg === 'rgb(153, 27, 27)', mvB.fg);
   t('「日にち変更」と大きく出る', /日にち変更/.test(mvB.title || ''), mvB.title);
   t('★元の日 → 移った日 の形で出る', mvB.date === MD(T0) + '→' + MD(TO), { got: mvB.date, want: MD(T0) + '→' + MD(TO) });
   t('★担当者が出る', (mvB.by||'').indexOf('見取') >= 0, mvB.by);
