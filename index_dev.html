@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794805571072';
+    window.__APP_BUILD='build-1794808851774';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.119.2';
+const APP_VERSION = '3.119.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3042,6 +3042,22 @@ const archMarkOneBooking=(arch,dk,tgt,o)=>{
   let hit=false;
   const next=rows.map(r=>same(r)?(hit=true,cxMark(r,o)):r);
   return hit?{...arch,[dk]:next}:undefined;
+};
+// ★保管箱（insp-arch）の『同じ予約』に【日にち変更の帯】を付ける（消さない。2026-11-16）。
+//   それまで archDropSameBooking で黙って null にしていたため、14日より前の日（保管箱）から
+//   日にちを動かすと【帯が出ず、予約そのものが跡形なく消えていた】。
+//   帯の決まり（消さずに残す）は保管箱でも同じにする。行は詰めずにその場で印を付ける。
+//   すでに帯になっている行・キャンセル行には触らない。keepDk（移り先）の日は対象外。
+const archMarkSameBooking=(arch,custId,keepDk,by)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    out[d]=rows.map(r=>(r&&r.name&&r.custId===custId&&r.bookingStatus!=='cancelled')
+      ?(hit=true,cxMark(r,{dk:d,to:keepDk,by:by||''})):r);
+  });
+  return hit?out:undefined;
 };
 const archDropSameBooking=(arch,custId,keepDk)=>{
   if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
@@ -17153,6 +17169,9 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         // ★GAS保存（第2層の本体）：サーバー最新値を読んで buildInspSave し直してから書き、
         //   読み返して着地を確認。未反映ならサーバー最新値からやり直す（最大3回）。これが
         //   insp への唯一のGAS書き込み経路（useShared 経由の全文書き戻しは通さない）。
+        //   ★_unarchDone＝保管箱からの引き戻しの約束。後ろの「保管箱に帯を付ける」処理が
+        //     これを待ってから保管箱を読む（待たないと引き戻す前の写しを書き戻してしまう）。
+        let _unarchDone=null;
         {
           const _vDk=_targetDk;
           const _vName=cleanWithStore.name,_vNo=cleanWithStore.no,_vCust=cleanWithStore.custId;
@@ -17179,7 +17198,13 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
             (async()=>{
               // ★予約を書く前に、その日が保管箱にあるなら insp へ引き戻す（2026-11-09）。
               //   これをしないと、過去の車検が画面から消え、翌朝の仕分けで永久に消える。
-              await hubUnarchiveDay(_vDk);
+              _unarchDone=(async()=>{
+                await hubUnarchiveDay(_vDk);
+                // ★元の日が保管箱にあるなら、そこも引き戻す。引き戻さないと base にその日が
+                //   無いので buildInspSave が【日にち変更の帯】を作れない（2026-11-16）。
+                if(_saveParams.isDateChange&&_saveParams.origDk)await hubUnarchiveDay(_saveParams.origDk);
+              })();
+              await _unarchDone;
               const ok=await withSaveBusy(()=>writeVerified(STOR+'insp',
                 base=>{
                   // 毎回サーバー最新値から組み立て直す。組み立てた結果は画面にも即反映して、
@@ -17255,12 +17280,24 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
             persistRres(base=>resHasBk(base,_rOld)?retagResBk(base,_rOld,_rNew):undefined,
               back=>!resHasBk(back,_rOld),{verb:'紐付けの更新'});
         }
-        // ★日付を変えた時は、保管箱（14日より前の分）に残る同じ予約も外す（2026-10-04）
-        if(_isDcForDel&&cleanData.custId){
+        // ★日付を変えた時は、保管箱（14日より前の分）に残る同じ予約を【帯】にする（2026-11-16）。
+        //   それまで archDropSameBooking で黙って消していたので、14日より前の日から
+        //   日にちを動かすと【帯が出ず、予約が跡形なく消えていた】（＝帯の決まりの抜け穴）。
+        //   ★custId が無い手入力の予約も、元の日の1件だけは氏名＋ナンバーで照合して帯にする。
+        //   ★保管箱を書く前に、移り先の日の引き戻し（hubUnarchiveDay）を必ず待つ。
+        //     待たないと引き戻す前の写しを書き戻し、その日が insp と保管箱の両方に出る。
+        if(_isDcForDel&&_origDkForDel){
           (async()=>{
             try{
+              try{ if(_unarchDone) await _unarchDone; }catch(_e){}
               const _a=await sGet(STOR+'insp-arch');
-              const _n=archDropSameBooking(_a,cleanData.custId,_targetDk);
+              const _cxBy2=(currentUser&&currentUser.name)||'';
+              const _aTgt={custId:cleanData.custId,name:cleanData.name,no:cleanData.no};
+              let _n=archMarkOneBooking(_a,_origDkForDel,_aTgt,{dk:_origDkForDel,to:_targetDk,by:_cxBy2});
+              if(cleanData.custId){
+                const _m=archMarkSameBooking(_n||_a,cleanData.custId,_targetDk,_cxBy2);
+                if(_m)_n=_m;
+              }
               if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
             }catch(e){}
           })();

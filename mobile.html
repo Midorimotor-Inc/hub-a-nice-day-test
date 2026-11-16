@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794805571072';
+  window.__APP_BUILD='build-1794808851774';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.119.2';
+const MOBILE_VERSION='3.119.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -1703,6 +1703,22 @@ const archDropOneBooking=(arch,dk,tgt)=>{
   let hit=false;
   const next=rows.map(r=>same(r)?(hit=true,null):r);
   return hit?{...arch,[dk]:next}:undefined;
+};
+// ★保管箱（insp-arch）の『同じ予約』に【日にち変更の帯】を付ける（消さない。2026-11-16）。
+//   それまで archDropSameBooking で黙って null にしていたため、14日より前の日（保管箱）から
+//   日にちを動かすと【帯が出ず、予約そのものが跡形なく消えていた】。
+//   帯の決まり（消さずに残す）は保管箱でも同じにする。行は詰めずにその場で印を付ける。
+//   すでに帯になっている行・キャンセル行には触らない。keepDk（移り先）の日は対象外。
+const archMarkSameBooking=(arch,custId,keepDk,by)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    out[d]=rows.map(r=>(r&&r.name&&r.custId===custId&&r.bookingStatus!=='cancelled')
+      ?(hit=true,cxMark(r,{dk:d,to:keepDk,by:by||''})):r);
+  });
+  return hit?out:undefined;
 };
 const archDropSameBooking=(arch,custId,keepDk)=>{
   if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
@@ -7693,11 +7709,18 @@ const App=()=>{
       // ★日を動かした時のあと始末（2026-10-04）
       if(isMove){
         const _nm=String(entry.name||'').trim();
-        // 保管箱（14日より前の分）に残る同じ予約を外す
-        if(entry.custId){
+        // ★保管箱（14日より前の分）に残る同じ予約は【帯】にする（消さない。2026-11-16）。
+        //   PC と同じ決まり。custId が無い手入力の予約も氏名＋ナンバーで照合して帯にする。
+        {
           try{
             const _a=await sGet(STOR+'insp-arch');
-            const _n=archDropSameBooking(_a,entry.custId,tDk);
+            const _cxBy2=(user&&user.name)||'';
+            const _aTgt={custId:entry.custId,name:entry.name,no:entry.no};
+            let _n=archMarkOneBooking(_a,req.dk,_aTgt,{dk:req.dk,to:tDk,by:_cxBy2});
+            if(entry.custId){
+              const _m=archMarkSameBooking(_n||_a,entry.custId,tDk,_cxBy2);
+              if(_m)_n=_m;
+            }
             if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n); }
           }catch(e){}
         }

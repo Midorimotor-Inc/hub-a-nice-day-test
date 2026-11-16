@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794805571072';
+  window.__APP_BUILD='build-1794808851774';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -170,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.119.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.119.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -594,6 +594,37 @@ const hubUnarchiveDay = async (dk) => {
 //   日付を変えても保管箱の古い行が残ると、同じ人が2件出たままになる（テスト版 辻井さんで確認）。
 //   消すのは custId が同じ行だけ。氏名で消すと、本当の過去の車検履歴まで消えてしまう。
 //   行は詰めずに null にする（後ろの行の bookingKey＝代車の紐付けを壊さないため）。
+// 保管箱のその日の予約1件に【帯の印】を付ける（消さない）。見つからなければ undefined。
+const archMarkOneBooking=(arch,dk,tgt,o)=>{
+  if(!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const rows=arch[dk];
+  if(!Array.isArray(rows))return undefined;
+  const same=r=>{
+    if(!r||!r.name||r.bookingStatus==='cancelled')return false;
+    if(tgt.custId)return r.custId===tgt.custId;
+    if(tgt.seq!=null&&r.seq!=null)return r.seq===tgt.seq;
+    return r.name===tgt.name&&String(r.no||'')===String(tgt.no||'');
+  };
+  let hit=false;
+  const next=rows.map(r=>same(r)?(hit=true,cxMark(r,o)):r);
+  return hit?{...arch,[dk]:next}:undefined;
+};
+// ★保管箱（insp-arch）の『同じ予約』に【日にち変更の帯】を付ける（消さない。2026-11-16）。
+//   それまで archDropSameBooking で黙って null にしていたため、14日より前の日（保管箱）から
+//   日にちを動かすと【帯が出ず、予約そのものが跡形なく消えていた】。
+//   帯の決まり（消さずに残す）は保管箱でも同じにする。行は詰めずにその場で印を付ける。
+//   すでに帯になっている行・キャンセル行には触らない。keepDk（移り先）の日は対象外。
+const archMarkSameBooking=(arch,custId,keepDk,by)=>{
+  if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
+  const out={};let hit=false;
+  Object.keys(arch).forEach(d=>{
+    const rows=arch[d];
+    if(d===keepDk||!Array.isArray(rows)){out[d]=rows;return;}
+    out[d]=rows.map(r=>(r&&r.name&&r.custId===custId&&r.bookingStatus!=='cancelled')
+      ?(hit=true,cxMark(r,{dk:d,to:keepDk,by:by||''})):r);
+  });
+  return hit?out:undefined;
+};
 const archDropSameBooking=(arch,custId,keepDk)=>{
   if(!custId||!arch||typeof arch!=='object'||Array.isArray(arch))return undefined;
   const out={};let hit=false;
@@ -4564,7 +4595,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
         _bg.push((async()=>{
           try{
             const _a=await sGet(STOR+'insp-arch');
-            const _n=archDropSameBooking(_a,customer.custId,dkFormatted);
+            // ★保管箱（14日より前の分）の同じ予約は【帯】にする（消さない。2026-11-16）
+            const _n=archMarkSameBooking(_a,customer.custId,dkFormatted,(currentUser&&currentUser.name)||'');
             if(_n){ await sSet(STOR+'insp-arch',_n); setInspArch(_n);
               try{ if(IS_EMBED)window.parent.postMessage({type:'hub-reload-main'},location.origin); }catch(_e){} }
           }catch(e){}
