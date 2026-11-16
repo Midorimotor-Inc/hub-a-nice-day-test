@@ -29,6 +29,23 @@
   };
   // 権限：許可簿に載っていない人の kv 読み書きは拒否（本物のルールの要点だけ真似る）
   const denied = () => Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+  // ★検査用：読み取りをわざと失敗させる（回線が一瞬切れた時の再現）。
+  //   window.__fakeFbFailGet = [{re:'cf-.*-index', times:2}] と置くと、その名前に当たる
+  //   1件取得（get）を times 回だけ「オフライン」で落とす（times を省くと止めるまでずっと）。
+  //   ★本物の Firestore も source:'server' の get は回線が切れていると例外を投げる。
+  //     「読めなかった時に手元の値をサーバーの値と思い込んで書く」類のバグは、これが無いと検査で踏めない。
+  const offline = () => Object.assign(new Error('Failed to get document because the client is offline.'), { code: 'unavailable' });
+  const failGet = (id) => {
+    let list; try { list = window.__fakeFbFailGet; } catch (e) { return false; }
+    if (!Array.isArray(list)) return false;
+    for (const r of list) {
+      if (!r || !r.re) continue;
+      if (!new RegExp(r.re).test(String(id))) continue;
+      if (r.times != null) { if (r.times <= 0) continue; r.times--; }
+      return true;
+    }
+    return false;
+  };
   const allowedOf = () => (store['meta/allowed'] || {});
   const ekey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
   const makeDb = auth => {
@@ -39,7 +56,7 @@
   const canWrite = (col, id) => (col === 'users' && own(id)) || (col === 'handoff' && isAllowed()) || (col === 'kv' && (id.indexOf('hub-v8-dev-') === 0 || isAllowed())) || (col === 'meta' && isAdmin()) || (col === 'devices' && isAllowed()) || (col.indexOf('snap') === 0 && isAllowed());
   const doc = (col, id) => ({
     id, __col: col, __id: id,
-    get: async () => { stats.reads++; if (!canRead(col, id)) throw denied(); return snapOf(col, id); },
+    get: async () => { stats.reads++; if (failGet(id)) throw offline(); if (!canRead(col, id)) throw denied(); return snapOf(col, id); },
     set: async (d, opts) => { if (!canWrite(col, id)) throw denied(); writeDoc(col, id, d, opts); },
     // ★本物と同じ update（2026-11-14 に足した）。項目を足す／差し替えるだけで、
     //   ★その行が無い時は失敗する（＝取り消された端末の行を作り直さない）。

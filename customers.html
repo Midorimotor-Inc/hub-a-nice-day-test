@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794725730513';
+  window.__APP_BUILD='build-1794789494967';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -170,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.117.6'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.118.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1532,6 +1532,9 @@ const pendLoad=()=>{try{const v=JSON.parse(localStorage.getItem(PEND_KEY)||'[]')
 const pendSave=list=>{try{localStorage.setItem(PEND_KEY,JSON.stringify(list.slice(-30)));}catch(e){}};
 const pendAdd=p=>{const l=pendLoad();l.push(p);pendSave(l);};
 const pendDrop=pid=>pendSave(pendLoad().filter(p=>p.pid!==pid));
+// ★控えに印を足す（2026-11-16）。スケジュールは入ったのに【顧客リストの行だけ】書けなかった
+//   分に fileFail を立て、起動し直しても控えを消さない＝バナーから再送できる。
+const pendMark=(pid,fields)=>pendSave(pendLoad().map(p=>p.pid===pid?{...p,...(fields||{})}:p));
 
 // ═══════════════════════════════════════════
 // ユーティリティ
@@ -3286,6 +3289,9 @@ const syncRowsOf=(insp,arch,dk)=>[...(((insp&&insp[dk])||[])),...(((arch&&arch[d
   .filter(r=>r&&r.bookingStatus!=='cancelled'&&r.name);
 const syncHas=(insp,arch,dk,c)=>syncRowsOf(insp,arch,dk).some(r=>syncSameRow(r,c));
 // その人が【別の日】に予約を持っていないか（持っていれば入庫日のズレ＝反映漏れではない）
+// 日付キーをゼロ詰めに直す（insp は "2026-12-5"・顧客リストは "2026-12-05"）
+const syncPad=dk=>{const q=String(dk||'').split('-').map(Number);
+  return (q.length===3&&!isNaN(q[0]))?`${q[0]}-${String(q[1]).padStart(2,'0')}-${String(q[2]).padStart(2,'0')}`:String(dk||'');};
 const syncOtherDay=(insp,arch,c,skipDk)=>{
   const dks=new Set([...Object.keys(insp||{}),...Object.keys(arch||{})]);
   for(const dk of dks){ if(dk===skipDk)continue; if(syncHas(insp,arch,dk,c))return dk; }
@@ -4635,7 +4641,21 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           try{
             const _latest=await loadFileChunked(changedFile.name,true);   // ★サーバーから読み直す
             // ★欠けて読めたサーバー値を「それが全部」と見なさない（短い行で上書きしない）
-            const _base=(_latest&&Array.isArray(_latest.customers)&&_latest._complete!==false)?_latest.customers:changedFile.customers;
+            // ★★【2026-11-16・重大】読めなかった時に、手元の【すでに書き換えた】配列を
+            //   「サーバーの今の値」として使ってはいけない。使うと差分がゼロになり、
+            //   saveFileChunked が1本も書かずに true を返す
+            //   ＝「保存できた」と言いながら1文字も書かない（画面と手元の控えだけが本予約になる）。
+            //   本番でこれが21件起きていた（2026-9-28〜11-15。スケジュール・代車・custbk は入って
+            //   いるのに、顧客リストの行だけ未予約／仮予約のまま。2026-11-16 ユーザー報告の
+            //   「仮予約なのにスケジュールは本予約」の正体）。
+            //   サーバーの今の値を読めない時は【書かずにやり直す】。3回だめなら下の案内を出し、
+            //   控え（未反映の予約）に残して再送できるようにする。
+            const _base=(_latest&&Array.isArray(_latest.customers)&&_latest._complete!==false)?_latest.customers:null;
+            if(!_base){
+              console.warn('[CF] サーバーの今の値を読めないので書きません',changedFile.name,'retry',_attempt+1);
+              await new Promise(r=>setTimeout(r,900*(_attempt+1)));
+              continue;
+            }
             // ★行まるごとではなく【変えた項目だけ】を当てる（2026-11-12）。
             //   まるごと置くと、他のPCがこの人に付けた投函の印・備考を手元の古い値で消す。
             const _dif=cfRowDiff(customer,updCustomer);
@@ -4660,6 +4680,8 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
             console.warn('顧客ファイル保存 未反映 retry',_attempt+1,customer.name);
           }catch(e){console.error('顧客ファイル保存エラー:',e);}
         }
+        // ★スケジュールには入っているので、控えを消さずに印を付ける（起動し直しても残る）
+        pendMark(pid,{fileFail:true});
         setPendings(pendLoad());
         alert(`⚠️ ${customer.name} のリスト保存がサーバーに反映できませんでした。\n画面上部の「未反映の予約」バナーから再送できます。`);
       })());
@@ -4705,6 +4727,9 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     const left=[];
     for(const p of list){
       if(!p.dk||!p.row){pendDrop(p.pid);continue;}          // 仮予約など（insp対象外）は控えを残さない
+      // ★【顧客リストの行だけ】書けなかった分は、スケジュールに入っていても控えを残す（2026-11-16）。
+      //   消すと「スケジュールには本予約・リストは未予約」のまま誰も気づけない。
+      if(p.fileFail){left.push(p);continue;}
       if(inspHasCust(insp,p.dk,p.custId,p.name))pendDrop(p.pid);
       else left.push(p);
     }
@@ -4724,12 +4749,23 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       // 顧客ファイル側（status/entryDate）も入っていなければ入れ直す
       if(p.fileName&&p.cust){
         const f=await loadFileChunked(p.fileName,true);   // ★サーバーから読み直す
-        if(f&&Array.isArray(f.customers)){
-          const cur=f.customers.find(c=>c.custId===p.custId);
-          if(!cur||cur.status!==p.cust.status||cur.entryDate!==p.cust.entryDate){
-            const merged=f.customers.map(c=>c.custId===p.custId?{...c,...p.cust}:c);
-            await saveFileChunked({name:p.fileName,customers:merged},f.customers);
+        // ★★読めなかった時は書かない。控えも消さない（2026-11-16）。
+        //   以前はここを素通りして pendDrop していたので、リストの行が直っていないのに
+        //   「再送できました」になっていた。
+        if(!(f&&Array.isArray(f.customers)&&f._complete!==false)){
+          alert('⚠️ '+p.name+' のリストをサーバーから読めませんでした。少し待ってからもう一度「再送」をお試しください。');
+          return;
+        }
+        const cur=f.customers.find(c=>c.custId===p.custId);
+        if(!cur||cur.status!==p.cust.status||cur.entryDate!==p.cust.entryDate){
+          const merged=f.customers.map(c=>c.custId===p.custId?{...c,...p.cust}:c);
+          cfHoldMark(p.custId,Object.keys(p.cust||{}));
+          const okFile=await saveFileChunked({name:p.fileName,customers:merged},f.customers);
+          if(!okFile){
+            alert('⚠️ '+p.name+' のリストをサーバーに書けませんでした。もう一度「再送」をお試しください。');
+            return;
           }
+          applyServerFile({name:p.fileName,customers:merged,_complete:true});
         }
       }
       pendDrop(p.pid);
@@ -4740,7 +4776,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       setResending('');
       setPendings(pendLoad());
     }
-  },[inspLimits]);
+  },[inspLimits,applyServerFile]);
 
   const handleSyncCheck=useCallback(async()=>{
     setSyncing(true);
@@ -4795,10 +4831,67 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           staff:f.staff,tokuten:f.tokuten,note:f.note,bookingTime:f.time,entryDate:e.dk,
           _src:'カレンダー仮登録(custbk)',_why:'カレンダーの仮登録（custbk）に残っています'});
       });
-      setSyncDialog({missing:[...missing,...extra],total:confirmedWithDate.length+extra.length,latestInsp,latestArch});
+      // ★★【逆向き・2026-11-16】スケジュールには本予約で入っているのに、顧客リストの行が本予約でない。
+      //   これまで同期チェックは「リストが本予約なのにスケジュールに無い」の片方向だけを見ていたので、
+      //   こちらは【誰にも見えなかった】（自己修復 reconcileListWithInsp も status==='confirm' の行しか直さない）。
+      //   2026-11-16 時点の本番に21件（2026-9-28〜11-15）。元凶は handleBookingSave の
+      //   「サーバーの今の値が読めない時に手元の配列を使って1文字も書かない」で、そちらは直したが、
+      //   すでに食い違っている分は現場で直せるようにここに出す。
+      const _byId={};
+      const _fileOf={};
+      allFiles.filter(Boolean).forEach(f=>(f.customers||[]).forEach(c=>{
+        if(c&&c.custId){_byId[c.custId]=c;_fileOf[c.custId]=f.name;}}));
+      const _seenB=new Set();
+      const back=[];
+      [latestInsp,latestArch].forEach((o,oi)=>{
+        Object.keys(o||{}).forEach(dk=>{
+          const rows=o[dk];
+          if(!Array.isArray(rows)||!inSyncRange(dk))return;
+          rows.forEach(r=>{
+            if(!r||!r.custId||!r.name||r.bookingStatus!=='confirmed')return;
+            const c=_byId[r.custId];
+            if(!c||c.status==='confirm')return;
+            const k=r.custId+'|'+syncPad(dk);
+            if(_seenB.has(k))return;
+            _seenB.add(k);
+            const _bt=r.time||r.bookingTime||'';
+            back.push({custId:r.custId,name:c.name,no:c.no,file:_fileOf[r.custId]||'',
+              listStatus:c.status||'none',listEntry:c.entryDate||'',dk:syncPad(dk),arch:oi===1,
+              store:r.store||c.store||'honten',course:r.course,
+              fields:{status:'confirm',entryDate:syncPad(dk),linkedInspDate:syncPad(dk),
+                ...(_bt?{bookingTime:_bt}:{}),...(r.course!=null?{course:Number(r.course)||0}:{})}});
+          });
+        });
+      });
+      back.sort((x,y)=>String(x.dk).localeCompare(String(y.dk)));
+      setSyncDialog({missing:[...missing,...extra],total:confirmedWithDate.length+extra.length,back,latestInsp,latestArch});
     }catch(e){alert('GASからのデータ取得に失敗しました: '+(e.message||e));}
     finally{setSyncing(false);}
   },[]);
+
+  // ★★【逆向きを直す・2026-11-16】スケジュールに本予約で入っている分に、顧客リストの行をそろえる。
+  //   書くのは status / entryDate / linkedInspDate / bookingTime / course の【5項目だけ】。
+  //   投函の印・備考・担当・dm*Book には触らない（cfSaveRowFields が変えた項目だけを当てる）。
+  //   ★スケジュール（insp）には1文字も書かない＝予約そのものは動かさない。
+  const handleSyncFixList=useCallback(async(items)=>{
+    const list=(items||[]).filter(x=>x&&x.custId&&x.file&&x.fields);
+    if(list.length===0)return;
+    setSyncing(true);
+    let okN=0;const ngNames=[];
+    try{
+      for(const it of list){
+        const rows=await cfSaveRowFields(it.file,it.custId,it.fields,
+          ((filesRef.current||[]).find(f=>f.name===it.file)||{}).customers);
+        if(rows){
+          okN++;
+          applyServerFile({name:it.file,customers:rows,_complete:true});
+        }else ngNames.push(it.name);
+      }
+      setSyncDialog(prev=>prev?{...prev,back:(prev.back||[]).filter(b=>!list.some(x=>x.custId===b.custId&&x.dk===b.dk)||ngNames.indexOf(b.name)>=0),
+        listFixed:okN,listNg:ngNames}:prev);
+    }catch(e){alert('リストの直しに失敗しました: '+(e.message||e));}
+    finally{setSyncing(false);}
+  },[applyServerFile]);
 
   const handleSyncFix=useCallback(async()=>{
     if(!syncDialog||syncDialog.missing.length===0)return;
@@ -5421,11 +5514,15 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                   </button>
                 </>
               )
-            ):syncDialog.missing.length===0?(
+            ):(syncDialog.missing.length===0&&(syncDialog.back||[]).length===0)?(
               <>
                 <div style={{fontWeight:800,fontSize:18,color:'#16a34a'}}>✅ 問題ありません</div>
                 <div style={{fontSize:14,color:'#374151'}}>本予約・入庫日あり {syncDialog.total}件すべてがスケジュールに反映されています。</div>
                 <div style={{fontSize:12,color:'#9ca3af'}}>入庫日が {SYNC_FROM_DK.replace(/-/g,'/')} 以降の分を見ています（スケジュールを使い始めた日より前は数えません）。</div>
+                {syncDialog.listFixed!=null&&(
+                  <div data-syncbackdone="1" style={{fontSize:12,color:'#166534',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:6,padding:'7px 10px',fontWeight:700}}>
+                    顧客リストを {syncDialog.listFixed}件そろえました{(syncDialog.listNg||[]).length>0?`（直せなかった分：${(syncDialog.listNg||[]).join('／')}）`:''}。
+                  </div>)}
                 <button onClick={()=>setSyncDialog(null)}
                   style={{alignSelf:'flex-end',padding:'8px 24px',background:'#1d4ed8',color:'white',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer'}}>
                   閉じる
@@ -5433,8 +5530,14 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               </>
             ):(
               <>
-                <div style={{fontWeight:800,fontSize:18,color:'#dc2626'}}>⚠️ {syncDialog.missing.length}件の反映漏れを検出</div>
-                <div style={{fontSize:13,color:'#6b7280'}}>入庫日あり・本予約ステータスだが、スケジュールへの反映が確認できない顧客です。（全{syncDialog.total}件中）</div>
+                <div style={{fontWeight:800,fontSize:18,color:'#dc2626'}}>{syncDialog.missing.length>0?`⚠️ ${syncDialog.missing.length}件の反映漏れを検出`:`⚠️ 食い違い ${(syncDialog.back||[]).length}件を検出`}</div>
+                {syncDialog.missing.length>0&&(
+                  <div style={{fontSize:13,color:'#6b7280'}}>リストは本予約・入庫日ありなのに、スケジュールへの反映が確認できない分が {syncDialog.missing.length}件（全{syncDialog.total}件中）。</div>)}
+                {(syncDialog.back||[]).length>0&&(
+                  <div data-syncbacknote="1" style={{fontSize:13,color:'#7f1d1d',background:'#fee2e2',border:'2px solid #fca5a5',borderRadius:6,padding:'7px 10px',fontWeight:700}}>
+                    ★逆向き：スケジュールには<b>本予約</b>で入っているのに、顧客リストの行が本予約になっていない分が {(syncDialog.back||[]).length}件。
+                    <span style={{fontWeight:500}}>（下の「顧客リストを本予約にそろえる」で直せます。スケジュールの予約そのものは動かしません）</span>
+                  </div>)}
                 <div style={{fontSize:12,color:'#9ca3af'}}>入庫日が {SYNC_FROM_DK.replace(/-/g,'/')} 以降の分を見ています（スケジュールを使い始めた日より前は数えません）。</div>
                 <div data-syncnote="1" style={{fontSize:12,color:'#166534',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:6,padding:'7px 10px'}}>
                   14日より前の予約（保管箱）も見ています。スケジュールに手で入れた行（氏名が短い・「様」付き）も、ナンバーか車種が合えば反映済みとして扱います。
@@ -5463,16 +5566,60 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
                       ))}
                     </tbody>
                   </table>
+                  {/* ★逆向きの食い違い（2026-11-16）。スケジュールは本予約・リストは未予約／仮予約／キャンセル。 */}
+                  {(syncDialog.back||[]).length>0&&(
+                    <div data-syncback="1">
+                      <div style={{padding:'7px 10px',background:'#7f1d1d',color:'white',fontWeight:800,fontSize:12.5}}>
+                        ★逆向き：スケジュールは本予約なのに、顧客リストが本予約でない {(syncDialog.back||[]).length}件
+                      </div>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                        <thead>
+                          <tr>
+                            {['氏名','No.','予約の日','リストの状態','リストの入庫日','月','直す'].map(h=>(
+                              <th key={h} style={{padding:'6px 10px',background:'#fef2f2',fontWeight:700,textAlign:'left',borderBottom:'1px solid #fca5a5'}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(syncDialog.back||[]).map((b,i)=>(
+                            <tr key={b.custId+b.dk} data-syncbackrow={b.custId} style={{borderBottom:'1px solid #f1f5f9',background:i%2?'#fff7f7':'white'}}>
+                              <td style={{padding:'5px 10px',fontWeight:600}}>{b.name}</td>
+                              <td style={{padding:'5px 10px',color:'#6b7280'}}>{b.no}</td>
+                              <td style={{padding:'5px 10px',fontWeight:700,color:'#1d4ed8'}}>{b.dk}{b.arch?'（保管箱）':''}</td>
+                              <td data-syncbackst={b.listStatus} style={{padding:'5px 10px',fontWeight:700,color:'#b91c1c'}}>{STATUS_DEF[b.listStatus]?STATUS_DEF[b.listStatus].label:(b.listStatus||'（空）')}</td>
+                              <td style={{padding:'5px 10px'}}>{b.listEntry||'（空）'}</td>
+                              <td style={{padding:'5px 10px',color:'#6b7280'}}>{b.file}</td>
+                              <td style={{padding:'5px 10px'}}>
+                                <button data-syncbackfix={b.custId} onClick={()=>handleSyncFixList([b])} disabled={syncing}
+                                  style={{padding:'3px 10px',background:'#1d4ed8',color:'white',border:'none',borderRadius:6,fontWeight:700,fontSize:11,cursor:'pointer',opacity:syncing?0.6:1}}>
+                                  本予約にそろえる
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>)}
                 </div>
-                <div style={{display:'flex',gap:10,justifyContent:'flex-end',flexShrink:0}}>
+                {syncDialog.listFixed!=null&&(
+                  <div data-syncbackdone="1" style={{fontSize:12,color:'#166534',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:6,padding:'7px 10px',fontWeight:700}}>
+                    顧客リストを {syncDialog.listFixed}件そろえました{(syncDialog.listNg||[]).length>0?`（直せなかった分：${(syncDialog.listNg||[]).join('／')}）`:''}。
+                  </div>)}
+                <div style={{display:'flex',gap:10,justifyContent:'flex-end',flexShrink:0,flexWrap:'wrap'}}>
                   <button onClick={()=>setSyncDialog(null)}
                     style={{padding:'8px 20px',background:'#f1f5f9',color:'#374151',border:'1px solid #e5e7eb',borderRadius:8,fontWeight:700,cursor:'pointer'}}>
                     キャンセル
                   </button>
-                  <button onClick={handleSyncFix} disabled={syncing}
-                    style={{padding:'8px 24px',background:'#dc2626',color:'white',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer',opacity:syncing?0.6:1}}>
-                    {syncing?'修復中...':'スケジュールに追加する'}
-                  </button>
+                  {(syncDialog.back||[]).length>0&&(
+                    <button data-syncbackall="1" onClick={()=>handleSyncFixList(syncDialog.back)} disabled={syncing}
+                      style={{padding:'8px 24px',background:'#1d4ed8',color:'white',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer',opacity:syncing?0.6:1}}>
+                      {syncing?'直しています...':'顧客リストを本予約にそろえる（'+(syncDialog.back||[]).length+'件）'}
+                    </button>)}
+                  {syncDialog.missing.length>0&&(
+                    <button onClick={handleSyncFix} disabled={syncing}
+                      style={{padding:'8px 24px',background:'#dc2626',color:'white',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer',opacity:syncing?0.6:1}}>
+                      {syncing?'修復中...':'スケジュールに追加する'}
+                    </button>)}
                 </div>
               </>
             )}
@@ -5520,13 +5667,16 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       {pendings.length>0&&(
         <div style={{position:'fixed',left:16,right:16,top:64,zIndex:99999,padding:'11px 14px',borderRadius:11,
           background:'#fef2f2',border:'2px solid #fca5a5',color:'#991b1b',boxShadow:'0 8px 24px rgba(0,0,0,.16)'}}>
-          <div style={{fontWeight:900,fontSize:13,marginBottom:6}}>⚠️ スケジュールに反映されていない予約が {pendings.length} 件あります</div>
+          {/* ★言葉を分ける（2026-11-16）。スケジュールは入っていて【顧客リストの行だけ】
+              書けなかった分（fileFail）があるので、「スケジュールに反映されていない」では嘘になる。 */}
+          <div style={{fontWeight:900,fontSize:13,marginBottom:6}}>⚠️ サーバーに反映されていない予約が {pendings.length} 件あります</div>
           {pendings.map(p=>(
             <div key={p.pid} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0',fontSize:12,fontWeight:700}}>
-              <span style={{flex:1}}>{p.name}（{String(p.dk).split('-').slice(1).join('/')} 入庫予定）</span>
+              <span style={{flex:1}}>{p.name}（{String(p.dk).split('-').slice(1).join('/')} 入庫予定）
+                {p.fileFail&&<span data-pendfile="1" style={{marginLeft:6,padding:'1px 6px',borderRadius:5,background:'#fee2e2',border:'1px solid #dc2626',fontSize:10.5,fontWeight:800}}>顧客リストの行だけ未反映</span>}</span>
               <button onClick={()=>resendPending(p)} disabled={resending===p.pid}
                 style={{padding:'5px 12px',background:'#dc2626',color:'white',border:'none',borderRadius:7,fontWeight:800,fontSize:12,cursor:'pointer',opacity:resending===p.pid?0.6:1}}>
-                {resending===p.pid?'再送中…':'スケジュールに再送'}
+                {resending===p.pid?'再送中…':(p.fileFail?'顧客リストに再送':'スケジュールに再送')}
               </button>
               <button onClick={()=>{pendDrop(p.pid);setPendings(pendLoad());}}
                 style={{padding:'5px 8px',background:'transparent',border:'none',color:'#991b1b',fontWeight:800,fontSize:14,cursor:'pointer'}}>✕</button>
