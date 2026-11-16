@@ -1,0 +1,288 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>見本：帯から再予約／帯をタップでジャンプ／2つ表示の扱い</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;font-family:"Segoe UI","Yu Gothic UI",sans-serif;color:#1b2129}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 14px 70px}
+h1{font-size:19px;margin:6px 0 4px}
+.lead{font-size:13px;color:#475569;line-height:1.75;margin:0 0 18px}
+.sec{background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:22px;overflow:hidden}
+.sec>h2{margin:0;padding:11px 14px;font-size:15px;background:#0f172a;color:white;font-weight:800}
+.sec>h2 small{font-weight:500;opacity:.8;font-size:12px;margin-left:8px}
+.body{padding:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tab{padding:8px 14px;border-radius:9px;border:2px solid #cbd5e1;background:white;font-size:13px;font-weight:800;cursor:pointer}
+.tab.on{background:#0891b2;border-color:#0891b2;color:white}
+.note{font-size:12.5px;color:#334155;line-height:1.8;background:#f8fafc;border-left:4px solid #0891b2;padding:9px 12px;border-radius:0 8px 8px 0;margin:0 0 12px}
+.note b{color:#0c4a6e}
+/* ===== 本物と同じスケジュール表 ===== */
+table.sch{width:100%;border-collapse:collapse;font-size:13px;background:white}
+table.sch th{background:#fff7ed;border-bottom:2px solid #64748b;padding:5px 4px;font-size:11.5px;color:#7c2d12;font-weight:800}
+table.sch td{border-bottom:1px solid #eef2f6;padding:5px 6px;vertical-align:middle}
+.numc{text-align:center;width:34px;font-weight:900;color:#64748b}
+.nm{font-weight:700}
+.car{color:#475569;font-size:12px}
+.cbadge{display:inline-block;padding:1px 7px;border-radius:4px;font-weight:800;font-size:11px}
+.c1{background:#dc2626;color:#fff}.c2{background:#f59e0b;color:#000}.c3{background:#2563eb;color:#fff}
+.btn{padding:2px 8px;border-radius:7px;font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap;border:1.5px solid #b91c1c;background:white;color:#991b1b}
+.btn.mv{border-color:rgba(255,255,255,.75);background:rgba(255,255,255,.14);color:white}
+.btn.go{border-color:#047857;background:white;color:#065f46}
+.right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.bandin{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 8px}
+.big{font-size:16px;font-weight:900;letter-spacing:3px}
+.strike{text-decoration:line-through}
+/* キャンセル帯 */
+tr.cx td{background:#fee2e2;border-bottom:1px solid #eef2f6}
+tr.cx td.mark{text-align:center;padding:6px 4px;font-weight:900;font-size:12;border-left:3px solid #dc2626;color:#991b1b}
+tr.cx .big,tr.cx .sub{color:#991b1b}
+tr.cx .sub{font-size:12px;font-weight:800;color:#7f1d1d}
+/* 日にち変更帯 */
+tr.mv td{background:#dc2626;border-bottom:1px solid #eef2f6}
+tr.mv td.mark{text-align:center;padding:6px 4px;font-weight:900;font-size:12;border-left:3px solid #7f1d1d;color:#fff}
+tr.mv .big{color:#fff}
+tr.mv .sub{font-size:12px;font-weight:800;color:#fee2e2}
+tr.mv.tapable{cursor:pointer}
+tr.mv.tapable:hover td{background:#b91c1c}
+.jumpable{text-decoration:underline;text-decoration-style:dotted;cursor:pointer}
+.hint{font-size:11px;font-weight:700;opacity:.85}
+/* 再予約済みの印 */
+.redone{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;font-weight:900;background:#047857;color:white}
+tr.cx.faded td{background:#fef2f2;opacity:.62}
+/* カード */
+.cardbg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+.cardbg.on{display:flex}
+.card{background:white;border-radius:14px;width:min(520px,96vw);max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.card h3{margin:0;padding:11px 14px;font-size:15px;color:white;background:#0891b2}
+.card.re h3{background:#047857}
+.cb{padding:14px;font-size:13px;line-height:1.9}
+.fld{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.fld label{width:92px;font-size:12px;font-weight:800;color:#475569;flex:none}
+.fld input{flex:1;padding:6px 9px;border:2px solid #cbd5e1;border-radius:8px;font-size:14px;font-family:inherit}
+.cf{padding:10px 14px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #e2e8f0}
+.cf button{padding:8px 16px;border-radius:9px;border:none;font-size:13px;font-weight:800;cursor:pointer}
+.ok{background:#047857;color:white}.gray{background:#e2e8f0;color:#334155}
+.ribbon{background:#fecaca;border:2px solid #991b1b;border-radius:9px;padding:7px 10px;font-size:12.5px;font-weight:800;color:#7f1d1d;margin-bottom:11px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0f172a;color:white;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:800;z-index:90;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.toast.on{display:block}
+.daybar{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.daybar .dd{font-size:17px;font-weight:900}
+.daybar .sm{font-size:12px;color:#64748b}
+.reset{margin-top:6px;padding:7px 14px;border-radius:9px;border:2px solid #94a3b8;background:white;font-size:12.5px;font-weight:800;cursor:pointer}
+.ok2{background:#ecfdf5;border:2px solid #047857;color:#065f46;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:800;margin-bottom:9px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+</style></head><body><div class="wrap">
+
+<h1>見本：キャンセル・日にち変更の帯から、できることを増やす</h1>
+<p class="lead">
+ご依頼の3つを、それぞれ案を並べました。<b>実際に押して動きます</b>（データは触りません・この1枚だけで動く見本です）。<br>
+① 取り消し・キャンセルの帯から<b>もう一度呼び出して再予約</b>　② 日にち変更の帯の<b>どこかをタップで移り先の日へジャンプ</b>　③ キャンセル後に<b>同じ日へ再予約すると帯と予約が2つ並ぶ</b>件の扱い
+</p>
+
+<!-- ①再予約 -->
+<div class="sec"><h2>① キャンセル／取り消しの帯から「再予約」<small>どこに置くか</small></h2><div class="body">
+  <div class="tabs" id="t1">
+    <button class="tab on" data-a="a">ア案：帯に「↻ 再予約」を足す</button>
+    <button class="tab" data-a="b">イ案：「🗒 中身」の中に置く</button>
+    <button class="tab" data-a="c">ウ案：帯のどこでも押す</button>
+  </div>
+  <div class="note" id="n1"></div>
+  <div class="daybar"><span class="dd">11月20日（木）</span><span class="sm">🚗 車検</span></div>
+  <table class="sch"><thead><tr><th>No</th><th>入庫</th><th>お客様</th><th>車種</th><th>コース</th><th>備考</th></tr></thead>
+  <tbody id="b1"></tbody></table>
+  <button class="reset" onclick="reset1()">↺ やり直す</button>
+</div></div>
+
+<!-- ②ジャンプ -->
+<div class="sec"><h2>② 日にち変更の帯をタップすると、移り先の日へジャンプ<small>どこを押せるようにするか</small></h2><div class="body">
+  <div class="tabs" id="t2">
+    <button class="tab on" data-a="a">ア案：帯のどこを押してもジャンプ</button>
+    <button class="tab" data-a="b">イ案：「11/20 → 11/27」の所だけ</button>
+    <button class="tab" data-a="c">ウ案：右端に「11/27 を見る ▶」</button>
+  </div>
+  <div class="note" id="n2"></div>
+  <div class="daybar"><span class="dd" id="d2">11月20日（木）</span><span class="sm">🚗 車検</span></div>
+  <div id="ok2box"></div>
+  <table class="sch"><thead><tr><th>No</th><th>入庫</th><th>お客様</th><th>車種</th><th>コース</th><th>備考</th></tr></thead>
+  <tbody id="b2"></tbody></table>
+  <button class="reset" onclick="reset2()">↺ やり直す（11/20 に戻る）</button>
+</div></div>
+
+<!-- ③2つ表示 -->
+<div class="sec"><h2>③ キャンセルしたあと、同じ日に再予約した時<small>帯をどうするか</small></h2><div class="body">
+  <div class="tabs" id="t3">
+    <button class="tab on" data-a="a">ア案：帯を自動で片づける</button>
+    <button class="tab" data-a="b">イ案：帯に「再予約済み」の印を付けて薄く残す</button>
+    <button class="tab" data-a="c">ウ案：今のまま（2つ出す）</button>
+  </div>
+  <div class="note" id="n3"></div>
+  <div class="daybar"><span class="dd">11月20日（木）</span><span class="sm">🚗 車検　※ 1回キャンセル → 同じ日に再予約した状態</span></div>
+  <table class="sch"><thead><tr><th>No</th><th>入庫</th><th>お客様</th><th>車種</th><th>コース</th><th>備考</th></tr></thead>
+  <tbody id="b3"></tbody></table>
+</div></div>
+
+</div>
+
+<!-- 予約カード -->
+<div class="cardbg" id="cbg"><div class="card" id="cardel">
+  <h3 id="ch">予約の中身</h3>
+  <div class="cb" id="cb"></div>
+  <div class="cf" id="cf"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+var A1='a',A2='a',A3='a',JUMPED=false,RE1=false;
+
+var NOTE1={
+ a:'<b>ア案</b>：帯の右の並びに <b>↻ 再予約</b> を足します（🗒 中身 ／ 🗑 記録を消す のとなり）。押すと、キャンセルした時の中身（お名前・車種・コース・備考）が入った予約カードがそのまま開きます。<br>・いちばん分かりやすく、1回のタップで始められます。　・帯のボタンが3つになります。',
+ b:'<b>イ案</b>：帯のボタンは増やさず、<b>「🗒 中身」を押して開いたカードの中</b>に「↻ この内容で再予約する」を置きます。<br>・帯がすっきりしたまま。　・中身を確かめてから再予約できます。　・2回のタップが要ります。',
+ c:'<b>ウ案</b>：<b>帯のどこを押しても</b>「この予約を再予約しますか？」と出ます（既存のボタンは押してもジャンプしません）。<br>・指で押しやすい（押す所が広い）。　・中身を見るつもりで触った時にも出ます。'
+};
+var NOTE2={
+ a:'<b>ア案</b>：帯の<b>どこを押しても</b>、移り先（11/27）のスケジュールへ移ります。ご依頼の「帯のどこかをタップすると変更した日にジャンプ」そのままの形です。<br>・既存の 🗒 中身・🗑 記録を消す は押してもジャンプしません（そのボタンの役目だけ動きます）。',
+ b:'<b>イ案</b>：<b>「11/20 → 11/27」の日付の所だけ</b>押せます（点線の下線が付きます）。<br>・押せる所がはっきりします。　・指では少し狙いにくいです。',
+ c:'<b>ウ案</b>：右端に <b>「11/27 を見る ▶」</b>のボタンを置きます。<br>・何が起きるか文字で分かります。　・帯のボタンが3つになります。'
+};
+var NOTE3={
+ a:'<b>ア案</b>：同じ日に同じ方を再予約したら、<b>キャンセルの帯を自動で片づけます</b>（記録は残りません）。<br>・画面は1行に戻ってすっきりします。　・「一度キャンセルがあった」ことは分からなくなります。',
+ b:'<b>イ案</b>：帯は残しますが <b>「✓ 再予約済み」の印を付けて薄く</b>出します。<br>・一度キャンセルがあったことが残ります（お客様から「キャンセルしたはずだけど」と言われた時に説明できます）。　・行は2つのままです。',
+ c:'<b>ウ案</b>：いまのまま、<b>キャンセルの帯と新しい予約を2つ出す</b>。<br>・直す所はありません。　・同じ方が2件あるように見えます（今回のご報告の状態）。'
+};
+
+function tbtn(cls){return cls;}
+function toast(s){var t=document.getElementById('toast');t.textContent=s;t.className='toast on';setTimeout(function(){t.className='toast'},2600);}
+
+/* 共通の行 */
+function row(n,tm,nm,car,cc,cl,note){
+ return '<tr><td class="numc">'+n+'</td><td>'+tm+'</td><td class="nm">'+nm+' 様</td><td class="car">'+car+'</td>'
+ +'<td><span class="cbadge '+cl+'">'+cc+'</span></td><td class="car">'+(note||'')+'</td></tr>';
+}
+
+/* ===== ① ===== */
+function reset1(){RE1=false;draw1();}
+function draw1(){
+ document.getElementById('n1').innerHTML=NOTE1[A1];
+ var h='';
+ h+=row(1,'09:00','田中 太郎','ワゴンR','ク','c2','');
+ h+=row(2,'10:00','山本 花子','ハスラー','マ','c1','代車あり');
+ if(RE1){ h+=row(3,'13:00','佐藤 健二','スペーシア','レ','c3','<b style="color:#047857">↻ 再予約で入りました</b>'); }
+ /* キャンセル帯 */
+ var tap=(A1==='c')?' style="cursor:pointer" onclick="askRe()"':'';
+ h+='<tr class="cx"'+tap+'><td class="mark">✕</td><td colspan="5" style="padding:0"><div class="bandin">'
+  +'<span class="big">キャンセル</span>'
+  +'<span class="sub" style="color:#b91c1c">11/16 に取消</span>'
+  +'<span class="sub">（江川）</span>'
+  +'<span class="sub strike">佐藤 健二 様</span><span class="sub strike">スペーシア</span>'
+  +'<span class="cbadge c3">レ</span>'
+  +'<span class="right">'
+  +(A1==='a'?'<button class="btn" onclick="event.stopPropagation();openRe()">↻ 再予約</button>':'')
+  +'<button class="btn" onclick="event.stopPropagation();openMi()">🗒 中身</button>'
+  +'<button class="btn" onclick="event.stopPropagation();toast(\'（見本）この記録を消します\')">🗑 記録を消す</button>'
+  +'</span></div></td></tr>';
+ if(A1==='c') h+='<tr><td colspan="6" style="font-size:11.5px;color:#64748b;background:#fafafa">↑ 帯のどこか（文字の所）を押してみてください</td></tr>';
+ document.getElementById('b1').innerHTML=h;
+}
+function askRe(){ if(confirm('佐藤 健二 様（スペーシア・レギュラー車検）を、もう一度予約しますか？')) openRe(); }
+function openMi(){
+ document.getElementById('cardel').className='card';
+ document.getElementById('ch').textContent='予約の中身（キャンセル）';
+ document.getElementById('cb').innerHTML='<div class="ribbon">✕ この予約はキャンセルです（11/16 に取消・江川）</div>'
+  +'<div class="fld"><label>お客様</label><input value="佐藤 健二" readonly></div>'
+  +'<div class="fld"><label>車種</label><input value="スペーシア" readonly></div>'
+  +'<div class="fld"><label>コース</label><input value="レギュラー車検" readonly></div>'
+  +'<div class="fld"><label>備考</label><input value="オイル交換も希望" readonly></div>';
+ document.getElementById('cf').innerHTML=
+  (A1==='b'?'<button class="ok" onclick="openRe()">↻ この内容で再予約する</button>':'')
+  +'<button class="gray" onclick="closeC()">とじる</button>';
+ document.getElementById('cbg').className='cardbg on';
+}
+function openRe(){
+ document.getElementById('cardel').className='card re';
+ document.getElementById('ch').textContent='↻ 再予約（キャンセルした内容が入っています）';
+ document.getElementById('cb').innerHTML='<div class="ok2">✓ キャンセルした時の中身を入れてあります。日にち・入庫時間を決めて保存してください。</div>'
+  +'<div class="fld"><label>お客様</label><input value="佐藤 健二"></div>'
+  +'<div class="fld"><label>車種</label><input value="スペーシア"></div>'
+  +'<div class="fld"><label>コース</label><input value="レギュラー車検"></div>'
+  +'<div class="fld"><label>入庫時間</label><input value="13:00"></div>'
+  +'<div class="fld"><label>備考</label><input value="オイル交換も希望"></div>';
+ document.getElementById('cf').innerHTML='<button class="ok" onclick="doRe()">📋 確定して登録</button><button class="gray" onclick="closeC()">やめる</button>';
+ document.getElementById('cbg').className='cardbg on';
+}
+function doRe(){RE1=true;closeC();draw1();toast('再予約を登録しました（見本）');}
+function closeC(){document.getElementById('cbg').className='cardbg';}
+document.getElementById('cbg').onclick=function(e){if(e.target===this)closeC();};
+
+/* ===== ② ===== */
+function reset2(){JUMPED=false;draw2();}
+function jump(){JUMPED=true;draw2();window.scrollTo({top:document.getElementById('b2').getBoundingClientRect().top+window.scrollY-160,behavior:'smooth'});}
+function draw2(){
+ document.getElementById('n2').innerHTML=NOTE2[A2];
+ var h='',ok='';
+ if(JUMPED){
+  document.getElementById('d2').textContent='11月27日（木）';
+  ok='<div class="ok2">✓ 11/27 へ移りました。ここに移した予約が入っています。</div>';
+  h+=row(1,'09:00','高橋 一郎','ソリオ','ク','c2','');
+  h+=row(2,'10:00','鈴木 みどり','タント','マ','c1','<b style="color:#047857">← 11/20 から移した分</b>');
+  h+=row(3,'14:00','伊藤 さくら','N-BOX','レ','c3','');
+ }else{
+  document.getElementById('d2').textContent='11月20日（木）';
+  h+=row(1,'09:00','田中 太郎','ワゴンR','ク','c2','');
+  h+=row(2,'10:00','山本 花子','ハスラー','マ','c1','');
+  var tap=(A2==='a')?' class="mv tapable" onclick="jump()" title="11/27 のスケジュールへ移ります"':' class="mv"';
+  h+='<tr'+tap+'><td class="mark">⇄</td><td colspan="5" style="padding:0"><div class="bandin">'
+   +'<span class="big">日にち変更</span>'
+   +'<span class="big" style="font-size:14px'+(A2==='b'?'" class="jumpable" onclick="event.stopPropagation();jump()':'')+'">'
+   +(A2==='b'?'<span class="jumpable" onclick="event.stopPropagation();jump()" title="11/27 へ移ります">11/20 → 11/27</span>':'11/20 → 11/27')
+   +'</span>'
+   +'<span class="sub">11/16 変更・江川</span>'
+   +'<span class="sub strike">鈴木 みどり 様</span><span class="sub strike">タント</span>'
+   +'<span class="cbadge c1">マ</span>'
+   +(A2==='a'?'<span class="sub hint">▶ 押すと 11/27 へ</span>':'')
+   +'<span class="right">'
+   +(A2==='c'?'<button class="btn mv" onclick="event.stopPropagation();jump()">11/27 を見る ▶</button>':'')
+   +'<button class="btn mv" onclick="event.stopPropagation();toast(\'（見本）この予約の中身を出します\')">🗒 中身</button>'
+   +'<button class="btn mv" onclick="event.stopPropagation();toast(\'（見本）この記録を消します\')">🗑 記録を消す</button>'
+   +'</span></div></td></tr>';
+  h+='<tr><td colspan="6" style="font-size:11.5px;color:#64748b;background:#fafafa">↑ 赤い帯を押してみてください（🗒・🗑 を押してもジャンプしません）</td></tr>';
+ }
+ document.getElementById('ok2box').innerHTML=ok;
+ document.getElementById('b2').innerHTML=h;
+}
+
+/* ===== ③ ===== */
+function draw3(){
+ document.getElementById('n3').innerHTML=NOTE3[A3];
+ var h='';
+ h+=row(1,'09:00','田中 太郎','ワゴンR','ク','c2','');
+ h+=row(2,'10:00','山本 花子','ハスラー','マ','c1','');
+ h+=row(3,'14:00','渡辺 修','ジムニー','レ','c3','<b style="color:#047857">↻ 再予約した分（いま有効）</b>');
+ if(A3!=='a'){
+  var fade=(A3==='b')?' faded':'';
+  h+='<tr class="cx'+fade+'"><td class="mark">✕</td><td colspan="5" style="padding:0"><div class="bandin">'
+   +'<span class="big">キャンセル</span>'
+   +'<span class="sub" style="color:#b91c1c">11/16 に取消</span>'
+   +'<span class="sub">（江川）</span>'
+   +'<span class="sub strike">渡辺 修 様</span><span class="sub strike">ジムニー</span>'
+   +'<span class="cbadge c3">レ</span>'
+   +(A3==='b'?'<span class="redone">✓ 再予約済み（14:00）</span>':'')
+   +'<span class="right"><button class="btn" onclick="toast(\'（見本）中身を出します\')">🗒 中身</button>'
+   +'<button class="btn" onclick="toast(\'（見本）この記録を消します\')">🗑 記録を消す</button></span>'
+   +'</div></td></tr>';
+ }else{
+  h+='<tr><td colspan="6" style="font-size:12px;color:#047857;background:#f0fdf4;font-weight:800">✓ 同じ日に再予約したので、キャンセルの帯は片づけました（1行だけ）</td></tr>';
+ }
+ document.getElementById('b3').innerHTML=h;
+}
+
+/* タブ */
+function wire(id,set){
+ var box=document.getElementById(id);
+ box.onclick=function(e){var b=e.target.closest('.tab');if(!b)return;
+  [].forEach.call(box.querySelectorAll('.tab'),function(x){x.className='tab'});
+  b.className='tab on';set(b.getAttribute('data-a'));};
+}
+wire('t1',function(v){A1=v;RE1=false;draw1();});
+wire('t2',function(v){A2=v;JUMPED=false;draw2();});
+wire('t3',function(v){A3=v;draw3();});
+draw1();draw2();draw3();
+</script></body></html>
