@@ -126,6 +126,30 @@ const OLD_ID = MACH_SEQ - 600000;               // その10分前に入ってい
   await page.waitForTimeout(900);
   t('週間カレンダーを閉じてスケジュールに戻った', await seeText(page, 'タイムスケジュール', 8000));
 
+  head('⑧ 1日表示：マッハの制限の帯は【行を区切らない】（2026-11-16 ユーザー指示）');
+  // それまでは「＋クリックして追加　🚗 マッハ車検 ◯◯様」を氏名の欄に入れていたので、
+  // nowrap の札が氏名の列をそのまま広げ、表が枠からはみ出して【内容】の欄が見えなくなっていた。
+  const mb = await page.evaluate(() => {
+    const lab = document.querySelector('[data-machlab]');
+    if (!lab) return { err: 'ない' };
+    const tr = lab.closest('tr'), tbl = lab.closest('table');
+    const ths = [...tbl.querySelectorAll('thead th')];
+    const pane = tbl.parentElement && tbl.parentElement.parentElement;
+    return {
+      cells: [...tr.children].map(td => ({ span: td.colSpan, w: Math.round(td.getBoundingClientRect().width) })),
+      nameW: Math.round(ths[1].getBoundingClientRect().width),
+      noteW: Math.round(ths[ths.length - 1].getBoundingClientRect().width),
+      labW: Math.round(lab.getBoundingClientRect().width),
+      labSpan: lab.closest('td') ? lab.closest('td').colSpan : null,
+      tableW: Math.round(tbl.getBoundingClientRect().width),
+      paneW: pane ? Math.round(pane.getBoundingClientRect().width) : null,
+    };
+  });
+  t('★マスは2つだけ（時間＋まとめた1つ）', !!mb.cells && mb.cells.length === 2, mb);
+  t('★まとめた方は colSpan 6（車種・作業・代車・指見・内容をまたぐ）', !!mb.cells && mb.cells[1] && mb.cells[1].span === 6, mb.cells);
+  t('★札は氏名の欄の中ではなく、まとめたマスの中にある', mb.labSpan === 6, mb);
+  t('★表が枠からはみ出さない（内容の欄まで見える）', mb.tableW <= (mb.paneW || 0) + 4, mb);
+
   // 指定の時間の空き行をクリックして予約カードを開き、名前と作業内容を入れて保存する
   const addAt = async (slot, workName, name) => {
     alerts.length = 0;

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794802849466';
+    window.__APP_BUILD='build-1794803655841';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.119.0';
+const APP_VERSION = '3.119.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -11575,6 +11575,12 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
   // ★マッハ車検の自動制限（2026-10-05）。網掛けの中に「マッハ車検」とだけ出す。
   //   マッハより先に入っていた予定は特例でそのまま（白いまま）。
   const machCov=isRestricted?machCovering(restriction,baseSlot):null;
+  // ★★マッハ車検の制限の帯は【行を区切らない】（2026-11-16 ユーザー指示）。
+  //   それまでは「＋クリックして追加　🚗 マッハ車検 ◯◯様」を氏名の欄に入れていたので、
+  //   nowrap の札（実測178px）が氏名の列をそのまま広げ、そのぶん【内容】の欄が狭くなっていた。
+  //   マス（車種・作業・代車・指見・内容）はどれも空なので、1つにまとめて colSpan で出す。
+  //   ★列に戻さないこと（また氏名の列が広がって、右半分が見にくくなる）。
+  const machBand=!locked&&isEmpty&&!!machCov;
   const rowMachPre=isRestricted&&!!row.name&&machPreexisting(restriction,row);
   const rowExempt=isRestricted&&!!row.name&&(restrPasses(restriction,row)||rowMachPre);
   const rowBgSched=rowExempt?'white'
@@ -11597,7 +11603,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
                  1件目と見分けられるよう、少し細く薄い字にしてある。 */
               : <span style={{fontWeight:600,color:'#38bdf8'}}>{isSpecialSlot(baseSlot)?specialSlotLabel(baseSlot):getBaseSlot(slot)}</span>)}
       </td>
-      <td style={TD}>
+      <td style={TD} colSpan={machBand?6:1}>
         {locked?<div style={{padding:'3px 5px',borderLeft:'5px solid #f59e0b',marginLeft:-8,paddingLeft:8}}>{row.name&&<div style={{fontWeight:600}}>{sama(row.name)}</div>}<LockBadge lockedBy={lockInfo.lockedBy} isNew={!row.name}/></div>
          :isEmpty?<div style={{color:'#475569',fontSize:11,padding:'5px 7px',fontStyle:'italic',fontWeight:600,display:'flex',alignItems:'center',gap:4}}><span style={{width:18,height:18,border:'2px dashed #94a3b8',borderRadius:3,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#475569',fontWeight:700}}>+</span>クリックして追加
            {/* ★マッハ車検による自動の入庫制限（2026-10-05）。網掛けの中に名前だけ出す */}
@@ -11614,6 +11620,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
               {row.staff&&<div style={{fontSize:12,color:'#374151'}}>{row.staff}</div>}
             </div>}
       </td>
+      {!machBand&&<>
       {/* ★車種の下にナンバー4桁、電話は作業内容のバッジの下（2026-09-30 ユーザー指示・A案） */}
       <td style={TD}><span style={{color:'#374151',fontSize:13,fontWeight:700}}>{row.carType||'—'}</span>
         {plateFull(row)!==''&&<div style={{fontSize:12,fontWeight:800,letterSpacing:'.06em',color:'#0f172a',whiteSpace:'nowrap'}}>ナンバー {plateFull(row)}</div>}</td>
@@ -11626,6 +11633,7 @@ const SchedRow=memo(({row,slot,baseSlot,isFirstSub,dk,onOpenModal,lockInfo,loane
       <td style={TD}><span style={{fontSize:13,color:'#374151'}}>{row.shimi||'—'}</span></td>
       {/* ★内容は2行まで。なぞると全文が吹き出しで出る（2026-10-05・A案） */}
       <td style={TD}><NoteCell text={row.content} items={contentQItems} dim={false} title="内容"/></td>
+      </>}
     </tr>
   );
 });
