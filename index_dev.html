@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794808851774';
+    window.__APP_BUILD='build-1794815008048';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.119.3';
+const APP_VERSION = '3.120.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -15096,6 +15096,9 @@ function AppInner() {
   //     GASが不調の朝に5件入れて3件が届かず、本人は「保存中」に気づかずリロードして失った。
   //     確認できなかった控え（サーバーが読めない時）も画面に出す＝GASが戻ってから送り直せる。
   const [inspPendings,setInspPendings]=useState([]);   // 画面に出す未反映の控え
+  // ★日にち変更のあと、元の日に出す緑のお知らせ（イ案・2026-11-16 ユーザー決定）。
+  //   {from:元の日, to:移り先の日, name:氏名}。元の日を離れると自然に消える（下の出し方を見ること）。
+  const [dcBack,setDcBack]=useState(null);
   useEffect(()=>{
     const pend=inspPendLoad();
     if(!pend.length)return;
@@ -17427,6 +17430,22 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         );
       }
     }
+    // ★日にち変更のあと、画面は【元の日】に留める（イ案・2026-11-16 ユーザー決定）。
+    //   ★移り先へ飛ばさないこと。 元の日に残した「日にち変更」の帯がその場で見えず、
+    //   「移したのに帯が出ない」と誤解される（2026-11-16 現場報告の見え方の正体）。
+    //   ★日を選んだ時点では今までどおり selDate を動かす（handleDateChangeModal）。
+    //   保存の組み立てが selDateRef を移り先として読むので、そこは触らずここで戻す。
+    if(_dcIsDateChange&&_dcOrigDk){
+      const _bp=String(_dcOrigDk).split('-').map(Number);
+      if(_bp.length===3&&!isNaN(_bp[0])){
+        const _bd=new Date(_bp[0],_bp[1]-1,_bp[2]);
+        setSelDate(_bd);selDateRef.current=_bd;
+      }
+      setDcBack({from:_dcOrigDk,to:_dcTargetDk,name:cleanData.name||''});
+    }else if(modalType==='insp'){
+      // 日にちを動かしていない保存のあとは、前のお知らせを片づける（残り続けないように）
+      setDcBack(null);
+    }
     const keyToRelease=curLockKey;
     setCurLockKey(null);
     setTimeout(()=>releaseLock(keyToRelease),200);
@@ -19436,6 +19455,24 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 <div style={{width:`${splitRatio}%`,minWidth:0,flexShrink:0,display:'flex',flexDirection:'column',gap:18,overflowY:'auto',height:'100%',paddingBottom:40}}>
               {/* -- 車検セクション（台数集計なし） -- */}
               <div id={SEC_INSP} style={{marginBottom:26,scrollMarginTop:'var(--header-h,60px)'}}>
+                {/* ★日にち変更のあとのお知らせ（イ案・2026-11-16 ユーザー決定）。
+                    ★出すのは【元の日を見ている間だけ】。別の日へ移れば自然に消えるので、
+                    消すためのタイマーは要らない（勝手に消えて驚かせないため）。 */}
+                {dcBack&&dcBack.from===dk&&(
+                  <div data-dcback="1" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
+                    padding:'8px 12px',marginBottom:8,background:'#ecfdf5',border:'2px solid #047857',
+                    borderRadius:10,color:'#065f46',fontSize:13,fontWeight:800}}>
+                    <span>✓ {cxMD(dcBack.to)} へ移しました。この日には「日にち変更」の記録（下の赤い帯）を残してあります。</span>
+                    <button data-dcbackgo="1" title="移り先の日のスケジュールを見る"
+                      onClick={()=>{const q=String(dcBack.to).split('-').map(Number);
+                        if(q.length===3&&!isNaN(q[0])){const nd=new Date(q[0],q[1]-1,q[2]);setSelDate(nd);selDateRef.current=nd;}}}
+                      style={{padding:'6px 12px',borderRadius:8,border:'2px solid #047857',background:'white',
+                        color:'#065f46',fontSize:12.5,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {cxMD(dcBack.to)} を見る ▶</button>
+                    <button data-dcbackx="1" title="このお知らせを閉じる" onClick={()=>setDcBack(null)}
+                      style={{marginLeft:'auto',border:'none',background:'transparent',color:'#065f46',
+                        fontSize:16,fontWeight:900,cursor:'pointer',padding:'2px 6px'}}>✕</button>
+                  </div>)}
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                   <h3 style={SEC_TITLE('#9a3412')}>🚗 車検</h3>
                   {/* 台数制限バッジ（設定中の日のみ表示） */}

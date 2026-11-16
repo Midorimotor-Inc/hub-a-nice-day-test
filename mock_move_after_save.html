@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>車検の日にち変更：保存したあと、どう見せるか（モック）</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px 20px 80px;background:#f1f5f9;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#1b2735}
+ h1{font-size:19px;margin:0 0 6px}
+ .lead{font-size:13px;color:#475569;line-height:1.8;margin:0 0 14px;max-width:1000px}
+ .lead b{color:#b91c1c}
+ .nav{position:sticky;top:0;z-index:60;background:#f1f5f9;padding:10px 0 10px;margin-bottom:12px;border-bottom:2px solid #cbd5e1}
+ .nav button{font-family:inherit;font-size:13.5px;font-weight:800;padding:9px 16px;margin-right:8px;border-radius:10px;
+   border:2px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .nav button.on{background:#E8492E;border-color:#E8492E;color:white}
+ .nav .reset{float:right;border-color:#94a3b8;color:#475569;font-weight:700}
+ .caseinfo{background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:10px 14px;font-size:13px;
+   line-height:1.8;margin:0 0 14px;max-width:1000px}
+ .caseinfo b{color:#92400e}
+ /* ===== にせスケジュール画面 ===== */
+ .screen{background:white;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;
+   box-shadow:0 3px 12px rgba(0,0,0,.08);max-width:1180px}
+ .shead{background:linear-gradient(135deg,#EA580C,#f97316);color:white;padding:8px 12px;display:flex;align-items:center;gap:12px}
+ .shead .logo{font-size:15px;font-weight:900;letter-spacing:1px}
+ .shead .ver{font-size:11px;opacity:.85}
+ .daybar{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#f8fafc;border-bottom:1px solid #cbd5e1}
+ .daybar .dnav{font-family:inherit;font-size:15px;font-weight:900;width:34px;height:30px;border-radius:8px;
+   border:1.5px solid #cbd5e1;background:white;color:#334155;cursor:pointer}
+ .daybar .dlabel{font-size:17px;font-weight:900;padding:3px 10px;border-radius:8px;background:white;border:1.5px solid #cbd5e1}
+ .daybar .hint{font-size:11.5px;color:#64748b;margin-left:auto}
+ .sect{font-size:13px;font-weight:900;padding:7px 12px 4px;color:#0f172a}
+ table{width:100%;border-collapse:collapse;font-size:12.5px}
+ th{background:#eef2f6;font-weight:800;font-size:11.5px;padding:5px 6px;border-bottom:1px solid #64748b;
+   border-right:1px solid #cbd5e1;text-align:left;white-space:nowrap}
+ td{padding:6px;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;vertical-align:middle}
+ tr.live:hover{background:#fff7ed;cursor:pointer}
+ .nm{font-weight:700}
+ .cbadge{display:inline-block;padding:1px 7px;border-radius:4px;font-weight:800;font-size:11px}
+ .add{color:#94a3b8;font-weight:700}
+ /* ===== 帯 ===== */
+ tr.band td{background:#dc2626;border-bottom:1px solid #eef2f6}
+ tr.band td.mark{text-align:center;padding:6px 4px;font-weight:900;font-size:12px;color:white;border-left:3px solid #7f1d1d}
+ tr.band .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 8px}
+ tr.band .ttl{font-size:16px;font-weight:900;letter-spacing:3px;color:white}
+ tr.band .dt{font-size:14px;font-weight:900;color:white}
+ tr.band .by{font-size:12px;font-weight:800;color:#fee2e2}
+ tr.band .sub{color:#fee2e2}
+ tr.band .st{text-decoration:line-through;text-decoration-color:#fecaca}
+ tr.band .btns{margin-left:auto;display:flex;gap:6px}
+ tr.band .btns button{font-family:inherit;padding:2px 8px;border-radius:7px;font-size:10.5px;font-weight:800;cursor:pointer;
+   white-space:nowrap;border:1.5px solid rgba(255,255,255,.75);background:rgba(255,255,255,.14);color:white}
+ /* ===== ア案のお知らせ帯 ===== */
+ .notice{display:flex;align-items:center;gap:12px;padding:9px 12px;font-size:13.5px;font-weight:800;flex-wrap:wrap}
+ .notice.mv{background:#fef2f2;border-bottom:2px solid #dc2626;color:#991b1b}
+ .notice.ok{background:#ecfdf5;border-bottom:2px solid #047857;color:#065f46}
+ .notice button{font-family:inherit;font-size:12.5px;font-weight:800;padding:6px 12px;border-radius:8px;cursor:pointer;
+   border:2px solid currentColor;background:white;color:inherit}
+ .notice .x{margin-left:auto;border:none;background:transparent;font-size:16px;color:inherit;padding:2px 6px}
+ /* ===== 予約カード ===== */
+ .veil{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+ .cardbox{background:white;border-radius:14px;width:min(560px,96vw);max-height:90vh;overflow:auto;
+   box-shadow:0 18px 50px rgba(0,0,0,.35)}
+ .cardbox .ch{background:#0f172a;color:white;padding:10px 14px;display:flex;align-items:center;gap:10px}
+ .cardbox .ch b{font-size:15px}
+ .cardbox .ch .x{margin-left:auto;background:#dc2626;border:none;color:white;font-size:14px;font-weight:900;
+   width:30px;height:26px;border-radius:7px;cursor:pointer}
+ .cardbody{padding:14px 16px 18px}
+ .fld{margin-bottom:12px}
+ .fld label{display:block;font-size:11.5px;font-weight:800;color:#475569;margin-bottom:3px}
+ .fld .val{font-size:14px;font-weight:700;padding:6px 9px;border:1.5px solid #cbd5e1;border-radius:8px;background:#f8fafc}
+ .dpick{font-family:inherit;font-size:15px;font-weight:900;padding:8px 14px;border-radius:9px;
+   border:2px solid #0891b2;background:white;color:#0e7490;cursor:pointer}
+ .dpick.set{border-color:#dc2626;color:#b91c1c;background:#fef2f6}
+ .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:8px;border:2px solid #cbd5e1;
+   border-radius:10px;padding:8px;background:white;max-width:330px}
+ .cal .dow{font-size:10.5px;font-weight:800;text-align:center;color:#64748b}
+ .cal .d{font-family:inherit;font-size:13px;font-weight:700;padding:6px 0;border-radius:7px;border:1.5px solid #e2e8f0;
+   background:white;cursor:pointer;text-align:center}
+ .cal .d.orig{border:2.5px solid #dc2626;color:#b91c1c;font-weight:900}
+ .cal .d.sel{background:#0891b2;border-color:#0891b2;color:white}
+ .cal .d.off{visibility:hidden}
+ .savebar{display:flex;gap:10px;margin-top:6px}
+ .savebar button{font-family:inherit;font-size:14px;font-weight:900;padding:10px 18px;border-radius:10px;cursor:pointer;border:none}
+ .savebar .go{background:#047857;color:white}
+ .savebar .no{background:#e2e8f0;color:#475569}
+ .explain{margin-top:14px;background:white;border:1px solid #cbd5e1;border-radius:12px;padding:12px 16px;
+   font-size:13px;line-height:1.85;max-width:1180px}
+ .explain h3{font-size:14px;margin:0 0 6px}
+ .explain .good{color:#047857;font-weight:800}
+ .explain .bad{color:#b91c1c;font-weight:800}
+</style></head><body>
+
+<h1>車検の日にち変更：保存したあと、どう見せるか（モック）</h1>
+<p class="lead">
+ いまの作り（ウ案）は、日にちを変えて保存すると<b>画面が移り先の日へ飛びます</b>。
+ 「日にち変更」の赤い帯は<b>元の日に残る</b>ので、飛んだ先の画面には出ません。
+ ＝「移したのに帯が出ない」と見えるのはこれが理由です（帯そのものは、ちゃんと作られています）。<br>
+ 下の3案を実際に押して試してください。<b>田中 太郎 様（11/15・09:00・ク）</b>の行を押すと予約カードが開きます。
+ カードの中で <b>11月18日</b> を選んで「内容を保存する」を押すと、案ごとに違う動きをします。
+</p>
+
+<div class="nav">
+ <button id="bA" class="on" onclick="setCase('A')">ア案　知らせ＋戻るボタン</button>
+ <button id="bB" onclick="setCase('B')">イ案　画面を動かさない</button>
+ <button id="bC" onclick="setCase('C')">ウ案　いまのまま</button>
+ <button class="reset" onclick="resetAll()">↺ やり直す</button>
+ <div style="clear:both"></div>
+</div>
+
+<div class="caseinfo" id="caseinfo"></div>
+
+<div class="screen">
+ <div class="shead"><span class="logo">Hub a Nice Day</span><span class="ver">スケジュールシステム・テスト版（モック）</span></div>
+ <div id="notice"></div>
+ <div class="daybar">
+  <button class="dnav" onclick="goDay(-1)">‹</button>
+  <span class="dlabel" id="dlabel"></span>
+  <button class="dnav" onclick="goDay(1)">›</button>
+  <span class="hint">‹ › で日を移せます（11/15 と 11/18 を行き来してみてください）</span>
+ </div>
+ <div class="sect">車検</div>
+ <div><table id="insptbl"></table></div>
+</div>
+
+<div class="explain" id="explain"></div>
+
+<div id="modal"></div>
+
+<script>
+var CASE='A';
+var sel='2026-11-18';            // いま見ている日（最初は移り先…ではなく下で設定）
+var picked=null;                 // カードで選んだ移り先
+var noticeState=null;            // {kind:'mv'|'ok'}
+var DAYS={};
+
+function freshData(){
+  return {
+   '2026-11-15':[
+     {no:1,name:'田中 太郎',car:'アルト',plate:'3182',course:2,time:'09:00',note:'納税確認済み',target:true},
+     {no:2,name:'山本 花子',car:'ワゴンR',plate:'2525',course:2,time:'09:00',note:'ライン'},
+     {no:3,name:'佐藤 健二',car:'ラパン',plate:'4411',course:1,time:'10:00',note:'初回'},
+     {no:4,name:'鈴木 みどり',car:'Ｎ ＷＧＮ',plate:'2719',course:1,time:'14:00',note:''}
+   ],
+   '2026-11-18':[
+     {no:1,name:'高橋 一郎',car:'ハスラー',plate:'8612',course:2,time:'09:00',note:''},
+     {no:2,name:'伊藤 さくら',car:'スペーシア',plate:'1167',course:3,time:'11:00',note:'代車あり'},
+     {no:3,name:'渡辺 修',car:'キャリィ',plate:'7033',course:2,time:'13:00',note:''}
+   ]
+  };
+}
+var COURSES={1:{n:'マッハ',i:'マ',bg:'#fca5a5',c:'#b91c1c'},
+             2:{n:'クイック',i:'ク',bg:'#bfdbfe',c:'#1d4ed8'},
+             3:{n:'レギュラー',i:'レ',bg:'#fde68a',c:'#d97706'}};
+var DOW=['日','月','火','水','木','金','土'];
+function md(dk){var p=dk.split('-');return Number(p[1])+'/'+Number(p[2]);}
+function label(dk){var p=dk.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);
+  return Number(p[0])+'年'+Number(p[1])+'月'+Number(p[2])+'日（'+DOW[d.getDay()]+'）';}
+
+var CASES={
+ A:{t:'ア案　お知らせ＋「元の日へ戻る」ボタン',
+    d:'保存すると<b>今までどおり移り先の日へ飛びます</b>が、画面の上に「11/15 に日にち変更の記録を残しました」と出て、'+
+      '<b>その場から元の日へ戻れる</b>ようにします。帯を見たい人だけ1クリックで確かめられます。'},
+ B:{t:'イ案　保存しても画面を動かさない',
+    d:'保存しても<b>元の日（11/15）に留まります</b>。できたばかりの赤い帯が<b>その場ですぐ見えます</b>。'+
+      '移り先を見たい時は「11/18 を見る」を押します。'},
+ C:{t:'ウ案　いまのまま',
+    d:'保存すると移り先の日へ飛び、<b>お知らせも出ません</b>。帯は 11/15 にありますが、'+
+      '自分で ‹ を押して戻らないと見えません。'}
+};
+
+function setCase(c){CASE=c;['A','B','C'].forEach(function(k){document.getElementById('b'+k).className=(k===c?'on':'');});resetAll();}
+function resetAll(){DAYS=freshData();sel='2026-11-15';picked=null;noticeState=null;document.getElementById('modal').innerHTML='';render();}
+
+function render(){
+  var ci=CASES[CASE];
+  document.getElementById('caseinfo').innerHTML='<b>'+ci.t+'</b><br>'+ci.d;
+  document.getElementById('dlabel').textContent=label(sel);
+  // お知らせ
+  var nv=document.getElementById('notice');
+  if(noticeState&&noticeState.kind==='mv'){
+    nv.innerHTML='<div class="notice mv">⇄ <span>11/15 に「日にち変更」の記録（赤い帯）を残しました。</span>'+
+      '<button onclick="jump(\'2026-11-15\')">◀ 11/15 を見る</button>'+
+      '<button class="x" onclick="closeNotice()">✕</button></div>';
+  }else if(noticeState&&noticeState.kind==='ok'){
+    nv.innerHTML='<div class="notice ok">✓ <span>11/18 へ移しました。元の日に「日にち変更」の記録を残してあります（下の赤い帯）。</span>'+
+      '<button onclick="jump(\'2026-11-18\')">11/18 を見る ▶</button>'+
+      '<button class="x" onclick="closeNotice()">✕</button></div>';
+  }else nv.innerHTML='';
+  // 表
+  var rows=DAYS[sel]||[];
+  var h='<tr><th style="width:34px">No</th><th>氏名</th><th>車種</th><th style="width:76px">コース</th>'+
+        '<th style="width:70px">代車</th><th style="width:44px">特典</th><th style="width:56px">入庫</th><th>備考</th></tr>';
+  var live=rows.filter(function(r){return !r.band;});
+  var bands=rows.filter(function(r){return r.band;});
+  live.forEach(function(r){
+    var c=COURSES[r.course];
+    h+='<tr class="live" onclick="openCard(\''+r.name+'\')">'+
+       '<td style="text-align:center;font-weight:800">'+r.no+'</td>'+
+       '<td><span class="nm">'+r.name+' 様</span><div style="font-size:10.5px;color:#64748b">本店／江川京志</div></td>'+
+       '<td>'+r.car+'<div style="font-size:10.5px;color:#64748b">ナンバー '+r.plate+'</div></td>'+
+       '<td><span class="cbadge" style="background:'+c.bg+';color:'+c.c+'">'+c.i+'</span> <span style="font-size:11px">'+c.n+'</span></td>'+
+       '<td style="text-align:center">—</td><td style="text-align:center">②</td>'+
+       '<td style="text-align:center;font-weight:800">'+r.time+'</td><td style="font-size:11.5px">'+(r.note||'—')+'</td></tr>';
+  });
+  h+='<tr><td style="text-align:center;color:#94a3b8;font-weight:800">'+(live.length+1)+'</td>'+
+     '<td colspan="7" class="add">＋ クリックして追加</td></tr>';
+  bands.forEach(function(r){
+    var c=COURSES[r.course];
+    h+='<tr class="band"><td class="mark">⇄</td><td colspan="7" style="padding:0"><div class="row">'+
+       '<span class="ttl">日にち変更</span>'+
+       '<span class="dt">'+md(r.cxFrom)+' → '+md(r.cxTo)+'</span>'+
+       '<span class="by">11/16 変更・江川京志</span>'+
+       '<span class="sub st" style="font-weight:700">'+r.name+' 様</span>'+
+       '<span class="sub st">'+r.car+'</span>'+
+       '<span class="cbadge" style="background:'+c.bg+';color:'+c.c+'">'+c.i+'</span>'+
+       '<span class="sub">'+r.time+' 入庫</span>'+
+       (r.note?'<span class="sub" style="font-size:11.5px">'+r.note+'</span>':'')+
+       '<span class="btns"><button>🗒 中身</button><button>🗑 記録を消す</button></span>'+
+       '</div></td></tr>';
+  });
+  document.getElementById('insptbl').innerHTML=h;
+  // 下の説明
+  var e='<h3>この案だと、こうなります</h3>';
+  if(CASE==='A')e+='<span class="good">よい点</span>：移り先の予定がすぐ確認できる（今までの流れのまま）。帯を残したことも必ず伝わる。<br>'+
+    '<span class="bad">気になる点</span>：帯そのものを見るには、もう1クリック要る。';
+  if(CASE==='B')e+='<span class="good">よい点</span>：できたばかりの帯がその場で見える＝「移した証拠」がすぐ分かる。<br>'+
+    '<span class="bad">気になる点</span>：移り先がどうなったかを見るには、自分で移る必要がある（続けて何件も動かす時はこちらが早い）。';
+  if(CASE==='C')e+='<span class="good">よい点</span>：今と同じなので、覚え直すことがない。<br>'+
+    '<span class="bad">気になる点</span>：帯が出ているのに画面から見えない＝「出ていない」と誤解されたまま。';
+  document.getElementById('explain').innerHTML=e;
+}
+function closeNotice(){noticeState=null;render();}
+function jump(dk){sel=dk;render();}
+function goDay(n){var p=sel.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);d.setDate(d.getDate()+n);
+  sel=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();if(!DAYS[sel])DAYS[sel]=[];render();}
+
+function openCard(name){
+  var rows=DAYS[sel]||[];var r=null;
+  rows.forEach(function(x){if(!x.band&&x.name===name)r=x;});
+  if(!r)return;
+  picked=null;
+  var isTarget=!!r.target;
+  var cal='';
+  ['日','月','火','水','木','金','土'].forEach(function(w){cal+='<div class="dow">'+w+'</div>';});
+  for(var i=0;i<0;i++)cal+='<div class="d off"></div>';
+  for(var d=1;d<=30;d++){
+    var dk='2026-11-'+d;
+    var cls='d'+(dk===sel?' orig':'');
+    cal+='<button class="'+cls+'" data-dk="'+dk+'" onclick="pick(\''+dk+'\')">'+d+'</button>';
+  }
+  document.getElementById('modal').innerHTML=
+   '<div class="veil" onclick="if(event.target===this)closeCard()"><div class="cardbox">'+
+   '<div class="ch"><b>車検予約カード</b><span style="font-size:12px;opacity:.85">'+label(sel)+'</span>'+
+   '<button class="x" onclick="closeCard()">✕</button></div>'+
+   '<div class="cardbody">'+
+   '<div class="fld"><label>氏名</label><div class="val">'+r.name+' 様</div></div>'+
+   '<div class="fld"><label>車種 ／ ナンバー</label><div class="val">'+r.car+'　'+r.plate+'</div></div>'+
+   '<div class="fld"><label>入庫時間 ／ コース</label><div class="val">'+r.time+'　'+COURSES[r.course].n+'</div></div>'+
+   '<div class="fld"><label>車検日（この日を変えると「日にち変更」になります）</label>'+
+     '<button class="dpick" id="dpickbtn">'+label(sel)+'　🗓 クリックで日付変更</button>'+
+     '<div class="cal" id="cal">'+cal+'</div>'+
+     '<div style="font-size:11.5px;color:#64748b;margin-top:6px">◯ 赤まる＝いまの予約日。'+
+     (isTarget?'<b style="color:#b91c1c">18 を押してみてください。</b>':'')+'</div></div>'+
+   '<div class="savebar"><button class="go" onclick="save(\''+r.name+'\')">💾 内容を保存する</button>'+
+   '<button class="no" onclick="closeCard()">やめる</button></div>'+
+   '</div></div></div>';
+}
+function pick(dk){
+  picked=dk;
+  var cs=document.querySelectorAll('#cal .d');
+  for(var i=0;i<cs.length;i++)cs[i].className=cs[i].className.replace(' sel','');
+  var b=document.querySelector('#cal .d[data-dk="'+dk+'"]');if(b)b.className+=' sel';
+  var p=document.getElementById('dpickbtn');
+  if(p){p.className='dpick set';p.textContent=label(dk)+'　⇄ '+md(sel)+' から変更';}
+}
+function closeCard(){document.getElementById('modal').innerHTML='';}
+
+function save(name){
+  var from=sel;
+  if(!picked||picked===from){closeCard();return;}
+  var to=picked;
+  var rows=DAYS[from]||[];var r=null,idx=-1;
+  rows.forEach(function(x,i){if(!x.band&&x.name===name){r=x;idx=i;}});
+  if(!r){closeCard();return;}
+  // 元の日：生きている行を外し、帯に置き換える
+  rows.splice(idx,1);
+  rows.forEach(function(x,i){if(!x.band)x.no=i+1;});
+  rows.push({band:true,name:r.name,car:r.car,course:r.course,time:r.time,note:r.note,cxFrom:from,cxTo:to});
+  // 移り先：行を足す
+  if(!DAYS[to])DAYS[to]=[];
+  var live=DAYS[to].filter(function(x){return !x.band;}).length;
+  DAYS[to].push({no:live+1,name:r.name,car:r.car,plate:r.plate,course:r.course,time:r.time,note:r.note});
+  closeCard();
+  if(CASE==='A'){sel=to;noticeState={kind:'mv'};}
+  else if(CASE==='B'){sel=from;noticeState={kind:'ok'};}
+  else {sel=to;noticeState=null;}
+  render();
+}
+resetAll();
+</script>
+</body></html>
