@@ -194,6 +194,51 @@ const srvInsp = page => page.evaluate(stor => JSON.stringify(window.__fakeFb.get
   t('★「2件そろえました」と出る', /2件/.test(after.done), after);
   t('★直した分は一覧から消える', after.left === 0, after);
 
+  head('⑦ ★手元の古い写しがサーバーの本予約を隠さない（赤帯が残る件）');
+  // サーバーは【本予約】なのに、この端末の localStorage の写しが【キャンセル】のまま。
+  // 「進み具合を後戻りさせない」の規則に時間の歯止めが無かったので、
+  // サーバーの値で上書きされず、しかもその写しを書き戻すので【赤帯が永久に残った】。
+  const back2 = await ctx.newPage();
+  const errs2 = []; back2.on('pageerror', e => errs2.push(String(e)));
+  back2.on('dialog', async d => { await d.accept().catch(() => {}); });
+  await back2.addInitScript(([stor, custs]) => {
+    // ★サーバー（にせ firebase）の方は【本予約】にしておく。
+    //   ctx の addInitScript が種データで毎回まき直すので、ここで上書きすること。
+    const srv = custs.map(c => c.name === '客1'
+      ? Object.assign({}, c, { status: 'confirm', entryDate: '2026-12-20', linkedInspDate: '2026-12-20', bookingTime: '10:00' }) : c);
+    try {
+      const st = JSON.parse(localStorage.getItem('__fakeFbStore') || '{}');
+      st['kv/' + stor + 'cf-202701-chunk-0'] = { v: JSON.stringify(srv), u: Date.now() };
+      localStorage.setItem('__fakeFbStore', JSON.stringify(st));
+    } catch (e) {}
+    // ★この端末の写しだけ【キャンセル】のまま＝報告された形
+    const rows = custs.map(c => c.name === '客1'
+      ? Object.assign({}, c, { status: 'cancel', entryDate: '', linkedInspDate: '' }) : c);
+    localStorage.setItem(stor + 'cf-index', JSON.stringify([{ name: '202701', count: rows.length }]));
+    localStorage.setItem(stor + 'cf-202701', JSON.stringify({ name: '202701', customers: rows }));
+  }, [STOR, CUSTS]);
+  await back2.goto('http://localhost:' + PORT + '/customers.html', { waitUntil: 'domcontentloaded' });
+  try { await back2.waitForFunction(() => document.body.innerText.includes('客1'), null, { timeout: 25000 }); } catch (e) {}
+  // 最初は手元の写し（赤帯）が出る。そのあとサーバーの値で直るまで待つ。
+  let cls = '';
+  for (let i = 0; i < 24; i++) {
+    await back2.waitForTimeout(500);
+    cls = await back2.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(x => ((x.children[1] || {}).innerText || '').indexOf('客1') >= 0);
+      return tr ? tr.className : '';
+    });
+    if (/row-confirm/.test(cls)) break;
+  }
+  t('★★サーバーの本予約で赤帯が直る（row-confirm になる）', /row-confirm/.test(cls), cls);
+  t('★赤帯（row-cancel）が残らない', !/row-cancel/.test(cls), cls);
+  const cached = await back2.evaluate(stor => {
+    try { const d = JSON.parse(localStorage.getItem(stor + 'cf-202701') || '{}');
+      const r = (d.customers || []).find(x => x && x.name === '客1'); return r ? r.status : null; } catch (e) { return 'err'; }
+  }, STOR);
+  t('★手元の写しにも本予約が書き戻される（古いキャンセルを残さない）', cached === 'confirm', cached);
+  t('この画面でもJSエラーが出ていない', errs2.length === 0, errs2.slice(0, 3));
+  await back2.close();
+
   head('⑥ 中身の見張り');
   const SRC = fs.readFileSync(path.join(DIR, 'customers.html'), 'utf8');
   t('★逆向きを直す所は cfSaveRowFields を使っている（読めない時は書かない）',
@@ -205,6 +250,8 @@ const srvInsp = page => page.evaluate(stor => JSON.stringify(window.__fakeFb.get
     FIXLIST.length > 300 && FIXLIST.indexOf("STOR+'insp'") < 0 && FIXLIST.indexOf('persistInsp') < 0,
     FIXLIST.length);
   t('★日付キーをゼロ詰めにそろえている（syncPad）', /const syncPad=/.test(SRC));
+  t('★「後戻りさせない」に時間の歯止めがある（cfTouched）',
+    /const cfTouched=/.test(SRC) && SRC.indexOf('lp>fp&&cfTouched(') >= 0);
   t('既存の目印（data-syncnote / data-syncwhy / data-syncskip）を壊していない',
     SRC.indexOf('data-syncnote') >= 0 && SRC.indexOf('data-syncwhy') >= 0 && SRC.indexOf('data-syncskip') >= 0);
 

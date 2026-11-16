@@ -151,19 +151,34 @@ const onServer = (page, name) => page.evaluate(([k, nm]) => {
   t('★担当もサーバーの値になる', m.staff === '岡本', m);
   t('★入庫日もサーバーの値になる', m.entryDate === '2027-01-20', m);
 
-  head('③ 予約の進み具合だけは後戻りさせない');
+  head('③ 予約の進み具合は【書いた直後だけ】後戻りさせない（2026-11-16 で歯止めを付けた）');
+  // ★★以前は時間の歯止めが無かったので、手元の写しが【キャンセル】だと
+  //   サーバーの【本予約】で永久に上書きされず、赤帯が残り続けた（本番で実際に起きた）。
+  //   いまは「この PC がその行を書いた直後（CF_BACK_MS）」だけ手元を守る。それ以外はサーバーが正。
   const m2 = await page.evaluate(() => {
-    if (typeof cfMergeRow !== 'function') return { a: {}, b: {} };
-    const lc = { custId: 'x', status: 'confirm', entryDate: '2027-01-15', bookingTime: '10:00', dm1Sent: false };
-    const fc = { custId: 'x', status: 'none', entryDate: '', bookingTime: '', dm1Sent: true };
-    const lc2 = { custId: 'y', status: 'temp', dm1Sent: false };
-    const fc2 = { custId: 'y', status: 'confirm', dm1Sent: true };
-    return { a: cfMergeRow(lc, fc), b: cfMergeRow(lc2, fc2) };
+    if (typeof cfMergeRow !== 'function') return { a: {}, b: {}, c: {}, d: {} };
+    // ① この PC がさっき書いた行（cfHoldMark で印が付く）。項目は関係ないものにして②だけを見る
+    const lc = { custId: 'x2', status: 'confirm', entryDate: '2027-01-15', bookingTime: '10:00', dm1Sent: false };
+    const fc = { custId: 'x2', status: 'none', entryDate: '', bookingTime: '', dm1Sent: true };
+    cfHoldMark('x2', ['zzz']);
+    const a = cfMergeRow(lc, fc);
+    // ② サーバーの方が進んでいる時は、いつでもサーバー
+    const b = cfMergeRow({ custId: 'y', status: 'temp', dm1Sent: false }, { custId: 'y', status: 'confirm', dm1Sent: true });
+    // ③ ★書いた直後ではない行＝サーバーが正（赤帯を残さない）
+    const c = cfMergeRow({ custId: 'z', status: 'cancel', entryDate: '' },
+      { custId: 'z', status: 'confirm', entryDate: '2026-12-20' });
+    // ④ ★同じく、手元が本予約でサーバーが未予約でも、書いた直後でなければサーバー
+    const d = cfMergeRow({ custId: 'w', status: 'confirm', entryDate: '2027-01-15' },
+      { custId: 'w', status: 'none', entryDate: '' });
+    return { a, b, c, d };
   });
-  t('★手元が本予約／サーバーが未予約なら本予約のまま', m2.a.status === 'confirm', m2.a);
+  t('★この PC が書いた直後は、手元の本予約を守る（サーバーが未予約でも）', m2.a.status === 'confirm', m2.a);
   t('★その時の入庫日・時間も残る', m2.a.entryDate === '2027-01-15' && m2.a.bookingTime === '10:00', m2.a);
   t('★それでも投函の印はサーバーを採る', m2.a.dm1Sent === true, m2.a);
   t('★サーバーが進んでいる時はサーバーを採る', m2.b.status === 'confirm', m2.b);
+  t('★★手元がキャンセルでも、書いた直後でなければサーバーの本予約になる（赤帯を残さない）',
+    m2.c.status === 'confirm' && m2.c.entryDate === '2026-12-20', m2.c);
+  t('★★手元が本予約でも、書いた直後でなければサーバーが正', m2.d.status === 'none', m2.d);
 
   head('④ 他のPCが付けた投函の印が、開いたままの画面に出る');
   let c = await cellOf(page, 0, '客3');

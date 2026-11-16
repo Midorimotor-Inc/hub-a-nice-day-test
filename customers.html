@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794789494967';
+  window.__APP_BUILD='build-1794794156687';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -170,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.118.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.118.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -361,11 +361,22 @@ const loadFileChunked=async(name,fresh)=>{
 // ─────────────────────────────────────────────────────────────
 const CF_HOLD_MS=20000;            // この PC がさっき直した項目を守る時間
 const cfHold=new Map();            // custId+項目 → 直した時刻
+// ★★【2026-11-16・重大】「進み具合を後戻りさせない」(下の②)は【この PC が書いた直後だけ】効かせる。
+//   時間の歯止めが無かったため、手元の写しが【キャンセル】だとサーバーの【本予約】で上書きされず、
+//   しかもその「キャンセルのまま」を localStorage に書き戻すので【赤帯が永久に残った】
+//   （2026-11-16 ユーザー報告：同期チェックで本予約にそろえたのに、リストは赤帯のまま・
+//    同期チェックは「ズレなし」＝サーバーは本予約なので正しい＝画面だけが古い）。
+//   ★ここの歯止めを外さないこと。サーバーが正で、手元を守るのは書いた直後だけ。
+const CF_BACK_MS=120000;           // 書いた直後の2分だけ「後戻りさせない」を効かせる
+const cfTouch=new Map();           // custId → この PC がその行を書いた時刻
 const cfHoldMark=(custId,keys)=>{
   const now=Date.now();
   (keys||[]).forEach(k=>cfHold.set(custId+'##'+k,now));
+  cfTouch.set(custId,now);
   if(cfHold.size>4000){ cfHold.forEach((t,k)=>{ if(now-t>CF_HOLD_MS)cfHold.delete(k); }); }
+  if(cfTouch.size>4000){ cfTouch.forEach((t,k)=>{ if(now-t>CF_BACK_MS)cfTouch.delete(k); }); }
 };
+const cfTouched=custId=>{ const t=cfTouch.get(custId); return !!t&&(Date.now()-t)<CF_BACK_MS; };
 const cfHeld=(custId,k)=>{ const t=cfHold.get(custId+'##'+k); return !!t&&(Date.now()-t)<CF_HOLD_MS; };
 // 1人ぶんの行の「変わった項目」だけを取り出す
 const cfRowDiff=(before,after)=>{
@@ -384,9 +395,10 @@ const cfMergeRow=(lc,fc)=>{
   // ① この PC がさっき直した項目だけ、保存が行き渡るまで手元の値を守る
   const keys=new Set([...Object.keys(lc),...Object.keys(fc)]);
   keys.forEach(k=>{ if(k.charAt(0)!=='_'&&cfHeld(fc.custId,k))out[k]=lc[k]; });
-  // ② 予約の進み具合は後戻りさせない（仮予約→本予約の途中で古い値に戻さない）
+  // ② 予約の進み具合は後戻りさせない（仮予約→本予約の途中で古い値に戻さない）。★書いた直後だけ
+  // ★この PC が書いた直後（CF_BACK_MS）だけ。過ぎたらサーバーが正。
   const lp=CF_PRIO[lc.status||'none']||0, fp=CF_PRIO[fc.status||'none']||0;
-  if(lp>fp){
+  if(lp>fp&&cfTouched(fc.custId)){
     out.status=lc.status;
     if(lc.entryDate&&!fc.entryDate)out.entryDate=lc.entryDate;
     if(lc.bookingTime&&!fc.bookingTime)out.bookingTime=lc.bookingTime;
