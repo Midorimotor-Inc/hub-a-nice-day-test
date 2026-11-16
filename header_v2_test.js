@@ -174,8 +174,9 @@ const run = async (chromium, seed) => {
   t('★期日ぎれの台数が出る', await page.evaluate(() => /期日ぎれ 1台/.test(document.querySelector('[data-dashtile="vehicle"]').innerText)),
     await page.evaluate(() => { const e = document.querySelector('[data-dashtile="vehicle"]'); return e ? e.innerText.replace(/\n/g, ' / ') : null; }));
   const tools = await page.evaluate(() => [...document.querySelectorAll('[data-dashtool]')].map(e => e.getAttribute('data-dashtool')));
-  t('★設定の道具が4つある', tools.length === 4, tools);
-  t('★スタッフ管理・休業日・復旧・控え', ['staff', 'holiday', 'restore', 'offline'].every(x => tools.indexOf(x) >= 0), tools);
+  // ★道具は5つ（staff/holiday/restore/works/offline）。足した時はここも直すこと。
+  t('★設定の道具が5つある', tools.length === 5, tools);
+  t('★スタッフ管理・休業日・復旧・クイック編集・控え', ['staff', 'holiday', 'restore', 'works', 'offline'].every(x => tools.indexOf(x) >= 0), tools);
   // 押すと本物の設定が開く（作り直していない＝今までの仕組みがそのまま出る）
   await page.evaluate(() => document.querySelector('[data-dashtool="holiday"]').click());
   await page.waitForTimeout(900);

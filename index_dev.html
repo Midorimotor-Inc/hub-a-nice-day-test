@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794803655841';
+    window.__APP_BUILD='build-1794805571072';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.119.1';
+const APP_VERSION = '3.119.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -7192,11 +7192,12 @@ const LoginScreen=({onLogin,staffListH,staffListS,onRegister,onSettings,desktopL
     // 社長（myNumber===0 or badge==='president'）は上部専用エリアで表示するためここでは除外
     const filteredList=(staffList||[]).filter(s=>s.myNumber!==0&&s.badge!=='president');
     return(
-      <div style={{flex:1,border:`2px solid ${isSelected?store.color:'#e5e7eb'}`,borderRadius:14,padding:'16px 14px',background:isSelected?store.bg:'#fafafa',transition:'all 0.15s'}}>
-        <div style={{textAlign:'center',marginBottom:12}}>
+      <div style={{flex:1,border:`2px solid ${isSelected?store.color:'#e5e7eb'}`,borderRadius:14,padding:'11px 12px',background:isSelected?store.bg:'#fafafa',transition:'all 0.15s'}}>
+        <div style={{textAlign:'center',marginBottom:8}}>
           <span style={{display:'inline-block',padding:'3px 14px',borderRadius:20,background:store.color,color:'white',fontWeight:800,fontSize:13}}>{store.name}</span>
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:7}}>
+        {/* ★名前は2列（A案）。窓が狭い時は minmax が効いて自動で1列に戻る。 */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:7}}>
           {filteredList.map(s=>{
             const isS=sel?.staff?.uid===s.uid;
             return(
@@ -7260,18 +7261,27 @@ const LoginScreen=({onLogin,staffListH,staffListS,onRegister,onSettings,desktopL
 
   // ステップ1：通常ログイン画面
   return (
-    <div style={{position:'fixed',inset:0,background:'linear-gradient(140deg,#7c2d12,#EA580C,#f97316)',display:'flex',alignItems:'flex-start',justifyContent:'center',fontFamily:'system-ui,sans-serif',padding:'24px 16px',overflowY:'auto',zIndex:9999}}>
-      <div style={{background:'white',borderRadius:20,padding:'32px 36px',maxWidth:680,width:'100%',boxShadow:'0 30px 80px rgba(0,0,0,0.4)'}}>
-        <div style={{textAlign:'center',marginBottom:24}}>
-          <div style={{fontSize:44,marginBottom:6}}>🚗</div>
-          <h1 style={{fontSize:22,fontWeight:900,color:'white',margin:0}}>Hub a Nice day</h1>
-          <p style={{fontSize:12,color:'#6b7280',marginTop:4}}>統合管理システム</p>
-          <span style={{display:'inline-block',marginTop:6,padding:'2px 10px',borderRadius:20,background:'#eff6ff',border:'1px solid #bfdbfe',color:'#1d4ed8',fontSize:11,fontWeight:700}}>v{APP_VERSION}</span>
+    <div style={{position:'fixed',inset:0,background:'linear-gradient(140deg,#7c2d12,#EA580C,#f97316)',display:'flex',alignItems:'flex-start',justifyContent:'center',fontFamily:'system-ui,sans-serif',padding:'8px 16px',overflowY:'auto',zIndex:9999}}>
+      <div style={{background:'white',borderRadius:20,padding:'22px 26px',maxWidth:1040,width:'100%',boxShadow:'0 30px 80px rgba(0,0,0,0.4)'}}>
+        {/* ★ログイン画面は【全体表示】（A案・2026-11-16 ユーザー選択）。
+            共有PCでスタッフ名が下に隠れ、スクロールしないと選べなかった（実測：カードの高さ1011px・
+            1366×768 で291pxはみ出し）。横の余白が広く空いていたので、そちらを使って全部出す。
+            ・ヘッダーは1行にまとめる（🚗＋題名＋版）
+            ・店の枠はそのまま、中の名前だけ2列に（StorePanel）
+            ★題名は color:'white' で白いカードに白字＝見えなくなっていた。黒字に直してある。 */}
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10}}>
+          <div style={{fontSize:26,lineHeight:1}}>🚗</div>
+          <h1 style={{fontSize:19,fontWeight:900,color:'#111827',margin:0}}>Hub a Nice day</h1>
+          <p style={{fontSize:12,color:'#6b7280',margin:0}}>統合管理システム</p>
+          <span style={{marginLeft:'auto',display:'inline-block',padding:'2px 10px',borderRadius:20,background:'#eff6ff',border:'1px solid #bfdbfe',color:'#1d4ed8',fontSize:11,fontWeight:700}}>v{APP_VERSION}</span>
         </div>
+        {/* ★端末の案内と代表取締役を【横に並べる】（A案・2026-11-16）。
+            縦に積むと、画面の低いPCでログインのボタンまで届かない。 */}
+        <div style={{display:'flex',gap:14,alignItems:'flex-start',marginBottom:12}}>
         {/* 認証済みの共有端末。どのPCで作業しているかを掲げ、
             その中から担当者を選ぶ形にする（インデックスカードの見立て）。 */}
         {deviceName&&(
-          <div style={{marginBottom:18}}>
+          <div style={{flex:1,minWidth:0}}>
             <div style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 16px 5px',
               background:'#1e3a34',color:'white',borderRadius:'10px 10px 0 0',fontWeight:800,fontSize:13,
               letterSpacing:'.02em',boxShadow:'0 -1px 0 rgba(0,0,0,.08)'}}>
@@ -7282,7 +7292,7 @@ const LoginScreen=({onLogin,staffListH,staffListS,onRegister,onSettings,desktopL
               <div style={{fontSize:12.5,color:'#31544c',lineHeight:1.8}}>
                 このPCは<b>共有端末として登録済み</b>です
                 {deviceStore?`（${deviceStore}）`:''}。<br/>
-                下から<b>担当者を選ぶだけ</b>で使えます。追加の登録は要りません。
+                下から<b>担当者を選ぶだけ</b>で使えます。
               </div>
             </div>
           </div>
@@ -7295,18 +7305,22 @@ const LoginScreen=({onLogin,staffListH,staffListS,onRegister,onSettings,desktopL
           const isS=sel?.staff?.uid===president.uid;
           const presStore=STORES.find(s=>s.id===president.store)||STORES[0];
           return(
-            <div style={{marginBottom:16}}>
+            <div style={{width:320,flex:'none'}}>
               <div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:6,display:'flex',alignItems:'center',gap:4}}>
                 代表取締役
               </div>
+              {/* ★代表は1人なので、横いっぱいに伸ばさない（A案・2026-11-16） */}
+              <div style={{maxWidth:320}}>
               <button onClick={()=>setSel({staff:president,store:presStore})}
                 style={{width:'100%',padding:'8px 12px',borderRadius:9,border:`2px solid ${isS?presStore.color:'#e5e7eb'}`,background:isS?presStore.color:'white',color:isS?'white':'#374151',fontWeight:isS?800:500,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:8,textAlign:'left',transition:'all 0.12s'}}>
                 <span style={{flex:1}}>{president.name}</span>
                 <BadgeIcon badge={president.badge} size={18}/>
               </button>
+              </div>
             </div>
           );
         })()}
+        </div>
         {/* 端末が三田店にあるなら三田店を左に。自分の店を探す手間を無くす。 */}
         {(() => {
           const sanda = deviceStore === '三田店';
@@ -7326,7 +7340,7 @@ const LoginScreen=({onLogin,staffListH,staffListS,onRegister,onSettings,desktopL
           onClick={()=>{if(sel)onLogin({...sel.staff,id:sel.staff.myNumber,store:sel.store,
             ...(deviceName?{desktopName:deviceName}:{})});}}
           disabled={!sel}
-          style={{width:'100%',padding:'14px 0',background:sel?`linear-gradient(135deg,${sel.store.color},${sel.store.accent})`:'#e5e7eb',color:sel?'white':'#9ca3af',border:'none',borderRadius:12,fontWeight:800,fontSize:16,cursor:sel?'pointer':'default',transition:'all 0.2s',marginBottom:10}}>
+          style={{width:'100%',padding:'12px 0',background:sel?`linear-gradient(135deg,${sel.store.color},${sel.store.accent})`:'#e5e7eb',color:sel?'white':'#9ca3af',border:'none',borderRadius:12,fontWeight:800,fontSize:16,cursor:sel?'pointer':'default',transition:'all 0.2s',marginBottom:10}}>
           {sel?`【${sel.store.name}】${sel.staff.name} でログイン →`:'担当者を選択してください'}
         </button>
         {/* 登録者が1人だけの端末で、種類が「自分専用」になっていないとき。
