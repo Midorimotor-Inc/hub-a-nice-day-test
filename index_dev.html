@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794815008048';
+    window.__APP_BUILD='build-1794821415483';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.120.0';
+const APP_VERSION = '3.121.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2636,6 +2636,15 @@ const cxToday=()=>{const d=new Date();return `${d.getFullYear()}-${d.getMonth()+
 const cxMD=(dk)=>{const p=String(dk||'').split('-');return (p.length===3&&p[1])?`${Number(p[1])}/${Number(p[2])}`:String(dk||'');};
 //   帯の行かどうか。★ふつうの『キャンセル』行（昔のデータ）と見分けるため cxAt/cxTo を見る。
 const cxIsTrace=(r)=>!!(r&&r.name&&r.bookingStatus==='cancelled'&&(r.cxAt||r.cxTo));
+// ★帯から「再予約」する時に【引き継ぐ項目】の白名簿（①ア案・2026-11-16 ユーザー決定）。
+//   ★黒名簿（これだけ除く）にしないこと。予約の項目が増えた時に取りこぼし、
+//     帯の印（bookingStatus・cxAt・cxBy・cxFrom・cxTo）や 予約順(seq)・受け付けの記録
+//     （at/by/rcvAt/rcvBy）・承認（approved/pendingApproval）・入庫/納車の印（arrived/delivered）・
+//     代車（loaner/loanerId/rentalLabel/rentalCarId）・予約確定（fixed/fixedAt/fixedBy）が
+//     新しい予約へ混ざる。混ざると「キャンセルなのに生きている行」ができる。
+//   ★納車日・納車時間も引き継がない（前の予約の日に紐づいた値なので、そのまま使えない）。
+const CX_REBOOK_KEEP=['name','user','carType','no','noChi','noBun','noKana','phone','address',
+  'course','time','staff','note','tokuten','custId','store','adv2y','contact','work','wkmon','qkind'];
 //   予約の行に当てる印。dk=その帯が出る日／to=移った日（日にち変更の時だけ）／by=操作した人
 const cxPatch=({dk,to,by})=>({bookingStatus:'cancelled',approved:false,pendingApproval:false,
   cxAt:cxToday(),cxBy:by||'',cxFrom:dk||'',cxTo:to||''});
@@ -10491,6 +10500,19 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
         )}
 
         <div style={{padding:'16px 20px',display:'grid',gap:14}}>
+          {/* ★キャンセルの帯の「↻ 再予約」から開いた時の案内（①ア案・2026-11-16 ユーザー決定）。
+              ★印は initialData._cxRe から見ること。form は同じ予約を開き直した時に作り直さない
+                決まりがあるので、form を見ると前のカードの値が残る（受け付けの記録と同じ落とし穴）。
+              ★_cxRe は頭が _ なので handleSaveModal が保存から落とす＝予約には入らない。 */}
+          {isInsp&&isNew&&initialData&&initialData._cxRe&&(
+            <div data-cxreribbon="1" style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap',
+              padding:'9px 12px',background:'#ecfdf5',border:'2px solid #047857',borderRadius:10,
+              color:'#065f46',fontSize:12.5,fontWeight:800,lineHeight:1.7}}>
+              <span>↻ 取り消した予約の中身を入れてあります。日にち・入庫時間を決めて保存してください。</span>
+              <span style={{fontSize:11.5,fontWeight:700,color:'#047857'}}>
+                ※ 元の記録（赤い帯）はそのまま残ります</span>
+            </div>
+          )}
           {/* 入庫日（車検日）— リスト画面からのみ表示・車検カレンダー */}
           {isInsp&&fromCustList&&(
             <div>
@@ -11296,9 +11318,16 @@ const MeigiBang=({row,done,dim})=>{
 //   ★行の高さは ふつうの行とほぼ同じ（1行型）＝【印刷の「1日が1枚」は崩れない】。
 const CX_BG='#fee2e2';       // キャンセルの帯（薄い赤）
 const CX_MV_BG='#dc2626';    // 日にち変更の帯（濃い赤・白ぬき）
-const CxBand=({row,dk,onOpen,onDrop})=>{
+// ★同じ日に再予約された帯の見え方（③イ案・2026-11-16 ユーザー決定）。
+//   帯は【消さずに薄く残し】「✓ 再予約済み」の印を付ける。消すと「一度キャンセルがあった」
+//   ことが分からなくなり、お客様から問い合わせがあった時に説明できない。
+const CX_RE_BG='#fef2f2';    // 再予約済みの帯の地（ふだんの帯より薄い）
+const CX_RE_OP=0.68;         // 再予約済みの帯の濃さ
+const CxBand=({row,dk,onOpen,onDrop,onRe,onJump,reDone})=>{
   const mv=!!row.cxTo;
-  const bg=mv?CX_MV_BG:CX_BG;
+  // ★reDone＝同じ日に再予約された時の【生きている行】。あれば薄くして印を付ける（③イ案）。
+  const bg=mv?CX_MV_BG:(reDone?CX_RE_BG:CX_BG);
+  const op=reDone?CX_RE_OP:1;
   const big=mv?{color:'white'}:{color:'#991b1b'};
   const sub=mv?{color:'#fee2e2'}:{color:'#7f1d1d'};
   const strike={textDecoration:'line-through',textDecorationColor:mv?'#fecaca':'#dc2626'};
@@ -11309,13 +11338,23 @@ const CxBand=({row,dk,onOpen,onDrop})=>{
     background:mv?'rgba(255,255,255,.14)':'white',color:mv?'white':'#991b1b'};
   return (
     <tr data-cxband={mv?'move':'cancel'}>
-      <td style={{textAlign:'center',padding:'6px 4px',background:bg,fontWeight:900,fontSize:12,
+      <td style={{textAlign:'center',padding:'6px 4px',background:bg,fontWeight:900,fontSize:12,opacity:op,
         borderLeft:`3px solid ${mv?'#7f1d1d':'#dc2626'}`,borderBottom:'1px solid #eef2f6',...big}}>{mv?'⇄':'✕'}</td>
-      <td colSpan={7} style={{padding:0,background:bg,borderBottom:'1px solid #eef2f6'}}>
+      <td colSpan={7} style={{padding:0,background:bg,borderBottom:'1px solid #eef2f6',opacity:op}}>
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'5px 8px'}}>
           <span data-cxtitle="1" style={{fontSize:16,fontWeight:900,letterSpacing:3,...big}}>{mv?'日にち変更':'キャンセル'}</span>
           {mv
-            ?<span data-cxdate="1" style={{fontSize:14,fontWeight:900,...big}}>{cxMD(row.cxFrom||dk)} → {cxMD(row.cxTo)}</span>
+            ?<span data-cxdate="1" style={{fontSize:14,fontWeight:900,...big}}>
+              {/* ★日にち変更の帯は、この【日付の所だけ】を押すと移り先の日へジャンプ（②イ案・2026-11-16 ユーザー決定）。
+                  ★帯全体を押せる形にしないこと＝中身を見るつもりで触った時にも飛んでしまう。 */}
+              {onJump
+                ?<span data-cxjump="1" title={cxMD(row.cxTo)+" のスケジュールを見る"}
+                   onClick={e=>{e.stopPropagation();onJump();}}
+                   style={{cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",
+                     textDecorationThickness:2,textUnderlineOffset:3}}>
+                   {cxMD(row.cxFrom||dk)} → {cxMD(row.cxTo)}</span>
+                :<>{cxMD(row.cxFrom||dk)} → {cxMD(row.cxTo)}</>}
+            </span>
             :<span data-cxdate="1" style={{fontSize:13,fontWeight:800,color:'#b91c1c'}}>{when?`${when} に取消`:'取消'}</span>}
           {(row.cxBy||(mv&&when))&&(
             <span data-cxby="1" style={{fontSize:12,fontWeight:800,...sub}}>
@@ -11326,7 +11365,17 @@ const CxBand=({row,dk,onOpen,onDrop})=>{
             background:c.bg,color:c.color}}>{c.initial}</span>}
           {row.time&&<span style={{...sub}}>{specialSlotLabel(row.time)} 入庫</span>}
           {row.note&&<span style={{...sub,fontSize:11.5}}>{row.note}</span>}
+          {reDone&&(
+            <span data-cxredone="1" title="この日にこの方の予約があらためて入っています"
+              style={{display:'inline-block',padding:'1px 9px',borderRadius:999,fontSize:10.5,fontWeight:900,
+                background:'#047857',color:'white',whiteSpace:'nowrap'}}>
+              ✓ 再予約済み（{specialSlotLabel(reDone.time)||'時間未定'}）</span>)}
           <span style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+            {/* ★取り消し・キャンセルの帯から、その中身でもう一度予約を取る（①ア案・2026-11-16 ユーザー決定）。
+                ★日にち変更の帯には出さない（そちらは移り先で生きている＝再予約するものが無い）。
+                ★すでに同じ日で再予約されている時も出さない（二重予約を誘わないため）。 */}
+            {!mv&&onRe&&!reDone&&<button data-cxre="1" title="この内容でもう一度 予約を取る" style={btn}
+              onClick={e=>{e.stopPropagation();onRe();}}>↻ 再予約</button>}
             {onOpen&&<button data-cxopen="1" title="この予約の中身を見る" style={btn}
               onClick={e=>{e.stopPropagation();onOpen();}}>🗒 中身</button>}
             {onDrop&&<button data-cxdrop="1" title="この記録そのものを消す（入力し間違えた時）" style={btn}
@@ -17454,6 +17503,28 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
 
   // ★帯（キャンセル／日にち変更の記録）そのものを消す。入力し間違えた時だけ使う。
   //   ★顧客リストには何も知らせない（リスト側の帯の色は現場が ✎ 編集で直す）。
+  // ★取り消し・キャンセルの帯から、その中身でもう一度 予約を取る（①ア案・2026-11-16 ユーザー決定）。
+  //   ★帯の行はそのまま残す（記録）。新しい予約は【空いている別の行】に入れる。
+  //     帯の行を使い回すと記録が上書きされて消える（2026-11-16 の recycledIdx と同じ理由）。
+  //   ★引き継ぐのは CX_REBOOK_KEEP の白名簿だけ（上のコメントを見ること）。
+  //   ★印は _cxRe（頭が _ ＝ handleSaveModal が保存から落とす）。カードの案内に使うだけ。
+  const handleReBookCx=useCallback((dk,row)=>{
+    const preset={_cxRe:1};
+    CX_REBOOK_KEEP.forEach(k=>{const v=row[k];if(v!==undefined&&v!==null&&v!=='')preset[k]=v;});
+    const rows=inspData[dk]||[];
+    let idx=rows.findIndex(r=>!cxIsTrace(r)&&!(r&&r.name));
+    if(idx<0)idx=rows.length;
+    handleOpenModal('insp',dk,idx,'',true,preset);
+  },[inspData,handleOpenModal]);
+
+  // ★日にち変更の帯の【日付の所】を押したら、移り先の日のスケジュールへ移る（②イ案・2026-11-16 ユーザー決定）。
+  const handleJumpCx=useCallback((to)=>{
+    const q=String(to||'').split('-').map(Number);
+    if(q.length!==3||isNaN(q[0]))return;
+    const d=new Date(q[0],q[1]-1,q[2]);
+    setSelDate(d);selDateRef.current=d;setDcBack(null);
+  },[]);
+
   const handleDropCxBand=useCallback((dk,idx,row)=>{
     const what=row.cxTo?'日にち変更':'キャンセル';
     if(!window.confirm(`${cxMD(dk)} の「${what}」の記録（${row.name}）を消しますか？`+String.fromCharCode(10)+'この行は表から消えます（予約は作り直されません）。'))return;
@@ -19574,12 +19645,30 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                         });
                         // ③-2 キャンセル／日にち変更の帯（2026-11-16 ユーザー指示）。
                         //   1〜6番の【下】に番号なしで並ぶ。取り消した日が新しいものを先に。
+                        // ★同じ日に再予約されたか（③イ案・2026-11-16 ユーザー決定）。
+                        //   見つかったら帯を薄くして「✓ 再予約済み」の印を付ける（消さない）。
+                        //   ★合わせ方は custId → 氏名＋ナンバー（seq は別の予約なので合わない）。
+                        //     ナンバーが片方だけ空の時は氏名だけで合わせる（手入力の予約には無いため）。
+                        //   ★日にち変更の帯には出さない（移り先で生きている＝同じ日の話ではない）。
+                        const _cxReOf=(band)=>{
+                          if(band.cxTo)return null;
+                          const nm=String(band.name||'').trim();
+                          return validRows.find(r=>{
+                            if(band.custId&&r.custId)return r.custId===band.custId;
+                            if(!nm||String(r.name||'').trim()!==nm)return false;
+                            const a=String(band.no||''),b=String(r.no||'');
+                            return (!a||!b)?true:a===b;
+                          })||null;
+                        };
                         allMapped.filter(cxIsTrace)
                           .sort((a,b)=>String(b.cxAt||'').localeCompare(String(a.cxAt||'')))
                           .forEach(row=>{
                             const origIdx=row._origIdx;
                             const {_origIdx,...cleanRow}=row;
-                            rows.push(<CxBand key={`cx-${origIdx}`} row={cleanRow} dk={dk}
+                            const _re=_cxReOf(cleanRow);
+                            rows.push(<CxBand key={`cx-${origIdx}`} row={cleanRow} dk={dk} reDone={_re}
+                              onRe={()=>handleReBookCx(dk,cleanRow)}
+                              onJump={cleanRow.cxTo?()=>handleJumpCx(cleanRow.cxTo):null}
                               onDrop={()=>handleDropCxBand(dk,origIdx,cleanRow)}/>);
                           });
                         // ④ 追加行（isNew=trueで開く）。台数制限を掛けた日で上限に達していたら「予約不可」
