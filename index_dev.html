@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794871317000';
+    window.__APP_BUILD='build-1794906219261';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.121.1';
+const APP_VERSION = '3.122.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -3159,6 +3159,35 @@ const removeResByBk=(base,bks)=>{
   }
   return out;
 };
+// ★キャンセル・削除で代車を外す時は、bookingKey が合わなければ【同じ日・同じ氏名】で探す
+//   （2026-11-17・新しい純関数。既にあるデータ層のコードは変えていない）。
+//   bookingKey は insp-{日付}-{行番号}／sched-{日付}-{枠} なので、予約を足し引きすると
+//   行番号がずれる。それまでは その鍵と完全一致する帯しか外していなかったので、
+//   ずれていると【代車を外さずに終わっていた】＝残った帯が代車管理のズレになり、
+//   その車はふさがったまま貸し出せなくなる（キャンセルしたのに代車が空かない）。
+//   ★氏名で照合すること（行番号だけで消さない。2026-10-14 の「別人の代車名を消していた」と同じ教訓）。
+//   ★同じ日に同じ氏名の帯が2本ある時は【何も触らない】（どちらの予約の分か決められないため。
+//     代車管理のズレの知らせから手で消してもらう）。
+const resBksForBooking=(base,bk,userName)=>{
+  const src=_resObj(base);
+  const m=String(bk||'').match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
+  const dayPrefix=m?(m[1]+'-'+m[2]+'-'):'';
+  const nm=String(userName==null?'':userName).trim();
+  let exact=false; const byName=new Set();
+  Object.keys(src).forEach(cid=>{
+    const days=src[cid]||{};
+    Object.keys(days).forEach(k=>{
+      const r=days[k];
+      if(!r||!r.bookingKey)return;
+      if(r.bookingKey===bk){exact=true;return;}
+      if(!nm||!dayPrefix)return;
+      if(String(r.bookingKey).indexOf(dayPrefix)===0&&String(r.user==null?'':r.user).trim()===nm)byName.add(r.bookingKey);
+    });
+  });
+  if(exact)return[bk];
+  const u=[...byName];
+  return u.length===1?u:[];        // 2本以上は取り合い＝触らない
+};
 // 指定車の予約を id で取り除く
 const removeResById=(base,carId,resId)=>{
   const src=_resObj(base),days={...(src[carId]||{})};
@@ -4310,12 +4339,27 @@ const syncCustStatus=async(custId,newStatus,extraFields={},matchName,matchNo)=>{
   try{
     // cust-updatesキューに積む（customers.htmlがポーリングで読んで反映する）
     const update={custId,name:matchName,no:matchNo,status:newStatus,...extraFields,ts:Date.now()};
-    const existing=await sGet(STOR+'cust-updates')||[];
-    const next=[...existing.filter(u=>
-      !(custId&&u.custId===custId)&&
-      !(matchName&&matchNo&&u.name===matchName&&String(u.no)===String(matchNo))
-    ),update];
-    await sSet(STOR+'cust-updates',next);
+    // ★★取り合いで消えないように【足すだけ】をトランザクションで行う
+    //   （2026-11-17・Kyoshi承認のBLOCK-B変更）。
+    //   それまでは sGet → 丸ごと sSet だったので、顧客リスト側が反映の後片付け
+    //   （await の2秒待ち×最大3回＝6秒以上）をしている最中にここで積んだ通知は、
+    //   あちらの書き戻しで上書きされて消えていた。
+    //   ＝2026-11-16「マッハ3件キャンセルで、3本の通知のうち1本だけ反映されず消えた」の正体。
+    //   顧客リストからの予約（customers.html の cust-updates 書き込み）は前からこの書き方で
+    //   正しかったので、それに揃える。★sGet→sSet に戻さないこと。
+    const _same=u=>{
+      if(!u)return false;
+      if(custId&&u.custId&&String(u.custId)===String(custId))return true;
+      const nm=String(matchName||'');
+      return !!nm && String(u.name||'')===nm && String(u.no||'')===String(matchNo||'');
+    };
+    const _keepFrom=Date.now()-60*24*3600*1000;   // 60日。顧客リスト側の保持期間と揃える
+    const _ok=await writeVerified(STOR+'cust-updates',
+      base=>[...(Array.isArray(base)?base:[]).filter(u=>u&&!_same(u)&&(u.ts||0)>_keepFrom),update],
+      back=>Array.isArray(back)&&back.some(u=>u&&u.ts===update.ts),
+      3,{requireBase:true}   // 読めなかったサーバー値を「空」とみなして書かない
+    );
+    if(!_ok)console.warn('[SYNC] 顧客リストへの連絡を積めませんでした',matchName||custId);
   }catch(e){console.error('syncCustStatus error:',e);}
 };
 
@@ -16820,14 +16864,23 @@ function AppInner() {
         const existingRow=meta?.existingDk&&meta?.existingIdx>=0
           ?(inspData[meta.existingDk]||[])[meta.existingIdx]:null;
         const custId=existingRow?.custId||clean.custId;
-        if(custId){
+        // ★氏名・ナンバー・車種も必ず付ける（2026-11-17）。
+        //   それまでは custId だけを渡していた。custId は ファイル名__行番号__氏名__ナンバー
+        //   なので月ファイルを取り込み直すと変わり、顧客リストは宛先を見つけられず
+        //   10分後に通知を黙って捨てていた＝「日にちを変えたのにリストに映らない」の正体。
+        //   ★custId が無い手入力の予約も、氏名があれば知らせる（それまでは1本も出していなかった）。
+        //   車種は【照合に使うだけ】。顧客リストには書かない（customers.html 側で除いてある）。
+        const _mName=clean.name||existingRow?.name||'';
+        const _mNo=clean.no||existingRow?.no||'';
+        if(custId||_mName){
           const newStatus=mode==='provisional'?'temp':'confirm';
           const newEntry=arrDate||'';
           syncCustStatus(custId,newStatus,{
             entryDate:newEntry,linkedInspDate:newEntry,
             course:clean.course,store:clean.store,
             staff:clean.staff,tokuten:clean.tokuten,note:clean.note,
-          });
+            carType:clean.carType||existingRow?.carType||'',
+          },_mName,_mNo);
         }
       }
     }
@@ -17560,6 +17613,10 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     const bk=modalType==='insp'
       ?`insp-${modalDk}-${modalIdx}`
       :`sched-${modalDk}-${modalSlot}`;
+    // ★代車を外す時の手がかりに氏名も使う（2026-11-17）。bookingKey の行番号・枠名は当てにならない。
+    const _bkName=(modalType==='insp'
+      ?(((inspData[modalDk]||[])[modalIdx]||{}).name)
+      :((((schedData||{})[modalDk]||{})[modalSlot]||{}).name))||'';
 
     if(modalType==='insp'){
       // キャンセル前に行データを取得してsyncCustStatusに渡す
@@ -17603,7 +17660,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
       const _dupLeft=!cancelCustId&&cancelName&&Object.keys(inspData).some(d=>
         (inspData[d]||[]).some((r,i)=>r&&r.name===cancelName&&r.bookingStatus!=='cancelled'&&!(d===modalDk&&i===modalIdx)));
       if((cancelCustId||cancelName)&&!_dupLeft){
-        syncCustStatus(cancelCustId,'cancel',{entryDate:'',linkedInspDate:''},cancelName,cancelNo);
+        // 車種は【照合に使うだけ】＝同じお名前の方が2人以上いる時の見分けに使う。
+        syncCustStatus(cancelCustId,'cancel',{entryDate:'',linkedInspDate:'',carType:cancelledRow?.carType||''},cancelName,cancelNo);
       }
       // ★custbkからも即時削除（画面の見た目を即反映）
       setCustBookings(prev=>{
@@ -17619,17 +17677,19 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
       setSchedData(prev=>{const d={...(prev[modalDk]||{})};delete d[modalSlot];return{...prev,[modalDk]:d};});
     }
 
-    // ★連動削除: bookingKeyに紐づく代車予約を削除（サーバー最新値ベース＋読み返し検証）
+    // ★連動削除: その予約に紐づく代車予約を削除（サーバー最新値ベース＋読み返し検証）。
+    //   bookingKey が合わなければ【同じ日・同じ氏名】の帯を外す（resBksForBooking）。
+    //   ずれた行番号のせいで代車が外れず、ふさがったまま残るのを防ぐ（2026-11-17）。
     persistLres(
-      base=>resHasBk(base,bk)?removeResByBk(base,[bk]):undefined,
-      back=>!resHasBk(back,bk),
+      base=>{const _bks=resBksForBooking(base,bk,_bkName);return _bks.length?removeResByBk(base,_bks):undefined;},
+      back=>resBksForBooking(back,bk,_bkName).length===0,
       {verb:'削除'}
     );
 
-    // ★連動削除: bookingKeyに紐づくレンタカー予約を削除（同上）
+    // ★連動削除: レンタカーも同じ（同上）
     persistRres(
-      base=>resHasBk(base,bk)?removeResByBk(base,[bk]):undefined,
-      back=>!resHasBk(back,bk),
+      base=>{const _bks=resBksForBooking(base,bk,_bkName);return _bks.length?removeResByBk(base,_bks):undefined;},
+      back=>resBksForBooking(back,bk,_bkName).length===0,
       {verb:'削除'}
     );
 
@@ -17656,7 +17716,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     }
 
     releaseLock(curLockKey);setCurLockKey(null);setModalOpen(false);
-  },[modalType,modalDk,modalIdx,modalSlot,curLockKey,releaseLock,persistInsp,setSchedData,persistLres,persistRres,inspData,syncCustStatus,inspLimits]);
+  },[modalType,modalDk,modalIdx,modalSlot,curLockKey,releaseLock,persistInsp,setSchedData,schedData,persistLres,persistRres,inspData,syncCustStatus,inspLimits]);
 
   // 承認ハンドラー（承認もサーバー最新値ベース。対象を本人性で特定し approved を立てる）
   // ★入庫済みチェック（任意）。名前の横の〇を押すと黄色地に赤チェックが点く。

@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794871317000';
+  window.__APP_BUILD='build-1794906219261';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.121.1';
+const MOBILE_VERSION='3.122.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -517,7 +517,7 @@ const CORP_TOKENS=['特定非営利活動法人','一般社団法人','一般財
 //   ★★付けるのは【画面に出す時だけ】。保存する name には絶対に入れないこと。
 //     入れてしまうと、顧客リストとの突き合わせ・検索・控えのキー（氏名::日付）・
 //     代車の紐付け（res.user === row.name）が**全部ずれる**。
-const SAMA_RE=/(様|さま|サマ|御中|殿)[s　]*$/;
+const SAMA_RE=/(様|さま|サマ|御中|殿)[\s　]*$/;
 //   ★お名前と「様」のあいだは【半マス＝半角のスペース】（2026-10-30 ユーザー決定。PC版と同じ）。
 const SAMA_GAP=' ';
 const sama=(n)=>{ const s=String(n==null?'':n).trim(); return (!s||SAMA_RE.test(s))?s:(s+SAMA_GAP+'様'); };
@@ -735,6 +735,35 @@ const fbSet = async (k, v) => {
 };
 // サーバー最新値 base → mutate(base) を書く。他端末と衝突したら Firestore が自動でやり直す（mutate は純関数であること）。
 //   戻り値: 'ok' / 'nochange'（mutate が undefined）/ false（失敗）。書いた値は opts.out.val に入る。
+// ★顧客リストへの連絡（cust-updates）を【足すだけ】で積む（2026-11-17）。
+//   それまでは sGet → 丸ごと sSet だったので、顧客リストが後片付けをしている最中に
+//   積んだ通知が上書きで消えていた（PC版 syncCustStatus と同じ不具合）。
+//   配列なので writeShared は使えない＝Firestore では fbTxn（トランザクション）で足す。
+//   ★sGet→sSet に戻さないこと。
+const custUpdPush = async (upd) => {
+  try{
+    const same=u=>{
+      if(!u)return false;
+      if(upd.custId&&u.custId&&String(u.custId)===String(upd.custId))return true;
+      const nm=String(upd.name||'');
+      return !!nm && String(u.name||'')===nm && String(u.no||'')===String(upd.no||'');
+    };
+    const keepFrom=Date.now()-60*24*3600*1000;   // 60日。顧客リスト側の保持期間と揃える
+    const mut=base=>[...(Array.isArray(base)?base:[]).filter(u=>u&&!same(u)&&(u.ts||0)>keepFrom),upd];
+    if(FB_ON){
+      for(let i=0;i<3;i++){
+        const r=await fbTxn(STOR+'cust-updates',mut,{requireBase:true});
+        if(r==='ok'||r==='nochange')return true;
+        await new Promise(res=>setTimeout(res,1200+1200*i));
+      }
+      console.warn('[SYNC] 顧客リストへの連絡を積めませんでした',upd.name||upd.custId);
+      return false;
+    }
+    const cur=await sGet(STOR+'cust-updates');
+    await sSet(STOR+'cust-updates',mut(cur));
+    return true;
+  }catch(e){ console.warn('[SYNC] cust-updates',e); return false; }
+};
 const fbTxn = async (k, mutate, opts) => {
   const _o = opts || {};
   let mutateErr = null;
@@ -7744,12 +7773,10 @@ const App=()=>{
             const _upd={custId:entry.custId||'',name:_nm,no:entry.no,status:'confirm',
               entryDate:_ed,linkedInspDate:_ed,course:Number(entry.course)||0,
               store:normStore(entry.store)||vsId,staff:entry.staff||'',tokuten:entry.tokuten||'-',
-              note:entry.note||'',bookingTime:entry.time||'',ts:Date.now()};
-            const _cur=await sGet(STOR+'cust-updates');
-            const _arr=Array.isArray(_cur)?_cur:[];
-            await sSet(STOR+'cust-updates',[..._arr.filter(u=>!(u&&(
-              (!!_upd.custId&&u.custId===_upd.custId)||
-              (!!_nm&&u.name===_nm&&String(u.no)===String(_upd.no))))),_upd]);
+              note:entry.note||'',bookingTime:entry.time||'',
+              carType:entry.carType||'',   // 照合に使うだけ（顧客リストには書かない）
+              ts:Date.now()};
+            await custUpdPush(_upd);
           }catch(e){}
         }
       }
@@ -8032,12 +8059,10 @@ const App=()=>{
         }catch(e){}
         try{
           const _upd={custId:(req.initial&&req.initial.custId)||'',name:_dnm,no:_dno,
-            status:'cancel',entryDate:'',linkedInspDate:'',ts:Date.now()};
-          const _cur=await sGet(STOR+'cust-updates');
-          const _arr=Array.isArray(_cur)?_cur:[];
-          await sSet(STOR+'cust-updates',[..._arr.filter(u=>!(u&&(
-            (!!_upd.custId&&u.custId===_upd.custId)||
-            (!!_dnm&&u.name===_dnm&&String(u.no)===String(_dno))))),_upd]);
+            status:'cancel',entryDate:'',linkedInspDate:'',
+            carType:(req.initial&&req.initial.carType)||'',   // 照合に使うだけ
+            ts:Date.now()};
+          await custUpdPush(_upd);
         }catch(e){}
       }
     }else{

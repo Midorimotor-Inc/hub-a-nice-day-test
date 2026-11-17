@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794871317000';
+  window.__APP_BUILD='build-1794906219261';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -170,7 +170,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.121.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.122.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -1723,6 +1723,51 @@ const makeCustId=(fileName,rowIdx,name,no)=>{
   const normName=String(name||'').replace(/[\s　]/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
   const normNo=String(no||'').trim();
   return `${fileName}__${rowIdx}__${normName}__${normNo}`;
+};
+
+// ═══ スケジュールからの通知（cust-updates）の宛先を決める照合（2026-11-17）═══
+//  ★ここは【顧客リストへ書き込む】ための照合。ゆるくすると別人のリストを書き換える。
+//  それまでは「通知のナンバーが空なら氏名だけで一致」としていた。
+//  本番には「苗字だけ・ナンバー空」で入っている車検予約が13件あり、
+//  同姓の別人（古川3人・高橋2人・上田3人・二助企画2台）が実在するため、
+//  「古川」さんの予約を1件キャンセルすると【古川さん3人全員】のリストが
+//  キャンセルに書き換わり、3人の入庫日が消えていた。
+//  ★照合はこの3段だけにすること（強い順）：
+//    3 … custId が一致
+//    2 … 氏名が完全一致 ＋ ナンバーが完全一致（どちらも空でない）
+//    1 … 氏名が完全一致 ＋ 通知のナンバーが空（車種が両方あれば車種も一致すること）
+//  ★1 の強さで2人以上が残ったら【誰にも書かない】（取り合いは両方書かない）。
+//    書かなかった通知はキューに残し、画面に「手で確かめてください」と出す。
+const updNm=s=>String(s==null?'':s).replace(/[\s　]/g,'').replace(/(様|さま|サマ|御中|殿)$/,'');
+const updNo=s=>String(s==null?'':s).replace(/[^0-9]/g,'');
+const updCar=s=>String(s==null?'':s).replace(/[\s　]/g,'')
+  .replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toUpperCase();
+// 通知 u と顧客 c の近さ。0＝別人（書いてはいけない）
+const updRank=(u,c)=>{
+  if(!u||!c)return 0;
+  if(u.custId&&c.custId&&String(u.custId)===String(c.custId))return 3;
+  const un=updNm(u.name),cn=updNm(c.name);
+  if(!un||!cn||un!==cn)return 0;                 // 氏名は完全一致だけ（部分一致で書かない）
+  const uno=updNo(u.no),cno=updNo(c.no);
+  if(uno&&cno)return uno===cno?2:0;              // 両方ナンバーがある＝一致必須
+  if(uno&&!cno)return 0;                         // 通知にナンバーがありリストに無い＝確かめられない
+  const ucar=updCar(u.carType),ccar=updCar(c.carType);
+  if(ucar&&ccar&&ucar!==ccar)return 0;           // 車種で別人と分かる
+  return 1;                                      // 氏名だけ（＋車種）＝弱い。候補が1人の時だけ使う
+};
+// 通知 u を当てる相手を決める。{rank,hits,amb}
+//  amb=true は「同じ強さで2人以上いる」＝誰にも書かない
+const updResolve=(u,files)=>{
+  let best=0,hits=[];
+  (files||[]).forEach(f=>((f&&f.customers)||[]).forEach(c=>{
+    const r=updRank(u,c);
+    if(!r)return;
+    if(r>best){best=r;hits=[c];}
+    else if(r===best)hits.push(c);
+  }));
+  if(best===0)return{rank:0,hits:[],amb:false};
+  if(best===1&&hits.length>1)return{rank:1,hits:[],amb:true};
+  return{rank:best,hits,amb:false};
 };
 
 // セル背景色 → ステータス変換
@@ -3347,11 +3392,11 @@ const inSyncRange=d=>{const dk=toDk(d);return !!dk&&_dkNum(dk)>=_dkNum(SYNC_FROM
 //    ナンバー下4桁か車種が合っている時にかぎって、氏名の部分一致も同じ人とみなす。
 //    ★氏名だけで同じ人と決めないこと（別人を「反映済み」と見なしてしまう）。
 //  ★③【別の日に予約がある人は数えない】日にちを動かした時の古い控え（custbk）の残り。
-const syncNm=s=>String(s==null?'':s).replace(/[s　]/g,'')
+const syncNm=s=>String(s==null?'':s).replace(/[\s　]/g,'')
   .replace(/(様|さま|サマ|御中|殿)$/,'')
   .replace(/(株式会社|有限会社|合同会社|(株)|（株）|(有)|（有）)/g,'');
 const _SKANA='ァィゥェォャュョ',_BKANA='アイウエオヤユヨ';
-const syncCar=s=>String(s==null?'':s).replace(/[s　]/g,'')
+const syncCar=s=>String(s==null?'':s).replace(/[\s　]/g,'')
   .replace(/[ァィゥェォャュョ]/g,m=>_BKANA[_SKANA.indexOf(m)])
   .replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toUpperCase();
 const syncNo=s=>String(s==null?'':s).replace(/[^0-9]/g,'');
@@ -3650,6 +3695,9 @@ const App=()=>{
   const [pendings,setPendings]=useState([]);     // 未反映の予約（localStorageの控え。起動時にサーバーと突き合わせて残ったもの）
   const [resending,setResending]=useState('');   // 再送中のpid
   const [pendingSync,setPendingSync]=useState({}); // スケジュール側からの変更が反映待ちの顧客 {custId|name__no:{name,entryDate,ts}}
+  // ★スケジュールからの通知のうち、同姓の別人が2人以上いて【自動では当てられない】もの（2026-11-17）。
+  //   黙って捨てる／別人に書く のどちらもしない＝画面に出して手で確かめてもらう。
+  const [ambUpd,setAmbUpd]=useState([]);
   const [syncFlash,setSyncFlash]=useState(null);   // スケジュール変更の反映完了フラッシュ {items:[{name,entryDate}],ts}
   const [recentApplied,setRecentApplied]=useState({}); // 反映直後の行ハイライト {custId|name__no:ts}
   const [loanerResH,setLoanerResH]=useState({});
@@ -3865,9 +3913,11 @@ const App=()=>{
       // ★リストに該当する顧客がいない通知（スケジュール側で手入力された予約のキャンセル等）は
       //   永久に適用されない。これを「反映中」に出すと消えないポップアップになる（2026-07-13の菊池）。
       //   バッジ判定とキュー掃除の両方で使うので、この関数スコープの先頭で定義する。
-      const matchesCust=u=>(filesRef.current||[]).some(f=>(f.customers||[]).some(c=>
-        (u.custId&&u.custId===c.custId)||(u.name&&((!u.no&&u.name===c.name)||(u.no&&u.name===c.name&&String(u.no)===String(c.no))))
-      ));
+      //   ★照合は updRank/updResolve の3段ルールだけを使うこと（2026-11-17）。
+      //     氏名だけの一致で書くと、同姓の別人（古川3人など）全員を書き換える。
+      const matchesCust=u=>updResolve(u,filesRef.current||[]).rank>0;
+      //   同じ強さで2人以上が取り合っている通知＝自動では当てない。画面に出して手で確かめてもらう。
+      const ambNow=[];
       try{
         const updates=await sGet(STOR+'cust-updates');
         arr=Array.isArray(updates)?updates:[];
@@ -3879,10 +3929,18 @@ const App=()=>{
         const pend={};
         arr.forEach(u=>{
           if(!u||!u.ts||window.__appliedUpdTs.has(u.ts))return;
-          if(loaded&&!matchesCust(u))return; // 宛先不明 → 反映待ちではない
+          if(loaded){
+            const _r=updResolve(u,filesRef.current||[]);
+            if(_r.rank===0)return;                       // 宛先不明 → 反映待ちではない
+            if(_r.amb){ambNow.push(u);return;}           // 取り合い → 自動では当てない
+          }
           pend[u.custId||`${u.name}__${u.no}`]={name:u.name,entryDate:u.entryDate,ts:u.ts};
         });
         setPendingSync(prev=>JSON.stringify(prev)===JSON.stringify(pend)?prev:pend);
+        setAmbUpd(prev=>{
+          const a=ambNow.map(u=>({name:u.name||'',no:u.no||'',status:u.status||'',entryDate:u.entryDate||'',ts:u.ts}));
+          return JSON.stringify(prev)===JSON.stringify(a)?prev:a;
+        });
       }catch{return;}
       if(arr.length===0)return;
       // ここから先は実際にリストへ反映する重い処理（チャンク保存・読み返し検証を伴う）。書込中・
@@ -3897,10 +3955,16 @@ const App=()=>{
         // tsありで未適用のものだけを対象（古い無タイムスタンプ項目は無視してクリーンアップ）
         const fresh=arr.filter(u=>u.ts&&!window.__appliedUpdTs.has(u.ts));
         if(fresh.length===0)return;
-        // custIdまたはname+noでマッチング
-        const findUpd=(c)=>fresh.find(u=>
-          (u.custId&&u.custId===c.custId)||(u.name&&((!u.no&&u.name===c.name)||(u.no&&u.name===c.name&&String(u.no)===String(c.no))))
-        );
+        // ★宛先は【通知ごとに先に1人（または同じ人の各月の行）へ決める】（2026-11-17）。
+        //   以前は顧客の側から fresh.find で引いていたので、氏名だけ一致する同姓の別人が
+        //   そろって同じ通知を拾い、全員が書き換わっていた。
+        const _assign=new Map();
+        fresh.forEach(u=>{
+          const r=updResolve(u,filesRef.current||[]);
+          if(r.rank===0||r.amb)return;                  // 宛先不明・取り合いは当てない
+          r.hits.forEach(c=>{ if(!_assign.has(c))_assign.set(c,u); });
+        });
+        const findUpd=(c)=>_assign.get(c);
         // ★適用先の有無をsetFilesの外で先に判定（filesRef基準）。
         //   マッチした通知だけを処理済み扱いにし、マッチしない通知はキューに残す（後でデータが揃ったら適用）。
         const appliedTs=new Set();
@@ -3930,9 +3994,11 @@ const App=()=>{
                 const chk=await loadFileChunked(f.name);
                 const okAll=chk&&Array.isArray(chk.customers)&&fresh.every(u=>{
                   if(!appliedTs.has(u.ts))return true;
-                  const c=chk.customers.find(x=>(u.custId&&x.custId===u.custId)||(x.name===u.name&&String(x.no||'')===String(u.no||'')));
+                  // ★読み返しの照合も同じ3段ルールで（強い方から探す）
+                  const c=chk.customers.find(x=>updRank(u,x)>=2)||chk.customers.find(x=>updRank(u,x)===1);
                   if(!c)return true; // このファイルの顧客でなければ対象外
-                  const{custId:_,name:__,no:___,ts:____,...sf}=u;
+                  // ★carType は照合に使うだけ（台帳の車種を予約の書き方で上書きしないこと）
+                  const{custId:_,name:__,no:___,ts:____,carType:_____,...sf}=u;
                   return Object.keys(sf).every(k=>String(c[k]??'')===String(sf[k]??''));
                 });
                 if(okAll)return true;
@@ -3949,7 +4015,8 @@ const App=()=>{
               const upd=findUpd(c);
               if(!upd)return c;
               // statusとextraFieldsのみ更新（他フィールドは保護）
-              const{custId:_,name:__,no:___,ts:____,...safeFields}=upd;
+              // ★carType は照合に使うだけ。リストの車種は台帳（取り込んだ月ファイル）が正。
+              const{custId:_,name:__,no:___,ts:____,carType:_____,...safeFields}=upd;
               return{...c,...safeFields};
             });
             return{...f,customers:custs};
@@ -4004,7 +4071,20 @@ const App=()=>{
           }
           return true;
         });
-        if(remaining.length!==arr.length)await sSet(STOR+'cust-updates',remaining.length>0?remaining:[]);
+        // ★★後片付けも【消す分だけ】をトランザクションで外す（2026-11-17）。
+        //   それまでは自分が読んだ arr から作った remaining を丸ごと書き戻していたので、
+        //   読んでから書き戻すまでの間（await の2秒待ち×最大3回＝6秒以上）に
+        //   スケジュール側が積んだ通知を、気づかないまま消していた。
+        //   ★丸ごと書き戻す形に戻さないこと。
+        const _dropTs=new Set(arr.filter(u=>!remaining.includes(u)).map(u=>u&&u.ts).filter(Boolean));
+        const _hasNoTs=arr.some(u=>!u||!u.ts);
+        if(_dropTs.size>0||_hasNoTs){
+          await writeVerified(STOR+'cust-updates',
+            base=>(Array.isArray(base)?base:[]).filter(u=>u&&u.ts&&!_dropTs.has(u.ts)),
+            back=>Array.isArray(back)&&!back.some(u=>u&&u.ts&&_dropTs.has(u.ts)),
+            3,{requireBase:true}
+          );
+        }
       }catch{}finally{window.__pollUpdatesBusy=false;}
     };
     pollUpdatesRef.current=pollUpdates;
@@ -4824,7 +4904,9 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
     try{ if(!window.__appliedUpdTs)window.__appliedUpdTs=new Set(); window.__appliedUpdTs.add(_upd.ts); }catch(e){}
     const _sameCust=u=>(u.custId&&u.custId===customer.custId)||
       (u.name&&u.name===customer.name&&String(u.no||'')===String(customer.no||''));
-    const _weekAgo=Date.now()-7*24*3600*1000;
+    // ★7日→60日（2026-11-17）。掃除側は60日保持なのに、ここで積むたびに7日より古い通知を
+    //   落としていた＝まだ当てられていない古い通知が、他の予約を1件入れるだけで消えていた。
+    const _weekAgo=Date.now()-60*24*3600*1000;
     _bg.push(writeVerified(STOR+'cust-updates',
       base=>[...(Array.isArray(base)?base:[]).filter(u=>u&&!_sameCust(u)&&(u.ts||0)>_weekAgo),_upd],
       back=>Array.isArray(back)&&back.some(u=>u&&u.ts===_upd.ts),
@@ -5478,6 +5560,22 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       )}
 
       {/* サーバーに保存しきれなかったファイルの警告（黙って消えたように見せない） */}
+      {/* ★スケジュールからの通知が「同姓の別人」に当たってしまう分（2026-11-17）。
+          自動では当てないので、どちらの方か手で確かめて直してもらう。 */}
+      {ambUpd.length>0&&(
+        <div data-ambupd style={{flexShrink:0,margin:'6px 14px',padding:'8px 12px',borderRadius:8,
+          background:'#fffbeb',border:'2px solid #f59e0b',color:'#92400e',fontSize:12,fontWeight:700,
+          display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
+          <span style={{fontSize:13}}>⚠ スケジュールからの連絡を、自動で反映できない方が {ambUpd.length} 人います</span>
+          <span style={{fontWeight:500,width:'100%'}}>
+            同じお名前の方が2人以上いて、ナンバーが入っていないため、どちらの方か機械では決められません。
+            スケジュールの予約にナンバーを入れると自動で反映されます（別の方を書き換えないように、こちらからは何も書いていません）。
+          </span>
+          <span style={{fontWeight:800,width:'100%'}}>
+            {ambUpd.map(u=>`${u.name||'（お名前なし）'}${u.status==='cancel'?'：キャンセル':(u.entryDate?'：'+u.entryDate+' に予約':'')}`).join('　／　')}
+          </span>
+        </div>
+      )}
       {cfWarn.length>0&&(
         <div style={{flexShrink:0,margin:'6px 14px',padding:'8px 12px',borderRadius:8,
           background:'#fef2f2',border:'1px solid #fecaca',color:'#991b1b',fontSize:12,fontWeight:700,
