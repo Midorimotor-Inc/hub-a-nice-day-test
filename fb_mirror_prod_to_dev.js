@@ -19,6 +19,11 @@
 //     ・マイスケジュール myprv-*（個人の予定）
 //     ・時点保存 snap*（テスト版のものをそのまま残す）
 //     ・作業中の印（locks・list-pending・diag-*・gasping）
+//     ・★顧客リストへの通知のキュー cust-updates（2026-11-17 に追加）
+//       これは「スケジュールが積む → 顧客リストが読んで当てたら消す」【待ち行列】。
+//       本番の分で上書きすると、テスト版でキャンセルした通知が【読まれる前に消える】＝
+//       顧客リストが赤くならない。逆に本番の通知がテスト版の顧客ファイルに当たることもある。
+//       環境をまたいで写す意味が無く、害だけがあるので写さない。
 const fs = require('fs'), path = require('path');
 const KEY_FILE = process.env.HUB_FB_KEY || 'C:/Users/A/Documents/Hub重要書類/firebase-admin.json';
 const MOD = path.join(process.env.LOCALAPPDATA || '', 'Temp', 'hub-verify', 'node_modules');
@@ -33,6 +38,7 @@ const ONCE = process.argv.indexOf('--once') >= 0;
 
 const SKIP = [
   /^myprv-/, /^auth-/, /^locks$/, /^list-pending$/, /^diag-/, /^gasping$/, /^handoff/, /^snap/,
+  /^cust-updates$/,   // ★顧客リストへの通知の待ち行列（上の説明を見ること・2026-11-17）
 ];
 const skip = base => SKIP.some(re => re.test(base));
 const now = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
@@ -58,6 +64,18 @@ const mirror = async (base, data) => {
 (async () => {
   console.log('本番 → テスト版 の写し取り' + (WRITE ? '（実行）' : '（下見・書き込みはしません）'));
   console.log('  読み元 ' + SRC + '*　→　書き先 ' + DST + '*　（逆向きはできません）');
+
+  // ★★この警告を消さないこと（2026-11-17・テスト版の検証が2回つぶれたため）。
+  //   起動した瞬間に、本番と違うキーを【全部】上書きする（insp も含む）。そのあとも
+  //   本番が保存するたびに上書きし続ける。テスト版で入れた予約・日にち変更・帯は
+  //   そのたびに本番の姿へ戻る。動かしたままテストすると必ず「元に戻った」が起きる。
+  if (WRITE) {
+    console.log('');
+    console.log('  ⚠ テスト版のスケジュール（insp）は、本番が保存するたびに上書きされます。');
+    console.log('  ⚠ テスト版に入れた予約・日にち変更・キャンセルの帯は、そのたびに消えます。');
+    console.log('  ⚠ テスト版で動きを確かめる時は、この写しを止めてから（Ctrl+C）。');
+    console.log('');
+  }
 
   // ① まず今の違いを揃える
   const snap = await db.collection('kv').get();
