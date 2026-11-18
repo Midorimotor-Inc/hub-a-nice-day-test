@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<title>Hub a Nice Day</title>
+<title>[テスト版] Hub a Nice Day</title>
 <!-- 保存先 Firebase（Firestore）。BACKEND が 'firebase' のときだけ使う。読み込めなければ GAS 版として動く（2026-09-18） -->
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794906219261';
+  window.__APP_BUILD='build-1794964181703';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.122.0';
+const MOBILE_VERSION='3.123.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -143,6 +143,7 @@ const STOR='hub-v8-dev-';
 // ★Firebase に繋ぐ時のアプリ名。**本番は既定（空）／テスト版は hub-dev**（2026-10-07）。
 //   同じ住所でフォルダが違うだけなので、アプリ名を分けないとサインインが共有され、
 //   片方のサインアウトでもう片方まで道連れでログアウトされる。
+const HUB_IS_TEST = (STOR !== 'hub-v8-');   // ★テスト版かどうか。画面の印に使う（2026-11-18）
 const HUB_FB_APP_NAME = (STOR === 'hub-v8-') ? '' : 'hub-dev';
 const hubFbApp = () => (HUB_FB_APP_NAME ? firebase.app(HUB_FB_APP_NAME) : firebase.app());
 // ★この端末に登録した人（v2.20 / 2026-09-04・Kyoshi承認のBLOCK-B変更。2026-09-18 に Firebase Auth 化）
@@ -8174,6 +8175,7 @@ const App=()=>{
         <div style={{padding:'7px 12px',display:'flex',alignItems:'center',gap:6}}>
           <span style={{color:'white',fontSize:12,fontWeight:900,letterSpacing:'.5px',flexShrink:0,whiteSpace:'nowrap'}}>🚗 Hub</span>
           <span style={{color:'rgba(255,255,255,.45)',fontSize:9,fontWeight:700,padding:'1px 5px',border:'1px solid rgba(255,255,255,.25)',borderRadius:8}}>v{MOBILE_VERSION}</span>
+          {HUB_IS_TEST&&<span data-testbadge="1" style={{color:'#9A3412',background:'#FFF7ED',fontSize:9,fontWeight:900,padding:'1px 6px',border:'2px solid #EA580C',borderRadius:8,flexShrink:0,whiteSpace:'nowrap'}}>⚠ テスト版</span>}
           <div style={{width:6,height:6,borderRadius:'50%',background:gasOk===true?'#4ade80':gasOk===false?'#f87171':'#fbbf24',marginLeft:2}}/>
           <span style={{color:'rgba(255,255,255,.55)',fontSize:10,fontWeight:700,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}（{myStore==='honten'?'本店':'三田店'}）</span>
           <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6}}>

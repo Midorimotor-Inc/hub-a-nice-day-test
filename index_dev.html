@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Hub a Nice Day [テスト版]</title>
+  <title>[テスト版] Hub a Nice Day</title>
   <meta name="theme-color" content="#1E3A5F" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794906219261';
+    window.__APP_BUILD='build-1794964181703';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.122.0';
+const APP_VERSION = '3.123.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2853,6 +2853,16 @@ const STOR = 'hub-v8-dev-';
 //   片方のサインアウトでもう片方まで道連れでログアウトされる。
 const HUB_FB_APP_NAME = (STOR === 'hub-v8-') ? '' : 'hub-dev';
 const hubFbApp = () => (HUB_FB_APP_NAME ? firebase.app(HUB_FB_APP_NAME) : firebase.app());
+// ★★【重大・2026-11-18】別タブの名前は環境ごとに分ける。
+//   テスト版と本番は同じ住所（midorimotor-inc.github.io）でフォルダが違うだけ＝同一オリジン。
+//   window.open の第2引数（タブの名前）が両環境で同じだと、本番側で押した時に
+//   【テスト版で開いていたタブの中身だけが本番に差し替わる】。タブは増えないので気づけない。
+//   2026-11-18、これでテスト版のつもりの操作が本番の予約に入った（本物のブラウザで再現済み）。
+//   ★STOR から作ること。port_to_main.js の変換ルールを増やさなくて済む＝付け替え忘れが起きない。
+const HUB_IS_TEST = (STOR !== 'hub-v8-');
+const HUB_TAB_SFX = HUB_IS_TEST ? '-dev' : '-main';
+const HUB_TAB_DASH = 'hub-dashboard' + HUB_TAB_SFX;
+const HUB_TAB_CUST = 'hub-customers' + HUB_TAB_SFX;
 const storKey = (base, storeId) => `${STOR}${storeId}-${base}`;
 
 // ── 未反映の予約控え（端末が落ちても未反映を見失わない。customers.html の list-pending と同じ仕組みの insp 版）──
@@ -18330,18 +18340,19 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
   const openDash=useCallback(()=>{
     if(isFullscreen){ setDashOpen(true); return; }
     let w=null;
-    try{ w=window.open(location.pathname+'?dash=1','hub-dashboard'); }catch(e){}
+    try{ w=window.open(location.pathname+'?dash=1',HUB_TAB_DASH); }catch(e){}   // ★名前は環境ごと
     if(w){ try{ w.focus(); }catch(e){} } else { setDashOpen(true); }
   },[isFullscreen]);
-  // 別タブで開いた時は、アドレスから印を外す（開き直すたびに出ないように）
-  useEffect(()=>{ if(!HUB_DASH_OPEN)return;
-    try{ history.replaceState(null,'',location.pathname+location.hash); }catch(e){} },[]);
+  // ★★【2026-11-18】アドレスから ?dash=1 を外さない。
+  //   以前は開いた直後に history.replaceState で消していたので、ダッシュボードのタブが
+  //   「ふつうのスケジュール画面」と見分けが付かなくなっていた（アドレスも印も残らない）。
+  //   タブの中身が入れ替わった時に気づける手がかりなので、印は残すこと。消す処理を戻さない。
   const openCustList=useCallback((find)=>{
     const q=(find&&find.name)?String(find.name):'';
     const file=(find&&find.file)?String(find.file):'';
     if(q){ try{ sessionStorage.setItem(STOR+'cust-find',JSON.stringify({q,file,ts:Date.now()})); }catch(e){} }
     const url='./customers.html'+(q?('?find='+encodeURIComponent(q)+(file?('&file='+encodeURIComponent(file)):'')):'');
-    const w=window.open(url,'hub-customers');   // 同じ名前のタブがあれば、そのタブを使い回す
+    const w=window.open(url,HUB_TAB_CUST);   // 同じ名前のタブがあれば使い回す。★名前は環境ごと
     if(w){ try{ w.focus(); }catch(e){} }
     else alert('別のタブを開けませんでした。ブラウザのポップアップ設定をご確認ください。');
   },[]);

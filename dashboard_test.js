@@ -128,8 +128,12 @@ const seed = {
   // この検査では同じタブの中で見たいので、?dash=1 で開き直す
   await login('?dash=1');
   t('★?dash=1 で開くと、最初からダッシュボードが出ている', await page.evaluate(() => !!document.querySelector('[data-dash]')));
-  t('★アドレスから印が外れている（開き直しても出っぱなしにならない）',
-    await page.evaluate(() => location.search === ''), await page.evaluate(() => location.search));
+  // ★★【2026-11-18 に逆にした】アドレスの ?dash=1 は【残す】。
+  //   以前は開いた直後に消していたので、ダッシュボードのタブが「ふつうのスケジュール画面」と
+  //   見分けが付かなかった。タブの中身が入れ替わった時に気づける唯一の手がかりなので残す。
+  //   （2026-11-18 にテスト版のタブが本番に差し替わり、本番の予約が書き換わった事故の直し）
+  t('★アドレスに ?dash=1 の印が残る（どのタブか見分けられるように）',
+    await page.evaluate(() => location.search === '?dash=1'), await page.evaluate(() => location.search));
   // ★v3.79.1 から、まず入口の画面が出る（これから項目が増えるため）
   t('★まず入口の画面が出る（いきなりリストではない）', await page.evaluate(() =>
     !!document.querySelector('[data-dashtile="shaken"]') && !document.querySelector('[data-dashrow]')));

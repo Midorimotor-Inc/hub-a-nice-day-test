@@ -23,7 +23,7 @@ const INDEX_RULES = [
   // 2026-09-18：本番も Firestore＋Firebase Auth（BACKEND='firebase'・AUTH_REQUIRED=true）。変換ルールは無し。
   //   本番のデータは fb_migrate.js --prod --write で写してから移植する（GAS 側はその時点で控えになる）。
   // タイトル
-  ['<title>Hub a Nice Day [テスト版]</title>', '<title>Hub a Nice Day</title>', 1],
+  ['<title>[テスト版] Hub a Nice Day</title>', '<title>Hub a Nice Day</title>', 1],
   // PWA の設定ファイル名（テスト版 manifest_dev.json ／ メイン manifest.json）
   ['<link rel="manifest" href="manifest_dev.json" />', '<link rel="manifest" href="manifest.json" />', 1],
   // 環境識別の配色: 全体背景・ログイン画面（オレンジ→青）
@@ -48,6 +48,8 @@ const INDEX_REGEX_RULES = [
 ];
 const CUST_RULES = [
   ["const STOR='hub-v8-dev-';", "const STOR='hub-v8-';", 1],
+  // タイトル（2026-11-18。それまで本番と1文字も違わなかった＝どちらのタブか見分けられなかった）
+  ['<title>[テスト版] 顧客リスト - Hub a Nice Day</title>', '<title>顧客リスト - Hub a Nice Day</title>', 1],
   ['<link rel="manifest" href="manifest_dev.json"/>', '<link rel="manifest" href="manifest.json"/>', 1],
   // 上の帯の色（2026-11-09）。テスト版＝オレンジ／本番＝青のグラデーション。
   //   index_dev.html の UI_HEAD と同じ決まり。色はこの定数だけを通すこと。
@@ -60,6 +62,8 @@ const CUST_REGEX_RULES = [
 // mobile.html の環境固有差分：STOR と 配色（2026-09-25 追加。テスト版＝オレンジ／メイン＝青。PC と同じ見分け方）
 const MOBILE_RULES = [
   ["const STOR='hub-v8-dev-';", "const STOR='hub-v8-';", 1],
+  // タイトル（2026-11-18。それまで本番と1文字も違わなかった）
+  ['<title>[テスト版] Hub a Nice Day</title>', '<title>Hub a Nice Day</title>', 1],
   // テスト版はべた塗りの明るいオレンジ（2026-09-25。グラデーションだと三田店の赤と見間違えるため）
   ["const UI_BG='#FF9500';", "const UI_BG='linear-gradient(160deg,#1e1b4b,#3730a3 60%,#6d28d9)';", 1],
   ["const UI_HEAD='#FF9500';", "const UI_HEAD='linear-gradient(135deg,#1e1b4b,#1d4ed8)';", 1],

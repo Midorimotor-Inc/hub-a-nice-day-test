@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>Hub a Nice Day - 顧客リスト</title>
+<title>[テスト版] 顧客リスト - Hub a Nice Day</title>
 <meta name="theme-color" content="#1E3A5F"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1794906219261';
+  window.__APP_BUILD='build-1794964181703';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -130,6 +130,7 @@ const STOR='hub-v8-dev-';
 // ★Firebase に繋ぐ時のアプリ名。**本番は既定（空）／テスト版は hub-dev**（2026-10-07）。
 //   同じ住所でフォルダが違うだけなので、アプリ名を分けないとサインインが共有され、
 //   片方のサインアウトでもう片方まで道連れでログアウトされる。
+const HUB_IS_TEST = (STOR !== 'hub-v8-');   // ★テスト版かどうか。画面の印に使う（2026-11-18）
 const HUB_FB_APP_NAME = (STOR === 'hub-v8-') ? '' : 'hub-dev';
 const hubFbApp = () => (HUB_FB_APP_NAME ? firebase.app(HUB_FB_APP_NAME) : firebase.app());
 // ★この端末に登録した人（v2.20 / 2026-09-04・Kyoshi承認のBLOCK-B変更。2026-09-18 に Firebase Auth 化）
@@ -170,7 +171,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.122.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.123.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -5426,7 +5427,7 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
           boxShadow:'0 2px 6px rgba(22,163,74,0.4)'}}>
           ← スケジュールに戻る
         </a>
-        <div style={{color:'white',fontWeight:900,fontSize:15,flex:1,display:'flex',alignItems:'center',gap:8}}>🚗 顧客リスト<span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:10,background:'#eff6ff',color:'#1d4ed8',border:'1px solid #bfdbfe'}}>v{APP_VERSION}</span></div>
+        <div style={{color:'white',fontWeight:900,fontSize:15,flex:1,display:'flex',alignItems:'center',gap:8}}>🚗 顧客リスト<span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:10,background:'#eff6ff',color:'#1d4ed8',border:'1px solid #bfdbfe'}}>v{APP_VERSION}</span>{HUB_IS_TEST&&<span data-testbadge="1" style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:10,background:'#FFF7ED',color:'#9A3412',border:'2px solid #EA580C',flexShrink:0,whiteSpace:'nowrap'}}>⚠ テスト版</span>}</div>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
           <div style={{width:7,height:7,borderRadius:'50%',background:gasOk===true?'#4ade80':gasOk===false?'#f87171':'#fbbf24'}}/>
           <span style={{color:'rgba(255,255,255,.6)',fontSize:10}}>{gasOk===true?'GAS接続済':gasOk===false?'GAS接続エラー':'確認中'}</span>
