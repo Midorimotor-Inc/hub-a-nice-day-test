@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1794964181703';
+  window.__APP_BUILD='build-1794993976954';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.123.0';
+const MOBILE_VERSION='3.124.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -4127,7 +4127,28 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGro
     catch(e){setErr(String(e?.message||e));return;}
   };
   const doDelete=()=>{
-    if(!window.confirm(`「${initial?.name||'この予約'}」を削除しますか？\n（紐付いた代車予約も削除されます）`))return;
+    // ★取り消しは【誰の・いつの・何が】を出して確認する（2026-11-18 ユーザー指示）。
+    //   消えるのは mode.dk / mode.slot の予約（移り先の mvDk ではない）。
+    const NL=String.fromCharCode(10);
+    const who=sama(initial?.name)||'この予約';
+    const p=String(mode.dk||'').split('-');
+    const when=p.length===3?(p[1]+'月'+p[2]+'日'):String(mode.dk||'');
+    let msg;
+    if(isInsp){
+      const t=initial?.time?('　'+specialSlotLabel(getBaseSlot(initial.time))+' 入庫'):'';
+      msg='「'+who+'」の '+when+t+' の車検予約を取り消します。'+NL+NL
+        +'・この予約は【キャンセル】の帯として表に残ります'+NL
+        +'・紐付いた代車・レンタカーの貸出も外れます'+NL
+        +'・顧客リストもキャンセルになります'+NL+NL
+        +'よろしいですか？';
+    }else{
+      const t=mode.slot?('　'+specialSlotLabel(getBaseSlot(mode.slot))):'';
+      msg='「'+who+'」の '+when+t+' の予定を削除します。'+NL+NL
+        +'・この予定は表から消えます（元には戻せません）'+NL
+        +'・紐付いた代車・レンタカーの貸出も外れます'+NL+NL
+        +'よろしいですか？';
+    }
+    if(!window.confirm(msg))return;
     try{onDelete();}
     catch(e){setErr('削除に失敗しました: '+(e?.message||e));}
   };
