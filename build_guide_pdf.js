@@ -19,6 +19,14 @@ function md2html(md) {
   while (i < L.length) {
     const l = L[i];
     if (/^---\s*$/.test(l)) { out.push('<hr>'); i++; continue; }
+    // ``` で囲んだ所はそのまま出す（命令・フォルダの形。折り返して全部見せる）
+    if (/^```/.test(l)) {
+      i++; const buf = [];
+      while (i < L.length && !/^```/.test(L[i])) { buf.push(esc(L[i])); i++; }
+      if (i < L.length) i++;
+      out.push('<pre>' + buf.join('\n') + '</pre>');
+      continue;
+    }
     let m;
     if ((m = l.match(/^(#{1,3})\s+(.*)/))) { out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++; continue; }
     if (/^\|/.test(l)) {
@@ -60,18 +68,30 @@ table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 1
 th, td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: top; text-align: left; }
 th { background: #f1f5f9; }
 code { background:#f1f5f9; border-radius:4px; padding: 0 4px; font-size: 10pt; }
+pre { background:#f8fafc; border:1px solid #cbd5e1; border-left:4px solid #94a3b8; border-radius:4px;
+      padding: 8px 10px; margin: 6px 0 12px; font-size: 9.5pt; line-height: 1.6;
+      font-family: "Consolas","Yu Gothic UI",monospace; white-space: pre-wrap; word-break: break-all;
+      page-break-inside: avoid; }
 a { color:#1d4ed8; text-decoration: none; word-break: break-all; }
 hr { border: none; border-top: 1px dashed #cbd5e1; margin: 14px 0; }
 b { color:#0f172a; }
 `;
+// 足の文字と「章ごとに改ページ」は呼ぶ側から変えられる（既定は今までどおり）
+//   GUIDE_TITLE=金庫に入れるもの   … 足の文字
+//   GUIDE_BREAK=h2                 … その見出しから必ず新しいページにする（最初の1つは除く）
+const FOOT = process.env.GUIDE_TITLE || 'Hub a Nice Day 登録手順';
+const BREAK = process.env.GUIDE_BREAK ? `
+${process.env.GUIDE_BREAK} { page-break-before: always; }
+${process.env.GUIDE_BREAK}:first-of-type { page-break-before: auto; }
+` : '';
 (async () => {
-  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>${CSS}</style></head><body>${md2html(fs.readFileSync(IN, 'utf8'))}</body></html>`;
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>${CSS}${BREAK}</style></head><body>${md2html(fs.readFileSync(IN, 'utf8'))}</body></html>`;
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 794, height: 1123 } });
   await page.setContent(html, { waitUntil: 'load' });
   if (process.env.GUIDE_SHOT) await page.screenshot({ path: process.env.GUIDE_SHOT, fullPage: true });   // 見た目の確認用
   await page.pdf({ path: OUT, format: 'A4', printBackground: true, displayHeaderFooter: true, headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;text-align:center;font-size:8px;color:#94a3b8;font-family:sans-serif">Hub a Nice Day 登録手順 — <span class="pageNumber"></span> / <span class="totalPages"></span></div>' });
+    footerTemplate: '<div style="width:100%;text-align:center;font-size:8px;color:#94a3b8;font-family:sans-serif">' + FOOT + ' — <span class="pageNumber"></span> / <span class="totalPages"></span></div>' });
   await browser.close();
   console.log('PDF:', OUT);
 })();
