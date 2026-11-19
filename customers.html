@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1795072306347';
+  window.__APP_BUILD='build-1795074331413';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -171,7 +171,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.125.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.125.2'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -5392,21 +5392,29 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
       {/* ── ヘッダー ── */}
       <div style={{flexShrink:0,background:UI_HEAD,padding:'10px 16px',display:'flex',alignItems:'center',gap:10}}>
         <a href="./index.html" onClick={e=>{
-            // ★別タブで開かれた時（2026-10-04 から顧客リストはいつでも別タブ）は、
-            //   このタブを閉じてスケジュールのタブへ戻る。別のタブへ行くと全画面は解除されるが、
-            //   スケジュールのタブはそのままなので、戻れば元の大きさで続けられる。
-            const standalone=!IS_EMBED&&(()=>{try{return !!(window.opener&&!window.opener.closed);}catch(err){return false;}})();
-            if(IS_EMBED||standalone){
+            // ★★【重要】別タブで開かれていても【タブは閉じない】。このタブをスケジュールに
+            //   切り替える（v3.125.2・2026-11-19 ユーザー決定）。
+            //   それまでは window.close() でタブを閉じ、裏のスケジュールのタブを前に出していた
+            //   （2026-10-04 に「顧客リストはいつでも別タブ」にした時の一式）。
+            //   現場の声：「戻るを押したらタブが消えた。バグではないか」＝閉じたことに気づけない。
+            //   ★保存の待ち（下の savesInFlight）は IS_EMBED でも別タブでも必ず通すこと。
+            //     以前は「別タブでない時」だけ素の <a> で遷移していたので、
+            //     保存中に押すと裏で走っている保存がその場で死んでいた。
+            {
               e.preventDefault();
               // ★保存が終わるまで閉じない。オーバーレイ(iframe)を閉じると裏で走っている
               //   リスト本体・カレンダー枠・代車・他PCへの通知の保存がその場で死ぬ。
               //   （ページ遷移ではないので beforeunload の警告も出ない）
               const close=()=>{
                 if(IS_EMBED){try{window.parent.postMessage({type:'hub-close-customers'},location.origin);}catch(err){}return;}
-                try{ if(window.opener&&!window.opener.closed)window.opener.focus(); }catch(err){}
-                try{ window.close(); }catch(err){}
-                // 閉じられなかった時（ブラウザが拒むことがある）は今までどおり画面を戻す
-                setTimeout(()=>{ try{ if(!window.closed)location.href='./index.html'; }catch(err){} },400);
+                // ★★タブの名前を先に捨てること。名前（hub-customers…）が残っていると、
+                //   別のタブで「顧客リスト」を押した時に window.open がこのタブを使い回し、
+                //   いま見ているスケジュールが顧客リストに差し替わる
+                //   ＝2026-11-18 の「タブの取り違え」とまったく同じ形になる。
+                //   名前を捨てておけば、次に顧客リストを開く時は新しいタブになる。
+                try{ window.name=''; }catch(err){}
+                try{ sessionStorage.setItem(STOR+'fs-restore',(document.fullscreenElement||document.webkitFullscreenElement)?'1':'0'); }catch(err){}
+                location.href='./index.html';
               };
               if(savesInFlight()<=0){close();return;}
               let waited=0;
@@ -5420,7 +5428,6 @@ ${failed.length?failed.map(n=>'「'+n+'」').join('、'):'一覧の更新に失�
               tick();
               return;
             }
-            try{sessionStorage.setItem(STOR+'fs-restore',(document.fullscreenElement||document.webkitFullscreenElement)?'1':'0');}catch(err){}
           }}
           style={{color:'#fef08a',fontSize:12,textDecoration:'none',fontWeight:800,
           padding:'6px 14px',background:'#16a34a',borderRadius:8,border:'2px solid #15803d',

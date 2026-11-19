@@ -2,7 +2,11 @@
 //   ・ナビの「顧客リスト」も、検索から選んだ時も、新しいタブで開く。
 //   ・元のタブ（スケジュール）の中には開かない。
 //   ・検索から選んだ時は、そのお客様で絞り込まれた状態で開く（?find=）。
-//   ・リストのタブの「スケジュールに戻る」で、そのタブが閉じる。
+//   ・リストのタブの「スケジュールに戻る」は【タブを閉じずに】そのタブをスケジュールに切り替える
+//     （v3.125.2・2026-11-19 ユーザー決定。それまでは閉じていたが「タブが消えた」と戸惑わせた）。
+//     ★あわせてタブの名前（hub-customers…）を捨てる＝次に顧客リストを開く時は新しいタブになる。
+//       名前が残っていると、別のタブで「顧客リスト」を押した時に【このタブが顧客リストに差し替わる】
+//       ＝2026-11-18 のタブ取り違えと同じ形になるため。
 //   実行: node cust_open_mode_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -81,7 +85,14 @@ const signedInInit = ([me, stor]) => {
     await tab1.evaluate(() => { const a = [...document.querySelectorAll("a")].find(e => e.innerText.includes("スケジュールに戻る")); if (a) a.click(); });
     await page.waitForTimeout(2000);
   }
-  t("★そのタブが閉じる", !!tab1 && tab1.isClosed(), { closed: tab1 && tab1.isClosed(), url: tab1 && !tab1.isClosed() ? tab1.url() : "" });
+  t("★★タブは閉じない（消えたように見せない）", !!tab1 && !tab1.isClosed(), { closed: tab1 && tab1.isClosed() });
+  const backUrl = tab1 && !tab1.isClosed() ? tab1.url() : "";
+  t("★★そのタブがスケジュールに切り替わる", /index(_dev|_main)?.html/.test(backUrl) && !/customers.html/.test(backUrl), backUrl);
+  t("★★タブの名前を捨てている（次の「顧客リスト」でこのタブを奪われない）",
+    !!tab1 && !tab1.isClosed() && (await tab1.evaluate(() => window.name)) === "", tab1 && !tab1.isClosed() ? await tab1.evaluate(() => window.name) : null);
+  t("スケジュールの画面が出ている", !!tab1 && !tab1.isClosed() &&
+    await tab1.waitForFunction(() => /Hub a Nice|スケジュール|ログイン|登録/.test(document.body.innerText), null, { timeout: 20000 }).then(() => true).catch(() => false));
+  if (tab1 && !tab1.isClosed()) await tab1.close();   // 次の検査のために片づける
 
   // ── 検索から選んだ時 ──
   console.log(String.fromCharCode(10) + "■ 検索から選んだ時");
@@ -107,6 +118,23 @@ const signedInInit = ([me, stor]) => {
   t("★新しいタブで開く", !!tab2, { tab: !!tab2 });
   if (tab2) await tab2.waitForLoadState("domcontentloaded").catch(() => {});
   t("★その人で絞り込んだ形で開く（?find=）", !!tab2 && /find=/.test(tab2.url()), tab2 && tab2.url());
+  // ── 作りの見張り（ファイルの中身）──
+  console.log(String.fromCharCode(10) + "■ 作りの見張り");
+  const csrc = fs.readFileSync(path.join(DIR, "customers.html"), "utf8");
+  t("★戻るの処理でタブを閉じていない（右上の ✕ の window.close は別もので残す）", (() => {
+    const a = csrc.indexOf("const close=()=>{");
+    const b = csrc.indexOf("};", a);
+    const blk = a >= 0 ? csrc.slice(a, b) : "";
+    return !!blk && blk.indexOf("window.close") < 0 && blk.indexOf("opener") < 0;
+  })());
+  t("★戻る時はタブの名前を捨てる", csrc.indexOf("window.name=" + String.fromCharCode(39,39)) >= 0);
+  t("★保存が終わるまで待ってから動く（savesInFlight）", csrc.indexOf("if(savesInFlight()<=0){close();return;}") >= 0);
+  t("★行き先はスケジュール（./index.html）で、名前を捨てた直後に飛ぶ", (() => {
+    const a = csrc.indexOf("window.name=" + String.fromCharCode(39,39));
+    const b = csrc.indexOf("location.href=" + String.fromCharCode(39) + "./index.html" + String.fromCharCode(39), a);
+    return a >= 0 && b > a && b - a < 400;
+  })());
+
   t("JSエラーなし", errs.length === 0, errs.slice(0, 3));
 
   await browser.close(); server.close();
