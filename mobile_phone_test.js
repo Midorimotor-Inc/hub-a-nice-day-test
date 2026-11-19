@@ -170,27 +170,32 @@ const hasLabel = (page, re) => page.evaluate(r =>
   await page.screenshot({ path: require('path').join(__dirname, 'smoke-mobile-addr.png') });
   t('車検には住所がある（PC版と同じ。スマホはボタン）', await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /住所|📍/.test(e.innerText) && e.offsetParent !== null)));
 
-  // ★ナンバー4桁（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）
+  // ★ナンバー（2026-10-17 ユーザー要望：スマホにも欲しい・車名の下に1行）
+  //   2026-11-19 から【1枠だけ】（A案）。そのまま貼り付けできる＝地名・かなも入るので inputMode は付けない。
   const noInfo = await page.evaluate(() => {
     const lab = [...document.querySelectorAll('label')].find(e => /^ナンバー/.test(e.innerText.trim()) && e.offsetParent !== null);
     if (!lab) return null;
-    const inp = document.querySelector('[data-nofour]');   // ★2026-11-04 から4分割。4桁の枠を見る
+    const inp = document.querySelector('[data-plate]');
     if (!inp) return null;
     const labs = [...document.querySelectorAll('label')].filter(e => e.offsetParent !== null).map(e => e.innerText.trim().split(' ')[0]);
     return { ph: inp.placeholder || '', im: inp.getAttribute('inputmode') || '', fs: parseFloat(getComputedStyle(inp).fontSize),
+      n: document.querySelectorAll('[data-plate]').length,
+      old: ['nochi', 'nobun', 'nokana', 'nofour'].filter(k => !!document.querySelector('[data-' + k + ']')),
       afterCar: labs.indexOf('ナンバー') > labs.findIndex(x => /^車種/.test(x)) };
   });
   t('★ナンバーの欄がある', !!noInfo, noInfo);
   t('★車種より下にある（車名の下に1行）', !!noInfo && noInfo.afterCar, noInfo);
-  t('数字キーパッドが出る（スマホはそのまま）', !!noInfo && noInfo.im === 'numeric', noInfo);
+  t('★★枠は1つだけ', !!noInfo && noInfo.n === 1, noInfo && noInfo.n);
+  t('★★4つに分かれた枠はもう無い', !!noInfo && noInfo.old.length === 0, noInfo && noInfo.old);
+  t('★★inputMode は付けない（地名・かなを打つ枠になったため）', !!noInfo && !noInfo.im, noInfo && noInfo.im);
   t('16px以上（iPhoneが勝手に拡大しない）', !!noInfo && noInfo.fs >= 16, noInfo);
-  t('★全角で打っても半角4桁になる', await page.evaluate(() => {
-    const inp = document.querySelector('[data-nofour]');
+  t('★★1枠にまるごと貼れて、打った字はそのまま残る', await page.evaluate(() => {
+    const inp = document.querySelector('[data-plate]');
     const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    st.call(inp, '３３１０'); inp.dispatchEvent(new Event('input', { bubbles: true }));
+    st.call(inp, '神戸 582 は ３３１０'); inp.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }) && await (async () => { await page.waitForTimeout(400); return page.evaluate(() => {
-    return document.querySelector('[data-nofour]').value === '3310';
+    return document.querySelector('[data-plate]').value === '神戸 582 は ３３１０';
   }); })());
 
   t('電話番号を入れられる', await typePhone(page, '090-1234-5678'));

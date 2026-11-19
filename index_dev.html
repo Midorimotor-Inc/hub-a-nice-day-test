@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1794993976954';
+    window.__APP_BUILD='build-1795062105198';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -87,13 +87,13 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    /* ★ナンバーの4つの枠（2026-11-04 ユーザー指示）：
+    /* ★ナンバーの枠（2026-11-04 ユーザー指示。2026-11-19 から【1枠だけ】）：
        まだ入れていない枠の案内（神戸／582／は／3182）は【うんとうすく】、
        入れた字は【太く】する＝入っている枠と入っていない枠の差がはっきり分かる。
        濃さは見本 mock_plate_weight.html で見比べて決めた値（案内 #dde1e6／入れた字 800）。
        ★色を変える時はこの1か所だけ（index_dev.html と mobile.html の2ファイルに同じものを置く）。 */
-    [data-nochi], [data-nobun], [data-nokana], [data-nofour] { font-weight: 800; }
-    [data-nochi]::placeholder, [data-nobun]::placeholder, [data-nokana]::placeholder, [data-nofour]::placeholder {
+    [data-plate] { font-weight: 800; }
+    [data-plate]::placeholder {
       color: #dde1e6; opacity: 1; font-weight: 500;
     }
     @media print {
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.124.0';
+const APP_VERSION = '3.125.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2550,6 +2550,54 @@ const plateFull = (r) => {
   const n = String(r.no == null ? '' : r.no);
   const h = String(r.noChi || '') + String(r.noBun || '') + String(r.noKana || '');
   return h ? h + n : n;
+};
+// ★ナンバーは【1枠だけ】に入れる（v3.125.0・2026-11-19 ユーザー決定・A案）。
+//   「神戸 582 は 3182」のように続けて打った字／貼り付けた字を、うしろから順に
+//   4桁 → かな → 分類番号 → 地名 に切り分ける（うしろから見るので、地名に空白が入っていても狂わない）。
+//   ★★4桁（no）はこれまでどおり必ず残すこと。顧客リストとの突き合わせ（cfxPersonKey）・同じ車の
+//      重複さがし（isSameVehicleRow）・車両管理との紐づけが【下4桁】でできているため。
+//   ★打った字そのものは書き換えない（画面の中だけの印 _plate に生のまま持つ）＝日本語入力が壊れない。
+//      保存の時に頭が _ のキーは落ちるので、保存される形は今までと1文字も変わらない。
+const platePick = (raw) => {
+  let s = String(raw == null ? '' : raw)
+    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))   // 全角英数 → 半角
+    .replace(/[・･]/g, ' ')
+    .replace(/[‐‑‒–—―ー−]/g, '-')                                              // いろいろな横棒 → -
+    .replace(/\s+/g, ' ').trim();
+  let no = '', kana = '', bun = '', rest = s, m;
+  m = rest.match(/^(.*?)\s*([0-9]{1,4}(?:-[0-9]{1,4})?)\s*$/);               // 一連番号（12-34 も可）
+  if (m) { no = m[2].replace(/-/g, ''); rest = m[1].trim(); }
+  m = rest.match(/^(.*?)\s*([\u3041-\u3096\u30A1-\u30FAA-Za-z])\s*$/);      // かな（レンタは英字もある）
+  if (m) { kana = m[2]; rest = m[1].trim(); }
+  m = rest.match(/^(.*?)\s*([0-9][0-9A-Za-z]{0,2})\s*$/);                     // 分類番号（5A0 のように英字入りも）
+  if (m) { bun = m[2].toUpperCase(); rest = m[1].trim(); }
+  return { noChi: rest.replace(/\s+/g, ''), noBun: bun, noKana: kana, no: no };
+};
+// 4つそろっているか（＝フルナンバー）
+const plateIsFull = (r) => !!(r && r.noChi && r.noBun && r.noKana && String(r.no == null ? '' : r.no));
+// カードを開いた時に、持っている4つから1枠の字を組み立てる（古い予約は4桁しか無い）
+const plateJoin = (r) => {
+  if (!r) return '';
+  return [String(r.noChi || ''), String(r.noBun || ''), String(r.noKana || ''),
+          String(r.no == null ? '' : r.no)].filter(x => x !== '').join(' ');
+};
+// ★2年前予約の入力チェック（v3.125.0・2026-11-19 ユーザー決定・A案）。
+//   2年後になった時に電話も車もたどれないと意味がないので、2年前予約の印を押した予約だけは
+//   お名前（フルネーム）・車種・フルナンバー・電話番号 がそろうまで保存させない。
+//   ★氏名は【姓と名の間にスペース】がある時だけフルネームとみなす（きびしい判定・ユーザー選択）。
+//      会社名などでスペースを入れたくない時は、2年前予約の印を外せば今までどおり保存できる。
+const nameIsFull = (v) => { const t = String(v == null ? '' : v).trim();
+  return /[\s\u3000]/.test(t) && t.replace(/[\s\u3000]/g, '').length >= 2; };
+const ADV2Y_NG = '#dc2626', ADV2Y_NGBG = '#fff1f2';
+// 足りない項目の一覧（空なら全部そろっている）。並びは予約カードの上から下と同じ
+const adv2yMissing = (f) => {
+  if (!f || !f.adv2y) return [];
+  const out = [];
+  if (!nameIsFull(f.name)) out.push({ key: 'name', label: 'お客様のフルネーム（姓と名の間にスペース）' });
+  if (!String(f.carType || '').trim()) out.push({ key: 'car', label: '車種' });
+  if (!plateIsFull(f)) out.push({ key: 'plate', label: 'フルナンバー（地名・分類番号・かな・4桁）' });
+  if (!String(f.phone || '').trim()) out.push({ key: 'phone', label: '電話番号' });
+  return out;
 };
 // ★マッハの「2年前予約」まわり（v3.95.0・2026-11-04 ユーザー決定）。
 //   マッハ車検を受けた日に2年後の予約を取るので、2年後に「2年前にもらった予約」だとすぐ分かるようにする印。
@@ -10008,10 +10056,8 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const userRef=useRef(null);   // 車検証の使用者（車検のカードだけ）
   const staffRef=useRef(null);
   const carRef=useRef(null);
-  const carNoRef=useRef(null);     // ナンバー4桁（2026-09-30）
-  const noChiRef=useRef(null);     // ナンバーの地名（2026-11-04・フルナンバー）
-  const noBunRef=useRef(null);     // ナンバーの分類番号
-  const noKanaRef=useRef(null);    // ナンバーのかな
+  const plateRef=useRef(null);     // ナンバー（2026-11-19 から1枠だけ。そのまま貼り付けできる）
+  const phoneRef=useRef(null);     // 電話番号（2年前予約の入力チェックで寄せるため）
   const workRef=useRef(null);      // 作業内容（整備）
   const tokutenRef=useRef(null);   // 特典（車検）
   const shimiRef=useRef(null);     // 指・見（整備）
@@ -10120,10 +10166,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const canDelete=!!onDelete;
 
   // ── キーボード操作 ──────────────────────────────────────────
-  //   ★ナンバーは4つに分かれている（2026-11-04）。Enter で 地名→分類番号→かな→4桁 と移る。
-  const INSP_ORDER=['name','user','staff','car','nochi','nobun','nokana','carno','course','tokuten','time','note'];
+  //   ★ナンバーは【1枠だけ】（2026-11-19 ユーザー決定・A案）。Enter で 車種→ナンバー→コース と移る。
+  const INSP_ORDER=['name','user','staff','car','plate','course','tokuten','time','note'];
   //   ★整備は先頭に時間帯（2026-10-15）。畳んだ状態から追加した時はここが必須の欄になる。
-  const SCHED_ORDER=['slot','name','staff','car','nochi','nobun','nokana','carno','work','shimi','note'];
+  const SCHED_ORDER=['slot','name','staff','car','plate','work','shimi','note'];
   const ORDER=isInsp?INSP_ORDER:SCHED_ORDER;
   // フォーカスリング
   const KB=(key)=>kbField===key
@@ -10150,6 +10196,10 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
     gap:5,fontFamily:'inherit',transition:'all .12s'});
   const BOK=(on)=>on?{...B2Y(false),border:'2px solid '+ADV2Y.ok,background:ADV2Y.ok,color:'white'}:B2Y(false);
+  // ★2年前予約の入力チェック（A案・2026-11-19 ユーザー決定）。足りない欄を赤くし、区画に一覧を出し、
+  //   保存を押したら止めて知らせる。2年前予約の印が付いていない時は今までどおり何も起きない。
+  const need2y = isInsp ? adv2yMissing(form) : [];
+  const NG2Y=(k)=>need2y.some(x=>x.key===k)?{borderColor:ADV2Y_NG,background:ADV2Y_NGBG}:{};
   // ★編集中の欄が**カードの半分より下**に来たら、真ん中へ戻す（B案・2026-10-15 ユーザー選択）。
   //   上半分にいる間は動かさない＝必要な時しか画面が動かない。
   //   以前は ↓キーで送った時だけ scrollIntoView していたので、**Tab・クリックでは一度もスクロールしなかった**
@@ -10183,10 +10233,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     else if(next==='user'){userRef.current?.focus();centerField(userRef.current);}
     else if(next==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(next==='car'){carRef.current?.focus();centerField(carRef.current);}
-    else if(next==='nochi'){noChiRef.current?.focus();centerField(noChiRef.current);}
-    else if(next==='nobun'){noBunRef.current?.focus();centerField(noBunRef.current);}
-    else if(next==='nokana'){noKanaRef.current?.focus();centerField(noKanaRef.current);}
-    else if(next==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
+    else if(next==='plate'){plateRef.current?.focus();centerField(plateRef.current);}
     else if(next==='time'){timeRef.current?.focus();centerField(timeRef.current);}
     else if(next==='note'){noteRef.current?.focus();centerField(noteRef.current);}
     else if(next==='cont'){contRef.current?.focus();centerField(contRef.current);}
@@ -10204,10 +10251,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     else if(prev==='user'){userRef.current?.focus();centerField(userRef.current);}
     else if(prev==='staff'){staffRef.current?.focus();centerField(staffRef.current);}
     else if(prev==='car'){carRef.current?.focus();centerField(carRef.current);}
-    else if(prev==='nochi'){noChiRef.current?.focus();centerField(noChiRef.current);}
-    else if(prev==='nobun'){noBunRef.current?.focus();centerField(noBunRef.current);}
-    else if(prev==='nokana'){noKanaRef.current?.focus();centerField(noKanaRef.current);}
-    else if(prev==='carno'){carNoRef.current?.focus();centerField(carNoRef.current);}
+    else if(prev==='plate'){plateRef.current?.focus();centerField(plateRef.current);}
     else if(prev==='time'){timeRef.current?.focus();centerField(timeRef.current);}
     else if(prev==='note'){noteRef.current?.focus();centerField(noteRef.current);}
     else if(prev==='cont'){contRef.current?.focus();centerField(contRef.current);}
@@ -10377,9 +10421,20 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
     if(!from||!to||from===to)return {};
     return {moved:hubPushMoved(form.moved,from,to,(currentUser&&currentUser.name)||'')};
   };
+  // ★2年前予約の歯止め（A案・2026-11-19 ユーザー決定）。足りない所を知らせて、いちばん上の欄へ寄せる。
+  const stop2y=()=>{
+    if(!isInsp||need2y.length===0)return false;
+    const NL=String.fromCharCode(10);
+    alert('2年前予約には、次の入力が必要です。'+NL+NL+need2y.map(x=>'・'+x.label).join(NL)+NL+NL
+      +'（どうしても入れられない時は「🗓 2年前予約」を押して印を外してください）');
+    const r={name:nameRef,car:carRef,plate:plateRef,phone:phoneRef}[need2y[0].key];
+    if(r&&r.current){r.current.focus();centerField(r.current);}
+    return true;
+  };
   const handleSave=()=>{
     if(!form.name){alert('氏名を入力してください');nameRef.current?.focus();return;}
     if(!form.carType){alert('車種を入力してください');carRef.current?.focus();return;}
+    if(stop2y())return;
     if(isInsp){
       if(!form.course){alert('コースを選択してください');return;}
       if(!form.time){alert('入庫時間を入力してください');timeRef.current?.focus();return;}
@@ -10401,6 +10456,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   // 顧客リストからの仮予約/本予約ボタン用
   const handleSaveAs=(status)=>{
     if(!form.name){alert('氏名を入力してください');nameRef.current?.focus();return;}
+    if(stop2y())return;
     // 本予約のみ車種・コース必須
     if(status==='confirmed'){
       if(!form.carType){alert('車種を入力してください');carRef.current?.focus();return;}
@@ -10681,7 +10737,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
               <div style={{position:'relative'}}>
                 <input ref={nameRef} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}
                   onFocus={()=>setKbField('name')} onBlur={()=>setKbField('')}
-                  onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name'),paddingRight:30}}/>
+                  onKeyDown={e=>onKbNav(e,'name')} placeholder="お客様名" style={{...INP,...KB('name'),...NG2Y('name'),paddingRight:30}}/>
                 {form.name&&!SAMA_RE.test(String(form.name).trim())&&(
                   <span data-namesama="1" style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
                     fontSize:13,fontWeight:700,color:'#64748b',pointerEvents:'none'}}>様</span>)}
@@ -10774,48 +10830,39 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                   この店の名簿がまだ読めていません（打ち込んでください）
                 </div>)}
           </div>
-          {/* 車種（1行）＋ナンバーはフルナンバーを4つに分けて（2026-11-04 ユーザー決定・C案）。
-              ★4桁（no）はこれまでどおり残す。顧客リストから入れた予約は今までどおりここに自動で入る。
-              ★Enter（または ↓）で 地名 → 分類番号 → かな → 4桁 と移る。
+          {/* 車種（1行）＋ナンバーは【1枠だけ】（v3.125.0・2026-11-19 ユーザー決定・A案）。
+              ★ねらいは「そのままコピペできる」こと。打った字／貼った字は platePick が
+                地名／分類番号／かな／4桁 に切り分けて form に入れるので、保存される形・plateFull・
+                顧客リストとの突き合わせは【1つも変わらない】。
+              ★4桁（no）はこれまでどおり残る。顧客リストから入れた予約も今までどおりここに出る。
+              ★打った字そのものは書き換えない（_plate に生で持つ）＝日本語入力が壊れない。
+                そのため「読み取った結果」も画面には出さない（A案・ユーザー決定）。
               ★PC なので inputMode / type=number を付けないこと（次の欄の日本語入力が解除される）。 */}
           <div>
             <label style={LBL}>車種</label>
             <input ref={carRef} value={form.carType} onChange={e=>setForm({...form,carType:e.target.value})}
               onFocus={()=>setKbField('car')} onBlur={()=>setKbField('')}
               onKeyDown={e=>onKbNav(e,'car')}
-              placeholder="例：プリウス" style={{...INP,...KB('car')}}/>
+              placeholder="例：プリウス" style={{...INP,...KB('car'),...NG2Y('car')}}/>
           </div>
           <div data-platebox="1">
-            <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>地名／分類番号／かな／4桁（Enter で次の枠へ）</span></label>
-            <div style={{display:'grid',gridTemplateColumns:'1.15fr .85fr .7fr 1.05fr',gap:6}}>
-              <input ref={noChiRef} data-nochi="1" value={form.noChi||''}
-                onChange={e=>setForm(p=>({...p,noChi:e.target.value}))}
-                onFocus={()=>setKbField('nochi')} onBlur={()=>setKbField('')}
-                onKeyDown={e=>onKbNav(e,'nochi')}
-                placeholder="神戸" style={{...INP,...KB('nochi'),padding:'10px 6px',textAlign:'center'}}/>
-              <input ref={noBunRef} data-nobun="1" value={form.noBun||''}
-                {...plateCodeProps(v=>setForm(p=>({...p,noBun:v})),3)}
-                onFocus={()=>setKbField('nobun')} onBlur={()=>setKbField('')}
-                onKeyDown={e=>onKbNav(e,'nobun')}
-                placeholder="582" style={{...INP,...KB('nobun'),padding:'10px 6px',textAlign:'center'}}/>
-              <input ref={noKanaRef} data-nokana="1" value={form.noKana||''}
-                onChange={e=>setForm(p=>({...p,noKana:e.target.value.replace(/\s+/g,'').slice(0,2)}))}
-                onFocus={()=>setKbField('nokana')} onBlur={()=>setKbField('')}
-                onKeyDown={e=>onKbNav(e,'nokana')}
-                placeholder="は" style={{...INP,...KB('nokana'),padding:'10px 4px',textAlign:'center'}}/>
-              {/* ★変換中は触らない（2026-10-17）。maxLength も付けない＝変換中の文字が切られて壊れるため。 */}
-              <input ref={carNoRef} data-nofour="1" value={form.no==null?'':String(form.no)}
-                {...numFieldProps(v=>setForm(p=>({...p,no:v})),4)}
-                onFocus={()=>setKbField('carno')} onBlur={()=>setKbField('')}
-                onKeyDown={e=>onKbNav(e,'carno')}
-                placeholder="3182" style={{...INP,...KB('carno'),padding:'10px 6px',textAlign:'center',letterSpacing:'.06em'}}/>
-            </div>
+            <label style={LBL}>ナンバー <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>そのまま貼り付けできます（例：神戸 582 は 3182）</span></label>
+            {/* ★変換中（IME）は打った字をそのまま置くだけで、切り分けない（2026-10-17 の守りと同じ考え方）。
+                maxLength も付けない＝変換中の文字が切られて壊れるため。 */}
+            <input ref={plateRef} data-plate="1"
+              value={form._plate!=null?form._plate:plateJoin(form)}
+              onChange={e=>{const raw=e.target.value,ime=!!(e.nativeEvent&&e.nativeEvent.isComposing);
+                setForm(p=>ime?{...p,_plate:raw}:{...p,_plate:raw,...platePick(raw)});}}
+              onCompositionEnd={e=>{const raw=e.target.value;setForm(p=>({...p,_plate:raw,...platePick(raw)}));}}
+              onFocus={()=>setKbField('plate')} onBlur={()=>setKbField('')}
+              onKeyDown={e=>onKbNav(e,'plate')}
+              placeholder="神戸 582 は 3182" style={{...INP,...KB('plate'),...NG2Y('plate'),letterSpacing:'.04em'}}/>
           </div>
           {/* 電話・住所（任意・2026-09-20）：リストから予約した場合はリストの値が自動で入る。整備は電話だけ */}
           <div style={{display:'grid',gridTemplateColumns:isInsp?'1fr 1.5fr':'1fr',gap:8}}>
             <div>
               <label style={LBL}>電話 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>任意</span></label>
-              <input value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="090-0000-0000" style={INP}/>   {/* PC では inputMode=tel を付けない：次の備考欄に移った時に日本語入力（ひらがな）が解除されるため（2026-09-23） */}
+              <input ref={phoneRef} value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="090-0000-0000" style={{...INP,...NG2Y('phone')}}/>   {/* PC では inputMode=tel を付けない：次の備考欄に移った時に日本語入力（ひらがな）が解除されるため（2026-09-23） */}
             </div>
             {isInsp&&<div>
               <label style={LBL}>住所 <span style={{fontWeight:400,color:'#9ca3af',fontSize:10}}>任意</span></label>
@@ -10859,6 +10906,21 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
                 {form.adv2y&&<span style={{fontWeight:900}}>✓</span>}🗓 2年前予約
               </button>
               {form.adv2y&&(<>
+                {/* ★足りない項目の一覧（A案・2026-11-19 ユーザー決定）。欄も赤くなる。
+                    2年後に電話も車もたどれないと意味がないので、ここがそろうまで保存できない。
+                    どうしても入れられない時は「🗓 2年前予約」を押して印を外せば今までどおり保存できる。 */}
+                {need2y.length>0
+                  ?<div data-adv2ymiss={String(need2y.length)} style={{marginTop:7,padding:'8px 11px',borderRadius:8,
+                      background:ADV2Y_NGBG,border:'2px solid '+ADV2Y_NG,color:'#991b1b',fontSize:12,lineHeight:1.7}}>
+                      <b>！ 2年前予約には、次の入力が必要です</b>
+                      <ul style={{margin:'3px 0 0',paddingLeft:19,fontWeight:700}}>
+                        {need2y.map(x=><li key={x.key} data-adv2ymissitem={x.key}>{x.label}</li>)}
+                      </ul>
+                      <div style={{marginTop:3,fontWeight:400,fontSize:11}}>※ 赤い枠の欄です。入れずに保存したい時は、上の「🗓 2年前予約」を押して印を外してください</div>
+                    </div>
+                  :<div data-adv2yok="1" style={{marginTop:7,fontSize:11.5,color:ADV2Y.ok,fontWeight:700}}>
+                      ✓ お名前・車種・フルナンバー・電話番号がそろっています
+                    </div>}
                 <div style={{marginTop:7,fontSize:11,color:'#6b7280',fontWeight:600}}>車検が近づいた時の案内の仕方</div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginTop:4}}>
                   <button type="button" data-contact="sms"

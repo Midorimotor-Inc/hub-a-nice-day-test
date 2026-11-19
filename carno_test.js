@@ -34,9 +34,9 @@ const DK = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 // 予約カードの中の入力欄を、その上のラベルの文字で探す
 const fieldByLabel = (page, label) => page.evaluate(lb => {
   const box = document.querySelector('.booking-modal-inner'); if (!box) return null;
-  // ★ナンバーは4つに分かれた（2026-11-04・C案）。見るのは【4桁の枠】。
+  // ★ナンバーは【1枠だけ】（2026-11-19・A案）。そのまま貼り付けできる。
   if (lb === 'ナンバー') {
-    const i4 = box.querySelector('[data-nofour]'); if (!i4) return null;
+    const i4 = box.querySelector('[data-plate]'); if (!i4) return null;
     const r4 = i4.getBoundingClientRect();
     return { value: i4.value, x: Math.round(r4.x), y: Math.round(r4.y), w: Math.round(r4.width), max: i4.maxLength,
              inputmode: i4.getAttribute('inputmode') || '', type: i4.getAttribute('type') || 'text' };
@@ -107,30 +107,30 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   t('整備：電話が作業内容と同じマスに出る', !!schedCells && schedCells.some(c => /079-560-0000/.test(c) && !/ワゴンR/.test(c)), schedCells);
 
   // ── ② 予約カードの欄 ──
-  console.log('\n■ ② 予約カード：車種の下にフルナンバー（地名／分類番号／かな／4桁）');
+  console.log('\n■ ② 予約カード：車種の下にナンバー（1枠だけ・そのまま貼り付けできる）');
   await page.click('td:has-text("原村")', { timeout: 8000 }).catch(() => {});
   t('予約カードが開く', await seeText(page, '車検予約カード', 8000));
   const car = await fieldByLabel(page, '車種');
   const no = await fieldByLabel(page, 'ナンバー');
   t('ナンバーの欄がある', !!no, { car, no });
   t('既に入っているナンバーが出ている', !!no && no.value === '3310', no);
-  // ★2026-11-04 からナンバーは【車種の下に1行】で、地名／分類番号／かな／4桁の4つに分かれている（C案）。
-  t('★車種の下にある（2026-11-04 からフルナンバーの1行）', !!car && !!no && no.y > car.y, { car, no });
-  t('★4つの枠がある（地名／分類番号／かな／4桁）', await page.evaluate(() =>
-    ['nochi', 'nobun', 'nokana', 'nofour'].every(k => !!document.querySelector('[data-' + k + ']'))));
-  t('★4桁の枠は車種の欄より狭い', !!car && !!no && no.w < car.w, { carW: car && car.w, noW: no && no.w });
-  // 数字だけ・4桁まで
+  // ★2026-11-19 からナンバーは【車種の下に1枠だけ】（A案）。そのまま貼り付けできる。
+  t('★車種の下にある', !!car && !!no && no.y > car.y, { car, no });
+  t('★★枠は1つだけ', await page.evaluate(() => document.querySelectorAll('[data-plate]').length === 1));
+  t('★★4つに分かれた枠はもう無い', await page.evaluate(() =>
+    ['nochi', 'nobun', 'nokana', 'nofour'].every(k => !document.querySelector('[data-' + k + ']'))));
+  // ★1枠なので【数字だけに削らない】（地名・かなが入る）。打った字はそのまま残す＝日本語入力が壊れない。
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(inp, 'あ12-345x9');
+    setter.call(inp, '姫路 300 あ 12-34');
     inp.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await page.waitForTimeout(400);
   const after = await fieldByLabel(page, 'ナンバー');
-  t('数字だけ・4桁までに直される', !!after && after.value === '1234', after);
+  t('★★打った字はそのまま残る（数字だけに削らない）', !!after && after.value === '姫路 300 あ 12-34', after);
 
   // ★日本語入力（ひらがな）が解除されないこと（2026-10-13 ユーザー報告）
   //   Windows は inputMode="numeric" の欄に入ると IME を英数にし、**次の欄へ移っても戻らない**。
@@ -138,7 +138,7 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   const imeAttrs = await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
     const pick = (label) => {
-      const wrap = (label === 'ナンバー') ? { querySelector: () => box.querySelector('[data-nofour]') }
+      const wrap = (label === 'ナンバー') ? { querySelector: () => box.querySelector('[data-plate]') }
         : [...box.querySelectorAll('div')].find(d => { const l = d.querySelector(':scope > label'); return l && l.innerText.replace(/\s/g, '').startsWith(label) && d.querySelector(':scope > input'); });
       const i = wrap && wrap.querySelector(':scope > input');
       return i ? { inputmode: i.getAttribute('inputmode') || '', type: i.getAttribute('type') || 'text' } : null;
@@ -157,13 +157,13 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   const cdp = await ctx.newCDPSession(page);
   const noInput = () => page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const i = wrap && wrap.querySelector(':scope > input'); if (!i) return null; i.focus(); return i.value;
   });
   // いったん空にする
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const i = wrap.querySelector(':scope > input');
     const st = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     st.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true }));
@@ -179,18 +179,20 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   await cdp.send('Input.insertText', { text: '３３１０' });   // 確定（Enter）
   await page.waitForTimeout(500);
   const fixed = await fieldByLabel(page, 'ナンバー');
-  t('★★日本語入力のまま変換して打っても 3310 が入る', !!fixed && fixed.value === '3310', fixed);
+  // ★1枠は【打った字を書き換えない】のが肝（書き換えると 2026-10-17 の「30回打っても入らない」が再発する）。
+  //   半角4桁に直るのは中で持っている no の側。それは下の「保存するとナンバーが残る」で確かめている。
+  t('★★日本語入力のまま変換して打っても、打った字がそのまま残る', !!fixed && fixed.value === '３３１０', fixed);
   t('★変換で打った後も number 型や inputmode は付いていない', !!fixed && !fixed.inputmode && fixed.type !== 'number', fixed);
   t('★maxLength は付けない（変換中の文字が切られて壊れるため）', await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const i = wrap.querySelector(':scope > input'); return !i.hasAttribute('maxlength');
   }));
 
   // 全角で打っても半角4桁になる（ひらがなのまま打てる）
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     setter.call(inp, '３３１０');
@@ -198,22 +200,23 @@ const fieldByLabel = (page, label) => page.evaluate(lb => {
   });
   await page.waitForTimeout(400);
   const zen = await fieldByLabel(page, 'ナンバー');
-  t('★全角で打っても半角の4桁になる', !!zen && zen.value === '3310', zen);
+  t('★全角で打った字もそのまま残る（半角に直すのは中で持っている no の側）', !!zen && zen.value === '３３１０', zen);
   // 元に戻してから保存へ進む
   await page.evaluate(() => {
     const box = document.querySelector('.booking-modal-inner');
-    const wrap = { querySelector: () => box.querySelector('[data-nofour]') };   // ★4桁の枠（2026-11-04 に4分割）
+    const wrap = { querySelector: () => box.querySelector('[data-plate]') };   // ★ナンバーの枠（2026-11-19 から1枠だけ）
     const inp = wrap.querySelector(':scope > input');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(inp, '1234');
+    setter.call(inp, '神戸 582 は 1234');
     inp.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await page.waitForTimeout(300);
-  // 保存するとサーバーに入る
+  // 保存するとサーバーに入る（★1枠に貼った字が 地名／分類番号／かな／4桁 に切り分けられる）
   await page.evaluate(() => { const box = document.querySelector('.booking-modal-inner'); const b = [...box.querySelectorAll('button')].find(x => /確定|保存/.test(x.innerText)); if (b) b.click(); });
-  t('保存するとナンバーが残る', await page.waitForFunction(([k, dk]) => {
+  t('★★保存すると 4桁（no）も フルナンバー（noChi／noBun／noKana）も残る', await page.waitForFunction(([k, dk]) => {
     const rows = (window.__fakeFb.get(k + 'insp') || {})[dk] || [];
-    return rows.some(r => r && r.name === '原村' && String(r.no) === '1234');
+    return rows.some(r => r && r.name === '原村' && String(r.no) === '1234'
+      && r.noChi === '神戸' && r.noBun === '582' && r.noKana === 'は');
   }, [STOR, DK], { timeout: 15000 }).then(() => true).catch(() => false),
     await page.evaluate(([k, dk]) => ((window.__fakeFb.get(k + 'insp') || {})[dk] || []).map(r => r && { n: r.name, no: r.no }), [STOR, DK]));
   await page.keyboard.press('Escape');

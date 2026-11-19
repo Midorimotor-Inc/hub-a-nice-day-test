@@ -1,6 +1,7 @@
 // マッハの「2年前予約」・連絡方法・予約確定＋フルナンバーの検査（v3.95.0・2026-11-04 ユーザー決定）
 //   ①C案：予約カードは「2年前予約」を押した時だけ 連絡方法と予約確定が出る
-//   ②C案：ナンバーは 地名／分類番号／かな／4桁 の4分割。Enter で次の枠へ移る
+//   ②A案（2026-11-19 ユーザー決定で見直し）：ナンバーは【1枠だけ】。そのまま貼り付けできる
+//   ★2年前予約は お名前（フルネーム）・車種・フルナンバー・電話 がそろうまで保存できない（A案）
 //   ③B案：スケジュール1日表示は 小さな札を並べる（🗓 2年前／📱 SMS or ☎ 電話／✅ 確定 or 未確定）
 //   ★4桁（no）はこれまでどおり残すこと（顧客リストとの突き合わせ・重複さがし・車両管理の紐づけに使う）
 //   ★bookingStatus（顧客リストの 仮予約／本予約／キャンセル）とは【別物】。さわらないこと。
@@ -49,15 +50,33 @@ const boxInfo = page => page.evaluate(() => {
   const one = e => e ? { on: /✓/.test(e.innerText), border: cs(e).borderColor, bg: cs(e).backgroundColor, color: cs(e).color, dis: !!e.disabled, op: cs(e).opacity, text: e.innerText.replace(/\s+/g, ' ').trim() } : null;
   return { need: need ? String(need.innerText) : null, btn: one(btn), sms: one(sms), tel: one(tel), fix: one(fix), stamp: st ? st.innerText.replace(/\s+/g, ' ').trim() : null };
 });
+// ★ナンバーは1枠だけ（2026-11-19 ユーザー決定・A案）。4つの枠はもう無い
 const plateInfo = page => page.evaluate(() => {
-  const g = ['nochi', 'nobun', 'nokana', 'nofour'].map(k => document.querySelector('[data-' + k + ']'));
-  if (g.some(e => !e)) return null;
-  return g.map(e => ({ v: e.value, ph: e.placeholder, im: e.getAttribute('inputmode'), ty: e.type, x: Math.round(e.getBoundingClientRect().left), fw: getComputedStyle(e).fontWeight }));
+  const e = document.querySelector('[data-plate]');
+  const old = ['nochi', 'nobun', 'nokana', 'nofour'].filter(k => document.querySelector('[data-' + k + ']'));
+  if (!e) return null;
+  const c = getComputedStyle(e);
+  return { v: e.value, ph: e.placeholder, im: e.getAttribute('inputmode'), ty: e.type,
+    fw: c.fontWeight, fs: parseFloat(c.fontSize), bc: c.borderColor, old: old,
+    n: document.querySelectorAll('[data-plate]').length };
 });
 const activeKey = page => page.evaluate(() => {
   const a = document.activeElement; if (!a) return null;
-  for (const k of ['nochi', 'nobun', 'nokana', 'nofour']) if (a.hasAttribute('data-' + k)) return k;
-  return a.placeholder || a.tagName;
+  if (a.hasAttribute('data-plate')) return 'plate';
+  return a.placeholder || a.getAttribute('data-kbkey') || a.tagName;
+});
+// 2年前予約の「足りない項目の一覧」を読む
+const missInfo = page => page.evaluate(() => {
+  const box = document.querySelector('[data-adv2ybox]'); if (!box) return null;
+  const m = box.querySelector('[data-adv2ymiss]'), ok = box.querySelector('[data-adv2yok]');
+  const red = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).borderColor : null; };
+  return {
+    n: m ? Number(m.getAttribute('data-adv2ymiss')) : 0,
+    ok: !!ok,
+    items: m ? [...m.querySelectorAll('[data-adv2ymissitem]')].map(e => e.getAttribute('data-adv2ymissitem')) : [],
+    text: m ? m.innerText.replace(/s+/g, ' ').trim() : null,
+    plateBc: red('[data-plate]'),
+  };
 });
 const setVal = (page, sel, v) => page.evaluate(([s, x]) => {
   const el = document.querySelector(s); if (!el) return false;
@@ -88,7 +107,8 @@ const seed = {
       adv2y: true, contact: 'sms', fixed: false },
     { name: '確定花子', carType: 'タント', no: '1234', course: 2, time: '10:00', store: 'honten', seq: 2, id: 2,
       adv2y: true, contact: 'tel', fixed: true, fixedAt: Date.now(), fixedBy: '江川京志' },
-    { name: '普通三郎', carType: 'ワゴンR', no: '5678', course: 3, time: '11:00', store: 'honten', seq: 3, id: 3 },
+    // ★お名前は【姓と名の間にスペース】。2年前予約のきびしい判定（2026-11-19 ユーザー決定）に合わせてある
+    { name: '普通 三郎', carType: 'ワゴンR', no: '5678', phone: '090-1111-2222', course: 3, time: '11:00', store: 'honten', seq: 3, id: 3 },
   ] },
   [STOR + 'honten-sched']: {}, [STOR + 'sanda-sched']: {},
   [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
@@ -120,7 +140,8 @@ const route = ctx => {
   route(ctx);
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
-  page.on('dialog', async d => { await d.accept().catch(() => {}); });
+  const dlgs = [];
+  page.on('dialog', async d => { dlgs.push(String(d.message())); await d.accept().catch(() => {}); });
   await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
   await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   await seeText(page, 'スケジュール', 25000);
@@ -137,18 +158,18 @@ const route = ctx => {
   const g2 = await tagsOf(page, '確定花子');
   t('★電話の人は「☎ 電話」', !!g2 && g2.tel === '電話' && g2.sms === null, g2);
   t('★確定した人は「✅ 確定」（未確定は出ない）', !!g2 && /確定/.test(g2.ok || '') && g2.wait === null, g2);
-  const g3 = await tagsOf(page, '普通三郎');
+  const g3 = await tagsOf(page, '普通');
   t('★2年前予約でない人には札を出さない', !!g3 && !g3.y2 && !g3.sms && !g3.tel && !g3.ok && !g3.wait, g3);
 
   head('② フルナンバーの表示（あればフル・無ければ4桁）');
   const r1 = await inspRowText(page, '二年太郎');
   t('★フルナンバーで出る（ナンバー 神戸582は3182）', /ナンバー 神戸582は3182/.test(r1 || ''), r1);
-  const r3 = await inspRowText(page, '普通三郎');
+  const r3 = await inspRowText(page, '普通');
   t('★古い予約は4桁のまま（ナンバー 5678）', /ナンバー 5678/.test(r3 || ''), r3);
 
   // ══ ① 予約カード（C案）══════════════════════════════════
   head('① 予約カード：2年前予約を押した時だけ 連絡方法と予約確定が出る（C案）');
-  await page.getByText('普通三郎', { exact: false }).last().click({ timeout: 8000 }).catch(() => {});
+  await page.getByText('普通', { exact: false }).last().click({ timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(1200);
   t('予約カードが開く', await page.evaluate(() => /予約カード|来店者氏名/.test(document.body.innerText)));
   let b = await boxInfo(page);
@@ -207,20 +228,21 @@ const route = ctx => {
   await page.click('[data-adv2yfix]'); await page.waitForTimeout(250);
 
   // ══ ② ナンバー4分割 ══════════════════════════════════════
-  head('② ナンバーは4つに分かれている（地名／分類番号／かな／4桁）');
+  head('② ナンバーは【1枠だけ】（2026-11-19 ユーザー決定・A案。そのまま貼り付けできる）');
   const pf = await plateInfo(page);
-  t('★4つの欄がある', !!pf && pf.length === 4, pf);
-  t('★左から 地名・分類番号・かな・4桁 の順に並ぶ', !!pf && pf[0].x < pf[1].x && pf[1].x < pf[2].x && pf[2].x < pf[3].x, pf && pf.map(x => x.x));
-  t('★4桁には元の値が入ったまま（5678）', !!pf && pf[3].v === '5678', pf && pf[3].v);
-  t('★PC なので inputMode を付けない（日本語入力が解除されるため）', !!pf && pf.every(x => !x.im), pf && pf.map(x => x.im));
-  t('★type=number でもない', !!pf && pf.every(x => x.ty !== 'number'), pf && pf.map(x => x.ty));
-  t('★入れた字は太い（入っている枠と入っていない枠の差を出す・2026-11-04 ユーザー指示）',
-    !!pf && pf.every(x => Number(x.fw) >= 700), pf && pf.map(x => x.fw));
+  t('★ナンバーの枠がある', !!pf, pf);
+  t('★★枠は1つだけ', !!pf && pf.n === 1, pf && pf.n);
+  t('★★4つに分かれた枠はもう無い（地名／分類番号／かな／4桁）', !!pf && pf.old.length === 0, pf && pf.old);
+  t('★開いた時は持っている値から組み立てて出る（5678）', !!pf && pf.v === '5678', pf && pf.v);
+  t('★案内は貼り付けの形（神戸 582 は 3182）', !!pf && /神戸/.test(pf.ph) && /3182/.test(pf.ph), pf && pf.ph);
+  t('★PC なので inputMode を付けない（日本語入力が解除されるため）', !!pf && !pf.im, pf && pf.im);
+  t('★type=number でもない', !!pf && pf.ty !== 'number', pf && pf.ty);
+  t('★入れた字は太い（2026-11-04 ユーザー指示）', !!pf && Number(pf.fw) >= 700, pf && pf.fw);
   const phCss = page => page.evaluate(() => {
     let hit = null;
     for (const s of document.styleSheets) {
       let rr = []; try { rr = [...s.cssRules]; } catch (e) { continue; }
-      for (const r of rr) if (r.selectorText && /data-nofour]::placeholder/.test(r.selectorText)) hit = r.style.color;
+      for (const r of rr) if (r.selectorText && /data-plate]::placeholder/.test(r.selectorText)) hit = r.style.color;
     }
     return hit;
   });
@@ -230,25 +252,68 @@ const route = ctx => {
   const lum = c => { const p = String(c || '').split('('); if (p.length < 2) return 0; const a = p[1].split(')')[0].split(',').map(x => Number(x.trim())); return (a[0] + a[1] + a[2]) / 3; };
   t('★うすさの目安（200より明るい灰色）', lum(ph) >= 200, ph);
 
-  head('② Enter で次の枠へ移る');
-  await page.focus('[data-nochi]');
-  await page.keyboard.type('神戸'); await page.keyboard.press('Enter'); await page.waitForTimeout(300);
-  t('★地名で Enter → 分類番号へ移る', (await activeKey(page)) === 'nobun', await activeKey(page));
-  await page.keyboard.type('582'); await page.keyboard.press('Enter'); await page.waitForTimeout(300);
-  t('★分類番号で Enter → かなへ移る', (await activeKey(page)) === 'nokana', await activeKey(page));
-  await page.keyboard.type('は'); await page.keyboard.press('Enter'); await page.waitForTimeout(300);
-  t('★かなで Enter → 4桁へ移る', (await activeKey(page)) === 'nofour', await activeKey(page));
-  await setVal(page, '[data-nofour]', '９９９９'); await page.waitForTimeout(250);
+  head('② 送り順（車種 → ナンバー → コース）と、貼り付け');
+  await page.focus('[data-plate]');
+  await page.keyboard.press('ArrowUp'); await page.waitForTimeout(350);
+  t('★↑でひとつ前（車種）へ戻る', /プリウス/.test(String(await activeKey(page))), await activeKey(page));
+  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(350);
+  t('★↓でナンバーの枠へ移る', (await activeKey(page)) === 'plate', await activeKey(page));
+  // ★1枠にまるごと貼る（全角の数字でも半角4桁になる）
+  await setVal(page, '[data-plate]', '神戸 582 は ９９９９'); await page.waitForTimeout(300);
   const pf2 = await plateInfo(page);
-  t('★全角で打っても半角4桁になる', !!pf2 && pf2[3].v === '9999', pf2 && pf2[3].v);
-  t('★打った内容が入っている（神戸／582／は）', !!pf2 && pf2[0].v === '神戸' && pf2[1].v === '582' && pf2[2].v === 'は', pf2 && pf2.map(x => x.v));
+  t('★★打った字はそのまま残る（書き換えない＝日本語入力が壊れない）', !!pf2 && pf2.v === '神戸 582 は ９９９９', pf2 && pf2.v);
+  t('★枠はまだ1つのまま', !!pf2 && pf2.n === 1, pf2 && pf2.n);
+  // 切り分けの結果は「保存した中身」と「表の字」で確かめる（画面には出さないのが A案）
 
   // SHOT3＝開いた予約カードそのもの（見た目を見たい時に）
   if (process.env.SHOT3) { await page.screenshot({ path: process.env.SHOT3 }); console.log('   [shot] ' + process.env.SHOT3); }
+  // ══ ⑤ 2年前予約の入力チェック（A案・2026-11-19 ユーザー決定） ══════════
+  head('⑤ 2年前予約は お名前（フルネーム）・車種・フルナンバー・電話 がそろうまで保存できない');
+  let ms = await missInfo(page);
+  t('★いまはそろっているので緑の印が出る', !!ms && ms.ok && ms.n === 0, ms);
+  // ── 電話を消す
+  await setVal(page, 'input[placeholder="090-0000-0000"]', ''); await page.waitForTimeout(300);
+  ms = await missInfo(page);
+  t('★電話を消すと一覧に出る', !!ms && ms.items.indexOf('phone') >= 0, ms && ms.items);
+  t('★電話の欄が赤くなる', await page.evaluate(() => {
+    const e = document.querySelector('input[placeholder="090-0000-0000"]');
+    return !!e && /220, 38, 38/.test(getComputedStyle(e).borderColor);
+  }));
+  dlgs.length = 0;
+  await page.evaluate(() => { const b2 = [...document.querySelectorAll('button')].find(e => /内容を保存する|確定して登録/.test(e.innerText) && e.offsetParent !== null); if (b2) b2.click(); });
+  await page.waitForTimeout(900);
+  t('★★保存を押すと止まって知らせる', dlgs.some(x => /2年前予約には/.test(x) && /電話番号/.test(x)), dlgs.slice(0, 2));
+  t('★★予約カードは閉じない（保存されていない）', await page.evaluate(() => !!document.querySelector('[data-adv2ybox]')));
+  await setVal(page, 'input[placeholder="090-0000-0000"]', '090-1111-2222'); await page.waitForTimeout(300);
+  // ── お名前のきびしい判定（姓と名の間にスペース）
+  await setVal(page, 'input[placeholder="お客様名"]', '速水'); await page.waitForTimeout(300);
+  ms = await missInfo(page);
+  t('★★「速水」だけ（スペース無し）はフルネームとみなさない', !!ms && ms.items.indexOf('name') >= 0, ms && ms.items);
+  t('★何が足りないか言葉で出る（姓と名の間にスペース）', !!ms && /スペース/.test(ms.text || ''), ms && ms.text);
+  await setVal(page, 'input[placeholder="お客様名"]', '速水 俊之'); await page.waitForTimeout(300);
+  ms = await missInfo(page);
+  t('★★「速水 俊之」なら通る', !!ms && ms.items.indexOf('name') < 0, ms && ms.items);
+  await setVal(page, 'input[placeholder="お客様名"]', '普通 三郎'); await page.waitForTimeout(300);
+  // ── フルナンバー
+  await setVal(page, '[data-plate]', '9999'); await page.waitForTimeout(300);
+  ms = await missInfo(page);
+  t('★4桁だけではフルナンバーにならない', !!ms && ms.items.indexOf('plate') >= 0, ms && ms.items);
+  t('★ナンバーの枠が赤くなる', !!ms && /220, 38, 38/.test(ms.plateBc || ''), ms && ms.plateBc);
+  await setVal(page, '[data-plate]', '神戸 582 は ９９９９'); await page.waitForTimeout(300);
+  ms = await missInfo(page);
+  t('★そろえば一覧は消えて緑の印に戻る', !!ms && ms.ok && ms.n === 0, ms);
+  // ── 2年前予約の印を外せば、今までどおり保存できる（逃げ道）
+  await page.click('[data-adv2ybtn]'); await page.waitForTimeout(300);
+  t('★★印を外すと一覧も消える（今までどおり保存できる）', await page.evaluate(() =>
+    !document.querySelector('[data-adv2ymiss]') && !document.querySelector('[data-adv2yok]')));
+  await page.click('[data-adv2ybtn]'); await page.waitForTimeout(300);
+  await page.click('[data-contact="tel"]'); await page.waitForTimeout(250);
+  await page.click('[data-adv2yfix]'); await page.waitForTimeout(250);
+
   head('① 保存すると残る／bookingStatus はさわらない');
   await page.evaluate(() => { const b2 = [...document.querySelectorAll('button')].find(e => /内容を保存する|確定して登録/.test(e.innerText) && e.offsetParent !== null); if (b2) b2.click(); });
   await page.waitForTimeout(2500);
-  const sv = await savedInsp(page, '普通三郎');
+  const sv = await savedInsp(page, '普通 三郎');
   t('★adv2y が残る', !!sv && sv.adv2y === true, sv && sv.adv2y);
   t('★連絡方法（tel）が残る', !!sv && sv.contact === 'tel', sv && sv.contact);
   t('★予約確定（fixed）が残る', !!sv && sv.fixed === true, sv && sv.fixed);
@@ -266,10 +331,11 @@ const route = ctx => {
   t('★★PC の2年前予約の区画は bookingStatus をさわっていない', !!pcBlock && pcBlock.indexOf('bookingStatus') < 0, pcBlock && pcBlock.length);
   t('★★スマホの2年前予約の区画も bookingStatus をさわっていない', !!mbBlock && mbBlock.indexOf('bookingStatus') < 0, mbBlock && mbBlock.length);
   t('★表にも札が出る', await page.evaluate(() => {
-    const tr = [...document.querySelectorAll('tr')].find(r => (r.innerText || '').indexOf('普通三郎') >= 0 && r.offsetParent !== null);
+    const tr = [...document.querySelectorAll('tr')].find(r => (r.innerText || '').indexOf('普通') >= 0 && r.offsetParent !== null);
     return !!(tr && tr.querySelector('[data-adv2y]') && tr.querySelector('[data-adv2yfixed]'));
   }));
-  t('★表のナンバーもフルになる', /ナンバー 神戸582は9999/.test((await inspRowText(page, '普通三郎')) || ''), await inspRowText(page, '普通三郎'));
+  t('★★1枠に貼った字が 地名／分類番号／かな／4桁 に切り分けられている（表もフルになる）',
+    /ナンバー 神戸582は9999/.test((await inspRowText(page, '普通')) || ''), await inspRowText(page, '普通'));
   t('PC で JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
   if (process.env.SHOT) { await page.screenshot({ path: process.env.SHOT }); console.log('   [shot] ' + process.env.SHOT); }
   await ctx.close();
@@ -302,16 +368,16 @@ const route = ctx => {
   t('★確定の印が出ている', !!mb && /電話で予約確定/.test(mb.stamp || ''), mb && mb.stamp);
   t('★スマホは保存ボタンと名前が重ならない（返事あり と付ける）', !!mb && /返事あり/.test(mb.fix.text), mb && mb.fix.text);
   const mpf = await plateInfo(mp);
-  t('★スマホのナンバーも4つに分かれている', !!mpf && mpf.length === 4, mpf);
-  t('★4桁だけ数字キーパッド（地名・分類・かなは付けない）', !!mpf && !mpf[0].im && !mpf[1].im && !mpf[2].im && mpf[3].im === 'numeric', mpf && mpf.map(x => x.im));
-  t('★入力欄は16px以上（iPhoneが勝手に拡大しない）', await mp.evaluate(() =>
-    ['nochi', 'nobun', 'nokana', 'nofour'].every(k => { const e = document.querySelector('[data-' + k + ']'); return e && parseFloat(getComputedStyle(e).fontSize) >= 16; })));
-  t('★スマホも入れた字は太い', !!mpf && mpf.every(x => Number(x.fw) >= 700), mpf && mpf.map(x => x.fw));
+  t('★★スマホのナンバーも1枠だけ', !!mpf && mpf.n === 1, mpf && mpf.n);
+  t('★★4つに分かれた枠はもう無い', !!mpf && mpf.old.length === 0, mpf && mpf.old);
+  t('★★inputMode を付けない（地名・かなを打つ枠になったため）', !!mpf && !mpf.im, mpf && mpf.im);
+  t('★入力欄は16px以上（iPhoneが勝手に拡大しない）', !!mpf && mpf.fs >= 16, mpf && mpf.fs);
+  t('★スマホも入れた字は太い', !!mpf && Number(mpf.fw) >= 700, mpf && mpf.fw);
   const mph = await mp.evaluate(() => {
     let hit = null;
     for (const s of document.styleSheets) {
       let rr = []; try { rr = [...s.cssRules]; } catch (e) { continue; }
-      for (const r of rr) if (r.selectorText && r.selectorText.indexOf('[data-nofour]::placeholder') >= 0) hit = r.style.color;
+      for (const r of rr) if (r.selectorText && r.selectorText.indexOf('[data-plate]::placeholder') >= 0) hit = r.style.color;
     }
     return hit;
   });
@@ -330,6 +396,17 @@ const route = ctx => {
   await mp.click('[data-contact="sms"]'); await mp.waitForTimeout(300);
   const mb5 = await boxInfo(mp);
   t('★スマホも連絡方法を外すと確定が外れる', !!mb5 && !mb5.fix.on && !mb5.stamp, mb5);
+  head('⑤ スマホも 2年前予約の入力チェックが効く');
+  // ここまでで adv2y は【入ったまま】・連絡方法は空。連絡方法だけ選び直す（印を押し直さないこと）
+  await mp.click('[data-contact="sms"]'); await mp.waitForTimeout(300);
+  const mms = await missInfo(mp);
+  t('★★足りない項目の一覧が出る（確定花子はスペース無し・ナンバーも電話も無い）',
+    !!mms && mms.n > 0 && mms.items.indexOf('name') >= 0 && mms.items.indexOf('plate') >= 0 && mms.items.indexOf('phone') >= 0, mms && mms.items);
+  t('★ナンバーの枠が赤くなる', !!mms && /220, 38, 38/.test(mms.plateBc || ''), mms && mms.plateBc);
+  await mp.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /^✅ 予約確定$|^💾|保存/.test(e.innerText.trim()) && e.offsetParent !== null); if (b) b.click(); });
+  await mp.waitForTimeout(900);
+  t('★★保存を押すと止まって知らせる', await mp.evaluate(() => /2年前予約には/.test(document.body.innerText)));
+  t('★★予約カードは閉じない（保存されていない）', await mp.evaluate(() => !!document.querySelector('[data-adv2ybox]')));
   t('スマホで JSエラーが出ていない', merrs.length === 0, merrs.slice(0, 3));
   if (process.env.SHOT2) { await mp.screenshot({ path: process.env.SHOT2 }); console.log('   [shot] ' + process.env.SHOT2); }
 

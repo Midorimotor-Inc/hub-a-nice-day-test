@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>見本：ナンバーを1枠に／2年前予約の入力チェック</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f1f5f9;color:#1b2129;padding:18px}
+  h1{font-size:19px;margin-bottom:4px}
+  .lead{font-size:13px;color:#475569;margin-bottom:18px;line-height:1.8}
+  .panel{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .ttl{font-size:15px;font-weight:800;color:#0f172a;margin-bottom:3px}
+  .sub{font-size:12px;color:#64748b;margin-bottom:10px;line-height:1.7}
+  .pick{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+  .pick button{border:2px solid #e5e7eb;background:#fff;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;color:#475569}
+  .pick button.on{border-color:#6d28d9;background:#ede9fe;color:#4c1d95}
+  .card{background:#fff;border:2px solid #e5e7eb;border-radius:10px;padding:14px;max-width:460px}
+  .card.wide{max-width:560px}
+  label.lbl{display:block;font-size:13px;font-weight:700;color:#374151;margin-bottom:5px}
+  label.lbl span{font-weight:400;color:#9ca3af;font-size:10px}
+  input.inp{width:100%;padding:9px 12px;border:2px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;outline:none}
+  input.inp:focus{border-color:#0891b2}
+  input.bad{border-color:#dc2626;background:#fef2f2}
+  .fld{margin-bottom:11px}
+  .four{display:grid;grid-template-columns:1.15fr .85fr .7fr 1.05fr;gap:6px}
+  .four input{text-align:center;padding:10px 6px;font-weight:800}
+  .one input{font-weight:800;letter-spacing:.04em}
+  .readout{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px}
+  .chip{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:3px 8px;color:#475569}
+  .chip b{color:#0f172a}
+  .chip.empty{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+  .pastebtn{margin-top:6px;border:2px solid #0891b2;background:#fff;color:#0e7490;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .b2y{width:100%;padding:10px 6px;border-radius:9px;border:2px solid #e5e7eb;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px}
+  .b2y.on{border-color:#6d28d9;background:#ede9fe;color:#6d28d9}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
+  .b2y.sms.on{border-color:#0891b2;background:#cffafe;color:#0891b2}
+  .b2y.tel.on{border-color:#047857;background:#d1fae5;color:#047857}
+  .b2y.ok.on{border-color:#15803d;background:#15803d;color:#fff}
+  .hint{font-size:11px;color:#6b7280;font-weight:600;margin-top:7px}
+  .need{background:#fef2f2;border:2px solid #dc2626;border-radius:9px;padding:10px 12px;margin-top:8px}
+  .need .h{font-size:12.5px;font-weight:800;color:#991b1b;margin-bottom:5px}
+  .need ul{margin:0;padding-left:18px;font-size:12.5px;color:#991b1b;line-height:1.8}
+  .okbox{background:#dcfce7;border:2px solid #15803d;border-radius:9px;padding:9px 12px;margin-top:8px;font-size:12.5px;font-weight:700;color:#15803d}
+  .fillbox{background:#faf5ff;border:2px solid #6d28d9;border-radius:9px;padding:11px 12px;margin-top:8px}
+  .fillbox .h{font-size:12.5px;font-weight:800;color:#5b21b6;margin-bottom:8px}
+  .save{margin-top:14px;display:flex;gap:8px}
+  .save button{flex:1;padding:11px 8px;border-radius:9px;border:none;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;color:#fff;background:#2563eb}
+  .save button.off{background:#cbd5e1;cursor:not-allowed;color:#f8fafc}
+  .msg{margin-top:9px;font-size:12.5px;font-weight:700;min-height:18px}
+  .msg.ng{color:#b91c1c}.msg.ok{color:#15803d}
+  .tests{margin-top:10px;font-size:12px;color:#475569;line-height:1.9}
+  .tests code{background:#f1f5f9;border-radius:4px;padding:1px 5px}
+  .tests button{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:2px 8px;font-size:11.5px;cursor:pointer;font-family:inherit;margin-left:5px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr}}
+  .foot{font-size:12px;color:#64748b;line-height:1.8;margin-top:6px}
+</style>
+</head>
+<body>
+
+<h1>見本：ナンバーを1枠に／2年前予約の入力チェック</h1>
+<p class="lead">
+  2026-11-19 のご依頼2つを、実際に触れる形にしました。<b>上のボタンで案を切り替えて、下のカードに打ち込んでみてください。</b><br>
+  ① ナンバーの枠を分けずに <b>1枠にしてコピペできるように</b>　／　② <b>2年前予約を押したら、氏名・フルナンバー・車種・電話が全部そろわないと保存できない</b>ように
+</p>
+
+<!-- ───────────── ① ナンバー ───────────── -->
+<div class="panel">
+  <div class="ttl">① ナンバーの入力欄</div>
+  <div class="sub">
+    いまは4つに分かれているので、<b>まるごと貼り付けできません</b>。1枠にすると貼り付けできますが、<br>
+    <b>下4桁だけは今までどおり別に取り出して持つ必要があります</b>（顧客リストとの突き合わせ・車両管理との紐づけが下4桁で動いているため）。<br>
+    そこで「1枠に打ってもらい、<b>裏で自動的に4つに分ける</b>」作りにします。下の読み取り結果がその分けた中身です。
+  </div>
+  <div class="pick" id="p1">
+    <button data-v="now">いま（4枠・参考）</button>
+    <button data-v="a" class="on">A案：1枠だけ</button>
+    <button data-v="b">B案：1枠＋読み取り結果</button>
+    <button data-v="c">C案：1枠＋貼り付けボタン＋読み取り結果</button>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="fld">
+        <label class="lbl">車種</label>
+        <input class="inp" value="スペーシア" id="carType1">
+      </div>
+      <div class="fld">
+        <label class="lbl">ナンバー <span id="plateHint">まるごと打てます／貼り付けできます</span></label>
+        <div id="plateNow" class="four" style="display:none">
+          <input class="inp" placeholder="神戸" value="神戸">
+          <input class="inp" placeholder="582" value="582">
+          <input class="inp" placeholder="は" value="は">
+          <input class="inp" placeholder="3182" value="3182">
+        </div>
+        <div id="plateOne" class="one">
+          <input class="inp" id="plateInput" placeholder="神戸 582 は 3182" value="神戸 582 は 3182">
+        </div>
+        <button class="pastebtn" id="pasteBtn" style="display:none">📋 貼り付ける</button>
+        <div class="readout" id="readout"></div>
+      </div>
+      <div class="foot" id="foot1"></div>
+    </div>
+
+    <div>
+      <div class="tests">
+        <b>いろいろな書き方で試す</b>（押すと入ります）<br>
+        <code>神戸 582 は 3182</code><button data-t="神戸 582 は 3182">試す</button><br>
+        <code>神戸582は3182</code><button data-t="神戸582は3182">試す</button><br>
+        <code>姫路 300 あ 12-34</code><button data-t="姫路 300 あ 12-34">試す</button><br>
+        <code>神戸 5A0 わ 1</code><button data-t="神戸 5A0 わ 1">試す</button><br>
+        <code>３３１０</code>（全角・4桁だけ）<button data-t="３３１０">試す</button><br>
+        <code>3310</code>（今までどおり4桁だけ）<button data-t="3310">試す</button><br>
+        <code>神戸</code>（途中まで）<button data-t="神戸">試す</button>
+      </div>
+      <div class="foot" style="margin-top:12px">
+        ★<b>4桁だけ打つのも今までどおりできます</b>（読み取り結果の「4桁」にそのまま入ります）。<br>
+        ★古い予約（4桁しか無いもの）も、そのまま開いて直せます。<br>
+        ★スマホの予約カードも同じ形にします。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────── ② 2年前予約 ───────────── -->
+<div class="panel">
+  <div class="ttl">② 2年前予約を押した時の入力チェック</div>
+  <div class="sub">
+    <b>2年前予約を押した時だけ</b>、氏名・フルナンバー・車種・電話が全部そろわないと保存できないようにします。<br>
+    押していない ふだんの予約は<b>今までどおり</b>で、何も変わりません。
+  </div>
+  <div class="pick" id="p2">
+    <button data-v="a" class="on">A案：足りない所を赤くして、保存を押した時に知らせる</button>
+    <button data-v="b">B案：そろうまで保存ボタンを押せなくする</button>
+    <button data-v="c">C案：押した時に「足りない欄だけの箱」を出す</button>
+  </div>
+  <div class="pick" id="p3" style="margin-bottom:14px">
+    <button data-v="loose" class="on">氏名の判定：ゆるい（空でなければOK）</button>
+    <button data-v="strict">氏名の判定：きびしい（姓と名の間にスペース）</button>
+  </div>
+
+  <div class="two-col">
+    <div class="card wide">
+      <div class="fld">
+        <label class="lbl">お名前</label>
+        <input class="inp" id="f_name" placeholder="例：速水 俊之" value="速水">
+      </div>
+      <div class="fld">
+        <label class="lbl">車種</label>
+        <input class="inp" id="f_car" placeholder="例：スペーシア" value="スペーシア">
+      </div>
+      <div class="fld">
+        <label class="lbl">ナンバー <span>1枠（上の①と同じ）</span></label>
+        <input class="inp" id="f_plate" placeholder="神戸 582 は 3182" value="8833">
+        <div class="readout" id="readout2"></div>
+      </div>
+      <div class="fld">
+        <label class="lbl">電話</label>
+        <input class="inp" id="f_phone" placeholder="090-0000-0000" value="">
+      </div>
+
+      <div style="margin-top:14px">
+        <label class="lbl">2年前予約 <span>2年後の予約をその場で取った時</span></label>
+        <button class="b2y" id="b_adv">🗓 2年前予約</button>
+        <div id="adv_rest" style="display:none">
+          <div class="hint">車検が近づいた時の案内の仕方</div>
+          <div class="two">
+            <button class="b2y sms" id="b_sms">📱 ショートメール</button>
+            <button class="b2y tel" id="b_tel">☎ 電話連絡</button>
+          </div>
+          <div style="margin-top:7px"><button class="b2y ok" id="b_fix">✅ 予約確定</button></div>
+          <div id="need_area"></div>
+        </div>
+      </div>
+
+      <div class="save">
+        <button id="saveBtn">📋 確定して登録</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div>
+      <div class="foot">
+        <b>見ていただきたい所</b><br>
+        ・「速水」だけ／電話が空／ナンバーが4桁だけ ―― <b>わざと足りない状態</b>にしてあります。<br>
+        ・<b>🗓 2年前予約を押すと</b>、案ごとに違う止め方をします。<br>
+        ・ナンバーは<b>フルで入っているか</b>を見ます（4桁だけでは通りません）。<br>
+        ・全部そろうと、止めは消えます。
+      </div>
+      <div class="foot" style="margin-top:12px">
+        <b>決めていただきたいこと</b><br>
+        1. ①は A・B・C のどれか<br>
+        2. ②は A・B・C のどれか<br>
+        3. 氏名の判定を「ゆるい／きびしい」のどちらにするか<br>
+        4. 電話は「携帯だけでよいか」（いまの欄は1つです）
+      </div>
+      <div class="foot" style="margin-top:12px;color:#b45309">
+        ★<b>これは現場の入力の決まりが変わる話です。</b><br>
+        決まったら、<b>先に現場へ申し送りをしてから</b>テスト版に入れます。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── ナンバーを1枠から4つに分ける ──────────────────────────
+//    末尾の数字＝4桁 → その手前の1文字＝かな → その手前の数字（英字混じり可）＝分類番号 → 残り＝地名
+function parsePlate(raw){
+  var s = String(raw||'')
+    .replace(/[！-～]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}) // 全角→半角
+    .replace(/[・･]/g,' ').replace(/[‐‑‒–—―ー−]/g,'-')
+    .replace(/\s+/g,' ').trim();
+  var no='',kana='',bun='',rest=s,m;
+  m = rest.match(/^(.*?)\s*([0-9]{1,4}(?:-[0-9]{1,4})?)\s*$/);
+  if(m){ no = m[2].replace(/-/g,''); rest = m[1].trim(); }
+  m = rest.match(/^(.*?)\s*([ぁ-ゖァ-ヺA-Za-z])\s*$/);
+  if(m){ kana = m[2]; rest = m[1].trim(); }
+  m = rest.match(/^(.*?)\s*([0-9][0-9A-Za-z]{0,2})\s*$/);
+  if(m){ bun = m[2].toUpperCase(); rest = m[1].trim(); }
+  return {chi:rest.replace(/\s+/g,''),bun:bun,kana:kana,no:no};
+}
+function isFullPlate(p){ return !!(p.chi && p.bun && p.kana && p.no); }
+
+function drawReadout(el,p){
+  function chip(label,v){
+    return '<span class="chip'+(v?'':' empty')+'">'+label+' <b>'+(v||'—')+'</b></span>';
+  }
+  el.innerHTML = chip('地名',p.chi)+chip('分類',p.bun)+chip('かな',p.kana)+chip('4桁',p.no)
+    + '<span class="chip">保存される形 <b>'+(p.chi+p.bun+p.kana+p.no||'—')+'</b></span>';
+}
+
+// ── ① の切り替え ───────────────────────────────────────
+var mode1='a';
+var plateNow=document.getElementById('plateNow'), plateOne=document.getElementById('plateOne');
+var plateInput=document.getElementById('plateInput'), readout=document.getElementById('readout');
+var pasteBtn=document.getElementById('pasteBtn'), plateHint=document.getElementById('plateHint');
+var foot1=document.getElementById('foot1');
+
+function render1(){
+  var now = mode1==='now';
+  plateNow.style.display = now?'grid':'none';
+  plateOne.style.display = now?'none':'block';
+  pasteBtn.style.display = (mode1==='c')?'inline-block':'none';
+  readout.style.display  = (mode1==='b'||mode1==='c')?'flex':'none';
+  plateHint.textContent  = now?'地名／分類番号／かな／4桁（Enter で次の枠へ）':'まるごと打てます／貼り付けできます';
+  foot1.innerHTML = now
+    ? 'いまの形です。<b>4つの枠に分かれているので、まるごと貼り付けできません。</b>'
+    : (mode1==='a' ? 'いちばん単純。打った字から裏で自動的に4つに分けます（読み取り結果は出しません）。'
+    : mode1==='b' ? '読み取り結果を出すので、<b>うまく分けられたか目で確かめられます</b>。'
+    : '「📋 貼り付ける」でクリップボードから一発。読み取り結果も出ます。');
+  if(!now) drawReadout(readout,parsePlate(plateInput.value));
+}
+document.getElementById('p1').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-v]'); if(!b)return;
+  mode1=b.dataset.v;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);});
+  render1();
+});
+plateInput.addEventListener('input',function(){ drawReadout(readout,parsePlate(this.value)); });
+pasteBtn.addEventListener('click',function(){
+  if(navigator.clipboard&&navigator.clipboard.readText){
+    navigator.clipboard.readText().then(function(t){ plateInput.value=t; drawReadout(readout,parsePlate(t)); })
+      .catch(function(){ alert('貼り付けの許可が要ります。Ctrl+V でも入ります。'); });
+  } else { alert('この画面では使えません。Ctrl+V で貼り付けてください。'); }
+});
+[].forEach.call(document.querySelectorAll('.tests button[data-t]'),function(b){
+  b.addEventListener('click',function(){
+    if(mode1==='now'){ mode1='b'; [].forEach.call(document.querySelectorAll('#p1 button'),function(x){x.classList.toggle('on',x.dataset.v==='b');}); render1(); }
+    plateInput.value=b.dataset.t; drawReadout(readout,parsePlate(b.dataset.t));
+  });
+});
+
+// ── ② の切り替え ───────────────────────────────────────
+var mode2='a', nameMode='loose';
+var st={adv:false,contact:'',fixed:false};
+var E=function(id){return document.getElementById(id);};
+
+function nameOk(v){
+  v=String(v||'').trim();
+  if(!v) return false;
+  if(nameMode==='strict') return /[\s　]/.test(String(v).trim()) && v.replace(/[\s　]/g,'').length>=2;
+  return true;
+}
+function missing(){
+  var out=[];
+  if(!nameOk(E('f_name').value)) out.push(nameMode==='strict'?'お名前（姓と名の間にスペースを入れてください）':'お名前');
+  if(!String(E('f_car').value||'').trim()) out.push('車種');
+  var p=parsePlate(E('f_plate').value);
+  if(!isFullPlate(p)) out.push('ナンバー（地名・分類番号・かな・4桁をすべて）');
+  if(!String(E('f_phone').value||'').trim()) out.push('電話番号');
+  return out;
+}
+function markBad(on){
+  var miss=missing();
+  function set(id,bad){ E(id).classList.toggle('bad', !!(on&&bad)); }
+  set('f_name', !nameOk(E('f_name').value));
+  set('f_car',  !String(E('f_car').value||'').trim());
+  set('f_plate',!isFullPlate(parsePlate(E('f_plate').value)));
+  set('f_phone',!String(E('f_phone').value||'').trim());
+  return miss;
+}
+function render2(){
+  E('b_adv').classList.toggle('on',st.adv);
+  E('adv_rest').style.display = st.adv?'block':'none';
+  E('b_sms').classList.toggle('on',st.contact==='sms');
+  E('b_tel').classList.toggle('on',st.contact==='tel');
+  E('b_fix').classList.toggle('on',st.fixed);
+  drawReadout(E('readout2'),parsePlate(E('f_plate').value));
+
+  var miss = st.adv ? markBad(true) : (markBad(false),[]);
+  var area = E('need_area'), save=E('saveBtn');
+  area.innerHTML=''; save.classList.remove('off'); save.textContent='📋 確定して登録';
+
+  if(!st.adv){ E('msg').textContent=''; return; }
+
+  if(miss.length===0){
+    area.innerHTML='<div class="okbox">✅ 2年前予約に必要な項目はそろっています</div>';
+    return;
+  }
+  if(mode2==='a'){
+    area.innerHTML='<div class="need"><div class="h">⚠ 2年前予約には、あと '+miss.length+' つ足りません</div><ul><li>'+miss.join('</li><li>')+'</li></ul></div>';
+  } else if(mode2==='b'){
+    area.innerHTML='<div class="need"><div class="h">⚠ そろうまで保存できません（あと '+miss.length+' つ）</div><ul><li>'+miss.join('</li><li>')+'</li></ul></div>';
+    save.classList.add('off'); save.textContent='📋 確定して登録（あと'+miss.length+'つ）';
+  } else {
+    var h='<div class="fillbox"><div class="h">🗓 2年前予約に必要な項目（ここで入れられます）</div>';
+    if(!nameOk(E('f_name').value)) h+='<div class="fld"><label class="lbl">お名前</label><input class="inp bad" data-mirror="f_name" value="'+E('f_name').value.replace(/"/g,'&quot;')+'" placeholder="例：速水 俊之"></div>';
+    if(!String(E('f_car').value||'').trim()) h+='<div class="fld"><label class="lbl">車種</label><input class="inp bad" data-mirror="f_car" value="" placeholder="例：スペーシア"></div>';
+    if(!isFullPlate(parsePlate(E('f_plate').value))) h+='<div class="fld"><label class="lbl">ナンバー（フル）</label><input class="inp bad" data-mirror="f_plate" value="'+E('f_plate').value.replace(/"/g,'&quot;')+'" placeholder="神戸 582 は 3182"></div>';
+    if(!String(E('f_phone').value||'').trim()) h+='<div class="fld"><label class="lbl">電話番号</label><input class="inp bad" data-mirror="f_phone" value="" placeholder="090-0000-0000"></div>';
+    h+='<div style="font-size:11.5px;color:#6b7280">※ ここに入れると、上の欄にもそのまま入ります</div></div>';
+    area.innerHTML=h;
+    [].forEach.call(area.querySelectorAll('input[data-mirror]'),function(inp){
+      inp.addEventListener('input',function(){
+        var t=E(this.dataset.mirror); t.value=this.value;
+        var keep=this.dataset.mirror, pos=this.selectionStart;
+        render2();
+        var again=document.querySelector('.fillbox input[data-mirror="'+keep+'"]');
+        if(again){ again.focus(); try{again.setSelectionRange(pos,pos);}catch(e){} }
+      });
+    });
+  }
+}
+document.getElementById('p2').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-v]'); if(!b)return;
+  mode2=b.dataset.v;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);});
+  E('msg').textContent=''; render2();
+});
+document.getElementById('p3').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-v]'); if(!b)return;
+  nameMode=b.dataset.v;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);});
+  E('msg').textContent=''; render2();
+});
+E('b_adv').addEventListener('click',function(){
+  st.adv=!st.adv; if(!st.adv){st.contact='';st.fixed=false;}
+  E('msg').textContent=''; render2();
+});
+E('b_sms').addEventListener('click',function(){ st.contact=(st.contact==='sms')?'':'sms'; if(!st.contact)st.fixed=false; render2(); });
+E('b_tel').addEventListener('click',function(){ st.contact=(st.contact==='tel')?'':'tel'; if(!st.contact)st.fixed=false; render2(); });
+E('b_fix').addEventListener('click',function(){
+  if(!st.contact){ E('msg').className='msg ng'; E('msg').textContent='先に「ショートメール」か「電話連絡」を選んでください'; return; }
+  st.fixed=!st.fixed; render2();
+});
+['f_name','f_car','f_plate','f_phone'].forEach(function(id){
+  E(id).addEventListener('input',function(){ E('msg').textContent=''; render2(); });
+});
+E('saveBtn').addEventListener('click',function(){
+  var miss = st.adv?missing():[];
+  if(miss.length){
+    E('msg').className='msg ng';
+    E('msg').textContent='⚠ 保存できません。足りない項目：'+miss.join('／');
+    markBad(true);
+    return;
+  }
+  E('msg').className='msg ok';
+  E('msg').textContent='✅ 保存しました（これは見本なので、実際には何も保存されません）';
+});
+
+render1(); render2();
+</script>
+</body>
+</html>
