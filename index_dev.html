@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795062105198';
+    window.__APP_BUILD='build-1795072306347';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.125.0';
+const APP_VERSION = '3.125.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -10127,14 +10127,28 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
   const makeKey=(d)=>d?`${d._idx??'none'}|${d._slot??'none'}|${d.name??''}`:'';
   const prevKeyRef=useRef('');
   const prevOpenRef=useRef(false);
+  // ★★【重要】カードを【開き直した】時は、打ちかけを捨てて保存されている中身から作り直す
+  //   （v3.125.1・2026-11-19 現場報告）。
+  //   報告：「姓だけの所にフルネームを入れて、保存しないで画面を消したのに、保存されている」。
+  //   調べた結果、サーバーには1文字も書かれていない（開き直しても閉じてもリロードすれば元のまま）。
+  //   ★本当の原因は「同じ予約か」を _idx|_slot|氏名 だけで見ていたこと。
+  //     カードを閉じても form は残るので、同じ予約を開き直すと【打ちかけがそのまま出る】
+  //     ＝保存できたように見える（そのまま保存を押すと本当に書かれる）。
+  //   ★openSeq は handleOpenModal 系＝【人がカードを開いた時】だけ増える。
+  //     代車・レンタカーのピッカーの往復（handleOpenLoanerPicker → handlePickLoaner／handleLoanerBack）と、
+  //     入庫制限で弾かれた時の開き直しでは増えない＝そこでは今までどおり打ちかけを残す（消してはいけない）。
+  //   ★この合図を外さないこと。外すと「保存していないのに保存されたように見える」が再発する。
+  const prevSeqRef=useRef(-1);
 
   useEffect(()=>{
     if(!isOpen){prevOpenRef.current=false;return;}
     const justOpened=!prevOpenRef.current;
     const curKey=makeKey(initialData);
-    const sameBooking=curKey===prevKeyRef.current;
+    const sameOpen=openSeq===prevSeqRef.current;          // ★人が開き直していない（ピッカー往復など）
+    const sameBooking=sameOpen&&curKey===prevKeyRef.current;
     prevOpenRef.current=true;
     prevKeyRef.current=curKey;
+    prevSeqRef.current=openSeq;
 
     // 同じ予約の再open（代車ピッカーから戻るなど）→ formをリセットしない
     // ただしisNew=trueの新規入力は必ずリセット
@@ -10152,7 +10166,7 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
       if(type!=='insp'&&isNew&&!timeSlot){ setKbField('slot'); slotRef.current?.focus(); }
       else { setKbField('name'); nameRef.current?.focus(); }
     },120);
-  },[isOpen,initialData,isNew,currentUser]);
+  },[isOpen,initialData,isNew,currentUser,openSeq]);
 
   useEffect(()=>{
     if(pendingLoanerId!=null){
@@ -16798,6 +16812,7 @@ function AppInner() {
     const dk=`${y}-${m}-${d}`;
     // 仮予約はinspDataに書かないのでlockは本予約確定時のみ取得
     setModalType('insp');setModalDk(dk);setModalIdx(idx||0);setModalSlot('');
+    setModalOpenSeq(q=>q+1);   // ★人が開き直した合図
     setModalIsNew(true);
     setModalData({...prefilledData,_idx:idx||0,bookingStatus:'provisional'});
     setPendingLoanerId(null);setPendingRentalId(null);setPendingRentalRec(null);setPickMode(false);
@@ -16997,6 +17012,7 @@ function AppInner() {
       acquireLock(key,currentUser.name);setCurLockKey(key);
     }
     setModalType(type);setModalDk(dk);setModalIdx(idx>=0?idx:0);setModalSlot(slot||'');
+    setModalOpenSeq(q=>q+1);   // ★人が開き直した合図（前のカードの打ちかけを持ち越さない）
     setModalIsNew(idx<0); // custBookings仮予約の再編集はisNew扱い
     setModalData(bookingData);
     setPendingLoanerId(null);setPendingRentalId(null);setPendingRentalRec(null);setPickMode(false);
