@@ -59,7 +59,12 @@ const signedInInit = ([k, me, stor]) => {
   await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
   await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   await seeText(page, 'スケジュール', 25000);
-  t('車両管理を開ける', await clickText(page, '車両管理') && await seeText(page, 'スペーシアカスタム', 15000));
+  // ★車両管理は v3.80.0（2026-10-29）でナビから【ダッシュボードの中】へ移った（ナビのボタンはもう無い）。
+  await page.evaluate(() => { window.open = () => null; });
+  await page.click('[data-dashnav]');
+  await page.waitForTimeout(600);
+  await page.click('[data-dashtile="vehicle"]');
+  t('車両管理を開ける', await seeText(page, 'スペーシアカスタム', 15000));
   // レンタカーの車両を選ぶ
   await page.evaluate(() => { const el = [...document.querySelectorAll('div')].find(e => e.offsetParent !== null && e.textContent.trim().startsWith('スペーシアカスタム') && e.textContent.length < 40); if (el) el.click(); });
   await page.waitForTimeout(600);

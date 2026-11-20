@@ -38,6 +38,14 @@ const plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso
 const minus = n => plus(-n);
 
 (async () => {
+  // v7（取り込み分と同じ形＝登録日が空で初度は年月だけ）の満了日は【今日の2か月後 + 2年】。
+  //   → 12か月点検の期日（満了−2年）が いつも2か月先 になる。
+  const _n = new Date(); const _dm = _n.getMonth() + 2;
+  const _dy = _n.getFullYear() + Math.floor(_dm / 12), _dmm = (_dm % 12) + 1;
+  const _p = x => String(x).padStart(2, '0');
+  const V7_M12 = _dy + '-' + _p(_dmm) + '-20';                       // 12か月点検の期日
+  const V7_EXPIRY = (_dy + 2) + '-' + _p(_dmm) + '-20';              // 車検満了（期日の2年後）
+  const V7_FIRST = (_dy - 1) + '-' + _p(_dmm);                       // 初度登録（年月だけ）
   const vehicles = [
     // スズキの代車：6か月点検が近い（登録を5.5か月前にする）
     { id: 'v1', group: 'factory', name: 'ハスラー タフワイルド ホワイト', num: '神戸58Aい7177', plate4: '7177', maker: 'スズキ',
@@ -64,7 +72,10 @@ const minus = n => plus(-n);
     // 取り込み分と同じ形（登録日が無く、初度は年月だけ）。満了から逆算して期日が出るか
     { id: 'v7', group: 'factory', name: 'ハスラーG オフブルー1800', num: '神戸58Aき1800', plate4: '1800', maker: 'スズキ',
       colorHex: '#7dd3fc', purpose: 'loaner', store: 'honten', tire: 'summer', insurance: true,
-      regDate: '', firstReg: '2025-11', expiry: '2028-11-20',
+      // ★期日を決め打ちにしないこと（2026-11-20 に踏んだ）。
+      //   12か月点検の期日は【満了日−2年】。固定の日付にすると、今日がその日に追いついた時点で
+      //   「まだ先」でなくなり、期日が出なくなって落ちる（製品側は正しい）。いつも2か月先になるようにする。
+      regDate: '', firstReg: V7_FIRST, expiry: V7_EXPIRY,
       inspections: { m1:{done:true}, m6:{done:true}, m12:[] }, archived:false },
     // 売却済み＝アーカイブ
     { id: 'v4', group: 'factory', name: 'ハスラー Jスタ カーキ（売却済）', num: '神戸582は3182', plate4: '3182', maker: 'スズキ',
@@ -101,7 +112,14 @@ const minus = n => plus(-n);
   await seeText(page, '江川京志', 20000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   await seeText(page, 'スケジュール', 20000); await clickText(page, 'このまま使う');
   await page.waitForTimeout(600);
-  t('車両管理を開ける', await clickText(page, '車両管理'));
+  // ★車両管理は v3.80.0（2026-10-29）でナビから【ダッシュボードの中】へ移った。
+  //   ナビの字で探す書き方だと開けず、以降の画面の検査が全部落ちる（41件の不合格の正体）。
+  //   ダッシュボードは別タブで開く作りなので、window.open を黙らせて【同じタブに重ねて】から中のタイルを押す。
+  await page.evaluate(() => { window.open = () => null; });
+  await page.click('[data-dashnav]');
+  await page.waitForTimeout(600);
+  t('ダッシュボードが開ける', (await page.$('[data-dashtile="vehicle"]')) !== null);
+  t('車両管理を開ける', await page.click('[data-dashtile="vehicle"]').then(() => true, () => false));
   await page.waitForTimeout(1500);
 
   head('① 一覧に出る（工場代車とレンタカーが別）');
@@ -192,7 +210,9 @@ const minus = n => plus(-n);
 
   head('⑨ 期日は車検満了日から逆算（2026-10-05 ユーザー指摘）');
   const m12cell = await cellOf('ハスラーG オフブルー1800',13);
-  t('★12か月点検の期日が 2026/11/20 になる', m12cell.indexOf('2026/11/20') >= 0, m12cell);
+  // ★画面の日付は【ゼロ詰めなし】で出る（2027/1/20）。文字をそのまま見比べないこと。
+  const _ymd = x => x.split('-').map(Number).join('/');
+  t('★12か月点検の期日が 車検満了日から逆算して出る', m12cell.indexOf(_ymd(V7_M12)) >= 0, [m12cell, _ymd(V7_M12)]);
   const expCell = await cellOf('ハスラーG オフブルー1800',7);
   t('★車検満了に「あと○日」を出さない', !/あと/.test(expCell), expCell);
   const doneCell = await cellOf('ハスラーG オフブルー1800',11);
@@ -212,7 +232,9 @@ const minus = n => plus(-n);
   t('★保存すると画面が閉じる', !(await page.evaluate(() => /車両を直す/.test(document.body.innerText))), await page.evaluate(()=>document.body.innerText.slice(0,120)));
   t('★直した名前が一覧に出る', await seeText(page, '（直した）', 6000));
   const after = await page.evaluate(k => (JSON.parse(JSON.stringify(window.__fakeFb.get(k)||[]))||[]).find(x=>x&&x.id==='v7'), STOR + 'vehicles-v2');
-  t('登録日が満了日から入る', !!after && after.regDate === '2025-11-20', after && after.regDate);
+  // 登録日は【満了−3年】＝12か月点検の期日の1年前。ここも決め打ちにしない。
+  const V7_REG = (Number(V7_M12.slice(0, 4)) - 1) + V7_M12.slice(4);
+  t('登録日が満了日から入る', !!after && after.regDate === V7_REG, [after && after.regDate, V7_REG]);
 
   head('⑪ 動きと保険（2026-10-05 ユーザー指示）');
   const anim = await page.evaluate(() => [...document.querySelectorAll('span')].filter(e=>/点検$/.test(e.innerText.trim()))
@@ -251,22 +273,23 @@ const minus = n => plus(-n);
   t('★6か月点検は期日も出す', /[0-9]+\/[0-9]+/.test(m6cell), m6cell);
   const m12cell2 = await cellOf('ハスラーG オフブルー1800',13);
   t('12か月は予定の時だけ期日', /12か月点検/.test(m12cell2), m12cell2);
-  // ナビの印（車両管理ボタンの△!）
-  await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(e=>/スケジュール/.test(e.innerText)&&e.offsetParent!==null&&e.innerText.replace(/s/g,'').length<12); if(b)b.click(); });
+  // ★知らせの印（2026-10-29 にナビの「車両管理」ボタンそのものが無くなった）。
+  //   いまは【スケジュール画面のダッシュボードのボタン】の右上に「！」が出る（data-dashbang）。
+  //   色と大きさは車検カレンダーの「！」にそろえてある（CALBANG_YEL・DASHBANG）。
+  await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(e=>/^.{0,3}スケジュール$/.test(e.innerText.trim())&&e.offsetParent!==null); if(b)b.click(); });
   await page.waitForTimeout(1200);
-  const mark = await page.evaluate(() => { const b=[...document.querySelectorAll('button')].find(e=>/車両管理/.test(e.innerText)); if(!b)return null;
-    const sp=[...b.querySelectorAll('span')].find(e=>e.innerText.trim()==='⚠'); if(!sp)return null; const st=getComputedStyle(sp);
-    return {color:st.color,cnt:st.animationIterationCount,dur:st.animationDuration,num:/[0-9]/.test(b.innerText)}; });
-  t('★ナビの印は △! になっている', !!mark, mark);
-  t('★色は 黄・オレンジ・赤 のどれか', !!mark && ['rgb(234, 179, 8)','rgb(249, 115, 22)','rgb(220, 38, 38)'].includes(mark.color), mark);
-  t('★3秒で止まる', !!mark && mark.cnt==='4' && parseFloat(mark.dur)===0.75, mark);
-
+  const mark = await page.evaluate(() => { const sp=document.querySelector('[data-dashbang]'); if(!sp)return null;
+    const st=getComputedStyle(sp); return {bg:st.backgroundColor,bd:st.borderTopColor,w:Math.round(sp.getBoundingClientRect().width),txt:sp.innerText.trim()}; });
+  t('★ダッシュボードのボタンに「！」が出る', !!mark && mark.txt==='!', mark);
+  t('★色は蛍光の黄（CALBANG_YEL）', !!mark && mark.bg==='rgb(255, 242, 0)', mark);
+  t('★濃い青の帯に沈まないよう白ふち', !!mark && mark.bd==='rgb(255, 255, 255)', mark);
+  t('★大きさは DASHBANG（23px）', !!mark && Math.abs(mark.w-23)<=1, mark);
   // ── ⑦ 点検の自動設計（画面の純関数をそのまま取り出して確かめる）──
   console.log(String.fromCharCode(10) + '■ ⑦ 点検の自動設計 1か月→6か月→12か月→12か月→車検');
   const SRC2 = fs.readFileSync(path.join(DIR, process.env.SRC || 'index_dev.html'), 'utf8');
   const _f = SRC2.indexOf('const vehIsSuzuki='), _to = SRC2.indexOf('const vehInspState=');
   const vbox = {};
-  new Function('box', SRC2.slice(_f, _to) + ';Object.assign(box,{vehAddMonths,vehBase,vehIsNewPeriod,vehM12List,vehInspDue,vehAlertKinds});')(vbox);
+  new Function('box', SRC2.slice(_f, _to) + ';Object.assign(box,{vehAddMonths,vehBase,vehIsNewPeriod,vehM12List,vehInspDue,vehAlertKinds});try{Object.assign(box,{vehIsKei,vehClassNo});}catch(e){}')(vbox);
   const mo = (a, b) => { const p = String(a).split('-').map(Number), q = String(b).split('-').map(Number); return (q[0] - p[0]) * 12 + (q[1] - p[1]); };
   // 新車の乗用（登録から車検満了まで36か月）
   const car = { id: 1, maker: 'スズキ', regDate: '2026-04-20', expiry: '2029-04-20' };
@@ -291,6 +314,39 @@ const minus = n => plus(-n);
   t('★⑦ 8/31 の1か月後は 9/30（10/1 にならない）', vbox.vehAddMonths('2026-08-31', 1) === '2026-09-30', vbox.vehAddMonths('2026-08-31', 1));
   t('★⑦ うるう日 2/29 の12か月後は 2/28', vbox.vehAddMonths('2024-02-29', 12) === '2025-02-28', vbox.vehAddMonths('2024-02-29', 12));
   t('⑦ 月末でない日はそのまま', vbox.vehAddMonths('2026-04-20', 6) === '2026-10-20', vbox.vehAddMonths('2026-04-20', 6));
+
+  // ── ⑬ 点検アラートは【軽自動車だけ】（2026-11-20 ユーザー指示）──
+  //   なぜ：点検費用がスズキから出るのは軽だけ。普通乗用車は同じスズキでも出ないので知らせる意味がない。
+  //   レンタカーは今までどおり【12か月点検だけ】（普通車も含めて全車）。1か月・6か月は出さない。
+  console.log(String.fromCharCode(10) + '■ ⑬ 点検アラートは軽自動車だけ');
+  const KEI = { id: 11, maker: 'スズキ', num: '神戸58Aい7177', purpose: 'loaner' };
+  const FUTSU = { id: 12, maker: 'スズキ', num: '神戸505す3119', purpose: 'loaner' };
+  const RENT_F = { id: 13, maker: 'スズキ', num: '神戸505わ4230', purpose: 'rental' };
+  const RENT_T = { id: 14, maker: 'トヨタ', num: '神戸303わ3869', purpose: 'rental' };
+  const k = v => vbox.vehAlertKinds(v).join(',');
+  // ★道具そのものが無い版（直す前）でも、検査が落ちずに FAIL と出るようにする
+  const kei = v => (typeof vbox.vehIsKei === 'function') ? vbox.vehIsKei(v) : '(vehIsKei が無い)';
+  const cls = x => (typeof vbox.vehClassNo === 'function') ? vbox.vehClassNo(x) : '(vehClassNo が無い)';
+  t('⑬ 軽／普通を見分ける道具がある', typeof vbox.vehIsKei === 'function' && typeof vbox.vehClassNo === 'function');
+  t('⑬ スズキの軽は 1か月・6か月・12か月とも出す', k(KEI) === 'm1,m6,m12', k(KEI));
+  t('★⑬ スズキの【普通車】は1つも出さない', k(FUTSU) === '', k(FUTSU));
+  t('★⑬ レンタカー（普通車）は12か月だけ', k(RENT_F) === 'm12', k(RENT_F));
+  t('⑬ レンタカー（スズキ以外）も12か月だけ', k(RENT_T) === 'm12', k(RENT_T));
+  t('⑬ スズキ以外の軽は出さない（費用が出ないため）', k({ id: 15, maker: 'トヨタ', num: '神戸58Aあ1111' }) === '');
+  t('⑬ 保管箱の車は出さない', k({ id: 16, maker: 'スズキ', num: '神戸58Aあ1111', archived: true }) === '');
+  // 軽／普通の見分け＝ナンバーの分類番号（頭1桁の 5 では判断できない。505 は普通）
+  t('⑬ 58x は軽乗用', kei({ num: '神戸582は3182' }) === true);
+  t('⑬ 58A（英字つき）も軽乗用', kei({ num: '神戸58Aき1800' }) === true);
+  t('★⑬ 全角の 58Ａ も軽と読む', kei({ num: '神戸５８Ａき1800' }) === true);
+  t('⑬ 48x は軽貨物', kei({ num: '神戸480よ824' }) === true);
+  t('★⑬ 505 は普通（頭が5でも軽ではない）', kei({ num: '神戸505わ4230' }) === false);
+  t('⑬ 3xx は普通乗用', kei({ num: '神戸302あ184' }) === false);
+  t('⑬ 分類番号が読めない時は分からない（null）', kei({ num: 'あああ' }) === null, kei({ num: 'あああ' }));
+  t('⑬ 分類番号を取り出せる', cls('神戸58Aい7177') === '58A', cls('神戸58Aい7177'));
+  // ★登録画面の「軽／普通」の選択はナンバーより強い（分類番号が読めない車のため）
+  t('★⑬ 手で「普通車」にしたら軽ナンバーでも普通あつかい', kei({ num: '神戸58Aい7177', kei: 'normal' }) === false);
+  t('★⑬ 手で「軽」にしたら読めないナンバーでも軽あつかい', kei({ num: '神戸787く8000', kei: 'kei' }) === true);
+  t('★⑬ 手で軽にしたスズキ車は 1か月・6か月も出る', k({ id: 17, maker: 'スズキ', num: '神戸787く8000', kei: 'kei' }) === 'm1,m6,m12');
 
   t('JSエラーなし', errs.length === 0, errs.slice(0, 3));
 

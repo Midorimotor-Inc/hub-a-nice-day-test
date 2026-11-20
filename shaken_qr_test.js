@@ -426,7 +426,13 @@ const fillLabeled = (page, label, value) => page.evaluate(([lb, v]) => {
   await seeText(pc, 'スケジュール', 25000);
   await clickText(pc, 'このまま使う');
   await pc.waitForTimeout(600);
-  await pc.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('車両管理') && el.offsetParent !== null); if (b) b.click(); });
+  // ★車両管理は v3.80.0（2026-10-29）でナビから【ダッシュボードの中】へ移った。
+  //   ナビの字で探す書き方だと開けず、以降の 📄 車検証 の検査が全部落ちる。
+  //   ダッシュボードは別タブで開く作りなので、window.open を黙らせて同じタブに重ねてからタイルを押す。
+  await pc.evaluate(() => { window.open = () => null; });
+  await pc.click('[data-dashnav]');
+  await pc.waitForTimeout(600);
+  await pc.click('[data-dashtile="vehicle"]');
   await pc.waitForTimeout(1500);
   t('スマホから入れた車が一覧に出る', await seeText(pc, 'スペーシア X パール', 10000));
 

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795163530626';
+    window.__APP_BUILD='build-1795165441793';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.125.4';
+const APP_VERSION = '3.126.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -12123,7 +12123,7 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
   const [f,setF]=useState(()=>({
     id:(v&&v.id)||('v'+Date.now()),
     group:(v&&v.group)||'factory', name:(v&&v.name)||'', num:(v&&v.num)||'',
-    maker:(v&&v.maker)||'', model:(v&&v.model)||'', cargo4:!!(v&&v.cargo4),
+    maker:(v&&v.maker)||'', model:(v&&v.model)||'', cargo4:!!(v&&v.cargo4), kei:(v&&v.kei)||'',
     colorHex:(v&&v.colorHex)||'', purpose:(v&&v.purpose)||'loaner', user:(v&&v.user)||'',
     store:(v&&v.store)||'honten', tire:(v&&v.tire)||'summer',
     insurance:v?!!v.insurance:true, nav:(v&&v.nav)||'', navYen:(v&&v.navYen)||'', supplier:(v&&v.supplier)||'',
@@ -12164,7 +12164,18 @@ const VehicleEdit=memo(({v,onSave,onClose})=>{
             <input value={f.name} onChange={e=>set('name',e.target.value)} placeholder="例：ハスラー タフワイルドTB ホワイト" style={INP}/>
           </div>
           <div><div style={LB}>ナンバー（FULL）*</div><input value={f.num} onChange={e=>set('num',e.target.value)} placeholder="例：神戸58Aい7177" style={INP}/></div>
-          <div><div style={LB}>メーカー（スズキなら点検アラートが出ます）</div><input value={f.maker} onChange={e=>set('maker',e.target.value)} placeholder="例：スズキ" style={INP}/></div>
+          <div><div style={LB}>メーカー（スズキの軽自動車なら1か月・6か月の点検アラートが出ます）</div><input value={f.maker} onChange={e=>set('maker',e.target.value)} placeholder="例：スズキ" style={INP}/></div>
+          <div><div style={LB}>軽／普通（点検アラートの判定に使います）</div>
+            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+              {[['','自動（ナンバーから）'],['kei','軽自動車'],['normal','普通車']].map(([id,lb])=>(
+                <button key={id||'auto'} data-vehkei={id||'auto'} onClick={()=>set('kei',id)}
+                  style={{padding:'5px 10px',borderRadius:20,fontSize:11.5,fontWeight:800,cursor:'pointer',border:'2px solid '+((f.kei||'')===id?'#047857':'#e5e7eb'),background:(f.kei||'')===id?'#047857':'white',color:(f.kei||'')===id?'white':'#64748b'}}>{lb}</button>
+              ))}
+            </div>
+            <div data-vehkeijudge style={{fontSize:10.5,color:'#64748b',marginTop:4}}>
+              {vehIsKei(f)===true?'→ 軽自動車として扱います':vehIsKei(f)===false?'→ 普通車として扱います':'→ ナンバーから見分けがつきません（手で選んでください）'}
+            </div>
+          </div>
           <div><div style={LB}>登録日*</div><HubDatePick value={f.regDate} onChange={v=>set('regDate',v)} clearable={false} placeholder="押して選ぶ" style={{...INP,background:'white'}}/></div>
           <div><div style={LB}>車検満了日*</div><HubDatePick value={f.expiry} onChange={v=>set('expiry',v)} clearable={false} placeholder="押して選ぶ" style={{...INP,background:'white'}}/></div>
           <div><div style={LB}>初度登録*（年月）</div><input type="month" value={String(f.firstReg||'').slice(0,7)} onChange={e=>set('firstReg',e.target.value)} style={INP}/></div>
@@ -12306,8 +12317,8 @@ const VehicleDetail=memo(({v,cfg,onChange,onClose,onDelete,linked,onLink,onUnlin
 
       <div style={LB}>🔧 点検</div>
       <div style={{...BOX,padding:'4px 11px'}}>
-        {vehAlertKinds(v).length===0&&<div style={{color:'#94a3b8',fontSize:11,padding:'6px 0'}}>スズキ車ではないので点検アラートは出しません（レンタカーは12か月点検だけ出します）</div>}
-        {vehAlertKinds(v).length===1&&<div style={{color:'#64748b',fontSize:11,padding:'6px 0'}}>スズキ車以外のレンタカーなので、12か月点検だけ知らせます</div>}
+        {vehAlertKinds(v).length===0&&<div style={{color:'#94a3b8',fontSize:11,padding:'6px 0'}}>点検アラートは出しません（1か月・6か月はスズキの軽自動車だけ＝点検費用がスズキから出る車。レンタカーは12か月点検だけ出します）</div>}
+        {vehAlertKinds(v).length===1&&<div style={{color:'#64748b',fontSize:11,padding:'6px 0'}}>レンタカーなので12か月点検（法定点検）だけ知らせます{vehIsKei(v)===false?'（普通車なので1か月・6か月は出しません）':''}</div>}
         {insRow('m1','1か月')}
         {insRow('m6','6か月')}
         {insRow('m12','12か月')}
@@ -12634,13 +12645,37 @@ const VEH_ALERT_DEF={ y1:0, o1:30, y6:90, o6:30, y12:0, o12:30, yCar:90, rCar:0 
 const vehAlertCfg=(o)=>({...VEH_ALERT_DEF,...(o&&typeof o==='object'?o:{})});
 // スズキ車か（メーカー欄が空の時は車名から推測しない＝出さない）
 const vehIsSuzuki=v=>/スズキ|SUZUKI|suzuki/.test(String(v&&v.maker||''));
-// ★どの点検を知らせるか（2026-10-05 ユーザー決定）
-//   スズキ車 … 1か月・6か月・12か月（無料点検はスズキの新車点検なので）
-//   スズキ以外のレンタカー … 12か月点検だけ（法定点検）
-//   それ以外 … 出さない
+// ★軽自動車か（2026-11-20 ユーザー指示）
+//   見分けは【ナンバーの分類番号】。軽乗用＝58x（58A・58Ａ も）／軽貨物＝48x。
+//   普通・小型は 3xx（普通乗用）・5xx（小型乗用）・4xx（小型貨物）・1xx/2xx（貨物）。
+//   ★「505」は小型乗用＝普通車。「58」で始まるものだけが軽。頭1桁の 5 で判断しないこと
+//     （本番の実データでも シエラ・ノマド・スイフト・クロスビー・ソリオ が 505＝普通車）。
+//   見分けがつかない時は null を返し、点検アラートは出さない（勝手に軽と決めない）。
+//   ★手で決めた時は v.kei（'kei' / 'normal'）が優先。車両の編集画面で選べる。
+const vehHan=s=>String(s==null?'':s).replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]/g,'');
+const vehClassNo=s=>{const m=vehHan(s).match(/([0-9]{1,3}[A-Za-z]?)/);return m?m[1]:'';};
+const vehIsKei=v=>{
+  if(!v)return null;
+  if(v.kei==='kei')return true;
+  if(v.kei==='normal')return false;
+  const c=vehClassNo(v.num);
+  if(!c)return null;
+  if(/^(58|48)/.test(c))return true;
+  if(/^[1-5]/.test(c))return false;
+  return null;
+};
+// ★どの点検を知らせるか（2026-11-20 ユーザー決定。2026-10-05 の決まりを見直した）
+//   ★なぜ知らせるか＝【1か月・6か月の点検費用がスズキ自動車から出る】のを忘れないため。
+//     もらえるのは【スズキの軽自動車】だけ。普通乗用車は同じスズキでも出ないので知らせない。
+//   ★レンタカーの12か月点検は法定点検なので【全車】（普通乗用車も）今までどおり知らせる。
+//     ただしレンタカーの普通乗用車に 1か月・6か月 は出さない。
+//   スズキの軽自動車 … 1か月・6か月・12か月
+//   レンタカー（軽でも普通でも）… 12か月だけ
+//   それ以外（普通乗用車の代車・展示車・社用車／スズキ以外の軽）… 出さない
+//   ★順番が大事：先に「スズキの軽」を見る（スズキの軽のレンタカーは1か月・6か月も出す）。
 const vehAlertKinds=v=>{
   if(!v||v.archived)return[];
-  if(vehIsSuzuki(v))return['m1','m6','m12'];
+  if(vehIsSuzuki(v)&&vehIsKei(v)===true)return['m1','m6','m12'];
   if(v.purpose==='rental'||v.group==='rental')return['m12'];
   return[];
 };
