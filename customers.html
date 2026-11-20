@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1795135288073';
+  window.__APP_BUILD='build-1795163530626';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -171,7 +171,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.125.3'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.125.4'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -3972,9 +3972,13 @@ const App=()=>{
         const changedFiles=new Set();
         const tsFiles={};            // ts→該当ファイル名(月)の集合。ファイル単位でGAS反映を確認するため
         let verifiedTs=new Set();    // GASチャンクに確実に保存できた通知のtsだけ。これだけをキューから消す
+        // ★当てる相手（月・行・通知）をここで控える。findUpd は【元の行オブジェクト】でしか
+        //   引けない（Map のキーが物そのもの）ので、next を作った後では引けない。
+        const _appliedRows=[];
         filesRef.current.forEach(f=>(f.customers||[]).forEach(c=>{
           const u=findUpd(c);
-          if(u){appliedTs.add(u.ts);changedFiles.add(f.name);(tsFiles[u.ts]=tsFiles[u.ts]||new Set()).add(f.name);}
+          if(u){appliedTs.add(u.ts);changedFiles.add(f.name);(tsFiles[u.ts]=tsFiles[u.ts]||new Set()).add(f.name);
+            _appliedRows.push({file:f.name,c,u});}
         }));
         if(appliedTs.size>0){
           // 保存後にGASを読み返して実反映を確認（sSetはno-corsで失敗を検知できないため）。
@@ -3988,9 +3992,44 @@ const App=()=>{
                 //   1分以上占有していた。＝他の保存が巻き添えで遅くなる/溢れる原因。
                 //   通知の送り主がすでに保存済みなら書き込みは0本で済む。
                 //   欠けている(_complete===false)時だけは全部書き直して修復する。
+                // ★★【2026-11-20・重大】書くのは【サーバーの今の値＋この通知の項目だけ】。
+                //   それまでは手元の配列 f を渡していたので、saveFileChunked が
+                //   チャンク（約100行）を【手元の写しから丸ごと】書き直していた
+                //   （prevCustomers は「書かずに飛ばすチャンク」を決めるためだけに使われる）。
+                //   顧客ファイルのチャンクは購読していない（fbLive は cust-updates と cf-index だけ）ので、
+                //   開きっぱなしのタブの行は何日でも古いまま＝通知が1件届くたびに、
+                //   同じチャンクの【他の人の行】が数日前の姿へ巻き戻る。
+                //   しかも向きが両方あるので、古い写しを持つ端末どうしが100行ずつ投げ合い、
+                //   キャンセル⇄本予約が永久に往復する（2026-11-20 に本番で5件発覚）。
+                //   ★手元の配列を渡す形に戻さないこと。他の書き込み経路（予約の保存・投函・
+                //     reconcile・cfSaveRowFields）には 2026-11-12／11-16 に同じ直しが入っている。
                 const _cur=await loadFileChunked(f.name,true).catch(()=>null);   // ★サーバーから読み直す
-                await saveFileChunked(f,(_cur&&_cur._complete!==false)?_cur.customers:null);
-                try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(f));}catch(e){}
+                const _base=(_cur&&Array.isArray(_cur.customers)&&_cur._complete!==false)?_cur.customers:null;
+                if(!_base){
+                  // ★欠けて読めた値を「それが全部」と見なさない／手元で埋めない（2026-11-16 と同じ決まり）
+                  console.warn('[SYNC] サーバーの今の値を読めないので書きません',f.name,'retry',_a+1);
+                  await new Promise(r=>setTimeout(r,900*(_a+1)));
+                  continue;
+                }
+                const _ups=_appliedRows.filter(x=>x.file===f.name);
+                const _onlyF=u=>{const{custId:_i,name:_n,no:_o,ts:_t,carType:_c,...sf}=u;return sf;};
+                const _hitOf=bc=>_ups.find(x=>
+                  (x.c.custId&&bc.custId&&String(x.c.custId)===String(bc.custId))||updRank(x.u,bc)>=2);
+                _ups.forEach(x=>{if(x.c.custId)cfHoldMark(x.c.custId,Object.keys(_onlyF(x.u)));});
+                const _merged=_base.map(bc=>{
+                  if(!bc)return bc;
+                  const h=_hitOf(bc);
+                  return h?{...bc,..._onlyF(h.u)}:bc;
+                });
+                // サーバーに行そのものが無い時だけ、手元の行＋通知の項目で足す（修復）
+                _ups.forEach(x=>{
+                  if(!x.c.custId)return;
+                  if(_merged.some(bc=>bc&&bc.custId&&String(bc.custId)===String(x.c.custId)))return;
+                  _merged.push({...x.c,..._onlyF(x.u)});
+                });
+                const _mf={...f,customers:_merged};
+                await saveFileChunked(_mf,_base);
+                try{localStorage.setItem(STOR+'cf-'+safeName(f.name),JSON.stringify(_mf));}catch(e){}
                 await new Promise(r=>setTimeout(r,2000));
                 const chk=await loadFileChunked(f.name);
                 const okAll=chk&&Array.isArray(chk.customers)&&fresh.every(u=>{

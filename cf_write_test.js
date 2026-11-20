@@ -17,6 +17,7 @@
 //     ② サーバーの今の値が読めない時、黙って「保存できた」にしない（案内を出す）
 //     ③ その時の控え（未反映の予約）から再送すると、リストの行も直る
 //     ④ 中身の見張り（手元の配列をサーバーの値の代わりに使っていない）
+//     ⑤ 通知を当てる時、同じチャンクの【他の行】を手元の古い写しで上書きしない（2026-11-20）
 //   実行: node cf_write_test.js
 const path = require('path');
 const fs = require('fs');
@@ -119,6 +120,7 @@ const srvInsp = (page, name) => page.evaluate(([stor, nm]) => {
 
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
+  if(process.env.LOG)page.on('console',m=>{const x=m.text();if(/SYNC|RECONCILE|CF/.test(x))console.log('    [画面] '+x.slice(0,200));});
   const dialogs = [];
   page.on('dialog', async d => { dialogs.push(d.message()); await d.accept().catch(() => {}); });
   await page.goto('http://localhost:' + PORT + '/customers.html', { waitUntil: 'domcontentloaded' });
@@ -219,6 +221,41 @@ const srvInsp = (page, name) => page.evaluate(([stor, nm]) => {
   t('★再送すると顧客リスト（サーバー）も本予約になる', r2 && r2.status === 'confirm', r2);
   t('★入庫日も入る', r2 && r2.entryDate === DKN, r2);
 
+  head('⑤ 通知を当てる時、同じチャンクの【他の行】を手元の古い写しで上書きしない');
+  // ★2026-11-20 に本番で5件見つかった「キャンセル⇄本予約が永久に往復する」の再現。
+  //   顧客ファイルのチャンクは購読していない（fbLive は cust-updates と cf-index だけ）ので、
+  //   開きっぱなしのタブが持つ行は何日でも古いまま。そこへ【別の人の】通知が1件届くと、
+  //   チャンク（約100行）が手元の写しから丸ごと書き直され、他の人の行が巻き戻っていた。
+  // 画面には見せずに、サーバーの 客3 だけを「キャンセル」に変える
+  await page.evaluate((stor) => {
+    const c = window.__fakeFb.get(stor + 'cf-202701-chunk-0') || [];
+    window.__fakeFb.set(stor + 'cf-202701-chunk-0',
+      c.map(x => (x && x.name === '客3') ? Object.assign({}, x, { status: 'cancel', entryDate: '', linkedInspDate: '' }) : x));
+  }, STOR);
+  let r3 = await srvRow(page, '客3');
+  t('下ごしらえ：サーバーの 客3 はキャンセルになった', r3 && r3.status === 'cancel', r3);
+  t('下ごしらえ：画面（手元）の 客3 はまだ古い（未予約のまま）',
+    await page.evaluate(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find(x => ((x.children[1] || {}).innerText || '').indexOf('客3') >= 0);
+      return !!tr && !/キャンセル/.test(tr.innerText || '');
+    }));
+  // スケジュール側から【客1】のキャンセル通知を1件積む（＝予約を消した時に出るもの）
+  await page.evaluate((stor) => {
+    window.__fakeFb.set(stor + 'cust-updates', [{
+      custId: '202701__1__客1__1001', name: '客1', no: 1001,
+      status: 'cancel', entryDate: '', linkedInspDate: '', ts: Date.now() + 1000,
+    }]);
+  }, STOR);
+  await page.waitForTimeout(32000);
+  r1 = await srvRow(page, '客1');
+  t('★通知のとおり 客1 はキャンセルになる', r1 && r1.status === 'cancel', r1);
+  t('★客1 の入庫日も空になる', r1 && !r1.entryDate, r1);
+  r3 = await srvRow(page, '客3');
+  t('★★客3 のキャンセルが巻き戻らない（他の行を古い写しで上書きしない）',
+    r3 && r3.status === 'cancel', r3);
+  let r2b = await srvRow(page, '客2');
+  t('★客2 の本予約も巻き添えにならない', r2b && r2b.status === 'confirm', r2b);
+
   head('④ 中身の見張り');
   const SRC = fs.readFileSync(path.join(DIR, 'customers.html'), 'utf8');
   t('★手元の配列をサーバーの値の代わりに使っていない（:changedFile.customers が無い）',
@@ -227,6 +264,10 @@ const srvInsp = (page, name) => page.evaluate(([stor, nm]) => {
     /サーバーの今の値を読めない/.test(SRC));
   t('読む時は【サーバー】から読み直している（fresh）',
     SRC.indexOf("loadFileChunked(changedFile.name,true)") >= 0);
+  t('★通知を当てる時も【サーバーの今の値＋通知の項目だけ】を書いている',
+    SRC.indexOf('const _mf={...f,customers:_merged};') >= 0);
+  t('★★通知を当てる時に手元の配列を丸ごと渡していない（saveFileChunked(f, が無い）',
+    SRC.indexOf('await saveFileChunked(f,') < 0);
 
   head('通し');
   t('JSエラーが出ていない', errs.length === 0, errs.slice(0, 3));
