@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795074331413';
+  window.__APP_BUILD='build-1795135288073';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.125.2';
+const MOBILE_VERSION='3.125.3';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -6087,6 +6087,32 @@ const calcHolidayCarry=(name,cy,cm,dayOff,isClosed,mhol)=>{
   const carried=days.slice(0,Math.min(carry,days.length));
   return {carryIn:carry,company,taken:t,quota,remain:quota==null?null:Math.max(0,quota-t),over,carried,carriedN:carried.length,fromM:cm===0?12:cm};
 };
+// ── 枠が空いたら有給を休日へ戻す（2026-11-20 ユーザー決定・案②）──────────────
+//   枠（会社の休日数＋前月からの繰り越し）を使い切った後に休日を入れると、その日は自動で有給になる。
+//   ところが、そのあと休日を1日外しても【有給は有給のまま残る】ので、
+//   休んだ合計は変わっていないのに「繰越1日」が出てしまう。
+//   2026-11-19 現場報告：11月を「休日9日＋有給1日」で入れたあと休日を外して9日にしたら、
+//   有給1日が残り「繰越し1日／翌月に1日繰越」と出た（会社の休日数は9日）。
+//   → 休日を外して【枠がいっぱいでなくなった】時だけ、その月の有給を休日へ戻す。
+//   ★★呼ぶのは「休日（dayoff）」を外した時だけ。**有給を足した直後に呼んではいけない**
+//     （わざと入れた有給が、その場で休日に化ける）。
+//   ★★【呼ぶ前に必ず見る条件】その操作の【前】に枠がいっぱい（taken >= quota）だったこと。
+//     これが「その有給は枠からあふれて自動でそうなった」ことの唯一の手がかり。
+//     ★この条件を外すと、月の途中でわざと入れた有給まで休日に戻る。絶対に外さないこと。
+//   戻すのは空いた日数ぶんだけ。**日付の遅い有給から**（あふれたのは後から足した日なので）。
+//   返すのは「休日に戻す日（日にち）」の配列。この関数はデータを1文字も書かない。
+const refillOffFromLeave=(name,cy,cm,dayOff,pleave,isClosed,mhol)=>{
+  const c=calcHolidayCarry(name,cy,cm,dayOff,isClosed,mhol);
+  if(!c||c.quota==null)return [];
+  const room=c.quota-c.taken;
+  if(room<=0)return [];
+  const dim=new Date(cy,cm+1,0).getDate(), days=[];
+  for(let d=1;d<=dim;d++){
+    if(isClosed(cy,cm,d))continue;                 // 店休日に有給は入らない
+    if((((pleave||{})[`${cy}-${cm+1}-${d}`])||[]).includes(name))days.push(d);
+  }
+  return days.reverse().slice(0,Math.min(room,days.length));
+};
 // バッジの文言：翌月へ回る分だけ「繰り越しN日」。使い切っていれば何も出さない（空文字）。枠を超えた分は有給扱いと出す
 const carryLabel=(c,long)=>{
   if(!c||c.quota==null)return '';
@@ -6168,7 +6194,16 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
   const commit=async()=>{
     if(!pendCount||busy)return;
     setBusy(true);
-    let saved=0, auto=[];
+    let saved=0, auto=[], back=[];
+    const isCl=(yy,mm,dd)=>calIsClosed(new Date(yy,mm,dd),cDays,cDates,overrideOpen);
+    // ★枠が空いた時に有給を休日へ戻すため、休日・有給の【手元の写し】を持つ（2026-11-20・案②）。
+    //   offs / leaves は state なので、この回し込みの中では古いまま更新されない。
+    const lOff={}, lPl={};
+    for(const k of Object.keys(offs||{}))lOff[k]=Array.isArray(offs[k])?[...offs[k]]:[];
+    for(const k of Object.keys(leaves||{}))lPl[k]=Array.isArray(leaves[k])?[...leaves[k]]:[];
+    const mInfo={};   // 'y-m1' → {y,m0,quota,wasFull,offCleared}
+    const lAdd=(o,dk,n)=>{o[dk]=[...(o[dk]||[]).filter(x=>x!==n),n];};
+    const lDel=(o,dk,n)=>{o[dk]=(o[dk]||[]).filter(x=>x!==n);};
     try{
       // 月ごとに「今月の枠（会社の休日数＋繰越）」を見ながら、日付順に保存する。枠を使い切ったら休日は有給として入れる（2026-09-21 ユーザー決定）
       const dks=Object.keys(pendDays).sort((x,y)=>{const a=x.split('-').map(Number),b=y.split('-').map(Number);return a[0]-b[0]||a[1]-b[1]||a[2]-b[2];});
@@ -6178,25 +6213,43 @@ const HolidayView=({user,vsId,viewStore,adminMode,staffH,staffS,dayOffH,dayOffS,
         const c=calcHolidayCarry(target,y,m1-1,offs,(yy,mm,dd)=>calIsClosed(new Date(yy,mm,dd),cDays,cDates,overrideOpen),monthlyHolidays);
         if(takenBy[mk]==null)takenBy[mk]=c?c.taken:0;
         const quota=c&&c.quota!=null?c.quota:null;
+        // ★この月を触る前に枠がいっぱいだったか（有給を休日へ戻してよいかの唯一の手がかり）
+        if(!mInfo[mk])mInfo[mk]={y:y,m0:m1-1,quota:quota,wasFull:quota!=null&&takenBy[mk]>=quota,offCleared:false};
         const cur=stateOf(dk), want=pendDays[dk];
         if(want==='dayoff'){
           if(cur==='dayoff')continue;
           if(quota!=null&&takenBy[mk]>=quota){
             if(cur==='leave')continue;                                     // すでに有給ならそのまま
             await onToggle(store,'leave',dk,target); auto.push(m1+'/'+d);  // 枠を使い切っているので有給として入れる
+            lAdd(lPl,dk,target); lDel(lOff,dk,target);
           }
-          else { await onToggle(store,'dayoff',dk,target); takenBy[mk]++; }  // 有給だった日は onToggle が外してくれる
+          else { await onToggle(store,'dayoff',dk,target); takenBy[mk]++;    // 有給だった日は onToggle が外してくれる
+            lAdd(lOff,dk,target); lDel(lPl,dk,target); }
           saved++;
         }else if(want==='leave'){
           if(cur==='leave')continue;
           if(cur==='dayoff')takenBy[mk]--;
           await onToggle(store,'leave',dk,target); saved++;
+          lAdd(lPl,dk,target); lDel(lOff,dk,target);
         }else{ // clear
-          if(cur==='dayoff'){ await onToggle(store,'dayoff',dk,target); takenBy[mk]--; saved++; }
-          else if(cur==='leave'){ await onToggle(store,'leave',dk,target); saved++; }
+          if(cur==='dayoff'){ await onToggle(store,'dayoff',dk,target); takenBy[mk]--; saved++;
+            lDel(lOff,dk,target); mInfo[mk].offCleared=true; }              // ★休日を外した＝枠が空いた合図
+          else if(cur==='leave'){ await onToggle(store,'leave',dk,target); saved++; lDel(lPl,dk,target); }
         }
       }
-      setAutoLeaveMsg(saved?`${saved}日を保存しました${auto.length?'。'+auto.join('・')+' は休日の枠を使い切っているので有給として入れました':''}`:'変更はありませんでした');
+      // ★休日を外して枠がいっぱいでなくなった月だけ、あふれて有給になっていた日を休日へ戻す
+      //   （2026-11-20・案②。有給を足した／外しただけの月には絶対に手を出さない）
+      for(const mk of Object.keys(mInfo)){
+        const I=mInfo[mk];
+        if(!I.offCleared||!I.wasFull)continue;
+        for(const d of refillOffFromLeave(target,I.y,I.m0,lOff,lPl,isCl,monthlyHolidays)){
+          const dk2=`${I.y}-${I.m0+1}-${d}`;
+          await onToggle(store,'dayoff',dk2,target);
+          lAdd(lOff,dk2,target); lDel(lPl,dk2,target);
+          back.push((I.m0+1)+'/'+d);
+        }
+      }
+      setAutoLeaveMsg(saved?`${saved}日を保存しました${auto.length?'。'+auto.join('・')+' は休日の枠を使い切っているので有給として入れました':''}${back.length?'。休日の枠が空いたので '+back.join('・')+' の有給を休日に戻しました':''}`:'変更はありませんでした');
       setEditMode(false); setPendDays({});
     }finally{ setBusy(false); }
   };

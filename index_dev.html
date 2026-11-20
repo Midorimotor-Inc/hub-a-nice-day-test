@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795074331413';
+    window.__APP_BUILD='build-1795135288073';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.125.2';
+const APP_VERSION = '3.125.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -538,6 +538,32 @@ const calcHolidayCarry=(name,cy,cm,dayOff,isClosed,mhol)=>{
   const days=[];{const dim=new Date(cy,cm+1,0).getDate();for(let d=1;d<=dim;d++){if(!isClosed(cy,cm,d)&&((dayOff||{})[`${cy}-${cm+1}-${d}`]||[]).includes(name))days.push(d);}}
   const carried=days.slice(0,Math.min(carry,days.length));
   return {carryIn:carry,company,taken:t,quota,remain:quota==null?null:Math.max(0,quota-t),over,carried,carriedN:carried.length,fromM:cm===0?12:cm};
+};
+// ── 枠が空いたら有給を休日へ戻す（2026-11-20 ユーザー決定・案②）──────────────
+//   枠（会社の休日数＋前月からの繰り越し）を使い切った後に休日を入れると、その日は自動で有給になる。
+//   ところが、そのあと休日を1日外しても【有給は有給のまま残る】ので、
+//   休んだ合計は変わっていないのに「繰越1日」が出てしまう。
+//   2026-11-19 現場報告：11月を「休日9日＋有給1日」で入れたあと休日を外して9日にしたら、
+//   有給1日が残り「繰越し1日／翌月に1日繰越」と出た（会社の休日数は9日）。
+//   → 休日を外して【枠がいっぱいでなくなった】時だけ、その月の有給を休日へ戻す。
+//   ★★呼ぶのは「休日（dayoff）」を外した時だけ。**有給を足した直後に呼んではいけない**
+//     （わざと入れた有給が、その場で休日に化ける）。
+//   ★★【呼ぶ前に必ず見る条件】その操作の【前】に枠がいっぱい（taken >= quota）だったこと。
+//     これが「その有給は枠からあふれて自動でそうなった」ことの唯一の手がかり。
+//     ★この条件を外すと、月の途中でわざと入れた有給まで休日に戻る。絶対に外さないこと。
+//   戻すのは空いた日数ぶんだけ。**日付の遅い有給から**（あふれたのは後から足した日なので）。
+//   返すのは「休日に戻す日（日にち）」の配列。この関数はデータを1文字も書かない。
+const refillOffFromLeave=(name,cy,cm,dayOff,pleave,isClosed,mhol)=>{
+  const c=calcHolidayCarry(name,cy,cm,dayOff,isClosed,mhol);
+  if(!c||c.quota==null)return [];
+  const room=c.quota-c.taken;
+  if(room<=0)return [];
+  const dim=new Date(cy,cm+1,0).getDate(), days=[];
+  for(let d=1;d<=dim;d++){
+    if(isClosed(cy,cm,d))continue;                 // 店休日に有給は入らない
+    if((((pleave||{})[`${cy}-${cm+1}-${d}`])||[]).includes(name))days.push(d);
+  }
+  return days.reverse().slice(0,Math.min(room,days.length));
 };
 // バッジの文言：翌月へ回る分だけ「繰り越しN日」。使い切っていれば何も出さない（空文字）。枠を超えた分は有給扱いと出す
 const carryLabel=(c,long)=>{
@@ -8647,9 +8673,20 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
       // ★「休日」のまま、もう一度クリックで解除できる（2026-09-28 ユーザー指示）。
       //   枠を使い切って自動で有給になった日も、有給ボタンに切り替えずにここで外せる。
       if(cur.includes(selStaff)||(pleaveData[dkk]||[]).includes(selStaff)){
-        setDayOffData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
-        setPleaveData(p=>({...p,[dkk]:(p[dkk]||[]).filter(n=>n!==selStaff)}));
+        // ★枠がいっぱいだった時に休日を外したら、あふれて自動で有給になっていた日を休日へ戻す
+        //   （2026-11-20 ユーザー決定・案②。条件と理由は refillOffFromLeave のコメントを読むこと）
+        const qB=calcHolidayCarry(selStaff,year,month,dayOffData,isStoreClosed,monthlyHolidays);
+        const wasFull=!!(qB&&qB.quota!=null&&qB.taken>=qB.quota);
+        const nOff={...dayOffData,[dkk]:(dayOffData[dkk]||[]).filter(n=>n!==selStaff)};
+        const nPl ={...pleaveData,[dkk]:(pleaveData[dkk]||[]).filter(n=>n!==selStaff)};
+        const back=wasFull?refillOffFromLeave(selStaff,year,month,nOff,nPl,isStoreClosed,monthlyHolidays):[];
+        const bKey=d=>`${year}-${month+1}-${d}`;
+        setDayOffData(p=>{const n={...p,[dkk]:(p[dkk]||[]).filter(x=>x!==selStaff)};
+          back.forEach(d=>{const k=bKey(d);n[k]=[...(n[k]||[]).filter(x=>x!==selStaff),selStaff];});return n;});
+        setPleaveData(p=>{const n={...p,[dkk]:(p[dkk]||[]).filter(x=>x!==selStaff)};
+          back.forEach(d=>{const k=bKey(d);n[k]=(n[k]||[]).filter(x=>x!==selStaff);});return n;});
         saveMemo(dkk,selStaff,''); if(memoEdit&&memoEdit.dkk===dkk)setMemoEdit(null);   // 休みを外したらメモも消す
+        if(back.length)setAutoLeaveMsg(`休日の枠が空いたので、${back.map(d=>`${month+1}/${d}`).join('・')} の有給を休日に戻しました`);
       }else{
         // 今月の枠（会社の休日数＋繰越）を使い切っていたら、休日ではなく有給として入れる（2026-09-21 ユーザー決定）
         const q=calcHolidayCarry(selStaff,year,month,dayOffData,isStoreClosed,monthlyHolidays);
