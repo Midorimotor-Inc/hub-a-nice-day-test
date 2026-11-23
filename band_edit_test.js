@@ -146,19 +146,20 @@ const openState = page => page.evaluate(() => ({
   t('顧客リストが開く', await see('客1'));
   await page.waitForTimeout(800);
 
-  head('① すべての行に「✎ 編集」（左）と 状態のボタン（右）');
+  head('① すべての行に 状態のボタン（左）と「✎ 編集」（右）');
   for (const nm of ['客1', '客2', '客3', '客4', '客6']) {
     const r = await rowInfo(page, nm);
     t(nm + ' に「✎ 編集」が出る', !!r && r.btns.some(x => x.indexOf('編集') >= 0), r);
   }
   const r1 = await rowInfo(page, '客1');
-  t('★「✎ 編集」が左、状態のボタンが右の順', !!r1 && r1.inFirst.length >= 2 && r1.inFirst[0].indexOf('編集') >= 0 && r1.inFirst[1].indexOf('＋予約') >= 0, r1 && r1.inFirst);
+  // ★2026-11-23 ユーザー指示で入れ替えた（それまでは 編集 が左だった）。戻さないこと
+  t('★状態のボタンが左、「✎ 編集」が右の順', !!r1 && r1.inFirst.length >= 2 && r1.inFirst[0].indexOf('＋予約') >= 0 && r1.inFirst[1].indexOf('編集') >= 0, r1 && r1.inFirst);
   t('★ボタンの置き場所は今までどおり一番左の列', !!r1 && r1.inFirst.length === 2, r1 && r1.inFirst);
-  t('未予約の右は「＋予約」', !!r1 && r1.stLabel.indexOf('＋予約') >= 0, r1 && r1.stLabel);
-  t('本予約の右は「本予約」', (await rowInfo(page, '客2')).stLabel.indexOf('本予約') >= 0);
-  t('仮予約の右は「仮予約」', (await rowInfo(page, '客6')).stLabel.indexOf('仮予約') >= 0);
-  t('★キャンセルの右は「再予約」', (await rowInfo(page, '客3')).stLabel.indexOf('再予約') >= 0);
-  t('初回車検の右は「＋予約」', (await rowInfo(page, '客4')).stLabel.indexOf('＋予約') >= 0);
+  t('未予約の左は「＋予約」', !!r1 && r1.stLabel.indexOf('＋予約') >= 0, r1 && r1.stLabel);
+  t('本予約の左は「本予約」', (await rowInfo(page, '客2')).stLabel.indexOf('本予約') >= 0);
+  t('仮予約の左は「仮予約」', (await rowInfo(page, '客6')).stLabel.indexOf('仮予約') >= 0);
+  t('★キャンセルの左は「再予約」', (await rowInfo(page, '客3')).stLabel.indexOf('再予約') >= 0);
+  t('初回車検の左は「＋予約」', (await rowInfo(page, '客4')).stLabel.indexOf('＋予約') >= 0);
 
   head('② 窓の中身');
   t('「✎ 編集」で窓が開く', await clickEdit(page, '客5'));
@@ -224,7 +225,7 @@ const openState = page => page.evaluate(() => ({
   sv = await saved(page, '客2');
   t('★帯がキャンセルになった', !!sv && sv.status === 'cancel', sv);
   t('一覧の行も赤になった', (await rowInfo(page, '客2')).cls.indexOf('row-cancel') >= 0);
-  t('右のボタンが「再予約」に変わった', (await rowInfo(page, '客2')).stLabel.indexOf('再予約') >= 0);
+  t('左のボタンが「再予約」に変わった', (await rowInfo(page, '客2')).stLabel.indexOf('再予約') >= 0);
 
   head('⑦ 同じ色をもう一度押すと「元に戻しますか？」');
   await clickEdit(page, '客3');
@@ -278,7 +279,7 @@ const openState = page => page.evaluate(() => ({
   t('★帯が何もない状態（未予約）に戻った', !!sv && sv.status === 'none', sv);
   t('★備考の「初回車検」も外れた', !!sv && sv.note === '', sv);
   t('一覧の行も白に戻った', (await rowInfo(page, '客1')).cls.indexOf('row-none') >= 0);
-  t('右のボタンが「＋予約」に戻った', (await rowInfo(page, '客1')).stLabel.indexOf('＋予約') >= 0);
+  t('左のボタンが「＋予約」に戻った', (await rowInfo(page, '客1')).stLabel.indexOf('＋予約') >= 0);
   t('窓も閉じた', !(await openState(page)).win);
   t('★予約カードは開かない', !(await openState(page)).card);
 

@@ -20,7 +20,7 @@
   // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
   // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
   // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-  window.__APP_BUILD='build-1795409593829';
+  window.__APP_BUILD='build-1795412191645';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -171,7 +171,7 @@ const hubRenew = async name => {};
 // index側の全画面オーバーレイ（iframe）内で開かれているか。埋め込み時は
 // 「スケジュールに戻る」がページ遷移ではなく親へのpostMessage（オーバーレイ閉鎖）になる。
 const IS_EMBED=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
-const APP_VERSION='3.127.0'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
+const APP_VERSION='3.127.1'; // 表示用バージョン。更新ごとに上げる（軽微+0.01／大型は整数を上げる）。index_dev.htmlと揃える
 const storKey=(base,sid)=>`${STOR}${sid}-${base}`;
 const CHUNK_SIZE=100;
 // ファイル名をGASキーに使える形に変換
@@ -3305,22 +3305,23 @@ const CustomerRow=memo(({customer,onBook,onEditBand,pending,flash,dmRow,dmSel,on
       {/* ＋予約ボタン ＋ 満期日 */}
       <td style={{padding:'7px 6px',whiteSpace:'nowrap',verticalAlign:'middle'}}>
         <div style={{display:'flex',alignItems:'center',gap:5}}>
-          {/* ★左＝「✎ 編集」（2026-11-07 ユーザー指示。すべての行に付ける）。
-              押すと帯の色（状態）を選ぶ小さな窓が開く。備考もここで直せる。
-              ★右＝状態のボタン。押すと今までどおり予約カード（未予約・初回車検＝＋予約／
+          {/* ★★並びは【左＝状態のボタン／右＝「✎ 編集」】（2026-11-23 ユーザー指示で入れ替えた。
+              それまでは 2026-11-07 の指示で 編集 が左だった。入れ替え直さないこと）。
+              ★左＝状態のボタン。押すと予約カード（未予約・初回車検＝＋予約／
               仮予約・本予約＝その字／キャンセル＝再予約）。
+              ★右＝「✎ 編集」。押すと帯の色（状態）を選ぶ小さな窓が開く。備考もここで直せる。
               ★ボタンの置き場所は今までどおり【一番左の列】のまま（2026-11-07 ユーザー指示）。 */}
-          <button data-bandedit="1" onClick={()=>onEditBand(customer)}
-            style={{padding:'4px 9px',borderRadius:8,border:'1.5px solid #64748b',
-              background:'white',color:'#1f2937',fontWeight:700,fontSize:11,whiteSpace:'nowrap',
-              minWidth:62,cursor:'pointer'}}>
-            ✎ 編集
-          </button>
           <button data-bandstatus={customer.status||'none'} onClick={()=>onBook(customer)}
             style={{padding:'4px 9px',borderRadius:8,border:`1.5px solid ${st.btnBorder}`,
               background:st.btnBg,color:st.btnColor,fontWeight:700,fontSize:11,whiteSpace:'nowrap',
               minWidth:62,cursor:'pointer'}}>
             {isCancelled?'再予約':(customer.status==='none'||customer.status==='new_car')?'＋予約':st.label}
+          </button>
+          <button data-bandedit="1" onClick={()=>onEditBand(customer)}
+            style={{padding:'4px 9px',borderRadius:8,border:'1.5px solid #64748b',
+              background:'white',color:'#1f2937',fontWeight:700,fontSize:11,whiteSpace:'nowrap',
+              minWidth:62,cursor:'pointer'}}>
+            ✎ 編集
           </button>
           <span style={{fontSize:11,color:'#111827',fontWeight:customer.expiry?600:400}}>
             {fmtDate(customer.expiry)}
