@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>モック：対応スタッフ数のアラートを車検の見出しに入れる</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI","Yu Gothic UI","Meiryo",sans-serif;background:#e2e8f0;color:#1b2129}
+.bar{background:#0f172a;color:white;padding:10px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.bar b{font-size:14px}
+.grp{display:flex;gap:4px;align-items:center;font-size:12px}
+.grp span{color:#94a3b8;margin-right:2px}
+.bar button{padding:6px 13px;border-radius:7px;border:2px solid #475569;background:#1e293b;color:#cbd5e1;font-weight:700;font-size:13px;cursor:pointer}
+.bar button.on{background:#fbbf24;border-color:#fbbf24;color:#0f172a}
+.note{max-width:1180px;margin:10px auto 0;background:#fffbeb;border:2px solid #fcd34d;border-radius:9px;padding:9px 14px;font-size:13px;line-height:1.7}
+.note b{color:#b45309}
+.count{max-width:1180px;margin:8px auto 0;font-size:14px;font-weight:800;color:#0f172a}
+.count em{font-style:normal;background:#0891b2;color:white;border-radius:6px;padding:2px 9px;margin:0 3px}
+.count .gain{background:#16a34a}
+.frame{max-width:1180px;height:470px;margin:8px auto 24px;background:white;border:3px solid #334155;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;overflow:hidden}
+.staff{flex-shrink:0;display:flex;gap:5px;align-items:center;font-size:11px;padding:5px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:8px;color:#475569}
+.staff i{font-style:normal;background:#0369a1;color:white;border-radius:10px;padding:1px 8px;font-weight:700}
+.alerts{flex-shrink:0;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.al{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:9px;border:2px solid #fcd34d;background:#fffbeb}
+.al.over{border-color:#fca5a5;background:#fff1f2}
+.al .ic{font-size:18px}
+.al .t{font-weight:800;color:#d97706;font-size:13px}
+.al.over .t{color:#dc2626}
+.al .d{font-size:11px;color:#92400e;margin-top:2px;display:flex;gap:10px;flex-wrap:wrap}
+.al.over .d{color:#9f1239}
+.split{flex:1;min-height:0;display:flex;gap:10px;overflow:hidden}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.sec{flex-shrink:0;display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:2px solid #e0f2fe}
+.sec h3{margin:0;font-size:15px;font-weight:800;padding-bottom:3px;white-space:nowrap}
+.sec .btns{margin-left:auto;display:flex;gap:5px}
+.sec .btns span{white-space:nowrap;font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;border:2px solid #cbd5e1;color:#64748b;background:#f8fafc}
+.scroll{flex:1;min-height:0;overflow:hidden}
+table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+th{padding:7px 8px;text-align:left;font-size:12px;font-weight:600;white-space:nowrap;color:white}
+.ts th{background:linear-gradient(90deg,#0e7490,#0891b2)}
+.in th{background:linear-gradient(90deg,#c2410c,#ea580c)}
+td{padding:7px 9px;border-bottom:1px solid #f3f4f6;border-right:1px solid #f3f4f6;font-size:13px;white-space:nowrap}
+td.tm{width:50px;font-weight:800;position:relative;color:#0f172a;cursor:pointer}
+tr.half{background:#f0feff} tr.half td.tm{font-weight:600;color:#0e7490}
+td.tm.sp{color:#9333ea}
+.empty{color:#475569;font-size:11px;font-style:italic;font-weight:600}
+.wk{display:inline-block;background:#0891b2;color:white;border-radius:4px;font-size:11px;font-weight:800;padding:1px 6px}
+.cs{display:inline-block;border-radius:4px;font-size:11px;font-weight:800;padding:1px 6px}
+tr.hidden-row td{opacity:.28}
+/* ── 「！」 ── */
+.bang{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-weight:900;font-size:13px;line-height:1;cursor:help;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.45);animation:mv .75s ease-in-out 4}
+.bang.eq{background:#fbbf24;color:#451a03}
+.bang.over{background:#dc2626;color:white}
+td.tm .bang{position:absolute;top:50%;right:2px;transform:translateY(-50%)}
+td.tm.hasbang{width:66px;padding-right:24px}
+@keyframes mv{0%,100%{margin-left:0}25%{margin-left:-3px}75%{margin-left:3px}}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:800;cursor:help;border:2px solid #f59e0b;background:#fffbeb;color:#b45309;white-space:nowrap}
+.chip.over{border-color:#ef4444;background:#fee2e2;color:#dc2626}
+.chip .bang{width:16px;height:16px;font-size:12px;box-shadow:none;animation:none}
+.chip{animation:mv .75s ease-in-out 4}
+.chip.sub b{font-weight:800}.chip .sep{opacity:.45;margin:0 2px}
+.chipx{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;border:2px solid #cbd5e1;white-space:nowrap}
+.mini{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:800;cursor:help;white-space:nowrap;animation:mv .75s ease-in-out 4}
+.mini.eq{color:#b45309}.mini.over{color:#dc2626}
+.mini .bang{animation:none}
+/* ── ポップ ── */
+#pop{position:fixed;z-index:999;display:none;min-width:300px;background:white;border:2px solid #f59e0b;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);padding:10px 14px}
+#pop.over{border-color:#dc2626}
+#pop .t{font-weight:800;font-size:13px;color:#d97706}
+#pop.over .t{color:#dc2626}
+#pop .d{font-size:12px;color:#92400e;margin-top:5px;display:flex;gap:10px;flex-wrap:wrap}
+#pop.over .d{color:#9f1239}
+#pop .x{font-size:10px;color:#94a3b8;margin-top:6px}
+</style></head><body>
+<div class="bar">
+  <b>対応スタッフ数のアラート</b>
+  <div class="grp"><span>出し方</span>
+    <button data-v="now">今のまま</button><button data-v="a">ア案 小さな札</button><button data-v="i">イ案 数字も出す</button><button data-v="u">ウ案 1つにまとめる</button><button data-v="e">エ案「！」と時刻だけ</button></div>
+  <div class="grp"><span>場面</span>
+    <button data-s="1">9:00が「達している」</button><button data-s="2">9:00「超えている」＋9:30「達している」</button><button data-s="3">＋台数制限・承認待ちも出ている日</button></div>
+  <div class="grp"><span>左右の割合</span>
+    <button data-c="50">半分ずつ</button><button data-c="36">車検を狭く</button></div>
+</div>
+<div class="note" id="note"></div>
+<div class="count" id="count"></div>
+<div class="frame">
+  <div class="staff">出勤 <i>見</i><i>岡</i><i>竹</i><i>幸</i><i>魚</i>　／　🏖 休み 舟・江</div>
+  <div class="alerts" id="alerts"></div>
+  <div class="split">
+    <div class="col" id="lcol">
+      <div class="sec" id="isec" style="flex-wrap:wrap;row-gap:5px"><h3 style="border-bottom:3px solid #ea580c">🚗 車検</h3><span id="ibadges" style="display:contents"></span><span id="chips" style="display:contents"></span></div>
+      <div class="scroll"><table class="in"><thead><tr><th>No</th><th>氏名</th><th>車種</th><th>コース</th><th>入庫</th><th>備考</th></tr></thead><tbody id="insp"></tbody></table></div>
+    </div>
+    <div class="col">
+      <div class="sec"><h3 style="border-bottom:3px solid #0891b2">⏰ タイムスケジュール</h3><span class="chipx" style="border-color:#ef4444;background:#fee2e2;color:#dc2626">🚫 入庫制限　10:00〜11:00</span>
+        <div class="btns"><span>📅 週表示</span><span id="foldlab">▲ 畳む</span><span>🚫 入庫制限</span><span>🖨 印刷</span></div></div>
+      <div class="scroll" id="tsscroll"><table class="ts"><thead><tr><th style="width:50px">時間</th><th>氏名</th><th>車種</th><th>作業</th><th>代車</th><th>内容</th></tr></thead><tbody id="ts"></tbody></table></div>
+    </div>
+  </div>
+</div>
+<div id="pop"></div>
+<script>
+// ※お名前はすべて架空です
+var V='a',S='2',C='50';
+var SLOTS=['午前入庫','09:00','09:30','10:00','10:30','11:00','11:30','12:00','時間未定','午後入庫','13:00','13:30','14:00','14:30','15:00'];
+var SCEN={
+ '1':{front:5,work:5,
+   insp:[['山田 太郎','ハスラー','マ','09:00'],['佐藤 花子','スペーシア','ク','09:00'],['鈴木 一郎','ワゴンR','レ','10:00'],['高橋 次郎','アルト','ク','13:00']],
+   ts:{'09:00':[['田中 三郎','ジムニー','Q','','オイル交換'],['伊藤 四郎','ソリオ','有点','代車A','12ヶ月点検'],['渡辺 五郎','エブリイ','Q','','タイヤ交換']],'10:30':[['中村 六郎','ラパン','B','代車B','鈑金 見積り']],'14:00':[['小林 七郎','スイフト','Q','','バッテリー']]},
+   al:{'09:00':{insp:2,sched:3}}},
+ '2':{front:4,work:5,
+   insp:[['山田 太郎','ハスラー','マ','09:00'],['佐藤 花子','スペーシア','ク','09:00'],['鈴木 一郎','ワゴンR','レ','09:30'],['高橋 次郎','アルト','ク','09:30'],['松本 八郎','キャリイ','ク','13:00']],
+   ts:{'09:00':[['田中 三郎','ジムニー','Q','','オイル交換'],['伊藤 四郎','ソリオ','有点','代車A','12ヶ月点検'],['渡辺 五郎','エブリイ','Q','','タイヤ交換']],'09:30':[['加藤 九郎','クロスビー','Q','','ワイパー'],['吉田 十郎','ハスラー','R','','リコール']],'10:30':[['中村 六郎','ラパン','B','代車B','鈑金 見積り']],'14:00':[['小林 七郎','スイフト','Q','','バッテリー']]},
+   al:{'09:00':{insp:2,sched:3},'09:30':{insp:2,sched:2}}}
+};
+SCEN['3']=SCEN['2'];
+var CSC={'マ':['#fca5a5','#b91c1c'],'ク':['#bfdbfe','#1d4ed8'],'レ':['#bbf7d0','#15803d']};
+function alOf(sc,slot){var a=sc.al[slot];if(!a)return null;var total=a.insp+a.sched;return {slot:slot,label:slot.replace(/^0/,'')+'枠',insp:a.insp,sched:a.sched,total:total,over:total>sc.front,front:sc.front,work:sc.work};}
+function detail(a){return '<span>🚗 車検 <b>'+a.insp+'台</b></span><span>⏰ 整備 <b>'+a.sched+'件</b></span><span>＝ 合計 <b>'+a.total+'件</b></span><span>👤 フロント対応 <b>'+a.front+'名</b>'+(a.front!==a.work?'（出勤'+a.work+'名）':'')+'</span>'+(a.over?'<span style="color:#dc2626;font-weight:800">→ '+(a.total-a.front)+'件オーバー</span>':'');}
+function title(a){return '【'+a.label+'】入庫台数が対応スタッフ数'+(a.over?'を超えています':'に達しています');}
+function bang(a){return '<span class="bang '+(a.over?'over':'eq')+'" data-al="'+a.slot+'">！</span>';}
+function st(a){return a.over?'超過':'いっぱい';}
+function chipHtml(als){
+  if(V==='a')return als.map(function(a){return '<span class="chip '+(a.over?'over':'')+'" data-al="'+a.slot+'">'+(a.over?'⚠️':'⚡')+' '+a.label.replace('枠','')+' '+st(a)+'</span>';}).join('');
+  if(V==='i')return als.map(function(a){return '<span class="chip sub '+(a.over?'over':'')+'" data-al="'+a.slot+'">'+(a.over?'⚠️':'⚡')+' '+a.label.replace('枠','')+'　入庫 <b>'+a.total+'件</b>／対応 <b>'+a.front+'名</b>'+(a.over?'　'+(a.total-a.front)+'件オーバー':'')+'</span>';}).join('');
+  if(V==='u'){if(!als.length)return '';var over=als.some(function(a){return a.over;});return '<span class="chip '+(over?'over':'')+'" data-al="'+als.map(function(a){return a.slot;}).join(',')+'">'+(over?'⚠️':'⚡')+' 対応スタッフ　'+als.map(function(a){return a.label.replace('枠','')+' '+st(a);}).join('<span class="sep">／</span>')+'</span>';}
+  if(V==='e')return als.map(function(a){return '<span class="mini '+(a.over?'over':'eq')+'" data-al="'+a.slot+'"><span class="bang '+(a.over?'over':'eq')+'">！</span>'+a.label.replace('枠','')+'</span>';}).join('');
+  return '';
+}
+function render(){
+  var sc=SCEN[S],als=[];['09:00','09:30'].forEach(function(s){var a=alOf(sc,s);if(a)als.push(a);});
+  document.getElementById('lcol').style.flex='0 0 '+C+'%';
+  document.getElementById('alerts').innerHTML=V==='now'?als.map(function(a){return '<div class="al '+(a.over?'over':'')+'"><span class="ic">'+(a.over?'⚠️':'⚡')+'</span><div><div class="t">'+title(a)+'</div><div class="d">'+detail(a)+'</div></div></div>';}).join(''):'';
+  document.getElementById('alerts').style.display=V==='now'?'flex':'none';
+  document.getElementById('ibadges').innerHTML=S==='3'?'<span class="chipx" style="border-color:#ef4444;background:#fee2e2;color:#dc2626">🚗 台数制限 最大5台</span><span class="chipx" style="border-color:#f59e0b;background:#fef3c7;color:#d97706">⚠️ 承認待ち 1件</span>':'';
+  document.getElementById('chips').innerHTML=chipHtml(als);
+  document.getElementById('insp').innerHTML=sc.insp.map(function(r,i){var c=CSC[r[2]];return '<tr><td>'+(i+1)+'</td><td><b>'+r[0]+' 様</b></td><td>'+r[1]+'</td><td><span class="cs" style="background:'+c[0]+';color:'+c[1]+'">'+r[2]+'</span></td><td>'+r[3]+'</td><td></td></tr>';}).join('')+[5,6].filter(function(n){return n>sc.insp.length;}).map(function(n){return '<tr><td>'+n+'</td><td class="empty" colspan="5">＋ クリックして追加</td></tr>';}).join('');
+  var html='';
+  SLOTS.forEach(function(slot){
+    var rows=sc.ts[slot]||[],sp=!/^\d/.test(slot),half=/:30$/.test(slot);
+    if(!rows.length){html+='<tr class="'+(half?'half':'')+'"><td class="tm'+(sp?' sp':'')+'">'+slot+'</td><td class="empty" colspan="5">＋ クリックして追加</td></tr>';return;}
+    rows.forEach(function(r,i){html+='<tr class="'+(half?'half':'')+'"><td class="tm"'+(i?' style="font-weight:600;color:#38bdf8"':'')+'>'+slot+'</td><td><b>'+r[0]+' 様</b></td><td><b>'+r[1]+'</b></td><td><span class="wk">'+r[2]+'</span></td><td>'+r[3]+'</td><td>'+r[4]+'</td></tr>';});
+  });
+  document.getElementById('ts').innerHTML=html;
+  [].forEach.call(document.querySelectorAll('.bar button'),function(b){b.className=(b.dataset.v===V||b.dataset.s===S||b.dataset.c===C)?'on':'';});
+  var N={now:'<b>今のまま</b>：車検とタイムスケジュールの上に帯で出る。1本で約2行ぶん、2本で約4行ぶんの高さを使う。',
+    a:'<b>ア案　小さな札</b>：「台数制限」「承認待ち」の札と同じ形で、<b>時刻と状態だけ</b>（いっぱい＝達している／超過＝超えている）。内訳はなぞる・押すとポップ。',
+    i:'<b>イ案　数字も出す</b>：札の中に<b>入庫の件数と対応できる人数</b>まで出す。なぞらなくても中身が分かる。そのぶん札が長い。',
+    u:'<b>ウ案　1つにまとめる</b>：9:00 と 9:30 を<b>1つの札</b>にまとめる。どちらかが超過なら札は赤。なぞる・押すと両方の内訳がポップ。',
+    e:'<b>エ案　「！」と時刻だけ</b>：枠の無い<b>丸い「！」＋時刻</b>だけ。いちばん場所を取らない。黄＝達している／赤＝超えている。'};
+  document.getElementById('note').innerHTML=N[V]+'<br><span style="color:#64748b;font-size:12px">置き場所は <b>🚗 車検 の見出しの行</b>（空いている所）。開いた直後の3秒だけ左右に揺れます。なぞるとポップ・押すと出したまま（もう一度押すと消える）。入りきらない幅の時は見出しが2段に折り返します。</span>';
+  var box=document.getElementById('tsscroll').getBoundingClientRect(),n=0;
+  [].forEach.call(document.querySelectorAll('#ts tr'),function(tr){var r=tr.getBoundingClientRect();if(r.bottom<=box.bottom+1)n++;});
+  var h=document.getElementById('isec').getBoundingClientRect().height;
+  document.getElementById('count').innerHTML='タイムスケジュールで見えている行：<em>'+n+'行</em>'+(V!=='now'&&window.__baseOf&&window.__baseOf[S+C]!=null?'（今のままより <em class="gain">＋'+(n-window.__baseOf[S+C])+'行</em>）':'')+(h>40?'　<span style="color:#dc2626">※車検の見出しが2段に折り返しています</span>':'');
+  hidePop(true);
+}
+function measureBase(){var keep={};var v0=V,s0=S,c0=C;['1','2','3'].forEach(function(s){['50','36'].forEach(function(c){V='now';S=s;C=c;render();var box=document.getElementById('tsscroll').getBoundingClientRect(),n=0;[].forEach.call(document.querySelectorAll('#ts tr'),function(tr){if(tr.getBoundingClientRect().bottom<=box.bottom+1)n++;});keep[s+c]=n;});});window.__baseOf=keep;V=v0;S=s0;C=c0;render();}
+var pinned=null;
+function showPop(el){var as=el.dataset.al.split(',').map(function(k){return alOf(SCEN[S],k);}).filter(Boolean);if(!as.length)return;var p=document.getElementById('pop');p.className=as.some(function(a){return a.over;})?'over':'';
+  p.innerHTML=as.map(function(a,i){return '<div'+(i?' style="margin-top:9px;padding-top:9px;border-top:1px dashed #cbd5e1"':'')+'><div class="t" style="color:'+(a.over?'#dc2626':'#d97706')+'">'+(a.over?'⚠️ ':'⚡ ')+title(a)+'</div><div class="d" style="color:'+(a.over?'#9f1239':'#92400e')+'">'+detail(a)+'</div></div>';}).join('');p.style.display='block';
+  var r=el.getBoundingClientRect(),w=p.offsetWidth,h=p.offsetHeight,x=Math.min(Math.max(8,r.left),innerWidth-w-8),y=r.bottom+6;if(y+h>innerHeight-8)y=r.top-h-6;p.style.left=x+'px';p.style.top=y+'px';}
+function hidePop(force){if(pinned&&!force)return;pinned=null;document.getElementById('pop').style.display='none';}
+document.addEventListener('mouseover',function(e){var el=e.target.closest('[data-al]');if(el&&!pinned)showPop(el);});
+document.addEventListener('mouseout',function(e){var el=e.target.closest('[data-al]');if(el)hidePop();});
+document.addEventListener('click',function(e){var b=e.target.closest('.bar button');if(b){if(b.dataset.v)V=b.dataset.v;if(b.dataset.s)S=b.dataset.s;if(b.dataset.c)C=b.dataset.c;render();return;}
+  var el=e.target.closest('[data-al]');if(el){if(pinned===el){hidePop(true);}else{pinned=null;showPop(el);pinned=el;}return;}hidePop(true);});
+measureBase();
+</script></body></html>

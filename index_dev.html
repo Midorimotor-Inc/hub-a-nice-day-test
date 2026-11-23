@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795412191645';
+    window.__APP_BUILD='build-1795424051046';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.127.1';
+const APP_VERSION = '3.128.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -11355,6 +11355,62 @@ const BookingModal=memo(({storeId,isOpen,onClose,type,initialData,isNew,dateLabe
 
 // ============================================
 
+// ── 対応スタッフ数のアラートの札（v3.128.0・2026-11-23 ユーザー決定・イ案）─────
+//   車検の見出しの行に置く小さな札。「9:00　入庫 5件／対応 4名　1件オーバー」。
+//   黄＝入庫が対応できる人数に【達している】／赤＝【超えている】（帯の時と同じ意味）。
+//   ★なぞるとポップ・押すと出したまま（もう一度押すか、ほかを押すと消える）。ポップの文面は帯の時と同じ。
+//   ★ポップは document.body へ出す（createPortal）。札は開いた直後に揺らす（transform）ので、
+//     札の中に position:fixed で置くと、揺れている間だけ【画面】ではなく【札】が基準になってズレる。
+//   ★揺らすのは最初の3秒だけ（vehMove ×4）。ずっと動かさないこと（車両管理の「！」と同じ決まり）。
+//   ★出すだけの部品。数え方は呼ぶ側（スケジュール画面）が持つ。
+const STAFF_AL_EQ  ={bd:'#f59e0b',bg:'#fffbeb',fg:'#b45309',sub:'#92400e'};
+const STAFF_AL_OVER={bd:'#ef4444',bg:'#fee2e2',fg:'#dc2626',sub:'#9f1239'};
+const StaffAlertChip=({a})=>{
+  const [rect,setRect]=useState(null);
+  const [pin,setPin]=useState(false);
+  const ref=useRef(null);
+  const open=()=>{try{const b=ref.current.getBoundingClientRect();setRect({left:b.left,top:b.top,bottom:b.bottom});}catch(e){}};
+  useEffect(()=>{
+    if(!pin)return;
+    const off=e=>{if(ref.current&&ref.current.contains(e.target))return;setPin(false);setRect(null);};
+    document.addEventListener('mousedown',off);
+    return()=>document.removeEventListener('mousedown',off);
+  },[pin]);
+  const c=a.isOver?STAFF_AL_OVER:STAFF_AL_EQ;
+  const below=rect?(rect.bottom+130<window.innerHeight):true;
+  return(
+    <span ref={ref} data-staffalert={a.slot} data-staffalertkind={a.isOver?'over':'equal'}
+      onMouseEnter={open} onMouseLeave={()=>{if(!pin)setRect(null);}}
+      onClick={e=>{e.stopPropagation();if(pin){setPin(false);setRect(null);}else{open();setPin(true);}}}
+      style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 8px',background:c.bg,border:'2px solid '+c.bd,
+        borderRadius:6,color:c.fg,fontSize:11,fontWeight:700,whiteSpace:'nowrap',cursor:'help',
+        animation:'vehMove .75s ease-in-out 4'}}>
+      <span style={{fontSize:14}}>{a.isOver?'⚠️':'⚡'}</span>
+      <span style={{fontWeight:800}}>{a.slot}</span>
+      <span>入庫 <strong>{a.total}件</strong>／対応 <strong>{a.front}名</strong></span>
+      {a.isOver&&<span style={{fontWeight:800}}>{a.total-a.front}件オーバー</span>}
+      {rect&&ReactDOM.createPortal(
+        <div data-staffalertpop={a.slot} style={{position:'fixed',zIndex:5000,pointerEvents:'none',
+          left:Math.max(8,Math.min(rect.left,window.innerWidth-560)),
+          ...(below?{top:rect.bottom+6}:{bottom:window.innerHeight-rect.top+6}),
+          background:'white',border:'2px solid '+c.bd,borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.28)',
+          padding:'10px 14px',maxWidth:550,textAlign:'left',whiteSpace:'normal'}}>
+          <div style={{fontWeight:800,color:a.isOver?'#dc2626':'#d97706',fontSize:13}}>
+            {a.isOver?'⚠️':'⚡'} 【{a.label}】入庫台数が対応スタッフ数{a.isOver?'を超えています':'に達しています'}
+          </div>
+          <div style={{fontSize:12,color:c.sub,marginTop:5,display:'flex',gap:10,flexWrap:'wrap'}}>
+            <span>🚗 車検 <strong>{a.insp}台</strong></span>
+            <span>⏰ 整備 <strong>{a.sched}件</strong></span>
+            <span>＝ 合計 <strong>{a.total}件</strong></span>
+            <span>👤 フロント対応 <strong>{a.front}名</strong>{a.front!==a.work&&<span style={{fontWeight:400}}>（出勤{a.work}名）</span>}</span>
+            {a.isOver&&<span style={{color:'#dc2626',fontWeight:800}}>→ {a.total-a.front}件オーバー</span>}
+          </div>
+          <div style={{fontSize:10,color:'#94a3b8',marginTop:6}}>フロント対応＝対応可能業務で 車検／整備のフロント対応 にチェックのある出勤スタッフ</div>
+        </div>,document.body)}
+    </span>
+  );
+};
+
 // ── 1日表示でお名前をなぞると「いつ予約を入れたか」が出る（2026-10-30 ユーザー指示）─────
 //   車検も整備も、予約が入っている行すべてに付ける。週表のお名前と同じ動き。
 //   ★言葉は【週表・予約カードと同じ hubEntryLines】を使うこと。別々に書くと食い違う。
@@ -19687,8 +19743,68 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 </div>;
               })()}
 
-              {/* -- 対応可能チェック・アラート（時間枠別・自店舗のみ） -- */}
-              {(()=>{
+              {/* == スプリットパネル：左＝車検＋備考 ／ 右＝タイムスケジュール == */}
+              {/* ドラッグで左右比率を変更、リセットで50:50に戻す */}
+              <div ref={splitContainerRef}
+                style={{display:'flex',gap:0,flex:1,overflow:'hidden',position:'relative',userSelect:isDraggingRef.current?'none':'auto'}}
+                onMouseMove={e=>{
+                  if(!isDraggingRef.current||!splitContainerRef.current)return;
+                  const rect=splitContainerRef.current.getBoundingClientRect();
+                  const pct=((e.clientX-rect.left)/rect.width)*100;
+                  setSplitRatio(Math.min(93,Math.max(7,pct)));
+                }}
+                onMouseUp={()=>{isDraggingRef.current=false;document.body.style.cursor='';document.body.style.userSelect='';}}
+                onMouseLeave={()=>{if(isDraggingRef.current){isDraggingRef.current=false;document.body.style.cursor='';document.body.style.userSelect='';}}}
+              >
+
+                {/* --- 左カラム --- */}
+                <div style={{width:`${splitRatio}%`,minWidth:0,flexShrink:0,display:'flex',flexDirection:'column',gap:18,overflowY:'auto',height:'100%',paddingBottom:40}}>
+              {/* -- 車検セクション（台数集計なし） -- */}
+              <div id={SEC_INSP} style={{marginBottom:26,scrollMarginTop:'var(--header-h,60px)'}}>
+                {/* ★日にち変更のあとのお知らせ（イ案・2026-11-16 ユーザー決定）。
+                    ★出すのは【元の日を見ている間だけ】。別の日へ移れば自然に消えるので、
+                    消すためのタイマーは要らない（勝手に消えて驚かせないため）。 */}
+                {dcBack&&dcBack.from===dk&&(
+                  <div data-dcback="1" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
+                    padding:'8px 12px',marginBottom:8,background:'#ecfdf5',border:'2px solid #047857',
+                    borderRadius:10,color:'#065f46',fontSize:13,fontWeight:800}}>
+                    <span>✓ {cxMD(dcBack.to)} へ移しました。この日には「日にち変更」の記録（下の赤い帯）を残してあります。</span>
+                    <button data-dcbackgo="1" title="移り先の日のスケジュールを見る"
+                      onClick={()=>{const q=String(dcBack.to).split('-').map(Number);
+                        if(q.length===3&&!isNaN(q[0])){const nd=new Date(q[0],q[1]-1,q[2]);setSelDate(nd);selDateRef.current=nd;}}}
+                      style={{padding:'6px 12px',borderRadius:8,border:'2px solid #047857',background:'white',
+                        color:'#065f46',fontSize:12.5,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {cxMD(dcBack.to)} を見る ▶</button>
+                    <button data-dcbackx="1" title="このお知らせを閉じる" onClick={()=>setDcBack(null)}
+                      style={{marginLeft:'auto',border:'none',background:'transparent',color:'#065f46',
+                        fontSize:16,fontWeight:900,cursor:'pointer',padding:'2px 6px'}}>✕</button>
+                  </div>)}
+                <div data-insphead="1" style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap',rowGap:5}}>
+                  <h3 style={SEC_TITLE('#9a3412')}>🚗 車検</h3>
+                  {/* 台数制限バッジ（設定中の日のみ表示） */}
+                  {inspLimits[dk]!=null&&(
+                    <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6}}>
+                      <span style={{fontSize:14}}>🚗</span>
+                      <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>台数制限 最大{inspLimits[dk]}台</span>
+                    </div>
+                  )}
+                  {/* 承認待ち警告アイコン */}
+                  {(()=>{
+                    const pendingCount=(inspData[dk]||[]).filter(r=>r?.name&&r.pendingApproval).length;
+                    if(pendingCount===0)return null;
+                    return <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fef3c7',border:'2px solid #f59e0b',borderRadius:6}}>
+                      <span style={{fontSize:16}}>⚠️</span>
+                      <span style={{fontWeight:700,color:'#d97706',fontSize:11}}>承認待ち {pendingCount}件</span>
+                    </div>;
+                  })()}
+                  {/* ★対応スタッフ数のアラート（v3.128.0・2026-11-23 ユーザー決定・イ案）。
+                      それまでは 車検とタイムスケジュールの【上に帯】で出していて、1本で約2行・2本で約4行ぶん
+                      予定表が狭くなっていた。→ 帯をやめて、この【車検の見出しの行】に札で出す。
+                      ★置き場所は車検の側（右のタイムスケジュールの見出しはボタンと入庫制限の札で混むため）。
+                      ★札の中に 入庫の件数／対応できる人数 まで出す（なぞらなくても分かる）。内訳はなぞる・押すとポップ。
+                      ★数え方（下の計算）は帯の時から1文字も変えていない。変えたのは出し方だけ。
+                      ★帯に戻さないこと（また予定表が狭くなる）。 */}
+                  {(()=>{
                 const storeHolidayChk=isClosed(new Date(...dk.split('-').map((v,i)=>i===1?Number(v)-1:Number(v))));
                 // ★有給も休みとして数える（2026-10-19）。出勤者の人数がずれていた。
                 // ★研修の人もここでは外す（2026-11-04 ユーザー了承）。出勤しているが研修で不在なので
@@ -19737,86 +19853,11 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                   const isOver=total>frontCount;
                   const isEqual=total===frontCount;
                   if(!isOver&&!isEqual)return;
-                  alerts.push({label,total,insp,sched,isOver,isEqual});
+                  alerts.push({slot:label.replace('枠',''),label,total,insp,sched,isOver,isEqual,front:frontCount,work:workingStaff.length});
                 });
 
                 if(alerts.length===0)return null;
-                return(
-                  <div style={{marginBottom:12,display:'flex',flexDirection:'column',gap:6}}>
-                    {alerts.map(({label,total,insp,sched,isOver})=>(
-                      <div key={label} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',background:isOver?'#fff1f2':'#fffbeb',border:`2px solid ${isOver?'#fca5a5':'#fcd34d'}`,borderRadius:9}}>
-                        <span style={{fontSize:18,flexShrink:0}}>{isOver?'⚠️':'⚡'}</span>
-                        <div style={{flex:1}}>
-                          <div style={{fontWeight:800,color:isOver?'#dc2626':'#d97706',fontSize:13}}>
-                            【{label}】入庫台数が対応スタッフ数{isOver?'を超えています':'に達しています'}
-                          </div>
-                          <div style={{fontSize:11,color:isOver?'#9f1239':'#92400e',marginTop:2,display:'flex',gap:10,flexWrap:'wrap'}}>
-                            <span>🚗 車検 <strong>{insp}台</strong></span>
-                            <span>⏰ 整備 <strong>{sched}件</strong></span>
-                            <span>＝ 合計 <strong>{total}件</strong></span>
-                            <span title="対応可能業務で車検/整備フロント対応にチェックのある出勤スタッフ">👤 フロント対応 <strong>{frontCount}名</strong>{frontCount!==workingStaff.length&&<span style={{fontWeight:400}}>（出勤{workingStaff.length}名）</span>}</span>
-                            {isOver&&<span style={{color:'#dc2626',fontWeight:800}}>→ {total-frontCount}件オーバー</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* == スプリットパネル：左＝車検＋備考 ／ 右＝タイムスケジュール == */}
-              {/* ドラッグで左右比率を変更、リセットで50:50に戻す */}
-              <div ref={splitContainerRef}
-                style={{display:'flex',gap:0,flex:1,overflow:'hidden',position:'relative',userSelect:isDraggingRef.current?'none':'auto'}}
-                onMouseMove={e=>{
-                  if(!isDraggingRef.current||!splitContainerRef.current)return;
-                  const rect=splitContainerRef.current.getBoundingClientRect();
-                  const pct=((e.clientX-rect.left)/rect.width)*100;
-                  setSplitRatio(Math.min(93,Math.max(7,pct)));
-                }}
-                onMouseUp={()=>{isDraggingRef.current=false;document.body.style.cursor='';document.body.style.userSelect='';}}
-                onMouseLeave={()=>{if(isDraggingRef.current){isDraggingRef.current=false;document.body.style.cursor='';document.body.style.userSelect='';}}}
-              >
-
-                {/* --- 左カラム --- */}
-                <div style={{width:`${splitRatio}%`,minWidth:0,flexShrink:0,display:'flex',flexDirection:'column',gap:18,overflowY:'auto',height:'100%',paddingBottom:40}}>
-              {/* -- 車検セクション（台数集計なし） -- */}
-              <div id={SEC_INSP} style={{marginBottom:26,scrollMarginTop:'var(--header-h,60px)'}}>
-                {/* ★日にち変更のあとのお知らせ（イ案・2026-11-16 ユーザー決定）。
-                    ★出すのは【元の日を見ている間だけ】。別の日へ移れば自然に消えるので、
-                    消すためのタイマーは要らない（勝手に消えて驚かせないため）。 */}
-                {dcBack&&dcBack.from===dk&&(
-                  <div data-dcback="1" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
-                    padding:'8px 12px',marginBottom:8,background:'#ecfdf5',border:'2px solid #047857',
-                    borderRadius:10,color:'#065f46',fontSize:13,fontWeight:800}}>
-                    <span>✓ {cxMD(dcBack.to)} へ移しました。この日には「日にち変更」の記録（下の赤い帯）を残してあります。</span>
-                    <button data-dcbackgo="1" title="移り先の日のスケジュールを見る"
-                      onClick={()=>{const q=String(dcBack.to).split('-').map(Number);
-                        if(q.length===3&&!isNaN(q[0])){const nd=new Date(q[0],q[1]-1,q[2]);setSelDate(nd);selDateRef.current=nd;}}}
-                      style={{padding:'6px 12px',borderRadius:8,border:'2px solid #047857',background:'white',
-                        color:'#065f46',fontSize:12.5,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap'}}>
-                      {cxMD(dcBack.to)} を見る ▶</button>
-                    <button data-dcbackx="1" title="このお知らせを閉じる" onClick={()=>setDcBack(null)}
-                      style={{marginLeft:'auto',border:'none',background:'transparent',color:'#065f46',
-                        fontSize:16,fontWeight:900,cursor:'pointer',padding:'2px 6px'}}>✕</button>
-                  </div>)}
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                  <h3 style={SEC_TITLE('#9a3412')}>🚗 車検</h3>
-                  {/* 台数制限バッジ（設定中の日のみ表示） */}
-                  {inspLimits[dk]!=null&&(
-                    <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fee2e2',border:'2px solid #ef4444',borderRadius:6}}>
-                      <span style={{fontSize:14}}>🚗</span>
-                      <span style={{fontWeight:700,color:'#dc2626',fontSize:11}}>台数制限 最大{inspLimits[dk]}台</span>
-                    </div>
-                  )}
-                  {/* 承認待ち警告アイコン */}
-                  {(()=>{
-                    const pendingCount=(inspData[dk]||[]).filter(r=>r?.name&&r.pendingApproval).length;
-                    if(pendingCount===0)return null;
-                    return <div style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',background:'#fef3c7',border:'2px solid #f59e0b',borderRadius:6}}>
-                      <span style={{fontSize:16}}>⚠️</span>
-                      <span style={{fontWeight:700,color:'#d97706',fontSize:11}}>承認待ち {pendingCount}件</span>
-                    </div>;
+                return alerts.map(a=><StaffAlertChip key={dk+'/'+a.slot} a={a}/>);
                   })()}
                   {/* +/- 枠ボタン：左詰め */}
                   {inspSlots>1&&<button onClick={()=>setInspSlots(s=>Math.max(1,s-1))} title="枠を削除" style={{display:'flex',alignItems:'center',gap:2,padding:'4px 9px',background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:5,cursor:'pointer',fontWeight:700,fontSize:10,color:'#dc2626'}}><MinusSquare size={13}/></button>}
