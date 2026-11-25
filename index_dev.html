@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795572527068';
+    window.__APP_BUILD='build-1795576721321';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.131.0';
+const APP_VERSION = '3.132.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8761,6 +8761,169 @@ td.closed{background:#fecaca}
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}</title><style>${css}</style></head><body><div class="sheet" data-printmode="${d.mode}">${head}${body}</div></body></html>`;
 };
 
+// ╔══ スタッフ休日：数え方・1か月の中身・表・印刷（v3.132.0・2026-11-25）══╗
+//   カレンダー画面の「🏖 休日」（見るだけ）と、設定の「スタッフ休日・有給カレンダー」（入れる所）の
+//   【両方が同じものを使う】。数え方をもう1つ書かないこと（画面どうし・画面と用紙で数字が食い違う）。
+//   c = { y, m, dayOff, pleave, trn, isClosed(y,m,d), mh（会社の月間休日数） }
+const _offArr=v=>Array.isArray(v)?v:[];
+// 1人ぶんの集計（店の休業日は休日に数える／枠を超えた休日は有給に数える／研修は休みに入れない）
+const staffOffSum=(name,c)=>{
+  let offs=0,leaves=0,closedN=0,trn=0;
+  const dim=new Date(c.y,c.m+1,0).getDate();
+  for(let d=1;d<=dim;d++){
+    const dkk=c.y+'-'+(c.m+1)+'-'+d;
+    if(c.isClosed(c.y,c.m,d)){offs++;closedN++;continue;}
+    if(_offArr((c.dayOff||{})[dkk]).includes(name))offs++;
+    if(_offArr((c.pleave||{})[dkk]).includes(name))leaves++;
+    if(_offArr((c.trn||{})[dkk]).includes(name))trn++;
+  }
+  const carry=calcHolidayCarry(name,c.y,c.m,c.dayOff||{},c.isClosed,c.mh);
+  if(carry&&carry.over>0){offs-=carry.over;leaves+=carry.over;}
+  return{name,offs,leaves,trn,closedN,carry};
+};
+// その月の1日ごとの中身と、表に出す人（名簿＋名簿に無い名前）。
+//   ★名簿に無い名前も、その月に休みが入っていれば必ず出す（名簿で絞って黙って消さない）。
+const staffOffMonth=(c,rosterNames)=>{
+  const days=[], dim=new Date(c.y,c.m+1,0).getDate();
+  for(let d=1;d<=dim;d++){
+    const dkk=c.y+'-'+(c.m+1)+'-'+d, closed=!!c.isClosed(c.y,c.m,d);
+    days.push({d,dkk,dow:new Date(c.y,c.m,d).getDay(),closed,hol:HOLIDAYS.has(dkk),
+      off:closed?[]:_offArr((c.dayOff||{})[dkk]), leave:closed?[]:_offArr((c.pleave||{})[dkk]), trn:closed?[]:_offArr((c.trn||{})[dkk])});
+  }
+  const roster=(rosterNames||[]).slice(), extra=[];
+  days.forEach(x=>[...x.off,...x.leave,...x.trn].forEach(n=>{if(!roster.includes(n)&&!extra.includes(n))extra.push(n);}));
+  return {days,roster,extra,names:[...roster,...extra]};
+};
+// 印刷の画面を開く。mode='table'（全員・表）／'one'（who さんの1か月）。用紙は staffCalPrintHtml が作る。
+const staffOffPrintOpen=({mode,who,storeName,c,rosterNames,noteOf})=>{
+  const mo=staffOffMonth(c,rosterNames);
+  const days=mo.days.map(x=>{const notes={};[...x.off,...x.leave].forEach(n=>{const t=noteOf?noteOf(x.dkk,n):'';if(t)notes[n]=t;});return {...x,notes};});
+  const names=mode==='one'?[who]:mo.names;
+  const summary=names.map(n=>{const x=staffOffSum(n,c);return{name:n,offs:x.offs,leaves:x.leaves,trn:x.trn,breakdown:offBreakdown(x.closedN,x.carry),carry:carryLabel(x.carry)};});
+  const c1=mode==='one'?calcHolidayCarry(who,c.y,c.m,c.dayOff||{},c.isClosed,c.mh):null;
+  const nw=new Date(), p2=v=>String(v).padStart(2,'0');
+  const html=staffCalPrintHtml({mode,storeName,y:c.y,m:c.m,who,quota:(c.mh||{})[c.y+'-'+(c.m+1)],
+    stamp:nw.getFullYear()+'/'+(nw.getMonth()+1)+'/'+nw.getDate()+' '+p2(nw.getHours())+':'+p2(nw.getMinutes()),
+    staff:names,days,summary,carried:(c1&&c1.carried)||[]});
+  const w=window.open('','_blank','width=1200,height=800');
+  if(!w){alert('印刷の画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度お試しください。');return false;}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{try{w.print();}catch(e){}},600);
+  return true;
+};
+// 全員の表（スタッフ×日）。印刷の表型（staffCalPrintHtml の mode:'table'）と同じ並び・同じ印。
+//   ★見るだけ。マスを押しても何も変わらない。氏名は canPick(name) が true の人だけ押せる（onPick）。
+const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})=>{
+  const OT_NAME=118, OT_DAY=30, OT_TOT=40, OT_CY=104;
+  const OT_LINE='1px solid #334155';
+  const OT_TH={border:OT_LINE,background:'#e5e7eb',padding:'3px 0',textAlign:'center',fontWeight:800,fontSize:11,lineHeight:1.2};
+  const OT_TD={border:OT_LINE,textAlign:'center',verticalAlign:'middle',padding:0,height:30,position:'relative',overflow:'hidden',background:'white'};
+  const OT_TOTD={...OT_TD,background:'#f8fafc',fontWeight:800,fontSize:12.5};
+  const OT_K={display:'inline-block',minWidth:20,textAlign:'center',fontWeight:900,fontSize:12,borderRadius:4,lineHeight:'19px',padding:'0 2px'};
+  const OT_K_OFF={...OT_K,background:'#fff',color:'#c2410c',border:'1.6px solid #c2410c'};
+  const OT_K_LV ={...OT_K,background:'#047857',color:'#fff',border:'1.6px solid #047857'};
+  const OT_K_TR ={...OT_K,background:'#fff',color:TRN_COL,border:'1.6px dashed '+TRN_COL};
+  const OT_TODAY_H={background:'#ffedd5',boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c, inset 0 2px 0 #fb923c'};
+  const OT_TODAY_C={boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c'};
+  const DOWJ=['日','月','火','水','木','金','土'];
+  const today=new Date();
+  const numCol=x=>(x.hol||x.dow===0)?'#dc2626':x.dow===6?'#1d4ed8':'#111';
+  const isToday=x=>x.d===today.getDate()&&c.m===today.getMonth()&&c.y===today.getFullYear();
+  const mo=staffOffMonth(c,rosterNames);
+  const note=(dkk,n)=>noteOf?noteOf(dkk,n):'';
+  return(
+    <div data-offtablewrap="1" style={{border:'2px solid #334155',borderRadius:9,overflowX:'auto',overflowY:'hidden',background:'white'}}>
+      <table data-offtable="1" style={{borderCollapse:'collapse',width:'100%',tableLayout:'fixed',
+        minWidth:OT_NAME+mo.days.length*OT_DAY+4*OT_TOT+OT_CY,fontSize:12}}>
+        <colgroup>
+          <col style={{width:OT_NAME}}/>
+          {mo.days.map(x=><col key={x.d} style={{width:OT_DAY}}/>)}
+          <col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/>
+          <col style={{width:OT_CY}}/>
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowSpan={2} style={{...OT_TH,textAlign:'left',paddingLeft:8,position:'sticky',left:0,zIndex:2}}>氏名</th>
+            {mo.days.map(x=>(
+              <th key={x.d} data-offhead={x.d} title={x.hol?'祝日':undefined}
+                style={{...OT_TH,color:numCol(x),fontSize:12.5,...(isToday(x)?OT_TODAY_H:{})}}>{x.d}</th>
+            ))}
+            <th rowSpan={2} style={OT_TH}>休日</th>
+            <th rowSpan={2} style={OT_TH}>有給</th>
+            <th rowSpan={2} style={OT_TH}>計</th>
+            <th rowSpan={2} style={OT_TH}>{TRN_LABEL}</th>
+            <th rowSpan={2} style={OT_TH}>繰り越し</th>
+          </tr>
+          <tr>
+            {mo.days.map(x=>(
+              <th key={x.d} style={{...OT_TH,color:numCol(x),fontSize:10.5,...(isToday(x)?OT_TODAY_H:{})}}>{DOWJ[x.dow]}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {mo.names.map(n=>{
+            const s=staffOffSum(n,c);
+            const mine=!!meName&&n===meName;
+            const outside=!mo.roster.includes(n);
+            const pick=!outside&&!!onPick&&(!canPick||canPick(n));
+            return(
+              <tr key={n} data-offrow={n}>
+                <td onClick={pick?()=>onPick(n):undefined}
+                  title={outside?'名簿に無い名前です（休みのデータに残っています）':pick?(n+' さんのカレンダーを開く'):undefined}
+                  style={{...OT_TD,textAlign:'left',paddingLeft:8,fontWeight:800,fontSize:12.5,whiteSpace:'nowrap',
+                    position:'sticky',left:0,zIndex:1,background:mine?storeObj.bg:'white',
+                    color:outside?'#b45309':pick?storeObj.color:'#111',cursor:pick?'pointer':'default'}}>
+                  {outside&&'⚠ '}{n}
+                </td>
+                {mo.days.map(x=>{
+                  const kind=x.closed?'closed':x.off.includes(n)?'off':x.leave.includes(n)?'leave':x.trn.includes(n)?'trn':'';
+                  const memo=(kind==='off'||kind==='leave')?note(x.dkk,n):'';
+                  const tip=kind==='closed'?'店休日':kind?((c.m+1)+'/'+x.d+' '+n+'：'+(kind==='off'?'休日':kind==='leave'?'有給':TRN_LABEL+'（出勤・不在）')+(memo?'　📝 '+memo:'')):undefined;
+                  return(
+                    <td key={x.d} data-offcell={n+'/'+x.d} data-offkind={kind} title={tip}
+                      style={{...OT_TD,...(x.closed?{background:CLOSED_BG,color:CLOSED_FG,fontSize:9.5,fontWeight:700}:{}),...(isToday(x)?OT_TODAY_C:{})}}>
+                      {kind==='closed'?'店休':kind==='off'?<span style={OT_K_OFF}>休</span>
+                        :kind==='leave'?<span style={OT_K_LV}>有</span>
+                        :kind==='trn'?<span style={OT_K_TR}>研</span>:null}
+                      {memo&&<span style={{position:'absolute',top:1,right:1,width:0,height:0,borderTop:'6px solid #f59e0b',borderLeft:'6px solid transparent'}}/>}
+                    </td>
+                  );
+                })}
+                <td data-offtot="offs" title={offBreakdown(s.closedN,s.carry)||undefined} style={OT_TOTD}>{s.offs||0}</td>
+                <td data-offtot="leaves" style={OT_TOTD}>{s.leaves||0}</td>
+                <td data-offtot="sum" style={{...OT_TOTD,color:'#c2410c'}}>{(s.offs||0)+(s.leaves||0)}</td>
+                <td data-offtot="trn" data-sumtrn={s.trn>0?n:undefined} style={{...OT_TOTD,color:TRN_COL}}>{s.trn||''}</td>
+                <td data-offtot="carry" title={carryTitle(s.carry)||undefined}
+                  style={{...OT_TOTD,fontSize:10,fontWeight:700,whiteSpace:'nowrap',color:(s.carry&&s.carry.remain>0)?'#1d4ed8':'#dc2626'}}>{carryLabel(s.carry)||''}</td>
+              </tr>
+            );
+          })}
+          <tr data-offcntrow="1">
+            <td style={{...OT_TOTD,textAlign:'left',paddingLeft:8,fontSize:10.5,position:'sticky',left:0,zIndex:1}}>休みの人数</td>
+            {mo.days.map(x=>(
+              <td key={x.d} data-offcnt={x.d}
+                style={{...OT_TOTD,fontSize:11,...(x.closed?{background:CLOSED_BG}:{}),...(isToday(x)?OT_TODAY_C:{})}}>
+                {x.closed?'':((x.off.length+x.leave.length)||'')}
+              </td>
+            ))}
+            <td colSpan={5} style={OT_TOTD}/>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{padding:'6px 10px',borderTop:'1px solid #cbd5e1',background:'#f8fafc',fontSize:10.5,color:'#475569',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}>
+        <span><span style={OT_K_OFF}>休</span> 休日</span>
+        <span><span style={OT_K_LV}>有</span> 有給</span>
+        <span><span style={OT_K_TR}>研</span> {TRN_LABEL}（出勤・不在）</span>
+        <span><span style={{display:'inline-block',width:13,height:13,background:CLOSED_BG,border:'1px solid #b91c1c',verticalAlign:-2,marginRight:3}}/>休業日</span>
+        <span>「休日」には店の休業日も入っています。「休みの人数」は 休日＋有給 の人数です。</span>
+        {onPick&&<span style={{color:storeObj.color,fontWeight:700}}>{hint||'色の付いた氏名を押すと、その人のカレンダーが開きます'}</span>}
+      </div>
+    </div>
+  );
+};
+// ╚══════════════════════════════════════════════════════════════════╝
+
 // ============================================
 //  スタッフ休日・有給カレンダーモーダル
 // ============================================
@@ -8781,7 +8944,6 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
   const [memoEdit,setMemoEdit]=useState(null);   // {dkk} 休日メモを編集中の日（選んだスタッフの分）
   const [memoText,setMemoText]=useState('');
   const [autoLeaveMsg,setAutoLeaveMsg]=useState('');   // 「枠を使い切ったので有給にしました」の一言（数秒で消える）
-  const [printOpen,setPrintOpen]=useState(false);      // 🖨 印刷のメニュー（2026-11-23）
   useEffect(()=>{ if(!autoLeaveMsg)return; const t=setTimeout(()=>setAutoLeaveMsg(''),6000); return()=>clearTimeout(t); },[autoLeaveMsg]);
 
   useEffect(()=>{
@@ -8795,7 +8957,6 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
       // ログインユーザーを初期選択（自分の休日をすぐ編集できるように）
       setSelStaff(startStore===(currentUser?.store?.id)?(currentUser?.name||null):null);   // 他店は「全員」から
       setSelType('dayoff');
-      setPrintOpen(false);
     }
   },[isOpen,initMonth,currentUser,viewStore]);
 
@@ -8918,115 +9079,26 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
 
   // 月次集計（店舗休業日はスタッフ休日にカウント）
   // ★1人ぶんの集計（2026-11-23：印刷でも【同じ数え方】を使うので関数に切り出した。中身は変えていない）
-  const sumOne=name=>{
-    let offs=0,leaves=0,closedN=0,trn=0;
-    for(let d=1;d<=daysInMonth;d++){
-      const dkk=`${cy}-${cm+1}-${d}`;
-      if(isStoreClosed(cy,cm,d)){offs++;closedN++;continue;} // 店休日はスタッフ休日としてカウント
-      if((dayOffData[dkk]||[]).includes(name))offs++;
-      if((pleaveData[dkk]||[]).includes(name))leaves++;
-      // ★研修は【休みでない】ので別に数える。offs・leaves・「計○日」には絶対に足さないこと（2026-11-04）
-      if((trnData[dkk]||[]).includes(name))trn++;
-    }
-    const carry=calcHolidayCarry(name,cy,cm,dayOffData,isStoreClosed,monthlyHolidays);
-    if(carry&&carry.over>0){offs-=carry.over;leaves+=carry.over;}   // 枠を超えた休日は有給に数える
-    return{name,offs,leaves,trn,closedN,carry};
-  };
+  const offCtx={y:cy,m:cm,dayOff:dayOffData,pleave:pleaveData,trn:trnData,isClosed:isStoreClosed,mh:monthlyHolidays};
+  const sumOne=name=>staffOffSum(name,offCtx);
   const monthlySummary=staffList.map(s=>sumOne(s.name)).filter(s=>s.offs>0||s.leaves>0||s.trn>0||(s.carry&&s.carry.quota!=null));
 
   const today=new Date();
   const selCarry=selStaff?calcHolidayCarry(selStaff,cy,cm,dayOffData,isStoreClosed,monthlyHolidays):null;   // 選んだ人の繰り越し（充てた日の表示用）
 
-  // ── 🖨 印刷（v3.129.0・2026-11-23 ユーザー要望：「全体（店舗）・スタッフ個別で印刷できるように」）
-  //   刷るのは【いま開いている月・いま選んでいる店】。用紙は staffCalPrintHtml（純関数）が作る。
-  //   ★個別で選べる人は画面の決まりと同じ：管理者＝全員／一般スタッフ＝自分だけ（全体は誰でも刷れる）。
-  //   ★名簿に無い名前（名前を変えた人など）も、その月に休みが入っていれば【全体の表に必ず出す】。
-  //     名簿で絞り込んで黙って消さないこと（2026-10-06 の「幸田さんが出ない」と同じ事故になる）。
-  //   ★店の休業日は名前を出さない（画面と同じ）。集計は画面と同じ sumOne。
-  const printNames=(adminMode?staffList:staffList.filter(s=>s.name===(currentUser&&currentUser.name))).map(s=>s.name);
-  // ★その月の1日ごとの中身と、表に出す人（名簿＋名簿に無い名前）。
-  //   【画面の全員表示の表】と【印刷】が同じものを使う（v3.131.0）＝画面と用紙で食い違わない。
-  const mDays=[];
-  for(let d=1;d<=daysInMonth;d++){
-    const dkk=`${cy}-${cm+1}-${d}`, closed=isStoreClosed(cy,cm,d);
-    mDays.push({d,dkk,dow:new Date(cy,cm,d).getDay(),closed,hol:HOLIDAYS.has(dkk),
-      off:closed?[]:(dayOffData[dkk]||[]), leave:closed?[]:(pleaveData[dkk]||[]), trn:closed?[]:(trnData[dkk]||[])});
-  }
-  const mRoster=staffList.map(s=>s.name), mExtra=[];
-  mDays.forEach(x=>[...x.off,...x.leave,...x.trn].forEach(n=>{if(!mRoster.includes(n)&&!mExtra.includes(n))mExtra.push(n);}));
-  const mNames=[...mRoster,...mExtra];
-  // ── 全員表示の表（スタッフ×日）の見た目。印刷の表型（staffCalPrintHtml）と同じ並び・同じ印。
-  const OT_NAME=118, OT_DAY=30, OT_TOT=40, OT_CY=104;
-  const OT_LINE='1px solid #334155';
-  const OT_TH={border:OT_LINE,background:'#e5e7eb',padding:'3px 0',textAlign:'center',fontWeight:800,fontSize:11,lineHeight:1.2};
-  const OT_TD={border:OT_LINE,textAlign:'center',verticalAlign:'middle',padding:0,height:30,position:'relative',overflow:'hidden',background:'white'};
-  const OT_TOTD={...OT_TD,background:'#f8fafc',fontWeight:800,fontSize:12.5};
-  const OT_K={display:'inline-block',minWidth:20,textAlign:'center',fontWeight:900,fontSize:12,borderRadius:4,lineHeight:'19px',padding:'0 2px'};
-  const OT_K_OFF={...OT_K,background:'#fff',color:'#c2410c',border:'1.6px solid #c2410c'};
-  const OT_K_LV ={...OT_K,background:'#047857',color:'#fff',border:'1.6px solid #047857'};
-  const OT_K_TR ={...OT_K,background:'#fff',color:TRN_COL,border:'1.6px dashed '+TRN_COL};
-  const OT_TODAY_H={background:'#ffedd5',boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c, inset 0 2px 0 #fb923c'};
-  const OT_TODAY_C={boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c'};
-  const otNumCol=x=>(x.hol||x.dow===0)?'#dc2626':x.dow===6?'#1d4ed8':'#111';
-  const otToday=x=>x.d===today.getDate()&&cm===today.getMonth()&&cy===today.getFullYear();
-  const doPrint=(mode,who)=>{
-    const days=mDays.map(x=>{const notes={};[...x.off,...x.leave].forEach(n=>{const t=noteOf(x.dkk,n);if(t)notes[n]=t;});return {...x,notes};});
-    const names=mode==='one'?[who]:mNames;
-    const summary=names.map(n=>{const x=sumOne(n);return{name:n,offs:x.offs,leaves:x.leaves,trn:x.trn,breakdown:offBreakdown(x.closedN,x.carry),carry:carryLabel(x.carry)};});
-    const c1=mode==='one'?calcHolidayCarry(who,cy,cm,dayOffData,isStoreClosed,monthlyHolidays):null;
-    const nw=new Date(), p2=v=>String(v).padStart(2,'0');
-    const html=staffCalPrintHtml({mode,storeName:storeObj.name,y:cy,m:cm,who,quota:(monthlyHolidays||{})[`${cy}-${cm+1}`],
-      stamp:`${nw.getFullYear()}/${nw.getMonth()+1}/${nw.getDate()} ${p2(nw.getHours())}:${p2(nw.getMinutes())}`,
-      staff:names,days,summary,carried:(c1&&c1.carried)||[]});
-    setPrintOpen(false);
-    const w=window.open('','_blank','width=1200,height=800');
-    if(!w){alert('印刷の画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度お試しください。');return;}
-    w.document.write(html);
-    w.document.close();
-    setTimeout(()=>{try{w.print();}catch(e){}},600);
-  };
+  // ★🖨 印刷はここには置かない（v3.132.0・2026-11-25 ユーザー指示）。
+  //   印刷はカレンダー画面の「🏖 休日」で、全員か個人かを選んでから押す。ここは休みを【入れる所】。
+  const mRosterNames=staffList.map(s=>s.name);
 
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:2500,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}>
-      <div onClick={e=>{e.stopPropagation();if(printOpen)setPrintOpen(false);}} className="modal-box"
+      <div onClick={e=>e.stopPropagation()} className="modal-box"
         style={{background:'white',borderRadius:16,width:selStaff?'min(900px,97vw)':'min(1360px,98vw)',maxHeight:'94vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.4)'}}>
 
         {/* ヘッダー */}
         <div style={{padding:'14px 20px',background:`linear-gradient(135deg,${storeObj.color},${storeObj.accent})`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
           <div style={{color:'white',fontWeight:800,fontSize:15}}>🏖 スタッフ休日・有給カレンダー</div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            {/* ★🖨 印刷（v3.129.0・2026-11-23 ユーザー要望）。押すと小さなメニュー：店舗全体／スタッフ個別。
-                先に「全員表示」や名前を選び直さなくても、ここから直接えらんで刷れる。 */}
-            <div style={{position:'relative'}} onClick={e=>e.stopPropagation()}>
-              <button data-offprint="1" onClick={()=>setPrintOpen(p=>!p)} title="この月の休日表を印刷します（A4 横・1枚）"
-                style={{padding:'5px 13px',borderRadius:6,border:'2px solid rgba(255,255,255,0.5)',
-                  background:printOpen?'rgba(255,255,255,0.3)':'transparent',
-                  color:'white',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
-                🖨 印刷
-              </button>
-              {printOpen&&(
-                <div data-offprintmenu="1" style={{position:'absolute',top:'100%',right:0,marginTop:6,zIndex:20,background:'white',
-                  border:'2px solid #334155',borderRadius:10,boxShadow:'0 10px 30px rgba(0,0,0,.35)',padding:10,width:270,textAlign:'left'}}>
-                  <div style={{fontSize:11,fontWeight:800,color:'#475569',marginBottom:7}}>{cy}年{cm+1}月・{storeObj.name}（A4 横・1枚）</div>
-                  <button data-offprintall="1" onClick={()=>doPrint('table',null)}
-                    style={{display:'block',width:'100%',padding:'8px 10px',borderRadius:7,border:'2px solid '+storeObj.color,
-                      background:storeObj.bg,color:storeObj.color,fontWeight:800,fontSize:13,cursor:'pointer',textAlign:'left'}}>
-                    🏢 {storeObj.name} 全体を印刷
-                  </button>
-                  <div style={{fontSize:11,fontWeight:800,color:'#475569',margin:'10px 0 5px'}}>スタッフ個別{!adminMode&&<span style={{fontWeight:500,color:'#9ca3af'}}>（ご自分の分だけ）</span>}</div>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
-                    {printNames.map(n=>(
-                      <button key={n} data-offprintone={n} onClick={()=>doPrint('one',n)}
-                        style={{padding:'6px 10px',borderRadius:6,border:'2px solid #d1d5db',background:'white',color:'#374151',
-                          fontWeight:700,fontSize:12,cursor:'pointer'}}>
-                        {n}
-                      </button>
-                    ))}
-                    {printNames.length===0&&<span style={{fontSize:11,color:'#9ca3af'}}>この店の名簿にご自分の名前がありません</span>}
-                  </div>
-                </div>
-              )}
-            </div>
             {STORES.map(s=>(
               <button key={s.id} onClick={()=>{setCalStore(s.id);// 店舗切り替え時：自分の店舗なら自分を再選択、他店舗なら全員表示
                 const nextStaff=(s.id===currentUser?.store?.id)?currentUser?.name||null:null;
@@ -9137,95 +9209,11 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
               ★見た目は印刷の表型（staffCalPrintHtml の mode:'table'）にそろえる。数字は画面と同じ sumOne。
               ★ここは【見るだけ】。入れる・外すのは今までどおり、名前を選んでカレンダーで行う。
                 表の氏名を押すと、その人のカレンダーへ移る（選べる人は上の名前ボタンと同じ決まり）。
-              ★名簿に無い名前も、その月に休みが入っていれば必ず出す（mExtra）。名簿で絞って黙って消さないこと。 */}
+              ★名簿に無い名前も、その月に休みが入っていれば必ず出す（部品 StaffOffTable がやる）。名簿で絞って黙って消さないこと。 */}
           {!selStaff?(
-          <div data-offtablewrap="1" style={{border:'2px solid #334155',borderRadius:9,overflowX:'auto',overflowY:'hidden'}}>
-            <table data-offtable="1" style={{borderCollapse:'collapse',width:'100%',tableLayout:'fixed',
-              minWidth:OT_NAME+mDays.length*OT_DAY+4*OT_TOT+OT_CY,fontSize:12}}>
-              <colgroup>
-                <col style={{width:OT_NAME}}/>
-                {mDays.map(x=><col key={x.d} style={{width:OT_DAY}}/>)}
-                <col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/>
-                <col style={{width:OT_CY}}/>
-              </colgroup>
-              <thead>
-                <tr>
-                  <th rowSpan={2} style={{...OT_TH,textAlign:'left',paddingLeft:8,position:'sticky',left:0,zIndex:2}}>氏名</th>
-                  {mDays.map(x=>(
-                    <th key={x.d} data-offhead={x.d} title={x.hol?'祝日':undefined}
-                      style={{...OT_TH,color:otNumCol(x),fontSize:12.5,...(otToday(x)?OT_TODAY_H:{})}}>{x.d}</th>
-                  ))}
-                  <th rowSpan={2} style={OT_TH}>休日</th>
-                  <th rowSpan={2} style={OT_TH}>有給</th>
-                  <th rowSpan={2} style={OT_TH}>計</th>
-                  <th rowSpan={2} style={OT_TH}>{TRN_LABEL}</th>
-                  <th rowSpan={2} style={OT_TH}>繰り越し</th>
-                </tr>
-                <tr>
-                  {mDays.map(x=>(
-                    <th key={x.d} style={{...OT_TH,color:otNumCol(x),fontSize:10.5,...(otToday(x)?OT_TODAY_H:{})}}>{DOW2[x.dow]}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {mNames.map(n=>{
-                  const s=sumOne(n);
-                  const mine=n===(currentUser&&currentUser.name);
-                  const pick=mRoster.includes(n)&&(adminMode||mine);
-                  const outside=!mRoster.includes(n);
-                  return(
-                    <tr key={n} data-offrow={n}>
-                      <td onClick={pick?()=>setSelStaff(n):undefined}
-                        title={outside?'名簿に無い名前です（休みのデータに残っています）':pick?(n+' さんのカレンダーを開く'):undefined}
-                        style={{...OT_TD,textAlign:'left',paddingLeft:8,fontWeight:800,fontSize:12.5,whiteSpace:'nowrap',
-                          position:'sticky',left:0,zIndex:1,background:mine?storeObj.bg:'white',
-                          color:outside?'#b45309':pick?storeObj.color:'#111',cursor:pick?'pointer':'default'}}>
-                        {outside&&'⚠ '}{n}
-                      </td>
-                      {mDays.map(x=>{
-                        const kind=x.closed?'closed':x.off.includes(n)?'off':x.leave.includes(n)?'leave':x.trn.includes(n)?'trn':'';
-                        const memo=(kind==='off'||kind==='leave')?noteOf(x.dkk,n):'';
-                        const tip=kind==='closed'?'店休日':kind?(`${cm+1}/${x.d} ${n}：${kind==='off'?'休日':kind==='leave'?'有給':TRN_LABEL+'（出勤・不在）'}${memo?'　📝 '+memo:''}`):undefined;
-                        return(
-                          <td key={x.d} data-offcell={n+'/'+x.d} data-offkind={kind} title={tip}
-                            style={{...OT_TD,...(x.closed?{background:CLOSED_BG,color:CLOSED_FG,fontSize:9.5,fontWeight:700}:{}),...(otToday(x)?OT_TODAY_C:{})}}>
-                            {kind==='closed'?'店休':kind==='off'?<span style={OT_K_OFF}>休</span>
-                              :kind==='leave'?<span style={OT_K_LV}>有</span>
-                              :kind==='trn'?<span style={OT_K_TR}>研</span>:null}
-                            {memo&&<span style={{position:'absolute',top:1,right:1,width:0,height:0,borderTop:'6px solid #f59e0b',borderLeft:'6px solid transparent'}}/>}
-                          </td>
-                        );
-                      })}
-                      <td data-offtot="offs" title={offBreakdown(s.closedN,s.carry)||undefined} style={OT_TOTD}>{s.offs||0}</td>
-                      <td data-offtot="leaves" style={OT_TOTD}>{s.leaves||0}</td>
-                      <td data-offtot="sum" style={{...OT_TOTD,color:'#c2410c'}}>{(s.offs||0)+(s.leaves||0)}</td>
-                      <td data-offtot="trn" data-sumtrn={s.trn>0?n:undefined} style={{...OT_TOTD,color:TRN_COL}}>{s.trn||''}</td>
-                      <td data-offtot="carry" title={carryTitle(s.carry)||undefined}
-                        style={{...OT_TOTD,fontSize:10,fontWeight:700,whiteSpace:'nowrap',color:(s.carry&&s.carry.remain>0)?'#1d4ed8':'#dc2626'}}>{carryLabel(s.carry)||''}</td>
-                    </tr>
-                  );
-                })}
-                <tr data-offcntrow="1">
-                  <td style={{...OT_TOTD,textAlign:'left',paddingLeft:8,fontSize:10.5,position:'sticky',left:0,zIndex:1}}>休みの人数</td>
-                  {mDays.map(x=>(
-                    <td key={x.d} data-offcnt={x.d}
-                      style={{...OT_TOTD,fontSize:11,...(x.closed?{background:CLOSED_BG}:{}),...(otToday(x)?OT_TODAY_C:{})}}>
-                      {x.closed?'':((x.off.length+x.leave.length)||'')}
-                    </td>
-                  ))}
-                  <td colSpan={5} style={OT_TOTD}/>
-                </tr>
-              </tbody>
-            </table>
-            <div style={{padding:'6px 10px',borderTop:'1px solid #cbd5e1',background:'#f8fafc',fontSize:10.5,color:'#475569',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}>
-              <span><span style={OT_K_OFF}>休</span> 休日</span>
-              <span><span style={OT_K_LV}>有</span> 有給</span>
-              <span><span style={OT_K_TR}>研</span> {TRN_LABEL}（出勤・不在）</span>
-              <span><span style={{display:'inline-block',width:13,height:13,background:CLOSED_BG,border:'1px solid #b91c1c',verticalAlign:-2,marginRight:3}}/>休業日</span>
-              <span>「休日」には店の休業日も入っています。「休みの人数」は 休日＋有給 の人数です。</span>
-              <span style={{color:storeObj.color,fontWeight:700}}>色の付いた氏名を押すと、その人のカレンダーが開きます</span>
-            </div>
-          </div>
+          <StaffOffTable c={offCtx} rosterNames={mRosterNames} noteOf={noteOf} storeObj={storeObj}
+            meName={currentUser&&currentUser.name}
+            canPick={n=>adminMode||n===(currentUser&&currentUser.name)} onPick={n=>setSelStaff(n)}/>
           ):(
           <div style={{border:'2px solid #e5e7eb',borderRadius:9,overflow:'hidden'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#eef2ff',borderBottom:'1px solid #d1d5db'}}>
@@ -19866,6 +19854,30 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
 
                 {/* 右端：カレンダー切替ボタン + 歯車 */}
                 <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,flex:1,justifyContent:'flex-end'}}>
+                  {/* ★🖨 印刷（v3.132.0・2026-11-25 ユーザー指示）。「🏖 休日」を見ている時だけ出す。
+                      ユーザーの言葉：「休日ボタンを押すとカレンダーが出てくるので、そちらの方を、個人か全員か、
+                      選択してから、印刷ボタンを押すと、印刷のプレビューが出て印刷をするという形」。
+                      ★刷るのは【いま画面に出しているもの】＝全員なら表／名前を選んでいればその人の1か月。
+                      ★設定の「スタッフ休日・有給カレンダー」には置かない（v3.129.0〜v3.131.0 はそこにあった）。 */}
+                  {calView==='staff'&&(
+                    <button data-offprint="1" data-offprintwho={calStaffFilter||''}
+                      title={(calStaffFilter?(calStaffFilter+' さんの'):'全員の')+cy+'年'+(cm+1)+'月の休日表を印刷します（A4 横・1枚）'}
+                      onClick={()=>{
+                        const _off=vsId==='honten'?dayOffDataH:dayOffDataS, _pl=vsId==='honten'?paidLeaveDataH:paidLeaveDataS, _tr=vsId==='honten'?trainingDataH:trainingDataS;
+                        const _nt=(vsId==='honten'?offNoteH:offNoteS)||{};
+                        const _cd=Array.isArray(closedDays)?closedDays:[], _cdt=Array.isArray(closedDates)?closedDates:[];
+                        const _ov=Array.isArray(overrideOpenDates)?overrideOpenDates:[];
+                        const _isCl=(y,m,d)=>{const dt=new Date(y,m,d);return _cd.includes(dt.getDay())||_cdt.includes(fmt(y,m,d))||isSecondTuesdayHoliday(y,m,d,_ov);};
+                        staffOffPrintOpen({mode:calStaffFilter?'one':'table',who:calStaffFilter||null,storeName:vsStore.name,
+                          c:{y:cy,m:cm,dayOff:_off,pleave:_pl,trn:_tr,isClosed:_isCl,mh:monthlyHolidays},
+                          rosterNames:(vsId==='honten'?dynStaffH:dynStaffS).filter(s=>s.badge!=='president'&&s.myNumber!==0).map(s=>s.name),
+                          noteOf:(dkk,n)=>{const v=_nt[dkk+'::'+n];return typeof v==='string'?v:(v&&v.memo)||'';}});
+                      }}
+                      style={{display:'flex',alignItems:'center',gap:4,padding:'5px 11px',background:'#1f2937',border:'2px solid #1f2937',
+                        borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:800,color:'white',whiteSpace:'nowrap',marginRight:4}}>
+                      <span style={{fontSize:13}}>🖨</span>印刷（{calStaffFilter?calStaffFilter:'全員'}）
+                    </button>
+                  )}
                   {/* カレンダー切替（車検／休日／予定）。2026-09-20 に「📝 予定」（マイスケジュール）を追加 */}
                   {[['insp','🚗','車検','#10b981','#f0fdf4','#059669'],['staff','🏖','休日','#f97316','#fff7ed','#ea580c'],['my','📝','予定','#7c3aed','#f5f3ff','#5b21b6']].map(([id,ic,l,bd,bg,fg])=>(
                     <button key={id} onClick={()=>{setCalView(id);setCalStaffFilter(null);}} title={l+'カレンダー'}
@@ -20061,22 +20073,22 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                   return false;
                 };
                 // 個人選択時の月間集計（店休日はスタッフ休日にカウント）
-                const staffMonthStats=calStaffFilter?(()=>{
-                  let offs=0,leaves=0,closedN=0,trn=0;
-                  const daysInM=new Date(cy,cm+1,0).getDate();
-                  for(let d=1;d<=daysInM;d++){
-                    const dkk=`${cy}-${cm+1}-${d}`;
-                    if(isStoreClosedDay(cy,cm,d)){offs++;closedN++;continue;} // 店休日はスタッフ休日としてカウント
-                    if((dayOffCur[dkk]||[]).includes(calStaffFilter))offs++;
-                    if((pleaveCur[dkk]||[]).includes(calStaffFilter))leaves++;
-                    if((trnCur[dkk]||[]).includes(calStaffFilter))trn++;   // ★別扱い
-                  }
-                  const carry=calcHolidayCarry(calStaffFilter,cy,cm,dayOffCur,isStoreClosedDay,monthlyHolidays);
-                  if(carry&&carry.over>0){offs-=carry.over;leaves+=carry.over;}   // 枠を超えた休日は有給に数える
-                  return{offs,leaves,trn,closedN,carry};
-                })():null;
+                // ★数え方は部品 staffOffSum（設定のカレンダー・印刷と同じ式。v3.132.0）
+                const offCtxV={y:cy,m:cm,dayOff:dayOffCur,pleave:pleaveCur,trn:trnCur,isClosed:isStoreClosedDay,mh:monthlyHolidays};
+                const staffMonthStats=calStaffFilter?staffOffSum(calStaffFilter,offCtxV):null;
+                // ★★全員＝【表（スタッフ×日）】／個人＝今まで通りのカレンダー（v3.132.0・2026-11-25 ユーザー決定）。
+                //   ユーザーの言葉：「印刷の全体表示が良かったので、ウェブで見る表示も全体表示は表に。
+                //   個人に切り替えた時は、カレンダーの中に休みを入れる今まで通りの方法で」。
+                //   表の氏名を押すと、その人のカレンダーに切り替わる（上の名前ボタンと同じ）。
+                if(!calStaffFilter)return(
+                  <div data-offview="all" style={{flex:1,minHeight:0,overflowY:'auto',margin:'0 18px 18px'}}>
+                    <StaffOffTable c={offCtxV} rosterNames={staffList.map(s=>s.name)} noteOf={noteOfCur} storeObj={vsStore}
+                      meName={currentUser&&currentUser.name} onPick={n=>setCalStaffFilter(n)}
+                      hint="色の付いた氏名を押すと、その人のカレンダーに切り替わります"/>
+                  </div>
+                );
                 return(
-                  <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden',margin:'0 18px 18px',border:'2px solid #e5e7eb',borderRadius:9}}>
+                  <div data-offview="one" style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden',margin:'0 18px 18px',border:'2px solid #e5e7eb',borderRadius:9}}>
                     <div style={{overflowY:'auto',flex:1}}>
                     <div style={{border:'none'}}>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'linear-gradient(90deg,#fff7ed,#fef9f0)',borderBottom:'2px solid #fed7aa'}}>

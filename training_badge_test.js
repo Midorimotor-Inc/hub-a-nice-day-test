@@ -180,8 +180,10 @@ const initFor = ([me, stor, sd]) => {
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.replace(/\s+/g, '') === '全員' && e.offsetParent !== null); if (b) b.click(); });
   await page.waitForTimeout(1100);
   const tab = await page.evaluate(() => {
-    const e = document.querySelector('[data-tabtrn]');
-    return { name: e ? e.getAttribute('data-tabtrn') : '', txt: e ? e.innerText.replace(/\s+/g, '') : '', n: document.querySelectorAll('[data-tabtrn]').length };
+    // ★v3.132.0（2026-11-25）から、「全員」は表（スタッフ×日）。研修はその人の行のマスに「研」で出る。
+    //   （名前を選んだ時は今まで通りのカレンダーで、札は data-tabtrn のまま）
+    const e = document.querySelector('[data-offtable] [data-offkind="trn"]');
+    return { name: e ? e.getAttribute('data-offcell').split('/')[0] : '', txt: e ? e.innerText.replace(/\s+/g, '') : '', n: document.querySelectorAll('[data-offtable] [data-offkind="trn"]').length };
   });
   t('★休日タブに研修の札が出る（岡本大地）', tab.name === '岡本大地', tab);
   t('★札に「研」が付く', /研/.test(tab.txt), tab);

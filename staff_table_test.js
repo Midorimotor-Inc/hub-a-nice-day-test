@@ -1,10 +1,11 @@
-// スタッフ休日・有給カレンダー：全員表示は【表（スタッフ×日）】（v3.131.0・2026-11-25 ユーザー決定）
+// スタッフ休日：全員の表示は【表（スタッフ×日）】（v3.131.0 → v3.132.0・2026-11-25 ユーザー決定）
 //   ユーザーの言葉：「印刷の全体表示が良かったので、ウェブで見る表示も全体表示は表に。
 //   個人に切り替えた時は、カレンダーの中に休みを入れる今まで通りの方法で」。
-//   ・全員表示＝表（行＝スタッフ／列＝日／右端に 休日・有給・計・研修・繰り越し／下に休みの人数）
-//   ・名前を選んだ時＝今まで通りのカレンダー（入れる・外すはこちらで）
-//   ・表は見るだけ。氏名を押すとその人のカレンダーへ（選べる人は名前ボタンと同じ決まり）
-//   ・数字は印刷の表と同じ（同じ sumOne・同じ mDays を使う）
+//   表が出る所は2つ（同じ部品 StaffOffTable）：
+//     ・カレンダー画面の「🏖 休日」（見るだけ）… 表示：全員＝表／名前を選ぶ＝今まで通りのカレンダー。🖨 印刷もここ
+//     ・設定の「スタッフ休日・有給カレンダー」（入れる所）… 全員表示＝表／名前を選ぶ＝今まで通りのカレンダー
+//   ・表は見るだけ。氏名を押すとその人のカレンダーへ
+//   ・数字は印刷の表と同じ（同じ staffOffSum・staffOffMonth を使う）
 //   ★日付は「今月」から作る（決め打ちにしない）。第2火曜（8〜14日）は休業日なので使わない。
 //   実行: node staff_table_test.js      見た目も撮る: SHOT=<保存先のフォルダ> node staff_table_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
@@ -106,7 +107,7 @@ const readTable = (page) => page.evaluate(() => {
   });
   const cnt = {}; [...tb.querySelectorAll('[data-offcnt]')].forEach(td => { cnt[td.getAttribute('data-offcnt')] = td.innerText.trim(); });
   const heads = [...tb.querySelectorAll('[data-offhead]')].map(th => th.innerText.trim());
-  const box = tb.closest('.modal-box').getBoundingClientRect();
+  const box = (tb.closest('.modal-box') || tb.closest('[data-offtablewrap]')).getBoundingClientRect();
   return { rows, cnt, heads, fitW: wrap.scrollWidth <= wrap.clientWidth + 1, boxW: Math.round(box.width), inView: box.left >= 0 && box.right <= window.innerWidth + 1,
     rowH: [...tb.querySelectorAll('tr[data-offrow]')].map(tr => Math.round(tr.getBoundingClientRect().height)) };
 });
@@ -157,25 +158,8 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('全員表示の時、下の集計のバッジは出さない（右端に同じ数字がある）', await pa.evaluate(() => !/📊/.test(document.querySelector('.modal-box').innerText)));
   if (SHOT) await pa.screenshot({ path: path.join(SHOT, 'staff_table_all.png') });
 
-  head('③ 右端の数字は、印刷の表とまったく同じ');
-  await pa.evaluate(() => { const b = document.querySelector('[data-offprint]'); if (b) b.click(); });
-  await pa.waitForTimeout(400);
-  await pa.evaluate(() => { const b = document.querySelector('[data-offprintall]'); if (b) b.click(); });
-  await pa.waitForTimeout(900);
-  const printed = await pa.evaluate(() => window.__printed);
-  {
-    const ctx = await browser.newContext(); const p = await ctx.newPage();
-    await p.setContent(printed, { waitUntil: 'load' });
-    const pr = await p.evaluate(() => [...document.querySelectorAll('table.tb tr')].map(tr => [...tr.children].map(c => c.innerText.replace(/\s+/g, ' ').trim())));
-    await ctx.close();
-    const same = T.rows.every(r => {
-      const q = pr.find(x => x[0] === r.name); if (!q) return false;
-      const n = q.length;   // 氏名＋日＋休日・有給・計・研修・繰り越し
-      return q[n - 5] === r.tot.offs && q[n - 4] === r.tot.leaves && q[n - 3] === r.tot.sum && q[n - 2] === r.tot.trn && q[n - 1] === r.tot.carry
-        && Object.keys(r.cells).every(d => (q[Number(d)] || '') === r.cells[d].text);
-    });
-    t('★4人とも、マスの中身も右端の数字も印刷と同じ', same, { screen: T.rows.map(r => [r.name, r.tot]), print: pr.slice(2, 6).map(q => q.slice(-5)) });
-  }
+  head('③ 設定の画面には印刷ボタンを置かない');
+  t('★設定の「スタッフ休日・有給カレンダー」に 🖨 印刷が無い', !(await pa.$('.modal-box [data-offprint]')));
   t('研修は「計」に入らない（竹林＝休日だけの数）', Number(row('竹林直行').tot.sum) === Number(row('竹林直行').tot.offs) + Number(row('竹林直行').tot.leaves) && row('竹林直行').tot.trn === '1', row('竹林直行').tot);
 
   head('④ 表の氏名を押すと、その人のカレンダー（今まで通り）');
@@ -230,6 +214,62 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★自分の氏名を押すと自分のカレンダー', (await hasGrid(pb)) && !(await readTable(pb)));
   t('画面のエラーなし（一般スタッフ）', B.errs.length === 0, B.errs.slice(0, 2));
   await B.ctx.close();
+
+  // ────────────────────────────────────────────────────────
+  head('⑦ カレンダー画面の「🏖 休日」：全員＝表／名前を選ぶ＝今まで通り／🖨 印刷と同じ数字');
+  const V = await start({ email: 'tikurin@midori-m.com', fbuid: 'uid_tk', uid: 'h3', name: '竹林直行', store: 'honten', role: 'staff' });
+  const pv = V.page;
+  // 設定の画面を閉じて、カレンダー画面 →「🏖 休日」
+  await pv.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => /確定して閉じる/.test(e.innerText)); if (b) b.click(); });
+  await pv.waitForTimeout(600);
+  await pv.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
+  await pv.waitForTimeout(1200);
+  await pv.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
+  await pv.waitForTimeout(1200);
+  const vPick = async (name) => { await pv.evaluate(n => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === n && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); }, name); await pv.waitForTimeout(600); };
+  t('開いた直後は自分のカレンダー（前からの動き・表は出ない）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]')));
+  await vPick('全員');
+  T = await readTable(pv);
+  const vrow = n => (T.rows.find(r => r.name === n) || { cells: {}, tot: {} });
+  t('★「全員」を選ぶと表（スタッフ×日）', !!T && await pv.evaluate(() => !!document.querySelector('[data-offview="all"]')));
+  t('★行＝名簿の3人＋名簿に無い名前1人', T && T.rows.length === 4, T && T.rows.map(r => r.name));
+  t('★休・有・研・店休が出る', vrow('竹林直行').cells['3'].text === '休' && vrow('魚住圭').cells['5'].text === '有' && vrow('竹林直行').cells['18'].text === '研' && vrow('江川京志').cells[String(CLOSED_DAY)].text === '店休');
+  t('★「休みの人数」', T.cnt['3'] === '2' && T.cnt['5'] === '1', [T.cnt['3'], T.cnt['5']]);
+  t('★横にはみ出さない', T.fitW, { fitW: T.fitW, boxW: T.boxW });
+  t('★ここでは誰の氏名も押せる（上の名前ボタンと同じ）', T.rows.filter(r => r.name !== '旧名太郎').every(r => r.cursor === 'pointer') && vrow('旧名太郎').cursor !== 'pointer', T.rows.map(r => [r.name, r.cursor]));
+  if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_all.png') });
+  // 印刷と突き合わせる
+  await pv.evaluate(() => { window.__printed = ''; });
+  await pv.click('[data-offprint]');
+  await pv.waitForTimeout(900);
+  {
+    const printed = await pv.evaluate(() => window.__printed);
+    const ctx = await browser.newContext(); const p = await ctx.newPage();
+    await p.setContent(printed, { waitUntil: 'load' });
+    const pr = await p.evaluate(() => [...document.querySelectorAll('table.tb tr')].map(tr => [...tr.children].map(c => c.innerText.replace(/\s+/g, ' ').trim())));
+    await ctx.close();
+    const same = T.rows.every(r => {
+      const q = pr.find(x => x[0] === r.name); if (!q) return false;
+      const n = q.length;
+      return q[n - 5] === r.tot.offs && q[n - 4] === r.tot.leaves && q[n - 3] === r.tot.sum && q[n - 2] === r.tot.trn && q[n - 1] === r.tot.carry
+        && Object.keys(r.cells).every(d => (q[Number(d)] || '') === r.cells[d].text);
+    });
+    t('★★4人とも、マスの中身も右端の数字も印刷とまったく同じ', same, { screen: T.rows.map(r => [r.name, r.tot]), print: pr.slice(2, 6).map(q => q.slice(-5)) });
+  }
+  // 氏名を押す → その人のカレンダー（今まで通り）→ 全員で表に戻る
+  await pv.evaluate(() => { const td = document.querySelector('tr[data-offrow="魚住圭"] td'); if (td) td.click(); });
+  await pv.waitForTimeout(700);
+  t('★表の氏名を押すと、その人のカレンダー（今まで通りの見た目）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]') && /魚住圭さん/.test(document.body.innerText)));
+  t('★印刷ボタンもその人を刷る表示になる', await pv.evaluate(() => (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho') === '魚住圭'));
+  if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one.png') });
+  await vPick('全員');
+  t('★「全員」で表に戻る', !!(await readTable(pv)));
+  await pv.evaluate(() => { const b = document.querySelector('button[title="翌月"]'); if (b) b.click(); });
+  await pv.waitForTimeout(600);
+  T = await readTable(pv);
+  t('★月を送っても表のまま・日数が変わる', T && T.heads.length === new Date(Y, M + 2, 0).getDate(), T && T.heads.length);
+  t('画面のエラーなし（🏖 休日）', V.errs.length === 0, V.errs.slice(0, 2));
+  await V.ctx.close();
 
   await browser.close(); server.close();
   console.log(NL + '━━━━━━━━━━━━━━━━━━━━');
