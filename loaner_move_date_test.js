@@ -187,7 +187,10 @@ const bar = (id, user, from, to, car, bk) => ({ id, user, fy: from.y, fm: from.m
   const rowB = ((i1 || {})[dk(B)] || []).find(r => r && r.name === '移動　太郎') || {};
   t('★予約が B 日へ移った', !!rowB.name, (i1 || {})[dk(B)]);
   t('★カードの代車名は消えていない', rowB.loaner === 'ハスラーオフブルー (8178)', rowB.loaner);
-  t('★A 日の予約は消えた', !((i1 || {})[dk(A)] || []).some(r => r && r.name === '移動　太郎'), (i1 || {})[dk(A)]);
+  // ★v3.119.0（2026-11-16）から、元の日には「日にち変更の帯」（bookingStatus:'cancelled'＋cxTo）が残る。
+  //   生きている予約が残っていないことを見る（帯は記録なので残ってよい）。
+  t('★A 日に生きている予約は残っていない（残るのは日にち変更の帯だけ）',
+    !((i1 || {})[dk(A)] || []).some(r => r && r.name === '移動　太郎' && r.bookingStatus !== 'cancelled'), (i1 || {})[dk(A)]);
   t('★「期間が一致しません」を聞かれない（一緒に動くので）', !dialogs.some(m => /期間がスケジュールと一致/.test(m)), dialogs);
 
   head('③ 代車管理が「ズレなし」になる');

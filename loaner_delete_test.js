@@ -92,14 +92,17 @@ const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 
   head('① 作りの確認（中身）');
   const SRC = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
-  const fn = (SRC.split('const clearCarLabelOnDelete=useCallback((res,isRental)=>{')[1] || '').split(NL + '  },[persistInsp,setSchedDataH,setSchedDataS]);')[0];
-  t('帯を消した時にカードを消す処理がある', !!fn);
+  // ★v3.130.0（2026-11-25）から、書く本体は writeCarLabelByRes（消す／入れるの両方に使う）。
+  //   clearCarLabelOnDelete は「同じ予約の帯がまだ残っていれば消さない」を見てからそれを呼ぶ。
+  const fn = (SRC.split('const writeCarLabelByRes=useCallback((res,isRental,setTo)=>{')[1] || '').split(NL + '  },[persistInsp,setSchedDataH,setSchedDataS]);')[0];
+  t('帯を消した時にカードを消す処理がある', !!fn && SRC.indexOf('writeCarLabelByRes(res,isRental,null);') > 0);
+  t('★同じ予約の帯がまだ残っていれば、カードは消さない', /const clearCarLabelOnDelete=useCallback\(\(res,isRental\)=>\{[\s\S]{0,700}if\(still\)return;/.test(SRC));
   t('★氏名が一致する行にだけ書く', fn.indexOf('r.name===who') > 0 && fn.indexOf('rows.findIndex') > 0, fn.slice(0, 80));
   t('★整備（sched-）にも効く', fn.indexOf("m[1]==='insp'") > 0 && fn.indexOf('setSchedDataH') > 0);
   t('★整備は両店を見る', fn.indexOf("'honten',setSchedDataH") > 0 && fn.indexOf("'sanda',setSchedDataS") > 0);
   t('★レンタカーの削除でもカードを消す', SRC.indexOf('clearCarLabelOnDelete(rec,true)') > 0);
   t('代車の削除ではレンタカー名を触らない（取り違え防止）',
-    fn.indexOf("isRental?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null}") > 0);
+    fn.indexOf("(isRental?{rentalLabel:'',rentalCarId:null}:{loaner:'',loanerId:null})") > 0);
 
   head('② 代車管理の画面から消してみる');
   await clickText(page, '代車管理');

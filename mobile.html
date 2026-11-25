@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795475697428';
+  window.__APP_BUILD='build-1795570340592';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.129.0';
+const MOBILE_VERSION='3.130.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -4166,7 +4166,33 @@ const EditModal=({quickItems,quickGroups,onSaveQuick,inspQuickItems,inspQuickGro
       if(cid){
         const p=String(mvDk).split('-').map(Number);
         const d1={y:p[0],m0:p[1]-1,d:p[2]};
-        loanerAction={kind:curKind,carId:cid,from:d1,to:d1,locked:carLocked};
+        // ★いまの貸出の【長さ】を保ったまま動かす（v3.130.0・2026-11-25。PC版と同じ決まり）。
+        //   それまでは移した日の1日だけに作り直していたので、数日貸しが1日に縮み、
+        //   時間を変えただけでも期間が変わっていた。
+        //   ・代車 … 同じ長さのまま、動かした日数ぶんずらす
+        //   ・レンタカー … 期間は動かさない（長期貸しが多い）。紐付けだけ付け替える
+        //   ★移した先でその車がふさがっていたら、保存そのものを止める（二重貸しを作らない）。
+        const src=(curKind==='rental'?rentalRes:loanerRes)||{};
+        const myBk=initial?.bookingKey||bk;
+        const old=Object.values(src[cid]||{}).find(r=>r&&r.bookingKey===myBk&&r.fy!=null);
+        const dnum=o=>Math.round(Date.UTC(o.y,o.m0,o.d)/86400000);
+        const ymd=n=>{const d=new Date(n*86400000);return{y:d.getUTCFullYear(),m0:d.getUTCMonth(),d:d.getUTCDate()};};
+        let from=d1,to=d1;
+        if(old){
+          const f0={y:old.fy,m0:old.fm,d:old.fd}, t0={y:old.ty==null?old.fy:old.ty,m0:old.tm==null?old.fm:old.tm,d:old.td==null?old.fd:old.td};
+          if(curKind==='rental'){ from=f0; to=t0; }
+          else{
+            const p0=String(mode.dk).split('-').map(Number);
+            const sh=dnum(d1)-dnum({y:p0[0],m0:p0[1]-1,d:p0[2]});
+            from=ymd(dnum(f0)+sh); to=ymd(dnum(t0)+sh);
+          }
+        }
+        if(curKind!=='rental'){
+          const fN=toNum(from.y,from.m0,from.d), tN=toNum(to.y,to.m0,to.d);
+          const hit=Object.values(src[cid]||{}).find(r=>r&&r!==old&&r.bookingKey!==myBk&&rangesOverlap(r,fN,tN));
+          if(hit){setErr(`日にちを変えられません。この代車は ${from.m0+1}/${from.d}〜${to.m0+1}/${to.d} に ${hit.user||'別の予約'} が使います。先に代車を選び直すか、「代車なし」にしてください`);return;}
+        }
+        loanerAction={kind:curKind,carId:cid,from,to,locked:carLocked};
       }
     }
     try{onSave(withDeliveryNote(outForm,mvDk,isInsp),loanerAction);}
@@ -5336,11 +5362,17 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
     if(m[1]==='insp'){
       const rows=(inspData||{})[m[2]]||[];
       const row=rows[Number(m[3])]||null;
-      if(row&&row.name)return{kind:'insp',dk:m[2],at:m[3],row,bk,store:null};
+      // ★その行が【本人の・生きている予約】の時だけ「その予約」とみなす（v3.130.0・2026-11-25。PC版と同じ）。
+      //   車検だけ氏名の確かめが抜けていて、帯の指す行に別のお客様が入ると2件に化けていた。
+      //   キャンセル・日にち変更の帯の行（bookingStatus:'cancelled'）は予約ではない。
+      const live=r=>!!(r&&r.name&&r.bookingStatus!=='cancelled');
+      if(live(row)&&(!who||row.name===who))return{kind:'insp',dk:m[2],at:m[3],row,bk,store:null};
       // ★行番号がずれただけ＝同じ日に同じ氏名の車検があればそれ（2026-10-14）
-      const i=who?rows.findIndex(r=>r&&r.name===who):-1;
+      const i=who?rows.findIndex(r=>live(r)&&r.name===who):-1;
       if(i>=0)return{kind:'insp',dk:m[2],at:String(i),row:rows[i],bk:'insp-'+m[2]+'-'+i,store:null};
-      return{kind:'insp',dk:m[2],at:m[3],row:null};
+      if(!who&&row&&row.name)return{kind:'insp',dk:m[2],at:m[3],row,bk,store:null};
+      const cx=rows.some(r=>r&&r.name&&r.bookingStatus==='cancelled'&&(!who||r.name===who));
+      return{kind:'insp',dk:m[2],at:m[3],row:null,cx};
     }
     // ★整備は**両店**を見る。代車は店をまたいで貸すので、見ている店だけ見ると他店の予約が「無い」になる。
     // ★拾った行は**氏名が合う時だけ**「その予約」とみなす（2026-10-14 ユーザー報告）。PC版と同じ。
@@ -5502,6 +5534,8 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
     scan('rental',rentalRes,rentals,null);
     const rev=(dk,at,row,kind)=>{
       if(!row||!row.name)return;
+      // ★キャンセル・日にち変更の帯の行は数えない（v3.130.0・PC版と同じ）。貸出は正しく外れている。
+      if(row.bookingStatus==='cancelled')return;
       const lbl=(row.loaner||'').trim(), rlbl=(row.rentalLabel||'').trim();
       if(!lbl&&!rlbl)return;
       const bk=kind+'-'+dk+'-'+at;
@@ -7596,8 +7630,15 @@ const App=()=>{
 
   // 代車/レンタカーの紐付け反映。entryへのラベル書き込みと lres/rres の予約更新を行い、
   // 更新後のentryを返す（PC版 handleSaveModal の pendingLoanerData / pendingRental 処理と同じ結果になる）
-  const applyLoanerAction=async(entry,action,bkFinal,userName,bkOld)=>{
+  const applyLoanerAction=async(entry,action,bkFinal,userName,bkOld,names)=>{
     if(!action)return entry; // 変更なし
+    // ★整備の鍵（sched-日付-枠）は【店ごとに別の表】なので、本店と三田店で同じ鍵になり得る。
+    //   鍵だけで外すと他店のお客様の帯まで外しかねない＝names（この予約の氏名）を渡された時は
+    //   氏名の違う帯には触らない（v3.130.0・2026-11-25。PC版の removeResByBkUser と同じ決まり）。
+    const _nm=s=>String(s==null?'':s).replace(/[\s　]/g,'');
+    const _nms=(names||[]).map(_nm).filter(Boolean);
+    const _mine=r=>{const u=_nm(r&&r.user);return !(_nms.length&&u&&!_nms.includes(u));};
+    const hasOwnBk=res=>Object.values(res||{}).some(days=>Object.values(days||{}).some(r=>r&&r.bookingKey===bkFinal&&_mine(r)));
     const lresKey=storKey('lres',vsId);
     const myLres=vsId==='honten'?loanerResH:loanerResS;
     const setMyLres=vsId==='honten'?setLoanerResH:setLoanerResS;
@@ -7607,7 +7648,7 @@ const App=()=>{
       const out={};
       for(const cid of Object.keys(res||{})){
         const days={...(res[cid]||{})};
-        Object.keys(days).forEach(k=>{const b=days[k]&&days[k].bookingKey;if(b===bkFinal||(bkOld&&b===bkOld))delete days[k];});
+        Object.keys(days).forEach(k=>{const b=days[k]&&days[k].bookingKey;if((b===bkFinal||(bkOld&&b===bkOld))&&_mine(days[k]))delete days[k];});
         out[cid]=days;
       }
       return out;
@@ -7616,8 +7657,8 @@ const App=()=>{
     if(action.kind==='none'){
       // 別キーへの独立した書き込みは並列化（GASロック側で直列化されるが、読み・検証待ちが重なる分速い）
       await Promise.all([
-        writeShared(lresKey,myLres,base=>cleanOwn(base),setMyLres,echo=>!hasBk(echo,bkFinal),true),
-        writeShared(STOR+'rres',rentalResData,base=>cleanOwn(base),setRentalResData,echo=>!hasBk(echo,bkFinal),true),
+        writeShared(lresKey,myLres,base=>cleanOwn(base),setMyLres,echo=>!hasOwnBk(echo),true),
+        writeShared(STOR+'rres',rentalResData,base=>cleanOwn(base),setRentalResData,echo=>!hasOwnBk(echo),true),
       ]);
       return {...entry,loaner:'',loanerId:null,rentalLabel:'',rentalCarId:null};
     }
@@ -7643,7 +7684,7 @@ const App=()=>{
           days[k]=rec;
           return{...cleaned,[action.carId]:days};
         },setMyLres,echo=>Object.values(echo[action.carId]||{}).some(r=>r&&r.id===rec.id&&r.bookingKey===bkFinal),true),
-        writeShared(STOR+'rres',rentalResData,base=>cleanOwn(base),setRentalResData,echo=>!hasBk(echo,bkFinal),true),
+        writeShared(STOR+'rres',rentalResData,base=>cleanOwn(base),setRentalResData,echo=>!hasOwnBk(echo),true),
       ]);
       return {...entry,loaner:car?`${car.name} (${car.num})`:'',loanerId:action.carId,rentalLabel:'',rentalCarId:null};
     }
@@ -7662,7 +7703,7 @@ const App=()=>{
           days[String(rec.id)]=rec; // PC版addRentalResと同じくidをキーにする
           return{...cleaned,[action.carId]:days};
         },setRentalResData,echo=>Object.values(echo[action.carId]||{}).some(r=>r&&r.id===rec.id&&r.bookingKey===bkFinal),true),
-        writeShared(lresKey,myLres,base=>cleanOwn(base),setMyLres,echo=>!hasBk(echo,bkFinal),true),
+        writeShared(lresKey,myLres,base=>cleanOwn(base),setMyLres,echo=>!hasOwnBk(echo),true),
       ]);
       return {...entry,loaner:'',loanerId:null,rentalLabel:`🔑 ${rcar?rcar.name:'レンタカー'}${rcar?.num?` (${rcar.num})`:''}`,rentalCarId:action.carId};
     }
@@ -7929,7 +7970,8 @@ const App=()=>{
       }
       const bkFinal=`sched-${tDk}-${slotFinal}`;
       const bkOld=`sched-${req.dk}-${req.slot}`;
-      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName,isMove?bkOld:'');
+      const _ownNm=[userName,((oldSd&&oldSd[req.dk])||{})[req.slot]&&oldSd[req.dk][req.slot].name].filter(Boolean);
+      const entry=await applyLoanerAction(clean(form),loanerAction,bkFinal,userName,isMove?bkOld:'',_ownNm);
       // ★受け付けの記録（2026-10-29）。rcvAt は上書きしない。at はマッハ特例の別物なので触らない。
       //   受け付けた人は【サインインしている人】（userName はお客様の氏名）。
       {
@@ -8209,19 +8251,42 @@ const App=()=>{
     const lresKey=storKey('lres',vsId);
     const myLres=vsId==='honten'?loanerResH:loanerResS;
     const setMyLres=vsId==='honten'?setLoanerResH:setLoanerResS;
-    const cleanBk=res=>{
-      const out={};
-      for(const cid of Object.keys(res||{})){
-        const days={...(res[cid]||{})};
-        Object.keys(days).forEach(k=>{if(days[k]?.bookingKey===bk)delete days[k];});
-        out[cid]=days;
+    // ★【両店】の代車の表から外す／氏名も見る（v3.130.0・2026-11-25。PC版と同じ決まり）。
+    //   ・代車は店をまたいで貸すので、見ている店の表だけでは他店の車の帯が残る。
+    //   ・鍵（行番号・枠名）がずれていても、【同じ日・同じ氏名】の帯が1本だけならそれを外す。
+    //   ・整備の鍵は店ごとに別の表なので、両店で同じ鍵になり得る＝氏名の違う帯は触らない。
+    const nmOf=s=>String(s==null?'':s).replace(/[\s　]/g,'');
+    const who=nmOf(deletedName);
+    const dayPre=(req.type==='insp'?'insp-':'sched-')+req.dk+'-';
+    const targets=res=>{
+      const exact=[],near=[];
+      for(const cid of Object.keys(res||{}))for(const k of Object.keys(res[cid]||{})){
+        const r=res[cid][k]; if(!r||!r.bookingKey)continue;
+        const u=nmOf(r.user);
+        if(u&&who&&u!==who)continue;                               // 別のお客様の帯
+        if(r.bookingKey===bk)exact.push([cid,k]);
+        else if(u&&who&&String(r.bookingKey).indexOf(dayPre)===0)near.push([cid,k]);
       }
+      return exact.length?exact:(near.length===1?near:[]);        // 2本以上は決められない＝触らない
+    };
+    const cleanBk=res=>{
+      const t=targets(res); if(!t.length)return res;
+      const out={};
+      for(const cid of Object.keys(res||{}))out[cid]={...(res[cid]||{})};
+      t.forEach(([cid,k])=>{delete out[cid][k];});
       return out;
     };
-    await Promise.all([
-      writeShared(lresKey,myLres,base=>cleanBk(base),setMyLres,echo=>!hasBk(echo,bk),true),
-      writeShared(STOR+'rres',rentalResData,base=>cleanBk(base),setRentalResData,echo=>!hasBk(echo,bk),true),
-    ]);
+    const gone=echo=>targets(echo).length===0;
+    const othKey=storKey('lres',vsId==='honten'?'sanda':'honten');
+    const othLres=vsId==='honten'?loanerResS:loanerResH;
+    const setOthLres=vsId==='honten'?setLoanerResS:setLoanerResH;
+    const jobs=[
+      writeShared(lresKey,myLres,base=>cleanBk(base),setMyLres,gone,true),
+      writeShared(STOR+'rres',rentalResData,base=>cleanBk(base),setRentalResData,gone,true),
+    ];
+    // 他店の表は、氏名が分かっていて実際に帯がある時だけ触る
+    if(who&&targets(othLres).length)jobs.push(writeShared(othKey,othLres,base=>cleanBk(base),setOthLres,gone,true));
+    await Promise.all(jobs);
   };
 
   // 削除も保存と同じ楽観的受付（即モーダルを閉じてバックグラウンド実行＋バナー通知）
