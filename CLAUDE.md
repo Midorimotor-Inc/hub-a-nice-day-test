@@ -4568,3 +4568,7 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   ★上の v3.129.0・v3.131.0 の項にある `sumOne`・`mDays`・`mNames`・`doPrint`・`data-offprintmenu` は**この部品に置き換わっている**。
 - 検査は **`node staff_print_test.js`（53件）** と **`node staff_table_test.js`（45件）**。
   どちらも 🏖 休日 の画面から動かす。`training_badge_test.js` は「全員＝表」に合わせて研修の見方を直した。
+- **全員の表は、日の列を1つ飛びで薄い網掛け**（v3.132.1・2026-11-25 ユーザー指示：「一つ飛びで薄い網掛けを。列がわかりにくくなるので」）。
+  `StaffOffTable` の `zb(x)`＝偶数の日。色は `OT_ZB`（マス）／`OT_ZB_H`（見出し）／`OT_ZB_C`（休みの人数の行）の3つだけを通す。
+  ★**休業日の赤・本日のオレンジの枠は網掛けより優先**。印刷の用紙（`staffCalPrintHtml`）には入れていない（頼まれていない）。
+  見張りは `staff_table_test.js`（48件）。

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795576721321';
+    window.__APP_BUILD='build-1795577551337';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.132.0';
+const APP_VERSION = '3.132.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8826,6 +8826,10 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
   const OT_K_TR ={...OT_K,background:'#fff',color:TRN_COL,border:'1.6px dashed '+TRN_COL};
   const OT_TODAY_H={background:'#ffedd5',boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c, inset 0 2px 0 #fb923c'};
   const OT_TODAY_C={boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c'};
+  // ★日の列を【1つ飛びで薄い網掛け】（v3.132.1・2026-11-25 ユーザー指示：「列がわかりにくくなるので」）。
+  //   偶数の日の列だけ薄い灰色。休業日の赤・本日のオレンジの枠はそのまま優先する。色はこの3つだけを通すこと。
+  const OT_ZB='#eaeff5', OT_ZB_H='#cfd7e1', OT_ZB_C='#e3e9f0';
+  const zb=x=>x.d%2===0;
   const DOWJ=['日','月','火','水','木','金','土'];
   const today=new Date();
   const numCol=x=>(x.hol||x.dow===0)?'#dc2626':x.dow===6?'#1d4ed8':'#111';
@@ -8847,7 +8851,7 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
             <th rowSpan={2} style={{...OT_TH,textAlign:'left',paddingLeft:8,position:'sticky',left:0,zIndex:2}}>氏名</th>
             {mo.days.map(x=>(
               <th key={x.d} data-offhead={x.d} title={x.hol?'祝日':undefined}
-                style={{...OT_TH,color:numCol(x),fontSize:12.5,...(isToday(x)?OT_TODAY_H:{})}}>{x.d}</th>
+                style={{...OT_TH,color:numCol(x),fontSize:12.5,...(zb(x)?{background:OT_ZB_H}:{}),...(isToday(x)?OT_TODAY_H:{})}}>{x.d}</th>
             ))}
             <th rowSpan={2} style={OT_TH}>休日</th>
             <th rowSpan={2} style={OT_TH}>有給</th>
@@ -8857,7 +8861,7 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
           </tr>
           <tr>
             {mo.days.map(x=>(
-              <th key={x.d} style={{...OT_TH,color:numCol(x),fontSize:10.5,...(isToday(x)?OT_TODAY_H:{})}}>{DOWJ[x.dow]}</th>
+              <th key={x.d} style={{...OT_TH,color:numCol(x),fontSize:10.5,...(zb(x)?{background:OT_ZB_H}:{}),...(isToday(x)?OT_TODAY_H:{})}}>{DOWJ[x.dow]}</th>
             ))}
           </tr>
         </thead>
@@ -8881,8 +8885,8 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
                   const memo=(kind==='off'||kind==='leave')?note(x.dkk,n):'';
                   const tip=kind==='closed'?'店休日':kind?((c.m+1)+'/'+x.d+' '+n+'：'+(kind==='off'?'休日':kind==='leave'?'有給':TRN_LABEL+'（出勤・不在）')+(memo?'　📝 '+memo:'')):undefined;
                   return(
-                    <td key={x.d} data-offcell={n+'/'+x.d} data-offkind={kind} title={tip}
-                      style={{...OT_TD,...(x.closed?{background:CLOSED_BG,color:CLOSED_FG,fontSize:9.5,fontWeight:700}:{}),...(isToday(x)?OT_TODAY_C:{})}}>
+                    <td key={x.d} data-offcell={n+'/'+x.d} data-offkind={kind} data-offzb={zb(x)?'1':'0'} title={tip}
+                      style={{...OT_TD,...(x.closed?{background:CLOSED_BG,color:CLOSED_FG,fontSize:9.5,fontWeight:700}:(zb(x)?{background:OT_ZB}:{})),...(isToday(x)?OT_TODAY_C:{})}}>
                       {kind==='closed'?'店休':kind==='off'?<span style={OT_K_OFF}>休</span>
                         :kind==='leave'?<span style={OT_K_LV}>有</span>
                         :kind==='trn'?<span style={OT_K_TR}>研</span>:null}
@@ -8903,7 +8907,7 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
             <td style={{...OT_TOTD,textAlign:'left',paddingLeft:8,fontSize:10.5,position:'sticky',left:0,zIndex:1}}>休みの人数</td>
             {mo.days.map(x=>(
               <td key={x.d} data-offcnt={x.d}
-                style={{...OT_TOTD,fontSize:11,...(x.closed?{background:CLOSED_BG}:{}),...(isToday(x)?OT_TODAY_C:{})}}>
+                style={{...OT_TOTD,fontSize:11,...(x.closed?{background:CLOSED_BG}:(zb(x)?{background:OT_ZB_C}:{})),...(isToday(x)?OT_TODAY_C:{})}}>
                 {x.closed?'':((x.off.length+x.leave.length)||'')}
               </td>
             ))}

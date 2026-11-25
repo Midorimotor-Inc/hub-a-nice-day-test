@@ -151,6 +151,15 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★研修は「研」', row('竹林直行').cells['18'].kind === 'trn' && row('竹林直行').cells['18'].text === '研');
   t('★店の休業日は全員「店休」', T.rows.every(r => r.cells[String(CLOSED_DAY)].kind === 'closed' && r.cells[String(CLOSED_DAY)].text === '店休'));
   t('★何も無い日は空', row('江川京志').cells['3'].kind === '' && row('江川京志').cells['3'].text === '');
+  // ★日の列は1つ飛びで薄い網掛け（v3.132.1・2026-11-25 ユーザー指示：「列がわかりにくくなるので」）
+  {
+    const bg = await pa.evaluate(([cd]) => { const g = k => { const e = document.querySelector('[data-offcell="江川京志/' + k + '"]'); return e ? getComputedStyle(e).backgroundColor : ''; };
+      const odd = [1, 3, 5, 7].filter(d => d !== cd).map(g), even = [2, 4, 6, 8].filter(d => d !== cd).map(g);
+      return { odd, even, closed: g(cd), cnt2: getComputedStyle(document.querySelector('[data-offcnt="2"]')).backgroundColor, cnt1: getComputedStyle(document.querySelector('[data-offcnt="1"]')).backgroundColor }; }, [CLOSED_DAY]);
+    t('★偶数の日の列だけ薄い網掛け（奇数の日は白）', bg.odd.every(c => c === 'rgb(255, 255, 255)') && bg.even.every(c => c !== 'rgb(255, 255, 255)') && new Set(bg.even).size === 1, bg);
+    t('★「休みの人数」の行にも同じ網掛け', bg.cnt2 !== bg.cnt1, [bg.cnt1, bg.cnt2]);
+    t('★休業日の赤は網掛けより優先（偶数の日でも赤のまま）', bg.closed === 'rgb(254, 202, 202)', bg.closed);
+  }
   t('★メモは、なぞると出る', /午後休/.test(row('竹林直行').cells['3'].title), row('竹林直行').cells['3'].title);
   t('★「休みの人数」＝休日＋有給（研修は数えない）', T.cnt['3'] === '2' && T.cnt['5'] === '1' && T.cnt['18'] === '' && T.cnt[String(CLOSED_DAY)] === '', [T.cnt['3'], T.cnt['5'], T.cnt['18']]);
   t('★横にはみ出さない（スクロールなしで1か月が見える）', T.fitW && T.inView, { fitW: T.fitW, boxW: T.boxW });
