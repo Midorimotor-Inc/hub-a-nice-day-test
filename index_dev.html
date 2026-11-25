@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795570340592';
+    window.__APP_BUILD='build-1795572527068';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.130.0';
+const APP_VERSION = '3.131.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8944,17 +8944,34 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
   //     名簿で絞り込んで黙って消さないこと（2026-10-06 の「幸田さんが出ない」と同じ事故になる）。
   //   ★店の休業日は名前を出さない（画面と同じ）。集計は画面と同じ sumOne。
   const printNames=(adminMode?staffList:staffList.filter(s=>s.name===(currentUser&&currentUser.name))).map(s=>s.name);
+  // ★その月の1日ごとの中身と、表に出す人（名簿＋名簿に無い名前）。
+  //   【画面の全員表示の表】と【印刷】が同じものを使う（v3.131.0）＝画面と用紙で食い違わない。
+  const mDays=[];
+  for(let d=1;d<=daysInMonth;d++){
+    const dkk=`${cy}-${cm+1}-${d}`, closed=isStoreClosed(cy,cm,d);
+    mDays.push({d,dkk,dow:new Date(cy,cm,d).getDay(),closed,hol:HOLIDAYS.has(dkk),
+      off:closed?[]:(dayOffData[dkk]||[]), leave:closed?[]:(pleaveData[dkk]||[]), trn:closed?[]:(trnData[dkk]||[])});
+  }
+  const mRoster=staffList.map(s=>s.name), mExtra=[];
+  mDays.forEach(x=>[...x.off,...x.leave,...x.trn].forEach(n=>{if(!mRoster.includes(n)&&!mExtra.includes(n))mExtra.push(n);}));
+  const mNames=[...mRoster,...mExtra];
+  // ── 全員表示の表（スタッフ×日）の見た目。印刷の表型（staffCalPrintHtml）と同じ並び・同じ印。
+  const OT_NAME=118, OT_DAY=30, OT_TOT=40, OT_CY=104;
+  const OT_LINE='1px solid #334155';
+  const OT_TH={border:OT_LINE,background:'#e5e7eb',padding:'3px 0',textAlign:'center',fontWeight:800,fontSize:11,lineHeight:1.2};
+  const OT_TD={border:OT_LINE,textAlign:'center',verticalAlign:'middle',padding:0,height:30,position:'relative',overflow:'hidden',background:'white'};
+  const OT_TOTD={...OT_TD,background:'#f8fafc',fontWeight:800,fontSize:12.5};
+  const OT_K={display:'inline-block',minWidth:20,textAlign:'center',fontWeight:900,fontSize:12,borderRadius:4,lineHeight:'19px',padding:'0 2px'};
+  const OT_K_OFF={...OT_K,background:'#fff',color:'#c2410c',border:'1.6px solid #c2410c'};
+  const OT_K_LV ={...OT_K,background:'#047857',color:'#fff',border:'1.6px solid #047857'};
+  const OT_K_TR ={...OT_K,background:'#fff',color:TRN_COL,border:'1.6px dashed '+TRN_COL};
+  const OT_TODAY_H={background:'#ffedd5',boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c, inset 0 2px 0 #fb923c'};
+  const OT_TODAY_C={boxShadow:'inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c'};
+  const otNumCol=x=>(x.hol||x.dow===0)?'#dc2626':x.dow===6?'#1d4ed8':'#111';
+  const otToday=x=>x.d===today.getDate()&&cm===today.getMonth()&&cy===today.getFullYear();
   const doPrint=(mode,who)=>{
-    const days=[];
-    for(let d=1;d<=daysInMonth;d++){
-      const dkk=`${cy}-${cm+1}-${d}`, closed=isStoreClosed(cy,cm,d);
-      const off=closed?[]:(dayOffData[dkk]||[]), leave=closed?[]:(pleaveData[dkk]||[]), trn=closed?[]:(trnData[dkk]||[]);
-      const notes={};[...off,...leave].forEach(n=>{const t=noteOf(dkk,n);if(t)notes[n]=t;});
-      days.push({d,dow:new Date(cy,cm,d).getDay(),closed,hol:HOLIDAYS.has(dkk),off,leave,trn,notes});
-    }
-    const roster=staffList.map(s=>s.name), extra=[];
-    days.forEach(x=>[...x.off,...x.leave,...x.trn].forEach(n=>{if(!roster.includes(n)&&!extra.includes(n))extra.push(n);}));
-    const names=mode==='one'?[who]:[...roster,...extra];
+    const days=mDays.map(x=>{const notes={};[...x.off,...x.leave].forEach(n=>{const t=noteOf(x.dkk,n);if(t)notes[n]=t;});return {...x,notes};});
+    const names=mode==='one'?[who]:mNames;
     const summary=names.map(n=>{const x=sumOne(n);return{name:n,offs:x.offs,leaves:x.leaves,trn:x.trn,breakdown:offBreakdown(x.closedN,x.carry),carry:carryLabel(x.carry)};});
     const c1=mode==='one'?calcHolidayCarry(who,cy,cm,dayOffData,isStoreClosed,monthlyHolidays):null;
     const nw=new Date(), p2=v=>String(v).padStart(2,'0');
@@ -8972,7 +8989,7 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:2500,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}>
       <div onClick={e=>{e.stopPropagation();if(printOpen)setPrintOpen(false);}} className="modal-box"
-        style={{background:'white',borderRadius:16,width:'min(900px,97vw)',maxHeight:'94vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.4)'}}>
+        style={{background:'white',borderRadius:16,width:selStaff?'min(900px,97vw)':'min(1360px,98vw)',maxHeight:'94vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.4)'}}>
 
         {/* ヘッダー */}
         <div style={{padding:'14px 20px',background:`linear-gradient(135deg,${storeObj.color},${storeObj.accent})`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
@@ -9114,6 +9131,102 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
             <button onClick={()=>setCalMonth(new Date(cy,cm+1,1))} style={NAV_S}><ChevronRight size={16}/></button>
           </div>
 
+          {/* ★★全員表示は【表（スタッフ×日）】（v3.131.0・2026-11-25 ユーザー決定）。
+              ユーザーの言葉：「印刷の全体表示が良かったので、ウェブで見る表示も全体表示は表に。
+              個人に切り替えた時は、カレンダーの中に休みを入れる今まで通りの方法で」。
+              ★見た目は印刷の表型（staffCalPrintHtml の mode:'table'）にそろえる。数字は画面と同じ sumOne。
+              ★ここは【見るだけ】。入れる・外すのは今までどおり、名前を選んでカレンダーで行う。
+                表の氏名を押すと、その人のカレンダーへ移る（選べる人は上の名前ボタンと同じ決まり）。
+              ★名簿に無い名前も、その月に休みが入っていれば必ず出す（mExtra）。名簿で絞って黙って消さないこと。 */}
+          {!selStaff?(
+          <div data-offtablewrap="1" style={{border:'2px solid #334155',borderRadius:9,overflowX:'auto',overflowY:'hidden'}}>
+            <table data-offtable="1" style={{borderCollapse:'collapse',width:'100%',tableLayout:'fixed',
+              minWidth:OT_NAME+mDays.length*OT_DAY+4*OT_TOT+OT_CY,fontSize:12}}>
+              <colgroup>
+                <col style={{width:OT_NAME}}/>
+                {mDays.map(x=><col key={x.d} style={{width:OT_DAY}}/>)}
+                <col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/><col style={{width:OT_TOT}}/>
+                <col style={{width:OT_CY}}/>
+              </colgroup>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{...OT_TH,textAlign:'left',paddingLeft:8,position:'sticky',left:0,zIndex:2}}>氏名</th>
+                  {mDays.map(x=>(
+                    <th key={x.d} data-offhead={x.d} title={x.hol?'祝日':undefined}
+                      style={{...OT_TH,color:otNumCol(x),fontSize:12.5,...(otToday(x)?OT_TODAY_H:{})}}>{x.d}</th>
+                  ))}
+                  <th rowSpan={2} style={OT_TH}>休日</th>
+                  <th rowSpan={2} style={OT_TH}>有給</th>
+                  <th rowSpan={2} style={OT_TH}>計</th>
+                  <th rowSpan={2} style={OT_TH}>{TRN_LABEL}</th>
+                  <th rowSpan={2} style={OT_TH}>繰り越し</th>
+                </tr>
+                <tr>
+                  {mDays.map(x=>(
+                    <th key={x.d} style={{...OT_TH,color:otNumCol(x),fontSize:10.5,...(otToday(x)?OT_TODAY_H:{})}}>{DOW2[x.dow]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {mNames.map(n=>{
+                  const s=sumOne(n);
+                  const mine=n===(currentUser&&currentUser.name);
+                  const pick=mRoster.includes(n)&&(adminMode||mine);
+                  const outside=!mRoster.includes(n);
+                  return(
+                    <tr key={n} data-offrow={n}>
+                      <td onClick={pick?()=>setSelStaff(n):undefined}
+                        title={outside?'名簿に無い名前です（休みのデータに残っています）':pick?(n+' さんのカレンダーを開く'):undefined}
+                        style={{...OT_TD,textAlign:'left',paddingLeft:8,fontWeight:800,fontSize:12.5,whiteSpace:'nowrap',
+                          position:'sticky',left:0,zIndex:1,background:mine?storeObj.bg:'white',
+                          color:outside?'#b45309':pick?storeObj.color:'#111',cursor:pick?'pointer':'default'}}>
+                        {outside&&'⚠ '}{n}
+                      </td>
+                      {mDays.map(x=>{
+                        const kind=x.closed?'closed':x.off.includes(n)?'off':x.leave.includes(n)?'leave':x.trn.includes(n)?'trn':'';
+                        const memo=(kind==='off'||kind==='leave')?noteOf(x.dkk,n):'';
+                        const tip=kind==='closed'?'店休日':kind?(`${cm+1}/${x.d} ${n}：${kind==='off'?'休日':kind==='leave'?'有給':TRN_LABEL+'（出勤・不在）'}${memo?'　📝 '+memo:''}`):undefined;
+                        return(
+                          <td key={x.d} data-offcell={n+'/'+x.d} data-offkind={kind} title={tip}
+                            style={{...OT_TD,...(x.closed?{background:CLOSED_BG,color:CLOSED_FG,fontSize:9.5,fontWeight:700}:{}),...(otToday(x)?OT_TODAY_C:{})}}>
+                            {kind==='closed'?'店休':kind==='off'?<span style={OT_K_OFF}>休</span>
+                              :kind==='leave'?<span style={OT_K_LV}>有</span>
+                              :kind==='trn'?<span style={OT_K_TR}>研</span>:null}
+                            {memo&&<span style={{position:'absolute',top:1,right:1,width:0,height:0,borderTop:'6px solid #f59e0b',borderLeft:'6px solid transparent'}}/>}
+                          </td>
+                        );
+                      })}
+                      <td data-offtot="offs" title={offBreakdown(s.closedN,s.carry)||undefined} style={OT_TOTD}>{s.offs||0}</td>
+                      <td data-offtot="leaves" style={OT_TOTD}>{s.leaves||0}</td>
+                      <td data-offtot="sum" style={{...OT_TOTD,color:'#c2410c'}}>{(s.offs||0)+(s.leaves||0)}</td>
+                      <td data-offtot="trn" data-sumtrn={s.trn>0?n:undefined} style={{...OT_TOTD,color:TRN_COL}}>{s.trn||''}</td>
+                      <td data-offtot="carry" title={carryTitle(s.carry)||undefined}
+                        style={{...OT_TOTD,fontSize:10,fontWeight:700,whiteSpace:'nowrap',color:(s.carry&&s.carry.remain>0)?'#1d4ed8':'#dc2626'}}>{carryLabel(s.carry)||''}</td>
+                    </tr>
+                  );
+                })}
+                <tr data-offcntrow="1">
+                  <td style={{...OT_TOTD,textAlign:'left',paddingLeft:8,fontSize:10.5,position:'sticky',left:0,zIndex:1}}>休みの人数</td>
+                  {mDays.map(x=>(
+                    <td key={x.d} data-offcnt={x.d}
+                      style={{...OT_TOTD,fontSize:11,...(x.closed?{background:CLOSED_BG}:{}),...(otToday(x)?OT_TODAY_C:{})}}>
+                      {x.closed?'':((x.off.length+x.leave.length)||'')}
+                    </td>
+                  ))}
+                  <td colSpan={5} style={OT_TOTD}/>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{padding:'6px 10px',borderTop:'1px solid #cbd5e1',background:'#f8fafc',fontSize:10.5,color:'#475569',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}>
+              <span><span style={OT_K_OFF}>休</span> 休日</span>
+              <span><span style={OT_K_LV}>有</span> 有給</span>
+              <span><span style={OT_K_TR}>研</span> {TRN_LABEL}（出勤・不在）</span>
+              <span><span style={{display:'inline-block',width:13,height:13,background:CLOSED_BG,border:'1px solid #b91c1c',verticalAlign:-2,marginRight:3}}/>休業日</span>
+              <span>「休日」には店の休業日も入っています。「休みの人数」は 休日＋有給 の人数です。</span>
+              <span style={{color:storeObj.color,fontWeight:700}}>色の付いた氏名を押すと、その人のカレンダーが開きます</span>
+            </div>
+          </div>
+          ):(
           <div style={{border:'2px solid #e5e7eb',borderRadius:9,overflow:'hidden'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#eef2ff',borderBottom:'1px solid #d1d5db'}}>
               {DOW2.map((d,i)=>(
@@ -9206,9 +9319,10 @@ const StaffCalendarModal=memo(({isOpen,onClose,initMonth,currentUser,adminMode,v
               </div>
             ))}
           </div>
+          )}
 
-          {/* 月次集計 */}
-          {monthlySummary.length>0&&(
+          {/* 月次集計（★全員表示の表には右端に同じ数字が出るので、名前を選んだ時だけ出す・v3.131.0） */}
+          {selStaff&&monthlySummary.length>0&&(
             <div style={{marginTop:14,padding:'11px 14px',background:'#f8fafc',borderRadius:9,border:'1px solid #e5e7eb'}}>
               <div style={{fontWeight:700,fontSize:12,color:'#374151',marginBottom:8}}>📊 {cy}年{cm+1}月 集計</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:7}}>

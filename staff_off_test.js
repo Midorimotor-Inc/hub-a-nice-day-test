@@ -30,6 +30,9 @@ const seed = {
   // 今日：本店は竹林が休日・魚住が有給／三田は中井が休日・芦田が有給
   [STOR + 'honten-dayoff']: { [DK]: ['竹林直行'] },
   [STOR + 'honten-pleave']: { [DK]: ['魚住圭'] },
+  // ★曜日の定休日を空にしておく（2026-11-25）。入れないと三田店の既定＝水曜定休が効き、
+  //   水曜に流すと「本日 店休日（全員休み）」になって ⑨⑩ が落ちる（製品は正しい・検査の曜日依存）。
+  [STOR + 'honten-cdow']: [], [STOR + 'sanda-cdow-v2']: [],
   [STOR + 'sanda-dayoff']: { [DK]: ['中井啓介'] },
   [STOR + 'sanda-pleave']: { [DK]: ['芦田昌則'] },
   [STOR + 'honten-cars']: [], [STOR + 'sanda-cars']: [], [STOR + 'rentalcars']: [],
