@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>[モック] 休日・個人のカレンダーの枠</title>
+<!--
+  モック：🏖 休日 → 個人のカレンダー（2026-11-25 ユーザー指示）
+    ①「上部にタブとかいろいろあって、もう少し画面が横長になるので、左右をもう少し縮めて、枠を横長にならないように」
+    ②「カレンダーと、下の集計の部分を、きっちり枠を分けて」
+    ③「カレンダーの枠の線も少し薄いので、もう少し濃い枠に」
+  ★名前は架空。本物のデータは使っていない。
+  ★この窓の大きさに合わせて動くので、ふだん Hub を開いている窓で開くと実際の見え方に近い。
+  アドレスの後ろに ?w=b&s=bottom&l=3&hide=1 と付けると、その組み合わせで開く（撮影用）。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic UI','Meiryo',sans-serif;color:#1b2129;background:#f3f4f6;display:flex;flex-direction:column;overflow:hidden}
+/* ── モックの切替（本物には無い） ── */
+#ctl{flex-shrink:0;background:#111827;color:#fff;padding:6px 12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px}
+#ctl b{color:#fde68a;font-size:12px}
+#ctl .g{display:flex;gap:4px;align-items:center}
+#ctl button{font:inherit;font-weight:700;padding:4px 10px;border-radius:14px;border:1.5px solid #6b7280;background:#1f2937;color:#e5e7eb;cursor:pointer}
+#ctl button.on{background:#fde68a;color:#111827;border-color:#fde68a}
+#ctl .note{margin-left:auto;color:#9ca3af;font-size:11px}
+/* ── Hub の上の帯（まね） ── */
+#hd{flex-shrink:0;background:#EA580C;color:#fff}
+#hd .r1{display:flex;align-items:center;gap:10px;padding:7px 14px;font-weight:800;font-size:15px}
+#hd .r1 small{font-weight:600;font-size:11px;opacity:.85}
+#hd .r2{display:flex;gap:6px;padding:0 14px 8px}
+#hd .r2 span{background:rgba(255,255,255,.2);border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:700}
+#hd .r2 span.on{background:#fff;color:#c2410c}
+/* ── カレンダー画面の見出し ── */
+#cal{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;margin:8px 10px 10px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#bar{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 18px 6px;flex-wrap:wrap}
+#bar .mon{font-size:20px;font-weight:900}
+#bar button{font:inherit;font-weight:700;border:1.5px solid #d1d5db;background:#fff;border-radius:8px;padding:5px 11px;cursor:pointer}
+#bar .tabs{margin-left:auto;display:flex;gap:6px}
+#bar .tabs span{font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:8px;border:1.5px solid #d1d5db}
+#bar .tabs span.on{background:#f97316;color:#fff;border-color:#f97316}
+#who{flex-shrink:0;display:flex;gap:6px;padding:4px 18px 10px;flex-wrap:wrap;align-items:center}
+#who span{font-size:12.5px;font-weight:700;padding:5px 12px;border-radius:16px;border:1.5px solid #d1d5db;background:#fff}
+#who span.on{background:#f97316;border-color:#f97316;color:#fff}
+#who .pr{margin-left:auto;background:#1f2937;color:#fff;border-color:#1f2937;border-radius:8px}
+/* ── 個人のカレンダー ── */
+#area{flex:1;min-height:0;display:flex;justify-content:center;gap:12px;padding:0 18px 16px}
+#col{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
+#grid{flex:1;min-height:0;display:flex;flex-direction:column;border-radius:9px;overflow-x:hidden;overflow-y:auto;background:#fff}
+#dow{flex-shrink:0;display:grid;grid-template-columns:repeat(7,1fr);background:linear-gradient(90deg,#fff7ed,#fef9f0)}
+#dow div{padding:8px 0;text-align:center;font-weight:700;font-size:13px}
+.wk{flex:1 1 0;min-height:66px;display:grid;grid-template-columns:repeat(7,1fr)}
+.c{padding:5px 5px;overflow:hidden;position:relative;background:#fff}
+.c.e{background:#f9fafb}
+.c .n{font-weight:800;font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:3px}
+.c .n i{margin-left:auto;font-style:normal;font-size:13px}
+.c.cl{background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c}
+.c.cl .n{color:#991b1b}
+.c.cl .mk{position:absolute;left:0;right:0;top:26px;text-align:center;font-size:11px;font-weight:800;color:#991b1b}
+.c.off{background:#fff7ed;outline:2px solid #f97316;outline-offset:-2px}
+.c.lv{background:#f0fdf4;outline:2px solid #10b981;outline-offset:-2px}
+.c.tr{background:#f9f0ff;outline:2px solid #9333ea;outline-offset:-2px}
+.c.td{outline:4px solid #c2410c;outline-offset:-4px;border-radius:10px;z-index:3}
+.c.td .n span{color:#c2410c;font-weight:900}
+.chip{display:flex;align-items:center;gap:3px;padding:2px 5px;border-radius:4px;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden}
+.chip em{font-style:normal;width:14px;height:14px;border-radius:3px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0}
+.chip.o{background:#fff7ed;border:1px solid #f97316;color:#92400e}.chip.o em{background:#f97316}
+.chip.l{background:#f0fdf4;border:1px solid #10b981;color:#065f46}.chip.l em{background:#10b981}
+.chip.t{background:#f9f0ff;border:1px solid #9333ea;color:#581c87}.chip.t em{background:#9333ea}
+/* ── 集計 ── */
+#sum{flex-shrink:0;border-radius:9px;overflow:hidden;background:#fff}
+#sum h4{margin:0;padding:7px 14px;font-size:13px;font-weight:800;background:#1f2937;color:#fff}
+#sum .b{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 14px;background:#f8fafc}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:800;border:2px solid;background:#fff}
+.pill big{font-size:18px;font-weight:900}
+.pill small{font-size:11px;font-weight:600}
+.p1{background:#fff7ed;border-color:#f97316;color:#ea580c}
+.p2{background:#f0fdf4;border-color:#10b981;color:#059669}
+.p3{background:#f9f0ff;border-color:#9333ea;color:#9333ea}
+.p4{background:#eef2ff;border-color:#a5b4fc;color:#c2410c;border-width:1px}
+.p5{border-color:#93c5fd;color:#1d4ed8}
+/* 集計を右に置く時 */
+body.sright #area{align-items:stretch}
+body.sright #sum{width:230px;align-self:flex-start}
+body.sright #sum .b{flex-direction:column;align-items:stretch}
+body.sright .pill{justify-content:space-between;border-radius:10px;padding:8px 12px}
+/* 今のまま：カレンダーと集計が1つの枠の中 */
+body.snow #col{gap:0;border:2px solid #e5e7eb;border-radius:9px;overflow:hidden}
+body.snow #grid{border:none !important;border-radius:0}
+body.snow #sum{margin:8px;border:1px solid #e5e7eb !important}
+body.snow #sum h4{display:none}
+body.snow #sum .b{background:linear-gradient(90deg,#f0f9ff,#fafafa)}
+body.snow #sum .b::before{content:attr(data-t);font-size:12.5px;font-weight:800;color:#1f2937}
+body.hide #ctl{display:none}
+</style>
+</head>
+<body>
+<div id="ctl">
+  <b>▼ モックの切替（本物には出ません）</b>
+  <div class="g">① 横幅：
+    <button data-k="w" data-v="now">今のまま</button>
+    <button data-k="w" data-v="a">A 正方形に近い</button>
+    <button data-k="w" data-v="b">B 少しだけ横長</button>
+    <button data-k="w" data-v="c">C 横長ぎみ</button>
+  </div>
+  <div class="g">② 集計：
+    <button data-k="s" data-v="now">今のまま</button>
+    <button data-k="s" data-v="bottom">ア 下に別の枠</button>
+    <button data-k="s" data-v="right">イ 右に別の枠</button>
+  </div>
+  <div class="g">③ 線：
+    <button data-k="l" data-v="1">今のまま</button>
+    <button data-k="l" data-v="2">1 少し濃く</button>
+    <button data-k="l" data-v="3">2 濃く</button>
+    <button data-k="l" data-v="4">3 もっと濃く</button>
+  </div>
+  <span class="note">名前は架空です／月は ‹ › で送れます（6週の月も試せます）</span>
+</div>
+<div id="hd">
+  <div class="r1">Hub a Nice Day <small>v3.133.0　⚠ スケジュールシステム テスト版</small></div>
+  <div class="r2"><span class="on">カレンダー</span><span>週間カレンダー</span><span>スケジュール</span><span>代車管理</span><span>検索</span><span>顧客リスト</span><span>料金表</span></div>
+</div>
+<div id="cal">
+  <div id="bar">
+    <button id="pv">‹</button><span class="mon" id="mon"></span><button id="nx">›</button>
+    <div class="tabs"><span>🚗 車検</span><span>📅 マイ</span><span class="on">🏖 休日</span><span>⚙ 設定</span></div>
+  </div>
+  <div id="who"><span>全員</span><span class="on">山田太郎</span><span>佐藤花子</span><span>鈴木一郎</span><span>高橋次郎</span><span>田中三郎</span><span class="pr">🖨 印刷（山田太郎）</span></div>
+  <div id="area">
+    <div id="col">
+      <div id="grid"></div>
+      <div id="sum"></div>
+    </div>
+  </div>
+</div>
+<script>
+var Q=new URLSearchParams(location.search);
+var S={w:Q.get('w')||'b',s:Q.get('s')||'bottom',l:Q.get('l')||'3'};
+if(Q.get('hide'))document.body.classList.add('hide');
+var Y=2026,M=10;                      // 2026年11月から
+var LINE={1:['#e5e7eb',1,'#e5e7eb'],2:['#cbd5e1',1,'#94a3b8'],3:['#94a3b8',1,'#64748b'],4:['#64748b',1,'#334155']};   // [マスの線, 太さ, 外枠]
+var RATIO={a:1.0,b:1.25,c:1.5};       // マスの 横÷縦
+var DOW=['日','月','火','水','木','金','土'];
+function weeksOf(y,m){var f=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate(),w=[],r=[];for(var i=0;i<f;i++)r.push(0);for(var d=1;d<=n;d++){r.push(d);if(r.length===7){w.push(r);r=[];}}if(r.length){while(r.length<7)r.push(0);w.push(r);}return w;}
+function kindOf(y,m,d){var dow=new Date(y,m,d).getDay();
+  if(dow===2&&d>=8&&d<=14)return'cl';          // 第2火曜＝休業日
+  if(dow===3)return'off';                      // 毎週水曜に休み（架空）
+  if(d===6||d===20)return'off';
+  if(d===17)return'lv'; if(d===26)return'tr'; return'';}
+function draw(){
+  var b=document.body; b.classList.toggle('sright',S.s==='right'); b.classList.toggle('snow',S.s==='now');
+  document.querySelectorAll('#ctl button').forEach(function(x){x.classList.toggle('on',S[x.dataset.k]===x.dataset.v);});
+  document.getElementById('mon').textContent=Y+'年'+(M+1)+'月';
+  var L=LINE[S.l], wk=weeksOf(Y,M), h='<div id="dow" style="border-bottom:2px solid '+(S.l==='1'?'#fed7aa':L[2])+'">';
+  DOW.forEach(function(d,i){h+='<div style="color:'+(i===0?'#dc2626':i===6?'#1d4ed8':'#374151')+(i>0?';border-left:'+L[1]+'px solid '+L[0]:'')+'">'+d+'</div>';});
+  h+='</div>'; var cnt={off:0,lv:0,tr:0,cl:0};
+  wk.forEach(function(r,wi){h+='<div class="wk">';
+    r.forEach(function(d,di){var st='border-top:'+(wi>0?L[1]+'px solid '+L[0]:'none')+';'+(di>0?'border-left:'+L[1]+'px solid '+L[0]+';':'');
+      if(!d){h+='<div class="c e" style="'+st+'"></div>';return;}
+      var k=kindOf(Y,M,d), dow=new Date(Y,M,d).getDay(), td=(Y===2026&&M===10&&d===25); if(k)cnt[k]++;
+      h+='<div class="c '+k+(td?' td':'')+'" style="'+st+'"><div class="n" style="color:'+(k==='cl'?'#991b1b':dow===0?'#dc2626':dow===6?'#1d4ed8':'#111')+'"><span>'+d+'</span>'+(k==='off'?'<i>🏖</i>':k==='lv'?'<i>📋</i>':k==='tr'?'<i>🎓</i>':'')+'</div>'
+        +(k==='cl'?'<div class="mk">休業日</div>':'')
+        +(k==='off'?'<div class="chip o"><em>山</em>山田太郎<span style="margin-left:auto;font-size:8px">休</span></div>':'')
+        +(k==='lv'?'<div class="chip l"><em>山</em>山田太郎<span style="margin-left:auto;font-size:8px">有</span></div>':'')
+        +(k==='tr'?'<div class="chip t"><em>山</em>山田太郎<span style="margin-left:auto;font-size:8px">研</span></div>':'')
+        +'</div>';});
+    h+='</div>';});
+  var g=document.getElementById('grid'); g.innerHTML=h; g.style.border=(S.s==='now'?'none':'2px solid '+L[2]);
+  var t='📅 山田太郎さん '+Y+'年'+(M+1)+'月の集計', s=document.getElementById('sum');
+  s.style.border='2px solid '+L[2];
+  s.innerHTML='<h4>'+t+'</h4><div class="b" data-t="'+t+'">'
+    +'<span class="pill p1">🏖 休日 <span><big>'+(cnt.off+cnt.cl)+'</big> 日 <small>（うち店休日'+cnt.cl+'）</small></span></span>'
+    +'<span class="pill p2">📋 有給 <span><big>'+cnt.lv+'</big> 日</span></span>'
+    +'<span class="pill p3">🎓 研修 <span><big>'+cnt.tr+'</big> 日</span></span>'
+    +'<span class="pill p4">合計 <span>'+(cnt.off+cnt.cl+cnt.lv)+' 日</span></span>'
+    +'<span class="pill p5">繰り越し <span>1日</span></span></div>';
+  // 集計の置き場所
+  var area=document.getElementById('area'), col=document.getElementById('col');
+  if(S.s==='right'){area.appendChild(s);}else{col.appendChild(s);}
+  fit(wk.length);
+}
+function fit(rows){
+  var area=document.getElementById('area'), col=document.getElementById('col'), g=document.getElementById('grid'), s=document.getElementById('sum');
+  col.style.width='100%'; col.style.flex='1 1 auto';
+  if(S.w==='now')return;
+  // マスの高さ（いま取れている高さ）から、ちょうどよい横幅を出す
+  var gh=g.clientHeight-document.getElementById('dow').offsetHeight, ch=Math.max(66,gh/rows);   // 66＝週の行の最低の高さ
+  var avail=area.clientWidth-36-(S.s==='right'?s.offsetWidth+12:0);
+  var w=Math.min(avail,Math.max(720,Math.round(ch*RATIO[S.w]*7)));   // 720＝これより狭くはしない（マスの字が入らなくなる）
+  col.style.flex='0 0 auto'; col.style.width=w+'px';
+  // 幅を変えると集計が折り返して高さが変わることがあるので、もう一度だけ合わせる
+  var gh2=g.clientHeight-document.getElementById('dow').offsetHeight;
+  if(Math.abs(gh2-gh)>2){var w2=Math.min(avail,Math.max(720,Math.round(Math.max(66,gh2/rows)*RATIO[S.w]*7))); col.style.width=w2+'px';}
+}
+document.getElementById('ctl').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;S[b.dataset.k]=b.dataset.v;draw();});
+document.getElementById('pv').onclick=function(){M--;if(M<0){M=11;Y--;}draw();};
+document.getElementById('nx').onclick=function(){M++;if(M>11){M=0;Y++;}draw();};
+window.addEventListener('resize',draw);
+draw();
+</script>
+</body>
+</html>

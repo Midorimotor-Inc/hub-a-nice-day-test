@@ -289,9 +289,42 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   });
   let F1 = await fit1();
   t('★個人のカレンダーは上下スクロールなしで全部見える', !!F1 && F1.noScroll, F1);
-  t('★下の集計の帯まで画面の中に入る', !!F1 && F1.sumInView, F1);
+  t('★集計の枠まで画面の中に入る', !!F1 && F1.sumInView, F1);
   t('★週の行は同じ高さで、空いている高さいっぱいに広がる（小さくしない）', !!F1 && Math.max(...F1.weeks) - Math.min(...F1.weeks) <= 2 && Math.min(...F1.weeks) >= 100, F1 && F1.weeks);
   t('★日付の字は小さくしていない（14px）', !!F1 && F1.numFs >= 14, F1 && F1.numFs);
+  // ★枠は2つ（v3.134.0・2026-11-25 ユーザー決定・モックの「B・イ・線2」）：
+  //   「実際は上部にタブとかがあってもっと横長になるので、左右を縮めて、枠を横長にならないように」
+  //   「カレンダーと集計の部分を、きっちり枠を分けて」「カレンダーの枠の線ももう少し濃く」
+  //   「（集計を右に置いた案が）横幅を利用できていい。黒が入ると重たいのでグリーン系に。研修は仕事なので休日の中に入れなくていい」
+  const frame1 = () => pv.evaluate(() => {
+    const sc = document.querySelector('[data-off1scroll]'), sum = document.querySelector('[data-off1sum]'), ttl = document.querySelector('[data-off1sumtitle]');
+    if (!sc || !sum || !ttl) return null;
+    const wk = [...document.querySelectorAll('[data-off1week]')];
+    const cell = wk[1].children[2], cr = cell.getBoundingClientRect(), a = sc.getBoundingClientRect(), b = sum.getBoundingClientRect();
+    const rgb = v => (String(v).match(/[\d.]+/g) || []).slice(0, 3).map(Number), tot = v => rgb(v).reduce((x, y) => x + y, 0);
+    return { ratio: Math.round(cr.width / cr.height * 100) / 100, cell: Math.round(cr.width) + 'x' + Math.round(cr.height),
+      sumOutside: !sc.contains(sum), sumRight: b.left >= a.right + 6, sumTopSame: Math.abs(b.top - a.top) <= 2,
+      line: tot(getComputedStyle(cell).borderTopColor), lineL: tot(getComputedStyle(cell).borderLeftColor),
+      frame: tot(getComputedStyle(sc).borderTopColor), frameW: parseFloat(getComputedStyle(sc).borderTopWidth),
+      head: rgb(getComputedStyle(ttl).backgroundColor), sumFrame: rgb(getComputedStyle(sum).borderTopColor),
+      sumText: sum.innerText.replace(/\s+/g, ''), vw: window.innerWidth, calW: Math.round(a.width), calL: Math.round(a.left), sumR: Math.round(window.innerWidth - b.right) };
+  });
+  let FR = await frame1();
+  t('★集計はカレンダーの枠の外（右どなりの別の枠・上がそろう）', !!FR && FR.sumOutside && FR.sumRight && FR.sumTopSame, FR);
+  t('★マスの線が濃い（以前の #e5e7eb より濃い）', !!FR && FR.line > 0 && FR.line < 600 && FR.lineL < 600, FR && [FR.line, FR.lineL]);
+  t('★カレンダーの外枠はさらに濃く・2px', !!FR && FR.frame < 400 && FR.frameW >= 2, FR && [FR.frame, FR.frameW]);
+  t('★集計の見出しは緑系（黒・濃い灰色にしない）', !!FR && FR.head[1] > FR.head[0] && FR.head[1] > FR.head[2] && FR.head[0] + FR.head[1] + FR.head[2] > 450, FR && FR.head);
+  t('★集計の枠も緑系', !!FR && FR.sumFrame[1] > FR.sumFrame[0] && FR.sumFrame[1] > FR.sumFrame[2], FR && FR.sumFrame);
+  t('★集計に 休日・有給・合計 が出る', !!FR && /休日\d+日/.test(FR.sumText) && /有給\d+日/.test(FR.sumText) && /合計\d+日/.test(FR.sumText), FR && FR.sumText);
+  t('★集計に研修は出さない（研修は仕事）', !!FR && !/研修/.test(FR.sumText) && !(await pv.$('[data-tabsumtrn]')), FR && FR.sumText);
+  // 横長の窓（上にタブなどがあって高さが取れない時）でも、マスが横長にならない
+  await pv.setViewportSize({ width: 1920, height: 900 }); await pv.waitForTimeout(500);
+  FR = await frame1(); F1 = await fit1();
+  t('★横長の窓（1920×900）でも、マスは少し横長まで（横÷縦が 1.1〜1.45）', !!FR && FR.ratio >= 1.1 && FR.ratio <= 1.45, FR && [FR.ratio, FR.cell]);
+  t('★その時、左右は空ける（カレンダーを窓いっぱいに広げない）', !!FR && FR.calW < FR.vw * 0.7 && FR.calL > 150 && FR.sumR > 150, FR && [FR.calW, FR.calL, FR.sumR, FR.vw]);
+  t('★その時もスクロールなしで全部見える', !!F1 && F1.noScroll && F1.sumInView, F1);
+  if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one_wide.png') });
+  await pv.setViewportSize({ width: 1500, height: 950 }); await pv.waitForTimeout(400);
   // 6週ある月でも収まる（最大12か月ぶん送って探す）
   { let moved = 0, six = false;
     for (let i = 0; i < 12; i++) { if ((await pv.evaluate(() => document.querySelectorAll('[data-off1week]').length)) === 6) { six = true; break; }

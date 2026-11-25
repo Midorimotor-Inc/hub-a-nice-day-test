@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795579247269';
+    window.__APP_BUILD='build-1795597822175';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.133.0';
+const APP_VERSION = '3.134.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -487,6 +487,29 @@ const CLOSED_TAG_FG = '#ffffff';
 //   ・入れ方は 休日設定（StaffCalendarModal）の 種類 の3つ目「🎓 研修」
 //   ・色と文字はこの定数を通すこと（画面に直書きしない）。mobile.html にも同じものを置く
 const OFF1_ROW_MIN = 66;      // 🏖 休日・個人のカレンダー：週の行の最低の高さ（これより低くはしない）
+// ── 🏖 休日・個人のカレンダーの枠（v3.134.0・2026-11-25 ユーザー決定・モック mock_off1_frame.html の「B・イ・線2」）──
+//   ユーザーの言葉：「実際は上部にタブとかいろいろあって、もう少し画面が横長になるので、左右をもう少し縮めて、
+//   枠を横長にならないように」「カレンダーと集計の部分を、きっちり枠を分けて」「カレンダーの枠の線ももう少し濃く」
+//   →「（集計を右に置いた）3番目の画像が一番、横幅を利用できていい。黒が入ると重たいので、休みなのでグリーン系に」
+//   ★横幅は【窓の高さ】から決める（マスの 横÷縦 が OFF1_RATIO になる幅）。余った左右は空ける。
+//     幅を決め打ちにしないこと（窓が低いほどマスが横長になる、が元の困りごと）。
+//   ★色・線はこの定数だけを通す。画面に直書きしない。
+const OFF1_RATIO  = 1.25;      // マスの 横÷縦（少しだけ横長）
+const OFF1_MIN_W  = 720;       // カレンダーはこれより狭くしない（マスの字が入らなくなる）
+const OFF1_DOW_H  = 40;        // 曜日の見出しの高さ（横幅の計算に使うので決めてある）
+const OFF1_SUM_W  = 236;       // 右の集計の枠の幅
+const OFF1_GAP    = 12;        // カレンダーと集計の間
+const OFF1_LINE   = '#94a3b8'; // マスの線（以前は #e5e7eb で薄かった）
+const OFF1_FRAME  = '#64748b'; // カレンダーの外枠・曜日の見出しの下の線
+const OFF1_SUM_FRAME   = '#22c55e'; // 集計の枠（緑。黒・濃い灰色は使わない＝重たく見えるため）
+const OFF1_SUM_HEAD_BG = '#bbf7d0'; // 集計の見出しの地
+const OFF1_SUM_HEAD_FG = '#14532d'; // 集計の見出しの字
+const OFF1_SUM_BG      = '#f0fdf4'; // 集計の中の地
+//   窓の高さから幅を出すのに CSS のコンテナ単位（cqw / cqh）を使う。使えないブラウザでは幅いっぱいのまま（今までどおり）。
+const OFF1_CQ = typeof CSS!=='undefined' && !!CSS.supports && CSS.supports('width','1cqh');
+const off1CalW = rows => 'min(calc(100cqw - '+(OFF1_SUM_W+OFF1_GAP)+'px), max('+OFF1_MIN_W+'px, calc(max('+OFF1_ROW_MIN+'px, (100cqh - '+(OFF1_DOW_H+4)+'px) / '+rows+') * '+(7*OFF1_RATIO)+')))';
+const OFF1_TILE = {borderRadius:10,padding:'7px 11px',fontSize:13,fontWeight:800,background:'white'};
+const OFF1_TILE_ROW = {display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:8};
 const TRN_COL = '#7e22ce';   // 研修の紫
 const TRN_CH  = '研';        // バッジの1文字
 const TRN_EMO = '🎓';        // 休日設定・カレンダーで使う絵文字
@@ -20097,23 +20120,25 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                   </div>
                 );
                 return(
-                  <div data-offview="one" style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden',margin:'0 18px 18px',border:'2px solid #e5e7eb',borderRadius:9}}>
+                  <div data-offview="one" style={{display:'flex',flexDirection:'row',justifyContent:'center',alignItems:'stretch',gap:OFF1_GAP,flex:1,minHeight:0,margin:'0 18px 18px',...(OFF1_CQ?{containerType:'size'}:{})}}>
                     {/* ★個人のカレンダーは【1画面に収める】（v3.133.0・2026-11-25 ユーザー指示）。
                         ユーザーの言葉：「上下スクロールしないと見れないので、1画面で全体表示して。あまり表示も小さくならないように」。
                         週の行を、空いている高さに均等に配る（1行の高さを決め打ちにしない）。字の大きさは変えない。
                         ★OFF1_ROW_MIN より低くはしない＝とても低い画面の時だけ、今までどおり中をスクロールできる。
-                        ★週の行やマスに高さの決め打ち（以前は120px）を戻さないこと。5〜6週ぶんで必ず画面からはみ出す。 */}
-                    <div data-off1scroll="1" style={{overflowY:'auto',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+                        ★週の行やマスに高さの決め打ち（以前は120px）を戻さないこと。5〜6週ぶんで必ず画面からはみ出す。
+                        ★★枠は2つ（v3.134.0）：左＝カレンダー（横幅は窓の高さから決める・マスを横長にしない）／右＝集計（別の枠・緑）。
+                        集計をカレンダーの枠の中や下に戻さないこと（下に置くと、狭い窓で折り返してカレンダーの高さを取る）。 */}
+                    <div data-off1scroll="1" style={{...(OFF1_CQ?{flex:'0 0 auto',width:off1CalW(weeks.length)}:{flex:'1 1 auto'}),minWidth:0,minHeight:0,overflowY:'auto',display:'flex',flexDirection:'column',boxSizing:'border-box',border:'2px solid '+OFF1_FRAME,borderRadius:9,background:'white'}}>
                     <div data-off1grid="1" style={{border:'none',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flexShrink:0,background:'linear-gradient(90deg,#fff7ed,#fef9f0)',borderBottom:'2px solid #fed7aa'}}>
+                      <div data-off1dow="1" style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flexShrink:0,height:OFF1_DOW_H,boxSizing:'border-box',background:'linear-gradient(90deg,#fff7ed,#fef9f0)',borderBottom:'2px solid '+OFF1_FRAME}}>
                         {DOW.map((d,i)=>(
-                          <div key={i} style={{padding:'9px 0',textAlign:'center',fontWeight:700,fontSize:13,color:i===0?'#dc2626':i===6?'#1d4ed8':'#374151'}}>{d}</div>
+                          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:13,borderLeft:i>0?'1px solid '+OFF1_LINE:'none',color:i===0?'#dc2626':i===6?'#1d4ed8':'#374151'}}>{d}</div>
                         ))}
                       </div>
                       {weeks.map((week,wi)=>(
                         <div key={wi} data-off1week={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flex:'1 1 0',minHeight:OFF1_ROW_MIN}}>
                           {week.map((day,di)=>{
-                            if(!day)return <div key={di} style={{borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:'#f9fafb'}}/>;
+                            if(!day)return <div key={di} style={{borderTop:wi>0?'1px solid '+OFF1_LINE:'none',borderLeft:di>0?'1px solid '+OFF1_LINE:'none',background:'#f9fafb'}}/>;
                             const dkk=`${cy}-${cm+1}-${day}`;
                             const dow=new Date(cy,cm,day).getDay();
                             const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
@@ -20139,7 +20164,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                             const highlightBg=cellIsOff?'#fff7ed':cellIsLeave?'#f0fdf4':cellIsTrn?'#f9f0ff':baseBg;
                             const highlightOutline=cellIsOff?'2px solid #f97316':cellIsLeave?'2px solid #10b981':cellIsTrn?('2px solid '+TRN_COL):'none';
                             return(
-                              <div key={di} style={{padding:'5px 4px',overflow:'hidden',borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:0,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
+                              <div key={di} style={{padding:'5px 4px',overflow:'hidden',borderTop:wi>0?'1px solid '+OFF1_LINE:'none',borderLeft:di>0?'1px solid '+OFF1_LINE:'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:-2,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
                                 {isCl&&<ClosedMark/>}
                                 <div style={{fontWeight:800,fontSize:14,marginBottom:4,color:isCl?CLOSED_FG:numCol,display:'flex',alignItems:'center',gap:3}}>
                                   <span style={isToday?{flexShrink:0,...TODAY_NUM}:{flexShrink:0}}>{day}</span>
@@ -20190,42 +20215,36 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                         </div>
                       ))}
                     </div>
+                    </div>
 
-                    {/* -- 個人選択時：月間合計バー -- */}
+                    {/* -- 個人選択時：月間の集計（v3.134.0 から【右の別の枠】・緑） --
+                        ★研修はここに出さない（2026-11-25 ユーザー指示：「研修は仕事なので、休日の中に研修は入れなくて大丈夫」）。
+                          カレンダーのマスの「研」はそのまま（その日に居ない理由が分かるように）。
+                        ★見出しに黒・濃い灰色を使わない（「黒が入ると重たく感じる。休みなのでグリーン系で」）。 */}
                     {staffMonthStats&&(
-                      <div data-off1sum="1" style={{flexShrink:0,margin:'8px 8px 8px',padding:'9px 16px',background:'linear-gradient(90deg,#f0f9ff,#fafafa)',borderRadius:9,border:'1px solid #e5e7eb',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                        <span data-off1sumtitle="1" style={{fontSize:12.5,fontWeight:800,color:'#1f2937',flexShrink:0}}>
-                          📅 {calStaffFilter}さん {cy}年{cm+1}月の集計
-                        </span>
-                        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                          <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 14px',background:'#fff7ed',border:'2px solid #f97316',borderRadius:20,fontSize:13,fontWeight:800,color:'#ea580c'}}>
-                            <span style={{width:10,height:10,borderRadius:2,background:'#f97316',display:'inline-block'}}/>
-                            🏖 休日&nbsp;<span style={{fontSize:18,fontWeight:900}}>{staffMonthStats.offs}</span>&nbsp;日{offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)&&<span style={{fontSize:11,fontWeight:600,color:'#9a3412'}}>{offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)}</span>}
-                          </span>
-                          <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 14px',background:'#f0fdf4',border:'2px solid #10b981',borderRadius:20,fontSize:13,fontWeight:800,color:'#059669'}}>
-                            <span style={{width:10,height:10,borderRadius:2,background:'#10b981',display:'inline-block'}}/>
-                            📋 有給&nbsp;<span style={{fontSize:18,fontWeight:900}}>{staffMonthStats.leaves}</span>&nbsp;日
-                          </span>
-                          {/* ★研修は「合計」に入れない（休みではない） */}
-                          {staffMonthStats.trn>0&&(
-                            <span data-tabsumtrn="1" style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 14px',background:'#f9f0ff',border:`2px solid ${TRN_COL}`,borderRadius:20,fontSize:13,fontWeight:800,color:TRN_COL}}>
-                              <span style={{width:10,height:10,borderRadius:2,background:TRN_COL,display:'inline-block'}}/>
-                              {TRN_EMO} {TRN_LABEL}&nbsp;<span style={{fontSize:18,fontWeight:900}}>{staffMonthStats.trn}</span>&nbsp;日
-                              <span style={{fontSize:10,fontWeight:700}}>（休みではありません）</span>
-                            </span>
-                          )}
-                          <span style={{fontSize:12,color:'#c2410c',fontWeight:800,padding:'5px 10px',background:'#eef2ff',border:'1px solid #a5b4fc',borderRadius:16}}>
-                            合計 {staffMonthStats.offs+staffMonthStats.leaves} 日
-                          </span>
+                      <div data-off1sum="1" style={{flex:'0 0 auto',width:OFF1_SUM_W,alignSelf:'flex-start',maxHeight:'100%',overflowY:'auto',boxSizing:'border-box',border:'2px solid '+OFF1_SUM_FRAME,borderRadius:9,background:OFF1_SUM_BG}}>
+                        <div data-off1sumtitle="1" style={{padding:'8px 12px',background:OFF1_SUM_HEAD_BG,color:OFF1_SUM_HEAD_FG,fontSize:13,fontWeight:800,lineHeight:1.5,borderBottom:'2px solid '+OFF1_SUM_FRAME}}>
+                          📅 {calStaffFilter}さん<br/>{cy}年{cm+1}月の集計
+                        </div>
+                        <div style={{display:'flex',flexDirection:'column',gap:8,padding:'10px 10px 12px'}}>
+                          <div data-off1sumoff="1" style={{...OFF1_TILE,background:'#fff7ed',border:'2px solid #f97316',color:'#ea580c'}}>
+                            <div style={OFF1_TILE_ROW}><span>🏖 休日</span><span><span style={{fontSize:20,fontWeight:900}}>{staffMonthStats.offs}</span>&nbsp;日</span></div>
+                            {offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)&&<div style={{fontSize:11,fontWeight:600,color:'#9a3412',marginTop:2}}>{offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)}</div>}
+                          </div>
+                          <div data-off1sumleave="1" style={{...OFF1_TILE,background:'#f0fdf4',border:'2px solid #10b981',color:'#059669'}}>
+                            <div style={OFF1_TILE_ROW}><span>📋 有給</span><span><span style={{fontSize:20,fontWeight:900}}>{staffMonthStats.leaves}</span>&nbsp;日</span></div>
+                          </div>
+                          <div data-off1sumtotal="1" style={{...OFF1_TILE,background:'#eef2ff',border:'1px solid #a5b4fc',color:'#c2410c'}}>
+                            <div style={OFF1_TILE_ROW}><span>合計</span><span><span style={{fontSize:16,fontWeight:900}}>{staffMonthStats.offs+staffMonthStats.leaves}</span>&nbsp;日</span></div>
+                          </div>
                           {carryLabel(staffMonthStats.carry,true)&&(
-                            <span title={carryTitle(staffMonthStats.carry)} style={{fontSize:12,fontWeight:800,padding:'5px 12px',background:'white',border:'2px solid #93c5fd',borderRadius:16,color:staffMonthStats.carry.remain>0?'#1d4ed8':staffMonthStats.carry.remain<0?'#dc2626':'#374151'}}>
+                            <div data-off1sumcarry="1" title={carryTitle(staffMonthStats.carry)} style={{...OFF1_TILE,fontSize:12,border:'2px solid #93c5fd',color:staffMonthStats.carry.remain>0?'#1d4ed8':staffMonthStats.carry.remain<0?'#dc2626':'#374151'}}>
                               {carryLabel(staffMonthStats.carry,true)}
-                            </span>
+                            </div>
                           )}
                         </div>
                       </div>
                     )}
-                  </div>
                   </div>
                 );
               })()

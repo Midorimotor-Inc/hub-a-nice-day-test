@@ -191,15 +191,17 @@ const initFor = ([me, stor, sd]) => {
     await page.evaluate(() => /竹林直行/.test(document.body.innerText) && /魚住圭/.test(document.body.innerText)));
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.replace(/\s+/g, '') === '岡本大地' && e.offsetParent !== null); if (b) b.click(); });
   await page.waitForTimeout(1200);
+  // ★v3.134.0（2026-11-25 ユーザー指示）：「研修は仕事なので、休日の中に研修は入れなくて大丈夫」
+  //   → 個人の集計（右の枠）に研修は出さない。カレンダーのマスの「研」はそのまま。
   const sumTile = await page.evaluate(() => {
-    const e = document.querySelector('[data-tabsumtrn]');
-    return { has: !!e, txt: e ? e.innerText.replace(/\s+/g, '') : '', bar: e ? e.parentElement.innerText.replace(/\s+/g, '') : '' };
+    const e = document.querySelector('[data-off1sum]');
+    return { has: !!e, noTile: !document.querySelector('[data-tabsumtrn]'), bar: e ? e.innerText.replace(/\s+/g, '') : '', cell: !!document.querySelector('[data-offview="one"] [data-tabtrn]') };
   });
-  t('★月間合計バーに研修のタイルが出る', sumTile.has, sumTile);
-  t('★「休みではありません」と添える', /休みではありません/.test(sumTile.txt), sumTile.txt);
+  t('★個人の集計の枠が出る', sumTile.has, sumTile);
+  t('★集計に研修は出さない（研修は仕事）', sumTile.has && sumTile.noTile && !/研修/.test(sumTile.bar), sumTile.bar);
+  t('★カレンダーのマスには「研」が出たまま', sumTile.cell, sumTile);
   // ★研修1日あっても「合計」は 休日＋有給 のまま（この月の休日は店休日1日だけ＝合計1日）。
-  t('★研修は「合計」に入れない（休日1＋有給0＝合計1日のまま）',
-    /研修1日/.test(sumTile.bar) && /合計1日/.test(sumTile.bar), sumTile.bar);
+  t('★研修は「合計」に入れない（休日1＋有給0＝合計1日のまま）', /合計1日/.test(sumTile.bar), sumTile.bar);
   t('JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-training.png') });
 
