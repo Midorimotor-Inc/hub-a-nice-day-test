@@ -277,6 +277,36 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★表の氏名を押すと、その人のカレンダー（今まで通りの見た目）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]') && /魚住圭さん/.test(document.body.innerText)));
   t('★印刷ボタンもその人を刷る表示になる', await pv.evaluate(() => (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho') === '魚住圭'));
   if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one.png') });
+  // ★個人のカレンダーは1画面に収まる（v3.133.0・2026-11-25 ユーザー指示：「上下スクロールしないと見れないので、
+  //   1画面で全体表示して。あまり表示も小さくならないように」）
+  const fit1 = () => pv.evaluate(() => {
+    const sc = document.querySelector('[data-off1scroll]'); if (!sc) return null;
+    const weeks = [...document.querySelectorAll('[data-off1week]')].map(e => Math.round(e.getBoundingClientRect().height));
+    const sum = document.querySelector('[data-off1sum]'); const sb = sum ? sum.getBoundingClientRect() : null;
+    const num = [...document.querySelectorAll('[data-off1week] span')].find(e => /^\d+$/.test(e.innerText.trim()));
+    return { noScroll: sc.scrollHeight <= sc.clientHeight + 1, weeks, sumInView: !!sb && sb.bottom <= window.innerHeight + 1 && sb.top >= 0,
+      numFs: num ? parseFloat(getComputedStyle(num).fontSize) : 0, vh: window.innerHeight };
+  });
+  let F1 = await fit1();
+  t('★個人のカレンダーは上下スクロールなしで全部見える', !!F1 && F1.noScroll, F1);
+  t('★下の集計の帯まで画面の中に入る', !!F1 && F1.sumInView, F1);
+  t('★週の行は同じ高さで、空いている高さいっぱいに広がる（小さくしない）', !!F1 && Math.max(...F1.weeks) - Math.min(...F1.weeks) <= 2 && Math.min(...F1.weeks) >= 100, F1 && F1.weeks);
+  t('★日付の字は小さくしていない（14px）', !!F1 && F1.numFs >= 14, F1 && F1.numFs);
+  // 6週ある月でも収まる（最大12か月ぶん送って探す）
+  { let moved = 0, six = false;
+    for (let i = 0; i < 12; i++) { if ((await pv.evaluate(() => document.querySelectorAll('[data-off1week]').length)) === 6) { six = true; break; }
+      await pv.evaluate(() => { const b = document.querySelector('button[title="翌月"]'); if (b) b.click(); }); await pv.waitForTimeout(350); moved++; }
+    F1 = await fit1();
+    t('★6週ある月でも、スクロールなしで全部見える', six && !!F1 && F1.noScroll && F1.sumInView && F1.weeks.length === 6, { six, F1 });
+    // 低めの画面（1366×768）でも収まる
+    await pv.setViewportSize({ width: 1366, height: 768 }); await pv.waitForTimeout(500);
+    F1 = await fit1();
+    t('★低めの画面（1366×768）・6週の月でも、スクロールなしで全部見える', !!F1 && F1.noScroll && F1.sumInView, F1);
+    t('★その時も週の行は最低の高さ（66px）より低くしない', !!F1 && Math.min(...F1.weeks) >= 66, F1 && F1.weeks);
+    if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one_small.png') });
+    await pv.setViewportSize({ width: 1500, height: 950 }); await pv.waitForTimeout(400);
+    for (let i = 0; i < moved; i++) { await pv.evaluate(() => { const b = document.querySelector('button[title="前月"]'); if (b) b.click(); }); await pv.waitForTimeout(250); }
+  }
   await vPick('全員');
   t('★「全員」で表に戻る', !!(await readTable(pv)));
   await pv.evaluate(() => { const b = document.querySelector('button[title="翌月"]'); if (b) b.click(); });

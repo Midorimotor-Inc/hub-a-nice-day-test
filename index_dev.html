@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795578437473';
+    window.__APP_BUILD='build-1795579247269';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.132.2';
+const APP_VERSION = '3.133.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -486,6 +486,7 @@ const CLOSED_TAG_FG = '#ffffff';
 //   ・保存先は {店}-training（`{"YYYY-M-D":[氏名]}`＝dayoff とまったく同じ形）
 //   ・入れ方は 休日設定（StaffCalendarModal）の 種類 の3つ目「🎓 研修」
 //   ・色と文字はこの定数を通すこと（画面に直書きしない）。mobile.html にも同じものを置く
+const OFF1_ROW_MIN = 66;      // 🏖 休日・個人のカレンダー：週の行の最低の高さ（これより低くはしない）
 const TRN_COL = '#7e22ce';   // 研修の紫
 const TRN_CH  = '研';        // バッジの1文字
 const TRN_EMO = '🎓';        // 休日設定・カレンダーで使う絵文字
@@ -20097,17 +20098,22 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 );
                 return(
                   <div data-offview="one" style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden',margin:'0 18px 18px',border:'2px solid #e5e7eb',borderRadius:9}}>
-                    <div style={{overflowY:'auto',flex:1}}>
-                    <div style={{border:'none'}}>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'linear-gradient(90deg,#fff7ed,#fef9f0)',borderBottom:'2px solid #fed7aa'}}>
+                    {/* ★個人のカレンダーは【1画面に収める】（v3.133.0・2026-11-25 ユーザー指示）。
+                        ユーザーの言葉：「上下スクロールしないと見れないので、1画面で全体表示して。あまり表示も小さくならないように」。
+                        週の行を、空いている高さに均等に配る（1行の高さを決め打ちにしない）。字の大きさは変えない。
+                        ★OFF1_ROW_MIN より低くはしない＝とても低い画面の時だけ、今までどおり中をスクロールできる。
+                        ★週の行やマスに高さの決め打ち（以前は120px）を戻さないこと。5〜6週ぶんで必ず画面からはみ出す。 */}
+                    <div data-off1scroll="1" style={{overflowY:'auto',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+                    <div data-off1grid="1" style={{border:'none',flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flexShrink:0,background:'linear-gradient(90deg,#fff7ed,#fef9f0)',borderBottom:'2px solid #fed7aa'}}>
                         {DOW.map((d,i)=>(
                           <div key={i} style={{padding:'9px 0',textAlign:'center',fontWeight:700,fontSize:13,color:i===0?'#dc2626':i===6?'#1d4ed8':'#374151'}}>{d}</div>
                         ))}
                       </div>
                       {weeks.map((week,wi)=>(
-                        <div key={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
+                        <div key={wi} data-off1week={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flex:'1 1 0',minHeight:OFF1_ROW_MIN}}>
                           {week.map((day,di)=>{
-                            if(!day)return <div key={di} style={{minHeight:120,borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:'#f9fafb'}}/>;
+                            if(!day)return <div key={di} style={{borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:'#f9fafb'}}/>;
                             const dkk=`${cy}-${cm+1}-${day}`;
                             const dow=new Date(cy,cm,day).getDay();
                             const isHol=HOLIDAYS.has(`${cy}-${cm+1}-${day}`);
@@ -20133,7 +20139,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                             const highlightBg=cellIsOff?'#fff7ed':cellIsLeave?'#f0fdf4':cellIsTrn?'#f9f0ff':baseBg;
                             const highlightOutline=cellIsOff?'2px solid #f97316':cellIsLeave?'2px solid #10b981':cellIsTrn?('2px solid '+TRN_COL):'none';
                             return(
-                              <div key={di} style={{minHeight:120,padding:'5px 4px',borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:0,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
+                              <div key={di} style={{padding:'5px 4px',overflow:'hidden',borderTop:'1px solid #e5e7eb',borderLeft:di>0?'1px solid #e5e7eb':'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:0,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
                                 {isCl&&<ClosedMark/>}
                                 <div style={{fontWeight:800,fontSize:14,marginBottom:4,color:isCl?CLOSED_FG:numCol,display:'flex',alignItems:'center',gap:3}}>
                                   <span style={isToday?{flexShrink:0,...TODAY_NUM}:{flexShrink:0}}>{day}</span>
@@ -20187,8 +20193,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
 
                     {/* -- 個人選択時：月間合計バー -- */}
                     {staffMonthStats&&(
-                      <div style={{marginTop:10,padding:'11px 16px',background:'linear-gradient(90deg,#f0f9ff,#fafafa)',borderRadius:9,border:'1px solid #e5e7eb',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                        <span style={{fontSize:12,fontWeight:800,color:'white',flexShrink:0}}>
+                      <div data-off1sum="1" style={{flexShrink:0,margin:'8px 8px 8px',padding:'9px 16px',background:'linear-gradient(90deg,#f0f9ff,#fafafa)',borderRadius:9,border:'1px solid #e5e7eb',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                        <span data-off1sumtitle="1" style={{fontSize:12.5,fontWeight:800,color:'#1f2937',flexShrink:0}}>
                           📅 {calStaffFilter}さん {cy}年{cm+1}月の集計
                         </span>
                         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
