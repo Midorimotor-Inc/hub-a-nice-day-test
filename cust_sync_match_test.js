@@ -158,9 +158,45 @@ head('⑨ キャンセル・削除で代車の帯を必ず外す（行番号が�
   t('整備（sched）の枠名がずれていても氏名で見つける',
     JSON.stringify(resBksForBooking({ 3: { x: band('sched-2026-11-20-11:00', '相原') } }, 'sched-2026-11-20-13:00', '相原')) === JSON.stringify(['sched-2026-11-20-11:00']));
 }
-t('キャンセル・削除は resBksForBooking を通している',
-  /const _bks=resBksForBooking\(base,bk,_bkName\)/.test(SRC_PC) &&
+// ★v3.134.4（2026-11-26）：鍵だけで外す形をやめ、帯を1本ずつ見て決める（resPickForDelete）。
+//   氏名でさがす保険は残しているが、【消した予約が車を持っていた時だけ】。画面を通した検査は delete_other_band_test.js。
+t('キャンセル・削除は resPickForDelete を通している（氏名でさがす保険つき）',
+  /const _p=resPickForDelete\(base,bk,_bkName,_pkL\(_st\)\)/.test(SRC_PC) && /const _p=resPickForDelete\(base,bk,_bkName,_pkR\)/.test(SRC_PC) &&
   !/base=>resHasBk\(base,bk\)\?removeResByBk\(base,\[bk\]\):undefined,/.test(SRC_PC));
+head('⑩ 消した予約のものでない帯は外さない（v3.134.4・2026-11-26）');
+{
+  const code2 = grab('carLabelNum', SRC_PC) + NL + grab('sameCarLabel', SRC_PC) + NL + grab('resRowHolds', SRC_PC) + NL + grab('resPickForDelete', SRC_PC) + NL + grab('removeResPicked', SRC_PC);
+  const b2 = {};
+  new Function('exports', code2 + NL + 'exports.resRowHolds=resRowHolds;exports.resPickForDelete=resPickForDelete;exports.removeResPicked=removeResPicked;')(b2);
+  const { resRowHolds, resPickForDelete, removeResPicked } = b2;
+  const WHO = '砂原 米彦';
+  const rb = (bk, user) => ({ id: 1, bookingKey: bk, user });                      // レンタカーの帯（車名なし）
+  const cars = [{ id: 'r1', name: 'スペカス', num: '8971' }, { id: 'r2', name: 'ライズ', num: '3928' }];
+  const oldRow = { name: WHO, rentalLabel: '', rentalCarId: null };
+  const newRow = { name: WHO, rentalLabel: '🔑 スペカス (8971)', rentalCarId: 'r1' };
+  const opt = (del, others) => ({
+    hadCar: !!String(del.rentalLabel || '').trim(),
+    ownCar: (cid, rec) => resRowHolds(del, 'rental', cid, rec, cars),
+    otherCar: (cid, rec) => others.some(r => resRowHolds(r, 'rental', cid, rec, cars)),
+  });
+  const n = (base, bk, del, others) => resPickForDelete(base, bk, WHO, opt(del, others)).length;
+  t('カードの車名とその帯の車が合えば「持っている」', resRowHolds(newRow, 'rental', 'r1', rb('x', WHO), cars) && !resRowHolds(newRow, 'rental', 'r2', rb('x', WHO), cars) && !resRowHolds(oldRow, 'rental', 'r1', rb('x', WHO), cars));
+  const near = { r1: { a: rb('sched-2026-11-20-未定__1', WHO) } };
+  t('★車の無い予約を消す：鍵が別の枠の帯は外さない（氏名でさがさない）', n(near, 'sched-2026-11-20-未定', oldRow, [newRow]) === 0);
+  t('★車の無い予約を消す：ほかに同じお名前の予約が無くても、氏名ではさがさない', n(near, 'sched-2026-11-20-未定', oldRow, []) === 0);
+  const same = { r1: { a: rb('sched-2026-11-20-未定', WHO) } };
+  t('★車の無い予約を消す：鍵が同じ字でも、別の予約がその車を持っていれば外さない', n(same, 'sched-2026-11-20-未定', oldRow, [newRow]) === 0);
+  t('鍵が同じ字で、ほかに持ち主がいなければ外す（帯だけ残さない）', n(same, 'sched-2026-11-20-未定', oldRow, []) === 1);
+  t('車を持っている予約を消す：鍵がずれていても氏名で見つけて外す', n(near, 'sched-2026-11-20-未定', newRow, [oldRow]) === 1);
+  t('車を持っている予約を消す：鍵がぴったりなら外す', n(same, 'sched-2026-11-20-未定', newRow, [oldRow]) === 1);
+  t('★氏名の違う帯は、鍵が同じ字でも外さない（他店の同じ鍵）', n({ r2: { a: rb('sched-2026-11-20-未定', '岩本') } }, 'sched-2026-11-20-未定', newRow, []) === 0);
+  const two = { r1: { a: rb('sched-2026-11-20-10:00', WHO) }, r2: { b: rb('sched-2026-11-20-11:00', WHO) } };
+  t('同じ日・同じ氏名の帯が2本（鍵が2種類）なら触らない', n(two, 'sched-2026-11-20-未定', newRow, []) === 0);
+  const cont = { r1: { a: rb('sched-2026-11-20-10:00', WHO), b: rb('sched-2026-11-20-10:00', WHO) } };
+  t('月またぎの続きの帯（同じ鍵）は1本として、2つとも外す', n(cont, 'sched-2026-11-20-未定', newRow, []) === 2);
+  const out = removeResPicked(near, resPickForDelete(near, 'sched-2026-11-20-未定', WHO, opt(newRow, [])));
+  t('removeResPicked：選んだ帯だけを外し、元の表は書き換えない', Object.keys(out.r1).length === 0 && Object.keys(near.r1).length === 1);
+}
 t('氏名は inspData／schedData のその行から取っている', /const _bkName=\(modalType==='insp'/.test(SRC_PC));
 t('useCallback の依存に schedData を足してある（古い値を掴まない）',
   /setSchedData,schedData,persistLres/.test(SRC_PC));

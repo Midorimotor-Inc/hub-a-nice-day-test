@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795664585570';
+  window.__APP_BUILD='build-1795671235918';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.134.3';
+const MOBILE_VERSION='3.134.4';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -8258,34 +8258,75 @@ const App=()=>{
     const nmOf=s=>String(s==null?'':s).replace(/[\s　]/g,'');
     const who=nmOf(deletedName);
     const dayPre=(req.type==='insp'?'insp-':'sched-')+req.dk+'-';
-    const targets=res=>{
-      const exact=[],near=[];
-      for(const cid of Object.keys(res||{}))for(const k of Object.keys(res[cid]||{})){
-        const r=res[cid][k]; if(!r||!r.bookingKey)continue;
-        const u=nmOf(r.user);
-        if(u&&who&&u!==who)continue;                               // 別のお客様の帯
-        if(r.bookingKey===bk)exact.push([cid,k]);
-        else if(u&&who&&String(r.bookingKey).indexOf(dayPre)===0)near.push([cid,k]);
-      }
-      return exact.length?exact:(near.length===1?near:[]);        // 2本以上は決められない＝触らない
+    // ★★消した予約のものでない帯は外さない（v3.134.4・2026-11-26・本番の現場報告。PC版の resPickForDelete と同じ決まり）。
+    //   同じ日に同じお名前の予約が2件あり、車の付いていない方を消したら、もう1件のレンタカーの帯が外れた。
+    //   ・消した予約が持っていない車の帯で、同じ日・同じお名前の【別の生きている予約】がその車を持っていれば外さない
+    //   ・鍵が合わない時の保険（氏名でさがす）は、消した予約が代車名／レンタカー名を持っていた時だけ
+    const delRow=req.initial||null;
+    const delSame=[];   // 同じ日・同じお名前の、消す予約【以外】の生きている予約（車検＋両店の整備）
+    if(who){
+      (inspData[req.dk]||[]).forEach((r,i)=>{
+        if(!r||r.bookingStatus==='cancelled')return;
+        if(req.type==='insp'&&i===req.idx)return;
+        if(nmOf(r.name)===who)delSame.push(r);
+      });
+      [['honten',schedDataH],['sanda',schedDataS]].forEach(([s0,sd0])=>{
+        const day0=((sd0||{})[req.dk])||{};
+        Object.keys(day0).forEach(sl=>{
+          const r=day0[sl];
+          if(!r||r.bookingStatus==='cancelled')return;
+          if(req.type!=='insp'&&s0===vsId&&sl===req.slot)return;
+          if(nmOf(r.name)===who)delSame.push(r);
+        });
+      });
+    }
+    const rowHolds=(row,kind,cid,rec,cars)=>{
+      if(!row)return false;
+      const lab=String((kind==='rental'?row.rentalLabel:row.loaner)||'').trim();
+      if(!lab)return false;
+      const lbl=(n,u)=>String(n||'')+(u?' ('+u+')':'');
+      let want=(rec&&rec.carName)?lbl(rec.carName,rec.carNum):'';
+      if(!want){const c=(Array.isArray(cars)?cars:[]).find(x=>x&&String(x.id)===String(cid));if(c)want=lbl(c.name,c.num);}
+      if(want)return sameCarLabel(lab,want);
+      const id=kind==='rental'?row.rentalCarId:row.loanerId;
+      return id!=null&&String(id)===String(cid);
     };
-    const cleanBk=res=>{
+    const targetsOf=(kind,cars)=>{
+      const hadCar=!!(delRow&&String((kind==='rental'?delRow.rentalLabel:delRow.loaner)||'').trim());
+      const notMine=(cid,r)=>!rowHolds(delRow,kind,cid,r,cars)&&delSame.some(o=>rowHolds(o,kind,cid,r,cars));
+      return res=>{
+        const exact=[],near=[];
+        for(const cid of Object.keys(res||{}))for(const k of Object.keys(res[cid]||{})){
+          const r=res[cid][k]; if(!r||!r.bookingKey)continue;
+          const u=nmOf(r.user);
+          if(u&&who&&u!==who)continue;                               // 別のお客様の帯
+          if(r.bookingKey===bk){ if(!notMine(cid,r))exact.push([cid,k]); }   // 同じお名前の【別の予約】の帯は外さない
+          else if(hadCar&&u&&who&&String(r.bookingKey).indexOf(dayPre)===0)near.push([cid,k,r]);
+        }
+        if(exact.length)return exact;
+        if(near.length!==1)return [];                                // 2本以上は決められない＝触らない
+        return notMine(near[0][0],near[0][2])?[]:[[near[0][0],near[0][1]]];
+      };
+    };
+    const cleanOf=targets=>res=>{
       const t=targets(res); if(!t.length)return res;
       const out={};
       for(const cid of Object.keys(res||{}))out[cid]={...(res[cid]||{})};
       t.forEach(([cid,k])=>{delete out[cid][k];});
       return out;
     };
-    const gone=echo=>targets(echo).length===0;
+    const tMy =targetsOf('loaner',vsId==='honten'?loanerCarsH:loanerCarsS);
+    const tOth=targetsOf('loaner',vsId==='honten'?loanerCarsS:loanerCarsH);
+    const tRen=targetsOf('rental',rentalCars);
     const othKey=storKey('lres',vsId==='honten'?'sanda':'honten');
     const othLres=vsId==='honten'?loanerResS:loanerResH;
     const setOthLres=vsId==='honten'?setLoanerResS:setLoanerResH;
     const jobs=[
-      writeShared(lresKey,myLres,base=>cleanBk(base),setMyLres,gone,true),
-      writeShared(STOR+'rres',rentalResData,base=>cleanBk(base),setRentalResData,gone,true),
+      writeShared(lresKey,myLres,cleanOf(tMy),setMyLres,echo=>tMy(echo).length===0,true),
+      writeShared(STOR+'rres',rentalResData,cleanOf(tRen),setRentalResData,echo=>tRen(echo).length===0,true),
     ];
     // 他店の表は、氏名が分かっていて実際に帯がある時だけ触る
-    if(who&&targets(othLres).length)jobs.push(writeShared(othKey,othLres,base=>cleanBk(base),setOthLres,gone,true));
+    if(who&&tOth(othLres).length)jobs.push(writeShared(othKey,othLres,cleanOf(tOth),setOthLres,echo=>tOth(echo).length===0,true));
     await Promise.all(jobs);
   };
 

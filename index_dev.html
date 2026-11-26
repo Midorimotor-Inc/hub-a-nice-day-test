@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795664585570';
+    window.__APP_BUILD='build-1795671235918';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.134.3';
+const APP_VERSION = '3.134.4';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -2589,6 +2589,76 @@ const sameCarLabel = (a, b) => {
   if (na && nb) return na === nb;
   return String(a == null ? '' : a).replace(/🔑/g, '').replace(/\s+/g, '')
       === String(b == null ? '' : b).replace(/🔑/g, '').replace(/\s+/g, '');
+};
+// ╔══ 予約を消した時に外す帯を【1本ずつ】決める（v3.134.4・2026-11-26・本番の現場報告）══╗
+//   起きたこと：同じ日に同じお名前の予約が2件あり、レンタカーの付いていない古い方を消したら、
+//   もう1件のレンタカーの帯が外れた（カードに車名は残り、代車管理から帯だけ消えた）。
+//   出どころは2つ：
+//     ① 鍵が合わない時の保険（同じ日・同じ氏名の帯が1本ならそれを外す・2026-11-17）が、
+//        【代車もレンタカーも持っていない予約】を消した時にも働いていた
+//     ② 帯の鍵が、消した予約の枠と同じ字になっていた時（整備の鍵は店ごとに別の表なので、
+//        本店と三田店でも同じ字になり得る）、氏名も車も確かめずに外していた（レンタカー）
+//   決まり：
+//     ・氏名の違う帯には触らない（帯に氏名が無ければ今までどおり外す）
+//     ・消した予約が持っていない車の帯で、同じ日・同じお名前の【別の生きている予約】が
+//       その車を持っていれば、その帯は別の予約のもの＝外さない
+//     ・保険（氏名でさがす）は、消した予約が代車名／レンタカー名を持っていた時だけ（hadCar）
+//     ・同じ日・同じ氏名の帯が2本以上（鍵が2種類以上）ある時は今までどおり触らない
+//   ★新しい純関数。既にあるデータ層のコード（resBksForBooking ほか）は変えていない。
+//   ★スマホ（mobile.html の deleteCore）にも同じ決まりを置いてある。片方だけ直さないこと。
+// その予約カード（row）が、その帯（車 cid・rec）の車を持っているか。kind＝'loaner'／'rental'
+const resRowHolds = (row, kind, cid, rec, cars) => {
+  if (!row) return false;
+  const lab = String((kind === 'rental' ? row.rentalLabel : row.loaner) || '').trim();
+  if (!lab) return false;
+  const lbl = (n, u) => String(n || '') + (u ? ' (' + u + ')' : '');
+  let want = (rec && rec.carName) ? lbl(rec.carName, rec.carNum) : '';
+  if (!want) { const c = (Array.isArray(cars) ? cars : []).find(x => x && String(x.id) === String(cid)); if (c) want = lbl(c.name, c.num); }
+  if (want) return sameCarLabel(lab, want);
+  const id = kind === 'rental' ? row.rentalCarId : row.loanerId;
+  return id != null && String(id) === String(cid);
+};
+// 外す帯の一覧 [{cid,k}] を返す。o＝{hadCar, ownCar(cid,rec), otherCar(cid,rec)}
+const resPickForDelete = (base, bk, userName, o) => {
+  const opt = o || {};
+  const src = (base && typeof base === 'object' && !Array.isArray(base)) ? base : {};
+  const nmz = s => String(s == null ? '' : s).replace(/[\s　]/g, '');
+  const nm = nmz(userName);
+  const m = String(bk || '').match(/^(insp|sched)-(\d+-\d+-\d+)-(.*)$/);
+  const dayPrefix = m ? (m[1] + '-' + m[2] + '-') : '';
+  const own = opt.ownCar || (() => false), oth = opt.otherCar || (() => false);
+  const notMine = (cid, r) => !own(cid, r) && oth(cid, r);   // 別の予約がその車を持っている
+  const exact = [], near = {};
+  Object.keys(src).forEach(cid => {
+    const days = src[cid] || {};
+    Object.keys(days).forEach(k => {
+      const r = days[k];
+      if (!r || !r.bookingKey) return;
+      const u = nmz(r.user);
+      if (r.bookingKey === bk) {
+        if (nm && u && u !== nm) return;      // 別のお客様の帯（他店の同じ鍵）
+        if (notMine(cid, r)) return;          // 同じお名前の【別の予約】の帯
+        exact.push({ cid, k });
+        return;
+      }
+      if (!nm || !dayPrefix || u !== nm) return;
+      if (String(r.bookingKey).indexOf(dayPrefix) === 0) (near[r.bookingKey] = near[r.bookingKey] || []).push({ cid, k, r });
+    });
+  });
+  if (exact.length) return exact;
+  if (!opt.hadCar) return [];                 // 車を持っていない予約は、氏名で他の帯をさがさない
+  const ks = Object.keys(near);
+  if (ks.length !== 1) return [];             // 2本以上は取り合い＝触らない（月またぎの続きは同じ鍵＝1本）
+  const hit = near[ks[0]];
+  if (hit.some(x => notMine(x.cid, x.r))) return [];
+  return hit.map(x => ({ cid: x.cid, k: x.k }));
+};
+const removeResPicked = (base, picks) => {
+  const src = (base && typeof base === 'object' && !Array.isArray(base)) ? base : {};
+  const out = {};
+  Object.keys(src).forEach(cid => { out[cid] = { ...(src[cid] || {}) }; });
+  (picks || []).forEach(p => { if (out[p.cid]) delete out[p.cid][p.k]; });
+  return out;
 };
 // 全角の数字（０-９）を半角に直す。日本語入力（ひらがな）のまま打っても数字欄に入るようにするため（2026-10-13）。
 const toHankakuNum = (v) => String(v == null ? '' : v).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
@@ -17725,6 +17795,7 @@ function AppInner() {
       :((((schedData||{})[_scO0]||{})[modalSlot]||{}).name);
     const _ownNames=[cleanData.name,_ownOldName].filter(Boolean);
     const _rmNames=modalType==='insp'?[]:_ownNames;   // 車検の鍵は両店で1つの表＝取り違えない
+    let _rrRef=null;   // いま選んだレンタカーの帯（同じく、整備は置き場所が決まってから鍵を直す・v3.134.4）
     let _luRef=null;   // いま選んだ代車の帯（下で作る）。整備は置き場所が決まってから鍵を直す
 
     // ★★整備も、日にちを変えたら代車の帯を《一緒に動かす》（v3.130.0・2026-11-25 ユーザー決定）
@@ -18010,10 +18081,15 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         :`sched-${_dcTargetDk}-${modalSlot||''}`;
       const _rRec={...pendingRentalRec,bookingKey:_rBk,carId:pendingRentalId};
       const _rCar=pendingRentalId;
+      // ★整備は、下で置き場所（_scFinalSlot）が決まってから鍵と「外す古い帯」を直す（v3.134.4・2026-11-26）。
+      //   それまでは【カードを開いた枠】の名前で鍵を作っていたので、その時間に先客がいて __1 へ置かれた時、
+      //   帯が【先客の枠】を指していた（先客を消すと、この予約の帯が外れる）。
+      //   書き込みは setTimeout の中＝この関数が終わった後なので、直した値がそのまま使われる。
+      _rrRef={rec:_rRec,rm:[_rBk]};
       // ★中身の無い仮の記録（id:'restored'＝本物が見つからなかった時）は書かない。
       //   書くと本物を消して期間の無い記録に置き換えてしまう。ラベルだけ予約カードに残す。
       if(_rRec.id!=='restored')setTimeout(()=>persistRres(
-        base=>putResRec(removeResByBk(base,[_rBk]),_rCar,String(_rRec.id),_rRec),
+        base=>putResRec(removeResByBkUser(base,_rrRef.rm,_rmNames),_rCar,String(_rRec.id),_rRec),
         back=>resHasRec(back,_rCar,_rRec.id),
         {verb:'登録',name:_rRec.user}
       ),0);
@@ -18391,6 +18467,13 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         }
         return ch?out:undefined;
       };
+      if(_rrRef){
+        // ★レンタカーの帯も、鍵を【実際に置いた枠】に合わせる（v3.134.4・2026-11-26）。
+        //   新しい予約は自分の鍵だけ／前からある予約は元の枠の鍵も外す（どちらも氏名の合う帯だけ＝_rmNames）。
+        //   ★新しい予約で【開いた枠】の鍵を外さないこと。そこには先客の帯がある。
+        _rrRef.rec.bookingKey=_scNewBk;
+        _rrRef.rm=modalIsNew?[_scNewBk]:[_scOldBk,_scNewBk];
+      }
       if(_luRef){
         // ★代車を選び直した：新しい帯の鍵を【実際に置いた枠】に合わせ、古い帯は同じ書き込みで外す。
         //   （それまでは帯の鍵を元の枠名で作り、別の書き込みで付け替えていた＝順番が入れ替わると
@@ -18559,6 +18642,37 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
       setSchedData(prev=>{const d={...(prev[modalDk]||{})};delete d[modalSlot];return{...prev,[modalDk]:d};});
     }
 
+    // ★★消した予約のものでない帯は外さない（v3.134.4・2026-11-26・本番の現場報告）。
+    //   同じ日に同じお名前の予約が2件あり、車の付いていない方を消したら、もう1件のレンタカーの帯が
+    //   外れた。帯を1本ずつ見て決める（resPickForDelete。決まりはその関数の所に書いてある）。
+    //   ★resBksForBooking＋removeResByBk（鍵だけで外す形）に戻さないこと。
+    const _delRow=(modalType==='insp'?(inspData[modalDk]||[])[modalIdx]:(((schedData||{})[modalDk]||{})[modalSlot]))||null;
+    const _delNm=_resNm(_bkName);
+    const _delSame=[];   // 同じ日・同じお名前の、消す予約【以外】の生きている予約（車検＋両店の整備）
+    if(_delNm){
+      (inspData[modalDk]||[]).forEach((r,i)=>{
+        if(!r||r.bookingStatus==='cancelled')return;
+        if(modalType==='insp'&&i===modalIdx)return;
+        if(_resNm(r.name)===_delNm)_delSame.push(r);
+      });
+      [['honten',schedDataH],['sanda',schedDataS]].forEach(([_s,_sd])=>{
+        const _day=((_sd||{})[modalDk])||{};
+        Object.keys(_day).forEach(_sl=>{
+          const r=_day[_sl];
+          if(!r||r.bookingStatus==='cancelled')return;
+          if(modalType!=='insp'&&_s===vsId&&_sl===modalSlot)return;
+          if(_resNm(r.name)===_delNm)_delSame.push(r);
+        });
+      });
+    }
+    const _pkOf=(kind,cars)=>({
+      hadCar:!!(_delRow&&String((kind==='rental'?_delRow.rentalLabel:_delRow.loaner)||'').trim()),
+      ownCar:(cid,rec)=>resRowHolds(_delRow,kind,cid,rec,cars),
+      otherCar:(cid,rec)=>_delSame.some(r=>resRowHolds(r,kind,cid,rec,cars)),
+    });
+    const _pkL=_st=>_pkOf('loaner',_st==='honten'?dynLoanerListH:dynLoanerListS);
+    const _pkR=_pkOf('rental',dynRentalCars);
+
     // ★連動削除: その予約に紐づく代車予約を削除（サーバー最新値ベース＋読み返し検証）。
     //   bookingKey が合わなければ【同じ日・同じ氏名】の帯を外す（resBksForBooking）。
     //   ずれた行番号のせいで代車が外れず、ふさがったまま残るのを防ぐ（2026-11-17）。
@@ -18569,16 +18683,16 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     ['honten','sanda'].forEach(_st=>{
       if(_st!==vsId&&!_resNm(_bkName))return;   // 氏名が分からない時は、他店の表には触らない
       persistLresOf(_st,
-        base=>{const _bks=resBksForBooking(base,bk,_bkName);return (_bks.length&&resHasBkUser(base,_bks,_bkName))?removeResByBkUser(base,_bks,_bkName):undefined;},
-        back=>{const _bks=resBksForBooking(back,bk,_bkName);return !(_bks.length&&resHasBkUser(back,_bks,_bkName));},
+        base=>{const _p=resPickForDelete(base,bk,_bkName,_pkL(_st));return _p.length?removeResPicked(base,_p):undefined;},
+        back=>resPickForDelete(back,bk,_bkName,_pkL(_st)).length===0,
         {verb:'削除',alert:_st===vsId}
       );
     });
 
     // ★連動削除: レンタカーも同じ（同上）
     persistRres(
-      base=>{const _bks=resBksForBooking(base,bk,_bkName);return _bks.length?removeResByBk(base,_bks):undefined;},
-      back=>resBksForBooking(back,bk,_bkName).length===0,
+      base=>{const _p=resPickForDelete(base,bk,_bkName,_pkR);return _p.length?removeResPicked(base,_p):undefined;},
+      back=>resPickForDelete(back,bk,_bkName,_pkR).length===0,
       {verb:'削除'}
     );
 
@@ -18605,7 +18719,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     }
 
     releaseLock(curLockKey);setCurLockKey(null);setModalOpen(false);
-  },[modalType,modalDk,modalIdx,modalSlot,curLockKey,releaseLock,persistInsp,setSchedData,schedData,persistLres,persistLresOf,vsId,persistRres,inspData,syncCustStatus,inspLimits]);
+  },[modalType,modalDk,modalIdx,modalSlot,curLockKey,releaseLock,persistInsp,setSchedData,schedData,persistLres,persistLresOf,vsId,persistRres,inspData,syncCustStatus,inspLimits,schedDataH,schedDataS,dynLoanerListH,dynLoanerListS,dynRentalCars]);
 
   // 承認ハンドラー（承認もサーバー最新値ベース。対象を本人性で特定し approved を立てる）
   // ★入庫済みチェック（任意）。名前の横の〇を押すと黄色地に赤チェックが点く。
