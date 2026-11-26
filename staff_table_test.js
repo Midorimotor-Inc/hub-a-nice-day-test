@@ -253,6 +253,32 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★横にはみ出さない', T.fitW, { fitW: T.fitW, boxW: T.boxW });
   t('★ここでは誰の氏名も押せる（上の名前ボタンと同じ）', T.rows.filter(r => r.name !== '旧名太郎').every(r => r.cursor === 'pointer') && vrow('旧名太郎').cursor !== 'pointer', T.rows.map(r => [r.name, r.cursor]));
   if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_all.png') });
+  // ★会社の休日数の札は、表の上の行の右端＝「休日〜繰り越し」の列の真上（v3.134.1・2026-11-26 ユーザー決定・モックの「B・言葉2・緑」）
+  //   「会社の設定された休日が今左上にあるので、表を少し下にずらして、印刷・車検・休日のボタンの下の行の右端に。
+  //    休日・有給・計と書いてあるあたりの上に入れたら、真上にあるので見やすい」
+  const mhPos = (pg) => pg.evaluate(() => {
+    const all = [...document.querySelectorAll('[data-mhbadge]')].filter(e => e.offsetParent !== null);
+    const mh = document.querySelector('[data-offview="all"] [data-offtop] [data-mhbadge]');
+    const th = [...document.querySelectorAll('[data-offtable] thead tr:first-child th')].find(e => e.innerText.trim() === '休日');
+    const wrap = document.querySelector('[data-offtablewrap]');
+    if (!mh || !th || !wrap) return { n: all.length, has: false };
+    const r = mh.getBoundingClientRect(), a = th.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    const rgb = v => (String(v).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    return { n: all.length, has: true, kind: mh.getAttribute('data-mhbadge'), text: mh.innerText.replace(/\s+/g, ''),
+      dL: Math.round(r.left - a.left), dR: Math.round(r.right - w.right), above: r.bottom <= w.top, gap: Math.round(w.top - r.bottom), wrapTop: Math.round(w.top),
+      bd: rgb(getComputedStyle(mh).borderTopColor), btn: !!mh.querySelector('[data-mhbtn]'), edit: mh.hasAttribute('data-mhedit'), h: Math.round(r.height) };
+  });
+  let MH = await mhPos(pv);
+  t('★会社の休日数の札は表の上の行にある（左上には出さない＝1つだけ）', MH.has && MH.n === 1 && MH.kind === 'wide' && MH.above, MH);
+  t('★札の左端＝「休日」の列の左端／右端＝表の枠の右端（真上にぴったり）', MH.has && Math.abs(MH.dL) <= 3 && Math.abs(MH.dR) <= 3, MH);
+  t('★言葉は「N月 会社の休日数 9日」', MH.has && MH.text.indexOf((M + 1) + '月会社の休日数9日') === 0, MH.text);
+  t('★札は緑系', MH.has && MH.bd[1] > MH.bd[0] && MH.bd[1] > MH.bd[2], MH.bd);
+  t('★管理者でない人には「変更」を出さない', MH.has && !MH.btn, MH);
+  await pv.setViewportSize({ width: 1920, height: 900 }); await pv.waitForTimeout(500);
+  MH = await mhPos(pv);
+  t('★横長の窓（1920×900）でも列の真上にぴったり', MH.has && Math.abs(MH.dL) <= 3 && Math.abs(MH.dR) <= 3, MH);
+  if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_all_wide.png') });
+  await pv.setViewportSize({ width: 1500, height: 950 }); await pv.waitForTimeout(400);
   // 印刷と突き合わせる
   await pv.evaluate(() => { window.__printed = ''; });
   await pv.click('[data-offprint]');
@@ -276,6 +302,7 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   await pv.waitForTimeout(700);
   t('★表の氏名を押すと、その人のカレンダー（今まで通りの見た目）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]') && /魚住圭さん/.test(document.body.innerText)));
   t('★印刷ボタンもその人を刷る表示になる', await pv.evaluate(() => (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho') === '魚住圭'));
+  t('★個人のカレンダーの時は、札は今までどおり左上（小さい札・表の上の行は無い）', await pv.evaluate(() => { const a = [...document.querySelectorAll('[data-mhbadge]')].filter(e => e.offsetParent !== null); return a.length === 1 && a[0].getAttribute('data-mhbadge') === 'std' && !document.querySelector('[data-offtop]'); }));
   if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one.png') });
   // ★個人のカレンダーは1画面に収まる（v3.133.0・2026-11-25 ユーザー指示：「上下スクロールしないと見れないので、
   //   1画面で全体表示して。あまり表示も小さくならないように」）
@@ -348,6 +375,36 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★月を送っても表のまま・日数が変わる', T && T.heads.length === new Date(Y, M + 2, 0).getDate(), T && T.heads.length);
   t('画面のエラーなし（🏖 休日）', V.errs.length === 0, V.errs.slice(0, 2));
   await V.ctx.close();
+
+  // ────────────────────────────────────────────────────────
+  head('⑧ 管理者：表の上の札の「変更」で会社の休日数を直せる');
+  const W = await start({ email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin', cert: { isAdmin: true } });
+  const pw = W.page;
+  await pw.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => /確定して閉じる/.test(e.innerText)); if (b) b.click(); });
+  await pw.waitForTimeout(600);
+  await pw.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
+  await pw.waitForTimeout(1200);
+  await pw.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
+  await pw.waitForTimeout(1200);
+  await pw.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '全員' && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); });
+  await pw.waitForTimeout(700);
+  MH = await mhPos(pw);
+  const carry0 = ((await readTable(pw)).rows.find(r => r.name === '江川京志') || { tot: {} }).tot.carry;
+  t('★管理者には「変更」が出る', MH.has && MH.btn, MH);
+  if (SHOT) { await pw.setViewportSize({ width: 1920, height: 900 }); await pw.waitForTimeout(400); await pw.screenshot({ path: path.join(SHOT, 'staff_view_all_admin.png') }); await pw.setViewportSize({ width: 1500, height: 950 }); await pw.waitForTimeout(400); MH = await mhPos(pw); }
+  await pw.click('[data-offtop] [data-mhbtn]'); await pw.waitForTimeout(400);
+  const MH2 = await mhPos(pw);
+  t('★押すと入力欄に変わる', MH2.has && MH2.edit && !!(await pw.$('[data-offtop] input')), MH2);
+  t('★その時、表は上下に動かない・札の幅も変わらない', MH2.has && Math.abs(MH2.wrapTop - MH.wrapTop) <= 1 && Math.abs(MH2.dL) <= 3 && Math.abs(MH2.dR) <= 3, [MH.wrapTop, MH2.wrapTop, MH2.dL, MH2.dR]);
+  await pw.fill('[data-offtop] input', '10');
+  await pw.click('[data-offtop] [data-mhsave]'); await pw.waitForTimeout(1200);
+  const MH3 = await mhPos(pw);
+  t('★保存すると札が 10日 になる', MH3.has && !MH3.edit && MH3.text.indexOf((M + 1) + '月会社の休日数10日') === 0, MH3.text);
+  t('★保存先（mholidays）も 10', (await pw.evaluate(k => (window.__fakeFb.get(k + 'mholidays') || {}), STOR))[Y + '-' + (M + 1)] === 10);
+  const carry1 = ((await readTable(pw)).rows.find(r => r.name === '江川京志') || { tot: {} }).tot.carry;
+  t('★右端の「繰り越し」も一緒に変わる', !!carry0 && !!carry1 && carry0 !== carry1, [carry0, carry1]);
+  t('画面のエラーなし（管理者・🏖 休日）', W.errs.length === 0, W.errs.slice(0, 2));
+  await W.ctx.close();
 
   await browser.close(); server.close();
   console.log(NL + '━━━━━━━━━━━━━━━━━━━━');

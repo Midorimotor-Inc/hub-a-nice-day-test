@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795597822175';
+    window.__APP_BUILD='build-1795656975071';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.134.0';
+const APP_VERSION = '3.134.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -510,6 +510,16 @@ const OFF1_CQ = typeof CSS!=='undefined' && !!CSS.supports && CSS.supports('widt
 const off1CalW = rows => 'min(calc(100cqw - '+(OFF1_SUM_W+OFF1_GAP)+'px), max('+OFF1_MIN_W+'px, calc(max('+OFF1_ROW_MIN+'px, (100cqh - '+(OFF1_DOW_H+4)+'px) / '+rows+') * '+(7*OFF1_RATIO)+')))';
 const OFF1_TILE = {borderRadius:10,padding:'7px 11px',fontSize:13,fontWeight:800,background:'white'};
 const OFF1_TILE_ROW = {display:'flex',alignItems:'baseline',justifyContent:'space-between',gap:8};
+// ★🏖 休日・全員の表：会社の休日数の札（v3.134.1・2026-11-26 ユーザー決定・モック mock_off_all_mh.html の「B・言葉2・緑」）
+//   ユーザーの言葉：「会社の設定された休日が今左上にあるので、表を少し下にずらして、印刷・車検・休日のボタンの
+//   下の行の右端に。休日・有給・計と書いてあるあたりの上に入れたら、真上にあるので見やすい」。
+//   ★札の幅は、表の「休日〜繰り越し」の列の幅にそろえる（StaffOffTable の topRight）。色は緑（集計の枠と同じ系統）。
+const OFFMH_BD  = OFF1_SUM_FRAME;    // 札の枠
+const OFFMH_BG  = OFF1_SUM_BG;       // 札の地
+const OFFMH_FG  = OFF1_SUM_HEAD_FG;  // 札の字
+const OFFMH_BTN = '#15803d';         // 「変更」「保存」の色
+const OFFMH_H   = 42;                // 札の高さ（「変更」を押して入力欄に変わっても、表が上下に動かないように決めてある）
+const OFFMH_GAP = 6;                 // 札と表のあいだ
 const TRN_COL = '#7e22ce';   // 研修の紫
 const TRN_CH  = '研';        // バッジの1文字
 const TRN_EMO = '🎓';        // 休日設定・カレンダーで使う絵文字
@@ -899,7 +909,7 @@ const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,m
 // ── 月間休日数バッジ（スタッフ休日カレンダーの上部）──
 //   会社が月ごとに決める休日数を出すだけの表示。スタッフが自分で数えなくて済むようにするもので、
 //   休業日データや集計には影響しない。鉛筆が出るのは編集権限のある4人だけ。
-const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave})=>{
+const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave,wide})=>{
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const [busy,setBusy]=useState(false);
@@ -912,20 +922,28 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave})=>{
     await onSave(y,m,n);
     setBusy(false);setEditing(false);
   };
-  const box={display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:7,
-    background:'#eef2ff',border:'2px solid #c7d2fe',fontSize:11,color:'#3730a3',whiteSpace:'nowrap'};
+  // ★wide＝🏖 休日・全員の表の上に置く大きい札（v3.134.1・2026-11-26 ユーザー決定・モックの「B・言葉2・緑」）。
+  //   表の「休日〜繰り越し」の列と同じ幅いっぱいに出す。色は OFFMH_* を通すこと（直書きしない）。
+  //   wide でない時（個人のカレンダーの左上・設定のカレンダー）は今までどおりの小さい藤色の札。
+  const box=wide
+    ?{display:'flex',alignItems:'center',justifyContent:'center',gap:9,padding:'6px 10px',borderRadius:7,boxSizing:'border-box',width:'100%',minHeight:OFFMH_H,
+      background:OFFMH_BG,border:'2px solid '+OFFMH_BD,fontSize:13,color:OFFMH_FG,whiteSpace:'nowrap'}
+    :{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:7,
+      background:'#eef2ff',border:'2px solid #c7d2fe',fontSize:11,color:'#3730a3',whiteSpace:'nowrap'};
+  const lab=wide?((m+1)+'月 会社の休日数'):((m+1)+'月の休日');
+  const bd=wide?OFFMH_BD:'#c7d2fe', btn=wide?OFFMH_BTN:'#4f46e5';
   if(editing){
     return (
-      <span style={{...box,background:'white',borderColor:'#6366f1'}}>
-        <span style={{fontWeight:700}}>{m+1}月の休日</span>
+      <span data-mhbadge={wide?'wide':'std'} data-mhedit="1" style={{...box,background:'white',borderColor:wide?OFFMH_BTN:'#6366f1',...(wide?{gap:5,fontSize:11.5}:{})}}>
+        <span style={{fontWeight:700}}>{lab}</span>
         {/* ★type="number" を使わない（2026-10-15）。Windows の IME が英数のままになるため。全角で打っても半角にする。 */}
         <input autoFocus value={val} disabled={busy}
           {...numFieldProps(v=>setVal(v),2)}
           onKeyDown={e=>{if(e.key==='Enter')commit();if(e.key==='Escape')setEditing(false);}}
-          style={{width:52,padding:'2px 6px',border:'2px solid #c7d2fe',borderRadius:5,fontSize:12,fontWeight:800,textAlign:'center'}}/>
+          style={{width:52,padding:'2px 6px',border:'2px solid '+bd,borderRadius:5,fontSize:12,fontWeight:800,textAlign:'center'}}/>
         <span style={{fontWeight:700}}>日</span>
-        <button onClick={commit} disabled={busy}
-          style={{padding:'2px 9px',borderRadius:5,border:'none',background:'#4f46e5',color:'white',fontWeight:800,fontSize:11,cursor:busy?'wait':'pointer'}}>
+        <button data-mhsave="1" onClick={commit} disabled={busy}
+          style={{padding:'2px 9px',borderRadius:5,border:'none',background:btn,color:'white',fontWeight:800,fontSize:11,cursor:busy?'wait':'pointer'}}>
           {busy?'保存中…':'保存'}
         </button>
         <button onClick={()=>setEditing(false)} disabled={busy}
@@ -934,12 +952,12 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave})=>{
     );
   }
   return (
-    <span style={box} title={canEdit?'クリックで今月の休日数を入力（管理者のみ）':'会社が決めた今月の休日数'}>
-      <span style={{fontWeight:700}}>{m+1}月の休日</span>
-      <span style={{fontWeight:900,fontSize:14}}>{value!=null?`${value}日`:'未設定'}</span>
+    <span data-mhbadge={wide?'wide':'std'} style={box} title={canEdit?'クリックで今月の休日数を入力（管理者のみ）':'会社が決めた今月の休日数'}>
+      <span style={{fontWeight:700}}>{lab}</span>
+      <span data-mhval="1" style={{fontWeight:900,fontSize:wide?19:14}}>{value!=null?`${value}日`:'未設定'}</span>
       {canEdit&&(
-        <button onClick={()=>{setVal(value!=null?String(value):'');setEditing(true);}}
-          style={{padding:'1px 7px',borderRadius:5,border:'1px solid #c7d2fe',background:'white',color:'#4f46e5',fontSize:10,fontWeight:800,cursor:'pointer'}}>
+        <button data-mhbtn="1" onClick={()=>{setVal(value!=null?String(value):'');setEditing(true);}}
+          style={{padding:wide?'3px 11px':'1px 7px',borderRadius:5,border:'1px solid '+bd,background:'white',color:btn,fontSize:wide?11.5:10,fontWeight:800,cursor:'pointer'}}>
           {value!=null?'変更':'入力'}
         </button>
       )}
@@ -8838,7 +8856,7 @@ const staffOffPrintOpen=({mode,who,storeName,c,rosterNames,noteOf})=>{
 };
 // 全員の表（スタッフ×日）。印刷の表型（staffCalPrintHtml の mode:'table'）と同じ並び・同じ印。
 //   ★見るだけ。マスを押しても何も変わらない。氏名は canPick(name) が true の人だけ押せる（onPick）。
-const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})=>{
+const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint,topRight})=>{
   const OT_NAME=118, OT_DAY=30, OT_TOT=40, OT_CY=104;
   const OT_LINE='1px solid #334155';
   const OT_TH={border:OT_LINE,background:'#e5e7eb',padding:'3px 0',textAlign:'center',fontWeight:800,fontSize:11,lineHeight:1.2};
@@ -8862,10 +8880,21 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
   const isToday=x=>x.d===today.getDate()&&c.m===today.getMonth()&&c.y===today.getFullYear();
   const mo=staffOffMonth(c,rosterNames);
   const note=(dkk,n)=>noteOf?noteOf(dkk,n):'';
+  // ★topRight＝表の上の行の右端に置くもの（会社の休日数の札・v3.134.1）。
+  //   幅は「休日〜繰り越し」の5列ぶん＝その真上にぴったり乗る。表は width:100% で列が同じ割合で広がるので、
+  //   枠の内側の幅（100% − 枠線4px）に 5列ぶん÷全列ぶん を掛け、右の枠線2pxを足す。
+  //   窓が狭くて表が横スクロールになる時は、5列ぶんの最低の幅で右端に置く。
+  const OT_TAIL=4*OT_TOT+OT_CY, OT_MINW=OT_NAME+mo.days.length*OT_DAY+OT_TAIL;
   return(
+    <>
+    {topRight&&(
+      <div data-offtop="1" style={{display:'flex',justifyContent:'flex-end',marginBottom:OFFMH_GAP}}>
+        <div data-offtopbox="1" style={{flex:'0 0 auto',boxSizing:'border-box',width:'calc((100% - 4px) * '+OT_TAIL+' / '+OT_MINW+' + 2px)',minWidth:OT_TAIL}}>{topRight}</div>
+      </div>
+    )}
     <div data-offtablewrap="1" style={{border:'2px solid #334155',borderRadius:9,overflowX:'auto',overflowY:'hidden',background:'white'}}>
       <table data-offtable="1" style={{borderCollapse:'collapse',width:'100%',tableLayout:'fixed',
-        minWidth:OT_NAME+mo.days.length*OT_DAY+4*OT_TOT+OT_CY,fontSize:12}}>
+        minWidth:OT_MINW,fontSize:12}}>
         <colgroup>
           <col style={{width:OT_NAME}}/>
           {mo.days.map(x=><col key={x.d} style={{width:OT_DAY}}/>)}
@@ -8952,6 +8981,7 @@ const StaffOffTable=({c,rosterNames,noteOf,storeObj,meName,canPick,onPick,hint})
         {onPick&&<span style={{color:storeObj.color,fontWeight:700}}>{hint||'色の付いた氏名を押すと、その人のカレンダーが開きます'}</span>}
       </div>
     </div>
+    </>
   );
 };
 // ╚══════════════════════════════════════════════════════════════════╝
@@ -19859,11 +19889,13 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                       <span style={{width:11,height:11,borderRadius:2,background:'#f97316',display:'inline-block'}}/>休日
                       <span style={{width:11,height:11,borderRadius:2,background:'#10b981',display:'inline-block',marginLeft:4}}/>有給
                     </span>
-                    {/* 会社が決めた今月の休日数（表示のみ・入力は管理者4人） */}
-                    <MonthlyHolidayBadge y={cy} m={cm}
+                    {/* 会社が決めた今月の休日数（表示のみ・入力は管理者4人）
+                        ★全員の表の時はここに出さない（v3.134.1・2026-11-26）。表の上の行の右端＝「休日〜繰り越し」の列の真上へ移した。
+                        個人のカレンダーの時は今までどおりここ。 */}
+                    {calStaffFilter&&<MonthlyHolidayBadge y={cy} m={cm}
                       value={(monthlyHolidays||{})[`${cy}-${cm+1}`]}
                       canEdit={canRestore(currentUser)}
-                      onSave={saveMonthlyHoliday}/>
+                      onSave={saveMonthlyHoliday}/>}
                   </>
                 )}
 
@@ -20116,6 +20148,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                   <div data-offview="all" style={{flex:1,minHeight:0,overflowY:'auto',margin:'0 18px 18px'}}>
                     <StaffOffTable c={offCtxV} rosterNames={staffList.map(s=>s.name)} noteOf={noteOfCur} storeObj={vsStore}
                       meName={currentUser&&currentUser.name} onPick={n=>setCalStaffFilter(n)}
+                      topRight={<MonthlyHolidayBadge wide y={cy} m={cm} value={(monthlyHolidays||{})[`${cy}-${cm+1}`]}
+                        canEdit={canRestore(currentUser)} onSave={saveMonthlyHoliday}/>}
                       hint="色の付いた氏名を押すと、その人のカレンダーに切り替わります"/>
                   </div>
                 );

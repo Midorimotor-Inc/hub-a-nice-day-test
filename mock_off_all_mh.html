@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>[モック] 休日・全員の表：会社の休日数の置き場所</title>
+<!--
+  モック：🏖 休日 → 全員の表（2026-11-26 ユーザー指示）
+    「会社の設定された休日が今左上にあるので、表を少し下にずらして（下に余白があるので）、
+     印刷・車検・休日のボタンの下の行の【右端】に『〇〇月の休日 何日 変更』を置く。
+     位置は『休日・有給・計…』と書いてあるあたりの真上。真上にあるので見やすい」
+  ★名前は架空。本物のデータは使っていない。
+  ★「変更」は実際に押せる（数字を変えると右端の「繰り越し」も変わる）。保存はしない。
+  アドレスの後ろに ?p=b&t=2&c=g&hide=1 と付けると、その組み合わせで開く（撮影用）。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic UI','Meiryo',sans-serif;color:#1b2129;background:#EA580C;display:flex;flex-direction:column;overflow:hidden}
+/* ── モックの切替（本物には無い） ── */
+#ctl{flex-shrink:0;background:#111827;color:#fff;padding:6px 12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px}
+#ctl b{color:#fde68a;font-size:12px}
+#ctl .g{display:flex;gap:4px;align-items:center}
+#ctl button{font:inherit;font-weight:700;padding:4px 10px;border-radius:14px;border:1.5px solid #6b7280;background:#1f2937;color:#e5e7eb;cursor:pointer}
+#ctl button.on{background:#fde68a;color:#111827;border-color:#fde68a}
+#ctl .note{margin-left:auto;color:#9ca3af;font-size:11px}
+body.hide #ctl{display:none}
+/* ── Hub の上の帯（まね） ── */
+#hd{flex-shrink:0;color:#fff}
+#hd .r1{display:flex;align-items:center;gap:10px;padding:9px 16px 4px;font-weight:800;font-size:15px}
+#hd .r1 small{font-weight:700;font-size:10.5px;background:#fff;color:#b91c1c;border-radius:10px;padding:2px 9px}
+#hd .r1 .dash{margin:0 auto;background:#fff;color:#c2410c;border-radius:9px;padding:6px 22px;font-size:13px}
+#hd .r1 .st{background:#fff;color:#1d4ed8;border-radius:8px;padding:5px 14px;font-size:12px}
+#hd .r2{display:flex;gap:8px;padding:4px 14px 12px;justify-content:center}
+#hd .r2 span{background:#fff;color:#111;border-radius:7px;padding:6px 26px;font-size:12.5px;font-weight:800}
+#hd .r2 span.on{background:#fcd34d}
+/* ── カレンダー画面 ── */
+#cal{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;margin:0 8px 8px;border-radius:13px;border-top:4px solid #2563eb;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+#bar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:14px 18px 10px;border-bottom:1px solid #e5e7eb}
+#bar .l{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;flex:1;min-width:0}
+#bar .l .lb{font-size:11px;font-weight:700;color:#374151}
+#bar .l .nm{padding:3px 9px;border-radius:6px;border:2px solid #d1d5db;background:#fff;color:#374151;font-weight:500;font-size:11px}
+#bar .l .nm.on{border-color:#059669;background:#d1fae5;color:#059669;font-weight:700}
+#bar .l .lg{display:flex;align-items:center;gap:5px;margin-left:4px;font-size:10px;color:#6b7280}
+#bar .l .lg i{width:11px;height:11px;border-radius:2px;display:inline-block}
+#bar .c{display:flex;align-items:center;gap:3px;flex-shrink:0}
+#bar .c span{width:30px;height:30px;border-radius:7px;background:#c2410c;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
+#bar .c h2{font-size:20px;font-weight:800;color:#1f2937;margin:0 8px;white-space:nowrap;padding:2px 10px}
+#bar .r{display:flex;align-items:center;gap:6px;flex:1;justify-content:flex-end}
+#bar .r span{display:flex;align-items:center;gap:4px;padding:5px 9px;border-radius:7px;border:2px solid #e5e7eb;background:#fff;font-size:11px;font-weight:600;color:#6b7280;white-space:nowrap}
+#bar .r span.pr{background:#1f2937;border-color:#1f2937;color:#fff;font-weight:800;padding:5px 11px;margin-right:4px}
+#bar .r span.on{background:#fff7ed;border-color:#f97316;color:#ea580c;font-weight:800}
+#bar .r span.st{background:#f3f4f6;border-color:#d1d5db;color:#374151;font-weight:700}
+/* ── 新しい行（ボタンの下・右端） ── */
+#area{flex:1;min-height:0;overflow-y:auto;margin:0 18px 18px;padding-top:8px}
+#mhrow{display:none;justify-content:flex-end;align-items:flex-end;margin-bottom:6px;min-height:30px}
+body.p-a #mhrow, body.p-b #mhrow, body.p-c #mhrow{display:flex}
+body.p-c #mhrow{margin-bottom:0}
+/* ── 会社の休日数の札 ── */
+.mh{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:7px;border:2px solid var(--mh-bd);background:var(--mh-bg);color:var(--mh-fg);font-size:11px;white-space:nowrap}
+.mh .t{font-weight:700}
+.mh .v{font-weight:900;font-size:14px}
+.mh button{font:inherit;padding:1px 7px;border-radius:5px;border:1px solid var(--mh-bd);background:#fff;color:var(--mh-btn);font-size:10px;font-weight:800;cursor:pointer}
+.mh input{width:52px;padding:2px 6px;border:2px solid var(--mh-bd);border-radius:5px;font:inherit;font-size:12px;font-weight:800;text-align:center}
+.mh button.sv{background:var(--mh-btn);color:#fff;border-color:var(--mh-btn);font-size:11px;padding:2px 9px}
+.mh button.cx{color:#6b7280;border-color:#d1d5db;font-size:11px;font-weight:500}
+.mh.ed{background:#fff;border-color:var(--mh-btn)}
+body.c-i{--mh-bd:#c7d2fe;--mh-bg:#eef2ff;--mh-fg:#3730a3;--mh-btn:#4f46e5}
+body.c-g{--mh-bd:#22c55e;--mh-bg:#f0fdf4;--mh-fg:#14532d;--mh-btn:#15803d}
+body.c-o{--mh-bd:#fb923c;--mh-bg:#fff7ed;--mh-fg:#9a3412;--mh-btn:#ea580c}
+/* 今のまま：左上（名前ボタンのとなり）だけに出す */
+#mhTop{display:none}
+body.p-now #mhTop{display:inline-flex}
+/* B：列の幅にそろえて大きく */
+body.p-b #mhrow .mh, body.p-c #mhrow .mh{width:var(--tailw,297px);justify-content:center;gap:9px;padding:6px 10px;font-size:13px}
+body.p-b #mhrow .mh .v, body.p-c #mhrow .mh .v{font-size:19px}
+body.p-b #mhrow .mh button, body.p-c #mhrow .mh button{font-size:11.5px;padding:3px 11px}
+body.p-b #mhrow .mh.ed, body.p-c #mhrow .mh.ed{gap:5px;font-size:11.5px}
+/* C：表にくっつける（見出しの上に乗る） */
+body.p-c #mhrow .mh{border-radius:9px 9px 0 0;border:2px solid #334155;border-bottom:none;background:var(--mh-bg)}
+body.p-c #wrap{border-top-right-radius:0}
+/* ── 全員の表（本物と同じ寸法） ── */
+#wrap{border:2px solid #334155;border-radius:9px;overflow-x:auto;overflow-y:hidden;background:#fff}
+table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px}
+th{border:1px solid #334155;background:#e5e7eb;padding:3px 0;text-align:center;font-weight:800;font-size:11px;line-height:1.2}
+td{border:1px solid #334155;text-align:center;vertical-align:middle;padding:0;height:30px;position:relative;overflow:hidden;background:#fff}
+td.nm{text-align:left;padding-left:8px;font-weight:800;font-size:12.5px;white-space:nowrap;color:#2563eb}
+td.tot{background:#f8fafc;font-weight:800;font-size:12.5px}
+tr.zb td{background:#eaeff5}
+tr.zb td.tot{background:#e3e9f0}
+td.cl, tr.zb td.cl{background:#fecaca;color:#991b1b;font-size:9.5px;font-weight:700}
+th.td{background:#ffedd5;box-shadow:inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c, inset 0 2px 0 #fb923c}
+td.td{box-shadow:inset 2px 0 0 #fb923c, inset -2px 0 0 #fb923c}
+.k{display:inline-block;min-width:20px;text-align:center;font-weight:900;font-size:12px;border-radius:4px;line-height:19px;padding:0 2px}
+.k.o{background:#fff;color:#c2410c;border:1.6px solid #c2410c}
+.k.l{background:#047857;color:#fff;border:1.6px solid #047857}
+.k.t{background:#fff;color:#9333ea;border:1.6px dashed #9333ea}
+#ft{padding:6px 10px;border-top:1px solid #cbd5e1;background:#f8fafc;font-size:10.5px;color:#475569;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body class="p-b c-i">
+<div id="ctl">
+  <b>▼ モックの切替（本物には出ません）</b>
+  <div class="g">① 置き場所：
+    <button data-k="p" data-v="now">今のまま（左上）</button>
+    <button data-k="p" data-v="a">A 右端に小さく</button>
+    <button data-k="p" data-v="b">B 右端・列の幅にそろえる</button>
+    <button data-k="p" data-v="c">C 表にくっつける</button>
+  </div>
+  <div class="g">② 言葉：
+    <button data-k="t" data-v="1">1「11月の休日」</button>
+    <button data-k="t" data-v="2">2「11月 会社の休日数」</button>
+  </div>
+  <div class="g">③ 色：
+    <button data-k="c" data-v="i">今の色（藤色）</button>
+    <button data-k="c" data-v="g">緑</button>
+    <button data-k="c" data-v="o">オレンジ</button>
+  </div>
+  <span class="note">名前は架空です／「変更」は実際に押せます（保存はしません）</span>
+</div>
+<div id="hd">
+  <div class="r1">Hub a Nice Day <small>⚠ スケジュールシステム テスト版</small><span class="dash">🏠 ダッシュボード</span><span class="st">本店</span></div>
+  <div class="r2"><span class="on">カレンダー</span><span>週間カレンダー</span><span>スケジュール</span><span>代車管理</span><span>検索</span><span>顧客リスト</span><span>料金表</span></div>
+</div>
+<div id="cal">
+  <div id="bar">
+    <div class="l" id="barL"></div>
+    <div class="c"><span>«</span><i style="width:8px"></i><span>‹</span><h2>2026年11月</h2><span>›</span><i style="width:8px"></i><span>»</span></div>
+    <div class="r"><span class="pr">🖨 印刷（全員）</span><span>🚗 車検</span><span class="on">🏖 休日</span><span>📝 予定</span><span class="st">⚙ 設定</span></div>
+  </div>
+  <div id="area">
+    <div id="mhrow"></div>
+    <div id="wrap">
+      <table id="tb"></table>
+      <div id="ft">
+        <span><span class="k o">休</span> 休日</span><span><span class="k l">有</span> 有給</span><span><span class="k t">研</span> 研修（出勤・不在）</span>
+        <span><span style="display:inline-block;width:13px;height:13px;background:#fecaca;border:1px solid #b91c1c;vertical-align:-2px;margin-right:3px"></span>休業日</span>
+        <span>「休日」には店の休業日も入っています。「休みの人数」は 休日＋有給 の人数です。</span>
+        <span style="color:#2563eb;font-weight:700">色の付いた氏名を押すと、その人のカレンダーに切り替わります</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ── 架空のデータ（2026年11月） ──
+var Y=2026, M=10, DAYS=30, TODAY=26, HOL=[3,23], CLOSED=[10,20];
+var STAFF=[
+  {n:'山田太郎', o:[4,17], l:[], t:[]},
+  {n:'佐藤花子', o:[3,4,25], l:[], t:[18]},
+  {n:'鈴木一郎', o:[3,11], l:[5], t:[]},
+  {n:'高橋健',   o:[6,13,24], l:[], t:[]},
+  {n:'田中実',   o:[1,8,15,22], l:[27], t:[]},
+  {n:'伊藤学',   o:[2,9,16], l:[], t:[12]},
+  {n:'渡辺誠',   o:[7,14,21,28], l:[], t:[]},
+  {n:'中村光',   o:[5,19], l:[30], t:[]},
+  {n:'小林茂',   o:[12,26], l:[], t:[]}
+];
+var DOWJ=['日','月','火','水','木','金','土'];
+var st={p:'b',t:'1',c:'i',mh:9,ed:false};
+(function(){var q=new URLSearchParams(location.search);['p','t','c'].forEach(function(k){if(q.get(k))st[k]=q.get(k);});if(q.get('hide'))document.body.classList.add('hide');if(q.get('ed'))st.ed=true;})();
+function dow(d){return new Date(Y,M,d).getDay();}
+function col(d){var w=dow(d);return (HOL.indexOf(d)>=0||w===0)?'#dc2626':w===6?'#1d4ed8':'#111';}
+function mhHtml(){
+  var lab=st.t==='2'?(M+1)+'月 会社の休日数':(M+1)+'月の休日';
+  if(st.ed)return '<span class="mh ed"><span class="t">'+lab+'</span><input id="mhIn" value="'+st.mh+'"><span class="t">日</span><button class="sv" data-act="save">保存</button><button class="cx" data-act="cancel">やめる</button></span>';
+  return '<span class="mh" title="クリックで今月の休日数を入力（管理者のみ）"><span class="t">'+lab+'</span><span class="v">'+st.mh+'日</span><button data-act="edit">変更</button></span>';
+}
+function draw(){
+  document.body.className=(document.body.classList.contains('hide')?'hide ':'')+'p-'+st.p+' c-'+st.c;
+  document.querySelectorAll('#ctl button').forEach(function(b){b.classList.toggle('on',st[b.dataset.k]===b.dataset.v);});
+  // 左上（表示：全員 名前… 凡例 ＋今のままの時だけ札）
+  var h='<span class="lb">表示：</span><span class="nm on">全員</span>';
+  STAFF.forEach(function(s){h+='<span class="nm">'+s.n+'</span>';});
+  h+='<span class="lg"><i style="background:#f97316"></i>休日<i style="background:#10b981;margin-left:4px"></i>有給</span>';
+  h+='<span id="mhTop">'+(st.p==='now'?mhHtml():'')+'</span>';
+  document.getElementById('barL').innerHTML=h;
+  document.getElementById('mhrow').innerHTML=st.p==='now'?'':mhHtml();
+  // 表
+  var t='<colgroup><col style="width:118px">';
+  for(var d=1;d<=DAYS;d++)t+='<col style="width:30px">';
+  t+='<col style="width:40px"><col style="width:40px"><col style="width:40px"><col style="width:40px"><col style="width:104px"></colgroup>';
+  t+='<thead><tr><th rowspan="2" style="text-align:left;padding-left:8px">氏名</th>';
+  for(d=1;d<=DAYS;d++)t+='<th class="'+(d===TODAY?'td':'')+'" style="color:'+col(d)+';font-size:12.5px">'+d+'</th>';
+  t+='<th rowspan="2" id="tail0">休日</th><th rowspan="2">有給</th><th rowspan="2">計</th><th rowspan="2">研修</th><th rowspan="2">繰り越し</th></tr><tr>';
+  for(d=1;d<=DAYS;d++)t+='<th class="'+(d===TODAY?'td':'')+'" style="color:'+col(d)+';font-size:10.5px">'+DOWJ[dow(d)]+'</th>';
+  t+='</tr></thead><tbody>';
+  var cnt={};
+  STAFF.forEach(function(s,ri){
+    t+='<tr class="'+(ri%2===1?'zb':'')+'"><td class="nm">'+s.n+'</td>';
+    for(var d=1;d<=DAYS;d++){
+      var cls=d===TODAY?'td':'', body='';
+      if(CLOSED.indexOf(d)>=0){cls+=' cl';body='店休';}
+      else if(s.o.indexOf(d)>=0){body='<span class="k o">休</span>';cnt[d]=(cnt[d]||0)+1;}
+      else if(s.l.indexOf(d)>=0){body='<span class="k l">有</span>';cnt[d]=(cnt[d]||0)+1;}
+      else if(s.t.indexOf(d)>=0){body='<span class="k t">研</span>';}
+      t+='<td class="'+cls+'">'+body+'</td>';
+    }
+    var offs=s.o.length+CLOSED.length, lv=s.l.length, rem=st.mh-offs;
+    t+='<td class="tot">'+offs+'</td><td class="tot">'+lv+'</td><td class="tot" style="color:#c2410c">'+(offs+lv)+'</td><td class="tot" style="color:#9333ea">'+(s.t.length||'')+'</td>';
+    t+='<td class="tot" style="font-size:10px;font-weight:700;white-space:nowrap;color:'+(rem>0?'#1d4ed8':'#dc2626')+'">'+(rem>0?'繰越'+rem+'日':rem<0?'有給へ'+(-rem)+'日':'')+'</td></tr>';
+  });
+  t+='<tr><td class="tot" style="text-align:left;padding-left:8px;font-size:10.5px">休みの人数</td>';
+  for(d=1;d<=DAYS;d++)t+='<td class="tot'+(CLOSED.indexOf(d)>=0?' cl':'')+(d===TODAY?' td':'')+'" style="font-size:11px">'+(CLOSED.indexOf(d)>=0?'':(cnt[d]||''))+'</td>';
+  t+='<td class="tot" colspan="5"></td></tr></tbody>';
+  document.getElementById('tb').innerHTML=t;
+  fit();
+  if(st.ed){var i=document.getElementById('mhIn');if(i){i.focus();i.select();}}
+}
+// 「休日〜繰り越し」の列の幅を測って、札の幅をそろえる（B・C）
+function fit(){
+  var a=document.getElementById('tail0'), w=document.getElementById('wrap');
+  if(!a||!w)return;
+  var tw=Math.round(w.getBoundingClientRect().right-a.getBoundingClientRect().left);
+  document.body.style.setProperty('--tailw',tw+'px');
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest('#ctl button');
+  if(b){st[b.dataset.k]=b.dataset.v;st.ed=false;draw();return;}
+  var a=e.target.closest('[data-act]');
+  if(!a)return;
+  if(a.dataset.act==='edit'){st.ed=true;draw();}
+  else if(a.dataset.act==='cancel'){st.ed=false;draw();}
+  else if(a.dataset.act==='save'){var v=parseInt(String(document.getElementById('mhIn').value).replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248);}),10);if(isFinite(v))st.mh=Math.max(0,Math.min(31,v));st.ed=false;draw();}
+});
+document.addEventListener('keydown',function(e){if(!st.ed)return;if(e.key==='Enter'){var s=document.querySelector('[data-act="save"]');if(s)s.click();}if(e.key==='Escape'){st.ed=false;draw();}});
+window.addEventListener('resize',fit);
+draw();
+</script>
+</body>
+</html>
