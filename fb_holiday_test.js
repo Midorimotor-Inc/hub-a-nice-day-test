@@ -179,7 +179,9 @@ const signedInInit = ([k, me, stor]) => {
     t('PC：開いた時点でログインしている人が選ばれている', await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '江川京志'); return !!b && b.style.borderColor === 'rgb(194, 65, 12)'; }));
     await page.waitForTimeout(500);
     t('PC：個人を選んでも他の日が薄くならない（opacity 0.28 のセルが無い）', await page.evaluate(() => ![...document.querySelectorAll('div')].some(el => el.style && (el.style.opacity === '0.28'))));
-    t('PC：個人の集計に繰り越しの内訳とバッジが出る', await seeText(page, '繰り越し休日', 5000) && await page.evaluate(() => /繰り越し\d+日 →翌月へ/.test(document.body.innerText) && !/枠 \d+日/.test(document.body.innerText)), await page.evaluate(() => (document.body.innerText.match(/月の集計[^]{0,200}/) || [''])[0]));
+    // ★v3.134.2（2026-11-26 ユーザー指示）：「うち店休いくらとかの表示は不必要。店休を含めた休日の合計を休日として表示」
+    //   → 個人の集計に（うち店休日○＋繰り越し休日○）の内訳は出さない。繰り越しのバッジは今までどおり出す。
+    t('PC：個人の集計に繰り越しのバッジが出る（内訳「うち…」は出さない）', await seeText(page, '月の集計', 5000) && await page.evaluate(() => { const e = document.querySelector('[data-off1sum]'); const tx = e ? e.innerText : ''; return /繰り越し\d+日 →翌月へ/.test(tx) && !/うち|繰り越し休日|店休日/.test(tx) && !/枠 \d+日/.test(document.body.innerText); }), await page.evaluate(() => (document.body.innerText.match(/月の集計[^]{0,200}/) || [''])[0]));
     await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('設定') && el.textContent.length < 6 && el.offsetParent !== null); if (b) b.click(); });
     await page.waitForTimeout(500);
     await clickText(page, 'スタッフ休日設定');

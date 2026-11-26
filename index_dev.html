@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795656975071';
+    window.__APP_BUILD='build-1795659945287';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.134.1';
+const APP_VERSION = '3.134.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -520,6 +520,14 @@ const OFFMH_FG  = OFF1_SUM_HEAD_FG;  // 札の字
 const OFFMH_BTN = '#15803d';         // 「変更」「保存」の色
 const OFFMH_H   = 42;                // 札の高さ（「変更」を押して入力欄に変わっても、表が上下に動かないように決めてある）
 const OFFMH_GAP = 6;                 // 札と表のあいだ
+const OFFMH_H_STACK = 68;            // 個人のカレンダーの右に置く2段組みの札の高さ（入力欄に変わっても下の集計が動かないように）
+// ★🏖 休日・個人のカレンダー：休日（オレンジ）と有給（緑）の色（v3.134.2・2026-11-26 ユーザー指示）
+//   ユーザーの言葉：「休日のオレンジと有給の緑がちょっとわかりにくいので、もう少し色の差がわかるように。もう少し濃い色に」。
+//   以前はマスの地が #fff7ed／#f0fdf4 で、どちらもほぼ白だった。マスの地・マスの枠・右の集計のタイルはこの6つを通すこと。
+//   ★休業日の赤（CLOSED_BG=#fecaca）と見分けが付く色にしてある（オレンジを赤に寄せないこと）。
+const OFF1_OFF_BG = '#fdba74', OFF1_OFF_BD = '#ea580c', OFF1_OFF_FG = '#7c2d12';   // 休日
+const OFF1_LV_BG  = '#86efac', OFF1_LV_BD  = '#15803d', OFF1_LV_FG  = '#14532d';   // 有給
+const OFF1_SIDE_GAP = 8;             // 🏖 休日・個人：右の列の「会社の休日数」と「集計」のあいだ（枠は分ける）
 const TRN_COL = '#7e22ce';   // 研修の紫
 const TRN_CH  = '研';        // バッジの1文字
 const TRN_EMO = '🎓';        // 休日設定・カレンダーで使う絵文字
@@ -909,7 +917,7 @@ const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,m
 // ── 月間休日数バッジ（スタッフ休日カレンダーの上部）──
 //   会社が月ごとに決める休日数を出すだけの表示。スタッフが自分で数えなくて済むようにするもので、
 //   休業日データや集計には影響しない。鉛筆が出るのは編集権限のある4人だけ。
-const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave,wide})=>{
+const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave,wide,stack})=>{
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const [busy,setBusy]=useState(false);
@@ -922,38 +930,46 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave,wide})=>{
     await onSave(y,m,n);
     setBusy(false);setEditing(false);
   };
-  // ★wide＝🏖 休日・全員の表の上に置く大きい札（v3.134.1・2026-11-26 ユーザー決定・モックの「B・言葉2・緑」）。
-  //   表の「休日〜繰り越し」の列と同じ幅いっぱいに出す。色は OFFMH_* を通すこと（直書きしない）。
-  //   wide でない時（個人のカレンダーの左上・設定のカレンダー）は今までどおりの小さい藤色の札。
+  // ★wide＝🏖 休日 の画面に置く大きい緑の札（v3.134.1・2026-11-26 ユーザー決定・モックの「B・言葉2・緑」）。
+  //   全員の表＝表の「休日〜繰り越し」の列と同じ幅で1行。色は OFFMH_* を通すこと（直書きしない）。
+  // ★stack＝個人のカレンダーの右（集計の枠の上）に置く時の2段組み（v3.134.2）。幅が狭い（OFF1_SUM_W）ので、
+  //   1段目＝言葉／2段目＝日数と「変更」。入力欄に変わっても高さが変わらないよう OFFMH_H_STACK で決めてある。
+  //   wide でない時（設定の「スタッフ休日・有給カレンダー」）は今までどおりの小さい藤色の札。
   const box=wide
-    ?{display:'flex',alignItems:'center',justifyContent:'center',gap:9,padding:'6px 10px',borderRadius:7,boxSizing:'border-box',width:'100%',minHeight:OFFMH_H,
-      background:OFFMH_BG,border:'2px solid '+OFFMH_BD,fontSize:13,color:OFFMH_FG,whiteSpace:'nowrap'}
+    ?{display:'flex',alignItems:'center',justifyContent:'center',gap:9,padding:'6px 10px',borderRadius:stack?9:7,boxSizing:'border-box',width:'100%',minHeight:OFFMH_H,
+      background:OFFMH_BG,border:'2px solid '+OFFMH_BD,fontSize:13,color:OFFMH_FG,whiteSpace:'nowrap',
+      ...(stack?{flexDirection:'column',gap:4,padding:'7px 8px',minHeight:OFFMH_H_STACK}:{})}
     :{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:7,
       background:'#eef2ff',border:'2px solid #c7d2fe',fontSize:11,color:'#3730a3',whiteSpace:'nowrap'};
   const lab=wide?((m+1)+'月 会社の休日数'):((m+1)+'月の休日');
   const bd=wide?OFFMH_BD:'#c7d2fe', btn=wide?OFFMH_BTN:'#4f46e5';
+  // 2段組みの時だけ、2段目をひとまとまりにする（そうでない時は display:contents＝今までの1行の並びのまま）
+  const rowS=g=>stack?{display:'flex',alignItems:'center',justifyContent:'center',gap:g}:{display:'contents'};
   if(editing){
     return (
-      <span data-mhbadge={wide?'wide':'std'} data-mhedit="1" style={{...box,background:'white',borderColor:wide?OFFMH_BTN:'#6366f1',...(wide?{gap:5,fontSize:11.5}:{})}}>
-        <span style={{fontWeight:700}}>{lab}</span>
+      <span data-mhbadge={wide?'wide':'std'} data-mhedit="1" style={{...box,background:'white',borderColor:wide?OFFMH_BTN:'#6366f1',...(wide?{gap:4,fontSize:11.5,padding:stack?'7px 8px':'6px 6px'}:{})}}>
+        <span style={{fontWeight:700,...(stack?{fontSize:13}:{})}}>{lab}</span>
+        <span style={rowS(4)}>
         {/* ★type="number" を使わない（2026-10-15）。Windows の IME が英数のままになるため。全角で打っても半角にする。 */}
         <input autoFocus value={val} disabled={busy}
           {...numFieldProps(v=>setVal(v),2)}
           onKeyDown={e=>{if(e.key==='Enter')commit();if(e.key==='Escape')setEditing(false);}}
-          style={{width:52,padding:'2px 6px',border:'2px solid '+bd,borderRadius:5,fontSize:12,fontWeight:800,textAlign:'center'}}/>
+          style={{width:wide?46:52,padding:'2px 6px',border:'2px solid '+bd,borderRadius:5,fontSize:12,fontWeight:800,textAlign:'center'}}/>
         <span style={{fontWeight:700}}>日</span>
         <button data-mhsave="1" onClick={commit} disabled={busy}
           style={{padding:'2px 9px',borderRadius:5,border:'none',background:btn,color:'white',fontWeight:800,fontSize:11,cursor:busy?'wait':'pointer'}}>
           {busy?'保存中…':'保存'}
         </button>
         <button onClick={()=>setEditing(false)} disabled={busy}
-          style={{padding:'2px 7px',borderRadius:5,border:'1px solid #d1d5db',background:'white',color:'#6b7280',fontSize:11,cursor:'pointer'}}>やめる</button>
+          style={{padding:wide?'2px 5px':'2px 7px',borderRadius:5,border:'1px solid #d1d5db',background:'white',color:'#6b7280',fontSize:11,cursor:'pointer'}}>やめる</button>
+        </span>
       </span>
     );
   }
   return (
     <span data-mhbadge={wide?'wide':'std'} style={box} title={canEdit?'クリックで今月の休日数を入力（管理者のみ）':'会社が決めた今月の休日数'}>
       <span style={{fontWeight:700}}>{lab}</span>
+      <span style={rowS(9)}>
       <span data-mhval="1" style={{fontWeight:900,fontSize:wide?19:14}}>{value!=null?`${value}日`:'未設定'}</span>
       {canEdit&&(
         <button data-mhbtn="1" onClick={()=>{setVal(value!=null?String(value):'');setEditing(true);}}
@@ -961,6 +977,7 @@ const MonthlyHolidayBadge = ({y,m,value,canEdit,onSave,wide})=>{
           {value!=null?'変更':'入力'}
         </button>
       )}
+      </span>
     </span>
   );
 };
@@ -19885,17 +19902,16 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                         {s.name}
                       </button>
                     ))}
-                    <span style={{display:'flex',alignItems:'center',gap:5,marginLeft:4,fontSize:10,color:'#6b7280'}}>
+                    {/* ★■休日 ■有給 の色の説明は、個人のカレンダーの時だけ（v3.134.2・2026-11-26 ユーザー指示：
+                        「全体の表示としてはもう省いていい」。全員の表は 休・有 の字で分かり、表の下にも説明がある） */}
+                    {calStaffFilter&&(
+                    <span data-offlegend="1" style={{display:'flex',alignItems:'center',gap:5,marginLeft:4,fontSize:10,color:'#6b7280'}}>
                       <span style={{width:11,height:11,borderRadius:2,background:'#f97316',display:'inline-block'}}/>休日
                       <span style={{width:11,height:11,borderRadius:2,background:'#10b981',display:'inline-block',marginLeft:4}}/>有給
                     </span>
-                    {/* 会社が決めた今月の休日数（表示のみ・入力は管理者4人）
-                        ★全員の表の時はここに出さない（v3.134.1・2026-11-26）。表の上の行の右端＝「休日〜繰り越し」の列の真上へ移した。
-                        個人のカレンダーの時は今までどおりここ。 */}
-                    {calStaffFilter&&<MonthlyHolidayBadge y={cy} m={cm}
-                      value={(monthlyHolidays||{})[`${cy}-${cm+1}`]}
-                      canEdit={canRestore(currentUser)}
-                      onSave={saveMonthlyHoliday}/>}
+                    )}
+                    {/* ★会社の休日数の札は、ここ（左上）には出さない。
+                        全員の表＝表の上の行の右端（v3.134.1）／個人のカレンダー＝右の集計の枠の上（v3.134.2）。 */}
                   </>
                 )}
 
@@ -20195,8 +20211,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                             const cellIsTrn=calStaffFilter&&filteredTrns.length>0;
                             // 休業日の見た目は車検カレンダーと共通（A案＋左の区切りバー）
                             const baseBg=isCl?CLOSED_BG:'white';
-                            const highlightBg=cellIsOff?'#fff7ed':cellIsLeave?'#f0fdf4':cellIsTrn?'#f9f0ff':baseBg;
-                            const highlightOutline=cellIsOff?'2px solid #f97316':cellIsLeave?'2px solid #10b981':cellIsTrn?('2px solid '+TRN_COL):'none';
+                            const highlightBg=cellIsOff?OFF1_OFF_BG:cellIsLeave?OFF1_LV_BG:cellIsTrn?'#f9f0ff':baseBg;
+                            const highlightOutline=cellIsOff?('2px solid '+OFF1_OFF_BD):cellIsLeave?('2px solid '+OFF1_LV_BD):cellIsTrn?('2px solid '+TRN_COL):'none';
                             return(
                               <div key={di} style={{padding:'5px 4px',overflow:'hidden',borderTop:wi>0?'1px solid '+OFF1_LINE:'none',borderLeft:di>0?'1px solid '+OFF1_LINE:'none',background:highlightBg,boxShadow:isCl?CLOSED_BAR:'none',outline:isToday?TODAY_CELL.outline:highlightOutline,outlineOffset:isToday?TODAY_CELL.outlineOffset:-2,borderRadius:isToday?10:0,zIndex:isToday?3:'auto',position:'relative',transition:'background 0.15s'}}>
                                 {isCl&&<ClosedMark/>}
@@ -20211,7 +20227,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                                   {filteredOffs.map((name,i)=>{
                                     const isFiltered=calStaffFilter===name;
                                     return(
-                                      <div key={`o${i}`} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 5px',borderRadius:4,background:'#fff7ed',border:`1px solid ${isFiltered?'#f97316':'#fed7aa'}`}}>
+                                      <div key={`o${i}`} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 5px',borderRadius:4,background:'white',border:`1px solid ${isFiltered?OFF1_OFF_BD:'#fed7aa'}`}}>
                                         <span style={{width:14,height:14,borderRadius:3,background:'#f97316',color:'white',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,flexShrink:0}}>{name.charAt(0)}</span>
                                         <span style={{fontSize:10,fontWeight:isFiltered?800:600,color:'#92400e',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:56}}>{name}</span>
                                         <span style={{fontSize:8,color:'#ea580c',flexShrink:0}}>休</span>
@@ -20223,7 +20239,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                                   {filteredLeaves.map((name,i)=>{
                                     const isFiltered=calStaffFilter===name;
                                     return(
-                                      <div key={`l${i}`} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 5px',borderRadius:4,background:'#f0fdf4',border:`1px solid ${isFiltered?'#10b981':'#bbf7d0'}`}}>
+                                      <div key={`l${i}`} style={{display:'flex',alignItems:'center',gap:3,padding:'2px 5px',borderRadius:4,background:'white',border:`1px solid ${isFiltered?OFF1_LV_BD:'#bbf7d0'}`}}>
                                         <span style={{width:14,height:14,borderRadius:3,background:'#10b981',color:'white',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,flexShrink:0}}>{name.charAt(0)}</span>
                                         <span style={{fontSize:10,fontWeight:isFiltered?800:600,color:'#065f46',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:56}}>{name}</span>
                                         <span style={{fontSize:8,color:'#059669',flexShrink:0}}>有</span>
@@ -20251,21 +20267,32 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                     </div>
                     </div>
 
-                    {/* -- 個人選択時：月間の集計（v3.134.0 から【右の別の枠】・緑） --
+                    {/* -- 個人選択時：右の列（v3.134.2・2026-11-26 ユーザー指示） --
+                        ユーザーの言葉：「全体で行った会社の休日の項目を、左上から右の個人の休日の上あたりに移動し、
+                        個人の休日の数は1段下げる。枠は分けた方が見やすい」。
+                        ★枠は2つ：上＝会社の休日数（MonthlyHolidayBadge の wide＋stack）／下＝その人の集計。1つの枠にまとめないこと。
+                        ★左上（名前ボタンの並び）には出さない（二重に出さない）。 */}
+                    <div data-off1side="1" style={{flex:'0 0 auto',width:OFF1_SUM_W,alignSelf:'flex-start',maxHeight:'100%',overflowY:'auto',display:'flex',flexDirection:'column',gap:OFF1_SIDE_GAP}}>
+                    <div data-off1mh="1" style={{flexShrink:0}}>
+                      <MonthlyHolidayBadge wide stack y={cy} m={cm} value={(monthlyHolidays||{})[`${cy}-${cm+1}`]}
+                        canEdit={canRestore(currentUser)} onSave={saveMonthlyHoliday}/>
+                    </div>
+                    {/* -- 月間の集計（v3.134.0 から【右の別の枠】・緑） --
                         ★研修はここに出さない（2026-11-25 ユーザー指示：「研修は仕事なので、休日の中に研修は入れなくて大丈夫」）。
                           カレンダーのマスの「研」はそのまま（その日に居ない理由が分かるように）。
-                        ★見出しに黒・濃い灰色を使わない（「黒が入ると重たく感じる。休みなのでグリーン系で」）。 */}
+                        ★見出しに黒・濃い灰色を使わない（「黒が入ると重たく感じる。休みなのでグリーン系で」）。
+                        ★「（うち店休日○＋繰り越し休日○）」の内訳は出さない（v3.134.2・2026-11-26 ユーザー指示：
+                          「うち店休いくらとかの表示は不必要。店休を含めた休日の合計を休日として表示」）。数は今までどおり店休日を含む。 */}
                     {staffMonthStats&&(
-                      <div data-off1sum="1" style={{flex:'0 0 auto',width:OFF1_SUM_W,alignSelf:'flex-start',maxHeight:'100%',overflowY:'auto',boxSizing:'border-box',border:'2px solid '+OFF1_SUM_FRAME,borderRadius:9,background:OFF1_SUM_BG}}>
+                      <div data-off1sum="1" style={{flexShrink:0,boxSizing:'border-box',border:'2px solid '+OFF1_SUM_FRAME,borderRadius:9,background:OFF1_SUM_BG}}>
                         <div data-off1sumtitle="1" style={{padding:'8px 12px',background:OFF1_SUM_HEAD_BG,color:OFF1_SUM_HEAD_FG,fontSize:13,fontWeight:800,lineHeight:1.5,borderBottom:'2px solid '+OFF1_SUM_FRAME}}>
                           📅 {calStaffFilter}さん<br/>{cy}年{cm+1}月の集計
                         </div>
                         <div style={{display:'flex',flexDirection:'column',gap:8,padding:'10px 10px 12px'}}>
-                          <div data-off1sumoff="1" style={{...OFF1_TILE,background:'#fff7ed',border:'2px solid #f97316',color:'#ea580c'}}>
+                          <div data-off1sumoff="1" style={{...OFF1_TILE,background:OFF1_OFF_BG,border:'2px solid '+OFF1_OFF_BD,color:OFF1_OFF_FG}}>
                             <div style={OFF1_TILE_ROW}><span>🏖 休日</span><span><span style={{fontSize:20,fontWeight:900}}>{staffMonthStats.offs}</span>&nbsp;日</span></div>
-                            {offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)&&<div style={{fontSize:11,fontWeight:600,color:'#9a3412',marginTop:2}}>{offBreakdown(staffMonthStats.closedN,staffMonthStats.carry)}</div>}
                           </div>
-                          <div data-off1sumleave="1" style={{...OFF1_TILE,background:'#f0fdf4',border:'2px solid #10b981',color:'#059669'}}>
+                          <div data-off1sumleave="1" style={{...OFF1_TILE,background:OFF1_LV_BG,border:'2px solid '+OFF1_LV_BD,color:OFF1_LV_FG}}>
                             <div style={OFF1_TILE_ROW}><span>📋 有給</span><span><span style={{fontSize:20,fontWeight:900}}>{staffMonthStats.leaves}</span>&nbsp;日</span></div>
                           </div>
                           <div data-off1sumtotal="1" style={{...OFF1_TILE,background:'#eef2ff',border:'1px solid #a5b4fc',color:'#c2410c'}}>
@@ -20279,6 +20306,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })()

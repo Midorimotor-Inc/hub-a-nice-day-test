@@ -274,6 +274,8 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★言葉は「N月 会社の休日数 9日」', MH.has && MH.text.indexOf((M + 1) + '月会社の休日数9日') === 0, MH.text);
   t('★札は緑系', MH.has && MH.bd[1] > MH.bd[0] && MH.bd[1] > MH.bd[2], MH.bd);
   t('★管理者でない人には「変更」を出さない', MH.has && !MH.btn, MH);
+  // ★v3.134.2（2026-11-26 ユーザー指示）：「オレンジで休日、緑で有給というマークは、全体の表示としてはもう省いていい」
+  t('★全員の表の時は、上の ■休日 ■有給 の色の説明を出さない', !(await pv.$('[data-offlegend]')));
   await pv.setViewportSize({ width: 1920, height: 900 }); await pv.waitForTimeout(500);
   MH = await mhPos(pv);
   t('★横長の窓（1920×900）でも列の真上にぴったり', MH.has && Math.abs(MH.dL) <= 3 && Math.abs(MH.dR) <= 3, MH);
@@ -302,7 +304,40 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   await pv.waitForTimeout(700);
   t('★表の氏名を押すと、その人のカレンダー（今まで通りの見た目）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]') && /魚住圭さん/.test(document.body.innerText)));
   t('★印刷ボタンもその人を刷る表示になる', await pv.evaluate(() => (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho') === '魚住圭'));
-  t('★個人のカレンダーの時は、札は今までどおり左上（小さい札・表の上の行は無い）', await pv.evaluate(() => { const a = [...document.querySelectorAll('[data-mhbadge]')].filter(e => e.offsetParent !== null); return a.length === 1 && a[0].getAttribute('data-mhbadge') === 'std' && !document.querySelector('[data-offtop]'); }));
+  // ★v3.134.2（2026-11-26 ユーザー指示）：「会社の休日の項目を、左上から右の個人の休日の上あたりに移動し、
+  //   個人の休日の数は1段下げる。枠は分けた方が見やすい」「うち店休いくらとかの表示は不必要。店休を含めた休日の合計を休日として表示」
+  //   「休日のオレンジと有給の緑がわかりにくいので、もう少し濃い色に」
+  const side1 = (pg) => pg.evaluate(() => {
+    const all = [...document.querySelectorAll('[data-mhbadge]')].filter(e => e.offsetParent !== null);
+    const mh = document.querySelector('[data-off1side] [data-off1mh] [data-mhbadge]'), sum = document.querySelector('[data-off1side] [data-off1sum]'), cal = document.querySelector('[data-off1scroll]');
+    if (!mh || !sum || !cal) return { n: all.length, has: false };
+    const r = mh.getBoundingClientRect(), b = sum.getBoundingClientRect(), c = cal.getBoundingClientRect();
+    const rgb = v => (String(v).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const off = document.querySelector('[data-off1sumoff]'), lv = document.querySelector('[data-off1sumleave]');
+    return { n: all.length, has: true, kind: mh.getAttribute('data-mhbadge'), text: mh.innerText.replace(/\s+/g, ''), inSum: sum.contains(mh),
+      top: Math.round(r.top - c.top), gap: Math.round(b.top - r.bottom), sumTop: Math.round(b.top), dW: Math.round(r.width - b.width), dL: Math.round(r.left - b.left),
+      fits: mh.scrollWidth <= mh.clientWidth + 1, edit: mh.hasAttribute('data-mhedit'), btn: !!mh.querySelector('[data-mhbtn]'),
+      legend: !!document.querySelector('[data-offlegend]'), offtop: !!document.querySelector('[data-offtop]'),
+      sumText: sum.innerText.replace(/\s+/g, ''), offN: off ? (off.innerText.match(/(\d+)\s*日/) || [])[1] : '',
+      offBg: off ? rgb(getComputedStyle(off).backgroundColor) : [], lvBg: lv ? rgb(getComputedStyle(lv).backgroundColor) : [] };
+  });
+  let S1 = await side1(pv);
+  t('★個人のカレンダーの時、会社の休日数の札は右の集計の上（1つだけ・左上には出さない）', S1.has && S1.n === 1 && S1.kind === 'wide' && !S1.offtop && Math.abs(S1.top) <= 2, S1);
+  t('★札と集計は別の枠（札は集計の枠の外・すき間がある・幅と左端がそろう）', S1.has && !S1.inSum && S1.gap >= 4 && Math.abs(S1.dW) <= 1 && Math.abs(S1.dL) <= 1, S1);
+  t('★札の言葉は「N月 会社の休日数 9日」・枠からはみ出さない', S1.has && S1.text.indexOf((M + 1) + '月会社の休日数9日') === 0 && S1.fits, S1);
+  t('★個人の時は ■休日 ■有給 の色の説明を出す', S1.has && S1.legend, S1);
+  t('★集計に「うち店休日…」の内訳を出さない', S1.has && !/うち|店休/.test(S1.sumText), S1.sumText);
+  t('★集計の「休日」は店休日を含めた数（全員の表の「休日」と同じ）', S1.has && S1.offN === vrow('魚住圭').tot.offs && Number(S1.offN) >= 2, [S1.offN, vrow('魚住圭').tot.offs]);
+  {
+    // 休日＝オレンジ／有給＝緑 が、白に近い色ではなく、はっきり違う色（R と G の差で見る）
+    const cells = await pv.evaluate(() => { const rgb = v => (String(v).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      const cs = [...document.querySelectorAll('[data-off1week] > div')]; const pick = ch => { const e = cs.find(c => [...c.querySelectorAll('span')].some(x => x.innerText.trim() === ch)); return e ? rgb(getComputedStyle(e).backgroundColor) : null; };
+      return { off: pick('休'), lv: pick('有') }; });
+    const strong = c => !!c && c.length === 3 && (Math.max(...c) - Math.min(...c)) >= 90;
+    t('★休日のマスは濃いオレンジ・有給のマスは濃い緑（どちらも白っぽくない）', strong(cells.off) && strong(cells.lv) && cells.off[0] > cells.off[2] + 90 && cells.lv[1] > cells.lv[0] + 60, cells);
+    t('★右の集計の 休日・有給 のタイルも同じ色', JSON.stringify(S1.offBg) === JSON.stringify(cells.off) && JSON.stringify(S1.lvBg) === JSON.stringify(cells.lv), [S1.offBg, S1.lvBg]);
+    t('★休日のオレンジは休業日の赤（#fecaca）と見分けが付く', !!cells.off && Math.abs(cells.off[1] - 202) + Math.abs(cells.off[2] - 202) >= 60, cells.off);
+  }
   if (SHOT) await pv.screenshot({ path: path.join(SHOT, 'staff_view_one.png') });
   // ★個人のカレンダーは1画面に収まる（v3.133.0・2026-11-25 ユーザー指示：「上下スクロールしないと見れないので、
   //   1画面で全体表示して。あまり表示も小さくならないように」）
@@ -330,14 +365,14 @@ const DIM = new Date(Y, M + 1, 0).getDate();
     const cell = wk[1].children[2], cr = cell.getBoundingClientRect(), a = sc.getBoundingClientRect(), b = sum.getBoundingClientRect();
     const rgb = v => (String(v).match(/[\d.]+/g) || []).slice(0, 3).map(Number), tot = v => rgb(v).reduce((x, y) => x + y, 0);
     return { ratio: Math.round(cr.width / cr.height * 100) / 100, cell: Math.round(cr.width) + 'x' + Math.round(cr.height),
-      sumOutside: !sc.contains(sum), sumRight: b.left >= a.right + 6, sumTopSame: Math.abs(b.top - a.top) <= 2,
+      sumOutside: !sc.contains(sum), sumRight: b.left >= a.right + 6, sumTopSame: Math.abs((document.querySelector('[data-off1side]') || sum).getBoundingClientRect().top - a.top) <= 2,
       line: tot(getComputedStyle(cell).borderTopColor), lineL: tot(getComputedStyle(cell).borderLeftColor),
       frame: tot(getComputedStyle(sc).borderTopColor), frameW: parseFloat(getComputedStyle(sc).borderTopWidth),
       head: rgb(getComputedStyle(ttl).backgroundColor), sumFrame: rgb(getComputedStyle(sum).borderTopColor),
       sumText: sum.innerText.replace(/\s+/g, ''), vw: window.innerWidth, calW: Math.round(a.width), calL: Math.round(a.left), sumR: Math.round(window.innerWidth - b.right) };
   });
   let FR = await frame1();
-  t('★集計はカレンダーの枠の外（右どなりの別の枠・上がそろう）', !!FR && FR.sumOutside && FR.sumRight && FR.sumTopSame, FR);
+  t('★集計はカレンダーの枠の外（右どなりの列・列の上がカレンダーとそろう）', !!FR && FR.sumOutside && FR.sumRight && FR.sumTopSame, FR);
   t('★マスの線が濃い（以前の #e5e7eb より濃い）', !!FR && FR.line > 0 && FR.line < 600 && FR.lineL < 600, FR && [FR.line, FR.lineL]);
   t('★カレンダーの外枠はさらに濃く・2px', !!FR && FR.frame < 400 && FR.frameW >= 2, FR && [FR.frame, FR.frameW]);
   t('★集計の見出しは緑系（黒・濃い灰色にしない）', !!FR && FR.head[1] > FR.head[0] && FR.head[1] > FR.head[2] && FR.head[0] + FR.head[1] + FR.head[2] > 450, FR && FR.head);
@@ -396,6 +431,7 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   const MH2 = await mhPos(pw);
   t('★押すと入力欄に変わる', MH2.has && MH2.edit && !!(await pw.$('[data-offtop] input')), MH2);
   t('★その時、表は上下に動かない・札の幅も変わらない', MH2.has && Math.abs(MH2.wrapTop - MH.wrapTop) <= 1 && Math.abs(MH2.dL) <= 3 && Math.abs(MH2.dR) <= 3, [MH.wrapTop, MH2.wrapTop, MH2.dL, MH2.dR]);
+  t('★入力欄・保存・やめる が札からはみ出さない', await pw.evaluate(() => { const m = document.querySelector('[data-offtop] [data-mhbadge]'); return !!m && m.scrollWidth <= m.clientWidth + 1; }));
   await pw.fill('[data-offtop] input', '10');
   await pw.click('[data-offtop] [data-mhsave]'); await pw.waitForTimeout(1200);
   const MH3 = await mhPos(pw);
@@ -403,6 +439,19 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   t('★保存先（mholidays）も 10', (await pw.evaluate(k => (window.__fakeFb.get(k + 'mholidays') || {}), STOR))[Y + '-' + (M + 1)] === 10);
   const carry1 = ((await readTable(pw)).rows.find(r => r.name === '江川京志') || { tot: {} }).tot.carry;
   t('★右端の「繰り越し」も一緒に変わる', !!carry0 && !!carry1 && carry0 !== carry1, [carry0, carry1]);
+  // 個人のカレンダーの札（右の集計の上）でも直せる。押しても下の集計は動かない
+  await pw.evaluate(() => { const td = document.querySelector('tr[data-offrow="魚住圭"] td'); if (td) td.click(); });
+  await pw.waitForTimeout(700);
+  let S2 = await side1(pw);
+  t('★管理者：個人の札にも「変更」が出る', S2.has && S2.btn && S2.text.indexOf((M + 1) + '月会社の休日数10日') === 0, S2);
+  if (SHOT) { await pw.setViewportSize({ width: 1920, height: 900 }); await pw.waitForTimeout(500); await pw.screenshot({ path: path.join(SHOT, 'staff_view_one_admin.png') }); await pw.setViewportSize({ width: 1500, height: 950 }); await pw.waitForTimeout(400); S2 = await side1(pw); }
+  await pw.click('[data-off1mh] [data-mhbtn]'); await pw.waitForTimeout(400);
+  const S3 = await side1(pw);
+  t('★押すと入力欄に変わる・下の集計は動かない・はみ出さない', S3.has && S3.edit && Math.abs(S3.sumTop - S2.sumTop) <= 1 && S3.fits, [S2.sumTop, S3.sumTop, S3.fits]);
+  await pw.fill('[data-off1mh] input', '9');
+  await pw.click('[data-off1mh] [data-mhsave]'); await pw.waitForTimeout(1200);
+  const S4 = await side1(pw);
+  t('★保存すると札が 9日 に戻る', S4.has && !S4.edit && S4.text.indexOf((M + 1) + '月会社の休日数9日') === 0, S4.text);
   t('画面のエラーなし（管理者・🏖 休日）', W.errs.length === 0, W.errs.slice(0, 2));
   await W.ctx.close();
 
