@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795659945287';
+    window.__APP_BUILD='build-1795664585570';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.134.2';
+const APP_VERSION = '3.134.3';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -8723,7 +8723,9 @@ const RestrictionModal=memo(({isOpen,onClose,dateLabel,dk,restriction,autoRanges
 //   ★色が出ない紙でも読めるよう、休＝「休」／有給＝「有」／研修＝「研」の字を必ず添える（色だけで区別しない）。
 //   d = {mode:'table'（店舗全体＝スタッフ×日の表）|'one'（スタッフ個別）, storeName, y, m(0始まり), who, quota, stamp,
 //        staff:[氏名], days:[{d,dow,closed,hol,off:[],leave:[],trn:[],notes:{氏名:メモ}}],
-//        summary:[{name,offs,leaves,trn,closedN,breakdown,carry}], carried:[日]（個別のみ）}
+//        summary:[{name,offs,leaves,trn,carry}], carried:[日]（個別のみ）}
+//        ★「（うち店休日○＋繰り越し休日○）」の内訳は用紙にも出さない（v3.134.3・2026-11-26 ユーザー指示）。
+//          「休日」の数は今までどおり店休日を含む。内訳を足し直さないこと。
 const staffCalPrintHtml=(d)=>{
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const DOW=['日','月','火','水','木','金','土'];
@@ -8815,7 +8817,7 @@ td.closed{background:#fecaca}
       if(x.trn.includes(n))return `<td class="is-tr">${dn(x)}<div class="mk tr">研修</div></td>`;
       return `<td>${dn(x)}</td>`;
     }).join('')+'</tr>').join('')+'</table></div>';
-    body+=`<div class="big"><span>休日 <b>${s.offs||0}</b> 日${s.breakdown?'<span class="sub">　'+esc(s.breakdown)+'</span>':''}</span><span>有給 <b>${s.leaves||0}</b> 日</span><span>計 <b>${(s.offs||0)+(s.leaves||0)}</b> 日</span>${s.trn?`<span>研修 <b>${s.trn}</b> 日<span class="sub">（休みには数えません）</span></span>`:''}${s.carry?`<span class="sub" style="font-size:12px;font-weight:800;color:#111">${esc(s.carry)}</span>`:''}</div>`;
+    body+=`<div class="big"><span>休日 <b>${s.offs||0}</b> 日</span><span>有給 <b>${s.leaves||0}</b> 日</span><span>計 <b>${(s.offs||0)+(s.leaves||0)}</b> 日</span>${s.trn?`<span>研修 <b>${s.trn}</b> 日<span class="sub">（休みには数えません）</span></span>`:''}${s.carry?`<span class="sub" style="font-size:12px;font-weight:800;color:#111">${esc(s.carry)}</span>`:''}</div>`;
   }
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}</title><style>${css}</style></head><body><div class="sheet" data-printmode="${d.mode}">${head}${body}</div></body></html>`;
 };
@@ -8858,7 +8860,7 @@ const staffOffPrintOpen=({mode,who,storeName,c,rosterNames,noteOf})=>{
   const mo=staffOffMonth(c,rosterNames);
   const days=mo.days.map(x=>{const notes={};[...x.off,...x.leave].forEach(n=>{const t=noteOf?noteOf(x.dkk,n):'';if(t)notes[n]=t;});return {...x,notes};});
   const names=mode==='one'?[who]:mo.names;
-  const summary=names.map(n=>{const x=staffOffSum(n,c);return{name:n,offs:x.offs,leaves:x.leaves,trn:x.trn,breakdown:offBreakdown(x.closedN,x.carry),carry:carryLabel(x.carry)};});
+  const summary=names.map(n=>{const x=staffOffSum(n,c);return{name:n,offs:x.offs,leaves:x.leaves,trn:x.trn,carry:carryLabel(x.carry)};});
   const c1=mode==='one'?calcHolidayCarry(who,c.y,c.m,c.dayOff||{},c.isClosed,c.mh):null;
   const nw=new Date(), p2=v=>String(v).padStart(2,'0');
   const html=staffCalPrintHtml({mode,storeName,y:c.y,m:c.m,who,quota:(c.mh||{})[c.y+'-'+(c.m+1)],
@@ -21436,7 +21438,9 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         onPickDay={(y,m,d)=>{setSelDate(new Date(y,m,d));setView('schedule');setDashOpen(false);}}/>
 
-      {/* -- 週表示（v3.69・2026-10-21）。読むだけ。保存はすべて予約カードを通る -- */}
+      {/* -- 週表示（v3.69・2026-10-21）。読むだけ。保存はすべて予約カードを通る --
+          ★帯の色（v3.134.3・2026-11-26 ユーザー指示）：テスト版＝オレンジ（スケジュール画面の帯と同じ UI_HEAD）。
+            本番は今までどおり店の色（本店＝青／三田店＝赤）。HUB_IS_TEST で出し分けるので port_to_main.js の変換は要らない。 */}
       <WeekScheduleModal
         isOpen={weekOpen}
         onClose={()=>setWeekOpen(false)}
@@ -21447,7 +21451,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
           // 本日から → 本日へ移る／月曜から → いま見ている週の月曜にそろえる
           setWeekStart(p=>v?weekStartMode(new Date(),true):weekStartOf(p||new Date()));}}
         storeId={vsId} storeName={vsStore.name}
-        headColor={`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
+        headColor={HUB_IS_TEST?UI_HEAD:`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}
         inspData={inspData} schedData={schedData}
         staffList={currentStaffList}
         dayOffData={dayOffData} paidLeaveData={paidLeaveData} trainingData={trainingData}

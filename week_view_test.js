@@ -168,6 +168,12 @@ const seed = {
   }));
   t('1日表示は無くなっていない（下にそのまま残る）', await page.evaluate(() =>
     [...document.querySelectorAll('th')].some(th => th.innerText.trim() === '代車・レンタカー')));
+  // ★v3.134.3（2026-11-26 ユーザー指示）：テスト版の週間カレンダーは、上の帯を青ではなくオレンジにする
+  //   （スケジュール画面の帯と同じ #EA580C）。本番は今までどおり店の色＝ファイルの中身で見張る。
+  const bandH = await page.evaluate(() => { const c = document.querySelector('[data-wclose]'); const h = c && c.parentElement && c.parentElement.parentElement; if (!h) return null; const cs = getComputedStyle(h); return { bg: cs.backgroundColor, img: cs.backgroundImage }; });
+  t('★★テスト版：上の帯はオレンジ（234,88,12）・青のグラデーションではない', !!bandH && /234, 88, 12/.test(bandH.bg) && bandH.img === 'none', bandH);
+  { const src = fs.readFileSync(path.join(DIR, 'index_dev.html'), 'utf8');
+    t('★★本番は店の色のまま（HUB_IS_TEST で出し分け・色は UI_HEAD を通す）', src.indexOf('headColor={HUB_IS_TEST?UI_HEAD:`linear-gradient(135deg,${vsStore.accent},${vsStore.color})`}') >= 0); }
 
   // ── ② 車検はコース順のバッジ ──
   console.log('\n■ ② 車検は マ→ク→レ の順のバッジ（台数ではない）');
@@ -603,6 +609,8 @@ const seed = {
   t('★三田店で開くと見出しが三田店', sanda.head, sanda);
   t('★★三田店で開いても車検は両店ぶん出る（火曜は5台）', sanda.n === 5, sanda);
   t('★スタッフも三田店の人', sanda.staff, sanda);
+  const bandS = await page.evaluate(() => { const c = document.querySelector('[data-wclose]'); const h = c && c.parentElement && c.parentElement.parentElement; if (!h) return null; const cs = getComputedStyle(h); return { bg: cs.backgroundColor, img: cs.backgroundImage }; });
+  t('★★テスト版：三田店で開いても帯はオレンジ（テスト版は両店ともオレンジ）', !!bandS && /234, 88, 12/.test(bandS.bg) && bandS.img === 'none', bandS);
   const wedSanda = await page.evaluate(d => {
     const cl = document.querySelector('[data-wclosed="' + d + '"]');
     return { cell: cl ? cl.innerText.replace(/\s+/g, '') : '', add: !!document.querySelector('[data-wadd^="' + d + '/"]') };

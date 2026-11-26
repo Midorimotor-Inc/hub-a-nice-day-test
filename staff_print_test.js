@@ -197,6 +197,8 @@ const readSheet = async (html, shot) => {
   t('★20日は「休業日」', cellOf(CLOSED_DAY).replace(/\s/g, '').indexOf('休業日') >= 0, cellOf(CLOSED_DAY));
   t('★ほかの人の休み（17日＝江川）は出ない', cellOf(17) === '17', cellOf(17));
   t('★下の集計：休日＝2＋店休日・研修1', new RegExp('休日\\s*' + (2 + closedN) + '\\s*日').test(B.big) && /研修\s*1\s*日/.test(B.big), B.big);
+  // ★v3.134.3（2026-11-26 ユーザー指示）：用紙の集計にも「（うち店休日○＋繰り越し休日○）」の内訳は出さない
+  t('★下の集計に「うち店休日…」の内訳を出さない', !/うち|店休日|繰り越し休日/.test(B.big), B.big);
   t('★外から何も読み込まない', !/https?:\/\//.test(st2.html) && !/<script/i.test(st2.html) && B.reqs.length === 0);
 
   head('④ 全員に戻す／月を変えるとその月を刷る');
