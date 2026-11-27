@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node off1_edit_test.js`（🏖 休日 の画面から休日・有給・研修・予定を入れる）・`node sched_multiday_test.js`（日をまたぐ予定）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node off1_edit_test.js`（🏖 休日 の画面から休日・有給・研修・予定を入れる）・`node sched_multiday_test.js`（日をまたぐ予定）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_autofix_test.js`（スケジュールに代車があるのに貸出が無い時に自動で貸出を作る）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -4851,3 +4851,40 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
 - ★**画面を変えたら、本番の実データでもその画面を開いて確かめること。** 道具は `fb_sync_screen.js` と同じ作り
   （本番の kv を読んで、にせの firebase に入れて `index_main.html` を動かす・書き込みなし）。
 - 見張りは `off1_edit_test.js`（84件）の ⑬ と ⑮。
+### 代車：スケジュールに代車があるのに貸出が無い → 自動で貸出を作る（v3.138.0・2026-11-27 ユーザー決定）
+- きっかけ：12/20 の1件（帯あり・カード空）を直したあとの、ユーザーの言葉
+  「**同じ類のバグが毎回出ています**」→ 私から「出ても自動で直る安全網」を提案 → ユーザーの返事：
+  「**基準は予約カード（＝スケジュール側）がいい。予約カードに代車をつけていて、代車管理にはないという場合は、
+  代車管理の方を直す**」。11/25 の「ズレたら予定表に合わせる」と同じ向き。
+- ★**自動で動くのは1方向だけ＝`type:'bar'`（スケジュールに代車名があるのに帯が無い）→ 帯を作る。**
+  それまで人が押していた「＋ 代車管理に貸出を作る」（v3.117.0・`makeLoanerBand`）を、押さなくても働くようにしたもの。
+  車＝カードの `loanerId`／`rentalCarId`（無ければ車名）、期間＝スケジュール（入庫日〜納車日・`schedSpan`）。
+- ★★**逆向き（帯があるのにカードが空＝`type:'label'` の「（空）」）と、帯だけ残った分（`type:'row'`）には自動で触らない。**
+  スケジュール基準をそのまま当てると「帯を消す」になり、**不具合でカードの代車名が消えた時に、残っていた貸出まで消す**
+  （＝お客様の車が1台もおさえられていない状態を自分で作る）。11/16・11/24・12/20 の実例はすべてこの形だった。
+  ここは 11/25 の決定「保留で残す（消さない）」のまま＝今までどおり知らせて、人が「直す」「消す」を選ぶ。
+  **自動で「消す」「カードを書き換える」道を足さないこと。**
+- **動く場所**：PC の代車管理を開いている間だけ（`LoanerGrid` の見回り・`LOANER_AUTOFIX_TICK` ごと）。
+  **スマホは作らない**（知らせるだけ。一覧に「PC の代車管理を開くと自動で貸出が作られます」と出す＝`data-autofixpc`）。
+  代車を選ぶ途中（`pickMode`）でも動かさない。
+- ★**二重に作らない・保存の途中を拾わないための守りは4つ。どれも外さないこと**（検査で1つずつ外して落ちるのを確認済み）：
+  ① **この画面で `LOANER_AUTOFIX_SEEN`（20秒）続けて見えていたものだけ**（読み込みの途中を拾わない）
+  ② **サーバーの予約カードを読み直す**（`sGet`）。いまもその代車名があるか＝手元の写しを信じない。消えていたら作らない
+  ③ **その予約を最後に保存してから `LOANER_AUTOFIX_WAIT`（3分）たっている**（`hubRowStamp`＝行の id・at・rcvAt の一番新しい時刻）。
+     予約カードの保存は「カード → 帯」の順に別々に書くので、保存の直後は一瞬この形になる。**ここで作ると帯が2本になる。**
+  ④ **書く直前に、サーバーの代車の表をもう一度見る**（`makeLoanerBand` の `_stop`・トランザクションの中）。
+     同じ予約の帯がもうある（ほかの PC が先に作った／遅れて届いた）・同じお名前の帯が同じ期間にある・その車がふさがっている → 作らない。
+- **作れない時は黙ってやめる**（自動の時は alert を出さない）。ズレの知らせは残り、一覧に理由を出す（`data-autofixno`・
+  `LOANER_AUTOFIX_WHY`＝車がふさがっている／名簿に車が無い／期間が分からない）。次に試すのは `LOANER_AUTOFIX_RETRY`（10分）後。
+- ★**黙って直さない。** 作った時は代車管理の上に緑の帯（`data-autofixlog`）で「どなたの・どの車・いつからいつまで」を出す。
+  記録は `kv` の **`diag-loanerfix`（最新50件）** と端末の localStorage（30件）＝`hubLoanerFixNote`。**お名前は入れない**（bookingKey と車と日だけ）。
+  ★**この記録が増えていれば、「カードだけに代車名が残る」不具合がまだどこかで生まれている**＝次に原因を追う時の手がかり
+  （読むのは Admin SDK で `hub-v8-diag-loanerfix`。`diag-*` は控え・写しの対象外）。
+- 手で押す「＋ 代車管理に貸出を作る」「🗑 代車は要らない（カードの代車名を消す）」は残してある。
+  ★代車が要らない予約なら、20秒〜数分のうちに貸出ができるので、**予約カードで「代車なし」にする**（カードが基準）。
+- BLOCK-B には触っていない（`sGet`・`writeVerified` を呼んでいるだけ。道具は BLOCK-D の `LoanerGrid` の手前に置いた）。
+- 検査は **`node loaner_autofix_test.js`（42件・PORT 8548）**。待ち時間の定数だけ短く差し替えて動かす。
+  サーバーだけを変える（画面に知らせない）のは `__fakeFb.setQuiet`。`SHOT`／`SHOT2` で見た目も撮れる。
+  周りの検査も PASS：loaner_move_date(45)・loaner_zero(61)・loaner_dnd(52)・loaner_delete(12)・loaner_dnd_stress(14)・
+  delete_other_band(46)・loaner_resize(38)・mobile_loaner_dnd(46)・mobile_del_band(12)。
+- **テスト版のみ（2026-11-27）。本番へは未反映**＝ユーザーの「本番へ」を待つ。

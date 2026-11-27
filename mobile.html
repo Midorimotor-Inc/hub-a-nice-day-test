@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795745648699';
+  window.__APP_BUILD='build-1795753733290';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.137.1';
+const MOBILE_VERSION='3.138.0';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -5708,9 +5708,15 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
                         ✓ 直す（予約カードを「{it.want}」にする）
                       </button>
                     )}
-                    {it.type!=='label'&&(
+                    {it.type==='row'&&(
                       <div style={{fontSize:10.5,color:'#92400e',marginTop:5,lineHeight:1.7}}>
                         片方にしか無いので自動では直せません。手で合わせるか、下の「消す」で片方だけ残っている分を消せます。
+                      </div>
+                    )}
+                    {/* ★スケジュールが基準（v3.138.0）。貸出を自動で作るのは PC の代車管理。スマホは知らせるだけ */}
+                    {it.type==='bar'&&(
+                      <div data-autofixpc style={{fontSize:10.5,color:'#065f46',marginTop:5,lineHeight:1.7}}>
+                        スケジュールが基準です。<b>PC の代車管理を開くと、自動で貸出が作られます</b>（車がふさがっている時は作られません）。代車が要らない予約なら、下のボタンで代車名を消せます。
                       </div>
                     )}
                     {/* ★他店の帯はここから消さない。dropSyncM の書き先が【見ている店の代車】に
