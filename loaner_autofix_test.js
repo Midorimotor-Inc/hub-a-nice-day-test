@@ -8,6 +8,9 @@
 //     ④ 逆向き（帯があるのにカードが空）・帯だけ残っている分には自動で触らない
 //     ⑤ サーバーにもう帯がある時は二重に作らない／サーバーのカードから代車名が消えていたら作らない
 //     ⑥ 黙って直さない（何を作ったかを画面に出す・記録を残す。記録にお名前は入れない）
+//     ⑦ ★納車日が無くて「いつまで貸すか」が分からない予約（整備・レンタカー）には作らない（v3.138.1）
+//        ユーザーの言葉：「1日だけにしてしまうと、空いているものと勘違いされ、そこに予定を入れられる。すごくまずい」。
+//        手で押した時は「1日だけになる」と先にたずねる／納車日を入れたら自動で作る
 //   ★名前はすべて架空。実行: node loaner_autofix_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -42,10 +45,11 @@ const DD = (day) => ({ y: NX.getFullYear(), m: NX.getMonth(), d: day });
 const dk = (o) => o.y + '-' + (o.m + 1) + '-' + o.d;
 const inp = (o) => o.y + '-' + String(o.m + 1).padStart(2, '0') + '-' + String(o.d).padStart(2, '0');
 const Z = DD(3), A = DD(5), A2 = DD(7), B = DD(9), C = DD(12), E = DD(16), F = DD(19), G0 = DD(22), G = DD(23), H = DD(26);
+const O = DD(14), F2 = DD(21), G2 = DD(24), P = DD(27), P2 = DD(28);   // v3.138.1：納車日なし（O・P）／納車日（F2・G2・P2）
 const CARS = [{ id: 1, name: 'ハスラーオフブルー', num: '8178' }, { id: 2, name: 'スペーシア', num: '4750' }, { id: 3, name: 'アルト', num: '5555' }];
 const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 const bar = (id, user, from, to, car, bk) => ({ id, user, fy: from.y, fm: from.m, fd: from.d, ty: to.y, tm: to.m, td: to.d, carName: car.name, carNum: car.num, bookingKey: bk });
-const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二郎', first: '先客　三郎', fresh: '直後　三子', rev: '逆向き　四郎', rent: 'レンタ　五郎', ghost: '幽霊　六郎', sched: '整備　七郎', quiet: '静か　八郎' };
+const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二郎', first: '先客　三郎', fresh: '直後　三子', rev: '逆向き　四郎', rent: 'レンタ　五郎', ghost: '幽霊　六郎', sched: '整備　七郎', quiet: '静か　八郎', open: '期限なし　十郎', ropen: '長期　十一郎' };
 
 (async () => {
   const insp0 = {
@@ -59,8 +63,10 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
     [dk(C)]: [{ name: N.fresh, carType: 'ワゴンR', no: '3333', time: '11:00', course: 2, store: 'honten', seq: 103, id: 103, loaner: 'アルト (5555)', loanerId: 3 }],
     // ④ 逆向き：帯はあるのにカードが空＝自動では触らない
     [dk(E)]: [{ name: N.rev, carType: 'ジムニー', no: '4444', time: '09:00', course: 2, store: 'honten', seq: 104, id: 104 }],
-    // ① レンタカー・帯なし＝作る
-    [dk(F)]: [{ name: N.rent, carType: 'ソリオ', no: '5151', time: '09:00', course: 2, store: 'honten', seq: 105, id: 105, rentalLabel: '🔑 ノマド (3101)', rentalCarId: 101 }],
+    // ① レンタカー・帯なし（納車日あり）＝作る
+    [dk(F)]: [{ name: N.rent, carType: 'ソリオ', no: '5151', time: '09:00', course: 2, store: 'honten', seq: 105, id: 105, rentalLabel: '🔑 ノマド (3101)', rentalCarId: 101, deliveryDate: inp(F2) }],
+    // ⑦ レンタカー・帯なし・★納車日なし＝作らない（車検でも、レンタカーはいつまで貸すか分からない）
+    [dk(P)]: [{ name: N.ropen, carType: 'クロスビー', no: '7171', time: '09:00', course: 2, store: 'honten', seq: 110, id: 110, rentalLabel: '🔑 ノマド (3101)', rentalCarId: 101 }],
     // ⑤ サーバーのカードからは代車名が消えている（画面の写しが古い）＝作らない
     [dk(H)]: [{ name: N.quiet, carType: 'エブリイ', no: '6161', time: '09:00', course: 2, store: 'honten', seq: 108, id: 108, loaner: 'アルト (5555)', loanerId: 3 }],
   };
@@ -74,8 +80,12 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   };
   const seed = {
     [STOR + 'insp']: insp0,
-    // ① 整備（タイムスケジュール）・帯なし＝作る
-    [STOR + 'honten-sched']: { [dk(G)]: { '10:00': { name: N.sched, carType: 'キャリイ', work: 'Q', content: '', store: 'honten', id: 107, loaner: 'アルト (5555)', loanerId: 3 } } },
+    // ① 整備（タイムスケジュール）・帯なし（納車日あり）＝作る
+    // ⑦ 整備・帯なし・★納車日なし（鈑金でいつ返るか分からない）＝作らない
+    [STOR + 'honten-sched']: {
+      [dk(G)]: { '10:00': { name: N.sched, carType: 'キャリイ', work: 'Q', content: '', store: 'honten', id: 107, loaner: 'アルト (5555)', loanerId: 3, deliveryDate: inp(G2) } },
+      [dk(O)]: { '11:00': { name: N.open, carType: 'ハイゼット', work: 'B', content: '鈑金', store: 'honten', id: 111, loaner: 'スペーシア (4750)', loanerId: 2 } },
+    },
     [STOR + 'sanda-sched']: {},
     [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, store: 'honten' }],
@@ -110,8 +120,8 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   ctx.route('https://script.google.com/**', route => route.fulfill({ status: 200, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'null' }));
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(String(e)));
-  const dialogs = [];
-  page.on('dialog', async d => { dialogs.push(d.message()); await d.accept().catch(() => {}); });
+  const dialogs = []; let dlgAccept = true;
+  page.on('dialog', async d => { dialogs.push(d.message()); await (dlgAccept ? d.accept() : d.dismiss()).catch(() => {}); });
   await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
   await seeText(page, '江川京志', 25000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
   await seeText(page, 'スケジュール', 25000); await clickText(page, 'このまま使う');
@@ -129,13 +139,19 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   t('★待ち時間の定数がある（見えていた時間・保存からの時間）', /const LOANER_AUTOFIX_SEEN  = 20000;/.test(SRC) && /const LOANER_AUTOFIX_WAIT  = 180000;/.test(SRC));
   t('★自動で動くのは「貸出が無い」（type:bar）だけ', SRC.indexOf("bars=(afIssues.current||[]).filter(x=>x.type==='bar')") > 0);
   t('★自動で「直す」（カードを書き換える）・「消す」を呼ぶ道は無い', !/afCall[\s\S]{0,2000}onFixSync\(/.test(SRC.slice(SRC.indexOf('const afKey='), SRC.indexOf('const afKey=') + 3200)) && !/onDropSync\(/.test(SRC.slice(SRC.indexOf('const afKey='), SRC.indexOf('const afKey=') + 3200)));
-  t('★作る前にサーバーの予約カードを読み直す（手元の写しを信じない）', /const autoMakeLoanerBand=useCallback\(async\(it\)=>\{[\s\S]{0,200}await sGet\(/.test(SRC));
+  t('★作る前にサーバーの予約カードを読み直す（手元の写しを信じない）', /const autoMakeLoanerBand=useCallback\(async\(it0\)=>\{[\s\S]{0,240}await sGet\(/.test(SRC));
   t('★保存した直後は待つ（hubRowStamp）', SRC.indexOf('if(last&&Date.now()-last<LOANER_AUTOFIX_WAIT)return {r:\'wait\'};') > 0);
   t('★書く直前にサーバーの代車の表をもう一度見る（_stop）', SRC.indexOf('persistRres(base=>_stop(base)?undefined:putResRec(') > 0 && SRC.indexOf('persistLresOf(store,base=>_stop(base)?undefined:putResRec(') > 0);
   t('★自動の時は alert を出さない', SRC.indexOf('if(auto){ _o.alert=false;') > 0 && SRC.indexOf("if(!auto)alert('⚠ 貸出を作れません'") > 0);
   t('★代車を選ぶ途中（pickMode）では動かさない', /useEffect\(\(\)=>\{\s*if\(pickMode\)return;\s*let dead=false;/.test(SRC));
   t('★手で押す「貸出を作る」は残してある', SRC.indexOf('data-syncmake') > 0);
   t('★スマホは知らせるだけ（PC で作られると案内する）', MOB.indexOf('data-autofixpc') > 0 && MOB.indexOf('makeLoanerBand') < 0);
+  t('★納車日が無い整備・レンタカーは「期間が分からない」と見分ける', SRC.indexOf("const loanerSpanUnknown=(rowKind,kind,del)=>!_normDkStr(del)&&(rowKind==='sched'||kind==='rental');") > 0);
+  t('★自動の時は、期間が分からなければ作らない（見回り・サーバーの読み直し・書く所の3か所）',
+    SRC.indexOf('if(loanerSpanUnknown(x.rowKind,x.kind,x.del))return false;') > 0
+    && SRC.indexOf("if(loanerSpanUnknown(it.rowKind,it.kind,row.deliveryDate))return {r:'noend'};") > 0
+    && SRC.indexOf("if(auto)return 'noend';") > 0);
+  t('★スマホにも「納車日が無いので自動では作られない」と出す', MOB.indexOf('data-autofixnoend') > 0);
 
   // ────────────────────────────────────────────────────────
   head('② 下ごしらえ：直後の予約の時刻を「いま」にする／サーバーだけを変える');
@@ -176,8 +192,12 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   t('★期間はスケジュールどおり（入庫日〜納車日）', mA.length === 1 && mA[0].fd === A.d && mA[0].td === A2.d && mA[0].fm === A.m, mA[0]);
   const mS = barsFor(L, N.sched);
   t('★整備：貸出ができた（紐付けは枠の名前）', mS.length === 1 && mS[0]._car === '3' && mS[0].bookingKey === 'sched-' + dk(G) + '-10:00' && mS[0].fd === G.d, mS);
+  t('★整備：期間は納車日まで', mS.length === 1 && mS[0].fd === G.d && mS[0].td === G2.d, mS);
   const mR = barsFor(R, N.rent);
   t('★レンタカー：貸出ができた（レンタカーの表に）', mR.length === 1 && mR[0]._car === '101' && mR[0].bookingKey === 'insp-' + dk(F) + '-0', mR);
+  t('★レンタカー：期間は納車日まで', mR.length === 1 && mR[0].fd === F.d && mR[0].td === F2.d, mR);
+  t('★★納車日の無い整備には作らない（1日だけの帯を作らない）', barsFor(L, N.open).length === 0, barsFor(L, N.open));
+  t('★★納車日の無いレンタカーには作らない', barsFor(R, N.ropen).length === 0, barsFor(R, N.ropen));
   t('★予約カードは書き換えていない', ((I[dk(A)] || [])[0] || {}).loaner === 'ハスラーオフブルー (8178)' && ((I[dk(F)] || [])[0] || {}).rentalLabel === '🔑 ノマド (3101)');
   t('★ふさがっている車には作らない', barsFor(L, N.busy).length === 0, barsFor(L, N.busy));
   t('★先客の貸出はそのまま', barsFor(L, N.first).length === 1 && barsFor(L, N.first)[0].id === 5003);
@@ -206,6 +226,7 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   t('★待ったあとで貸出ができた（1本だけ）', mF.length === 1 && mF[0]._car === '3' && mF[0].fd === C.d, mF);
   t('★何度見回っても二重に作らない', barsFor(L, N.auto).length === 1 && barsFor(L, N.sched).length === 1 && barsFor(R, N.rent).length === 1 && barsFor(L, N.dup).length === 1);
   t('★ふさがっている車・食い違う分は、待っても作らない', barsFor(L, N.busy).length === 0 && barsFor(L, N.quiet).length === 0);
+  t('★★納車日の無い整備・レンタカーは、待っても作らない', barsFor(L, N.open).length === 0 && barsFor(R, N.ropen).length === 0);
   const diag = await get(STOR + 'diag-loanerfix');
   t('★記録が残る（作った4件）', Array.isArray(diag) && diag.length === 4 && diag.every(d => d.bk && d.car && d.ver), diag);
   t('★記録にお名前は入れない', Array.isArray(diag) && !Object.values(N).some(n => JSON.stringify(diag).indexOf(n) >= 0));
@@ -216,7 +237,8 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   const s1 = await syncBtn();
   t('ズレの件数が減っている', /ズレ\d+件/.test(s1 || '') && Number((s1.match(/ズレ(\d+)件/) || [])[1]) < Number((s0.match(/ズレ(\d+)件/) || [])[1]), [s0, s1]);
   await clickText(page, 'スケジュールとズレ'); await page.waitForTimeout(800);
-  const list = await page.evaluate(() => { const e = document.querySelector('[data-synclist]'); return e ? { txt: e.innerText, no: [...e.querySelectorAll('[data-autofixno]')].map(x => x.innerText), make: e.querySelectorAll('[data-syncmake]').length } : null; });
+  const list = await page.evaluate(() => { const e = document.querySelector('[data-synclist]'); return e ? { txt: e.innerText, no: [...e.querySelectorAll('[data-autofixno]')].map(x => x.innerText), noend: [...e.querySelectorAll('[data-autofixnoend]')].map(x => x.innerText), make: e.querySelectorAll('[data-syncmake]').length } : null; });
+  t('★★納車日が無い2件は一覧に残り、理由（納車日が入っていない）を出す', !!list && list.noend.length === 2 && list.noend.every(x => /納車日が入っていない/.test(x) && /納車日を入れると、自動で作ります/.test(x)) && list.txt.indexOf(N.open) >= 0 && list.txt.indexOf(N.ropen) >= 0, list && list.noend);
   t('★作れなかった理由を出す（ふさがっている）', !!list && list.no.some(x => /ふさがっています/.test(x)), list && list.no);
   t('★作った人は一覧から消えている', !!list && list.txt.indexOf(N.auto) < 0 && list.txt.indexOf(N.rent) < 0 && list.txt.indexOf(N.sched) < 0 && list.txt.indexOf(N.fresh) < 0, list && list.txt.slice(0, 200));
   t('★逆向き・予約の無い貸出は、今までどおり一覧に出る', !!list && list.txt.indexOf(N.rev) >= 0 && list.txt.indexOf(N.ghost) >= 0);
@@ -224,6 +246,37 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   t('alert は最後まで1つも出していない', dialogs.length === 0, dialogs);
   t('画面のエラーは出ていない', errs.length === 0, errs.slice(0, 3));
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });
+
+  // ────────────────────────────────────────────────────────
+  head('⑨ 納車日が無い予約：手で押した時は「1日だけになる」と先にたずねる');
+  const pressMake = who => page.evaluate(w => {
+    const b = [...document.querySelectorAll('[data-synclist] [data-syncmake]')].find(x => { let p = x; for (let i = 0; i < 6 && p; i++) { p = p.parentElement; if (p && (p.innerText || '').indexOf(w) >= 0 && p.querySelectorAll('[data-syncmake]').length === 1) return true; } return false; });
+    if (b) { b.click(); return true; } return false;
+  }, who);
+  dlgAccept = false;
+  t('「貸出を作る」を押せた', await pressMake(N.open));
+  await page.waitForTimeout(900);
+  t('★たずねる（1日だけの貸出になる・翌日から空いて見える）', dialogs.length === 1 && /1日だけの貸出になります/.test(dialogs[0]) && /空いている車に見えて/.test(dialogs[0]) && /右端を引いて/.test(dialogs[0]), dialogs);
+  t('★「いいえ」なら作らない', barsFor(await get(STOR + 'honten-lres'), N.open).length === 0);
+  dlgAccept = true;
+  await pressMake(N.open);
+  await page.waitForTimeout(1500);
+  const mO = barsFor(await get(STOR + 'honten-lres'), N.open);
+  t('★「はい」なら作る（人が選んだ時だけ・1日）', dialogs.length === 2 && mO.length === 1 && mO[0]._car === '2' && mO[0].fd === O.d && mO[0].td === O.d, mO);
+
+  // ────────────────────────────────────────────────────────
+  head('⑩ 予約カードに納車日を入れると、自動で作る（その日まで）');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '閉じる' && e.offsetParent !== null); if (b) b.click(); });
+  await page.evaluate(([k, d, who, del]) => {
+    const v = JSON.parse(JSON.stringify(window.__fakeFb.get(k) || {}));
+    (v[d] || []).forEach(r => { if (r && r.name === who) r.deliveryDate = del; });
+    window.__fakeFb.set(k, v);
+  }, [STOR + 'insp', dk(P), N.ropen, inp(P2)]);
+  await page.waitForTimeout(6000);
+  const mP = barsFor(await get(STOR + 'rres'), N.ropen);
+  t('★納車日を入れたら貸出ができた（入庫日〜納車日）', mP.length === 1 && mP[0]._car === '101' && mP[0].fd === P.d && mP[0].td === P2.d, mP);
+  t('この間に alert・確認は増えていない', dialogs.length === 2, dialogs);
+  t('画面のエラーは最後まで出ていない', errs.length === 0, errs.slice(0, 3));
 
   await browser.close(); server.close();
   console.log(NL + '━━━━━━━━━━━━━━━━━━━━');

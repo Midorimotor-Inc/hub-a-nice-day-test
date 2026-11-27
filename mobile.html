@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795753733290';
+  window.__APP_BUILD='build-1795763672568';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.138.0';
+const MOBILE_VERSION='3.138.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -5542,6 +5542,7 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
       const bk=kind+'-'+dk+'-'+at;
       if(seen[bk])return;
       out.push({kind:rlbl?'rental':'loaner',type:'bar',bk,user:row.name,have:(rlbl||lbl),want:'',dk,at,rowKind:kind,endNum:dkNum(dk),
+        del:String(row.deliveryDate||'').trim(),
         text:'予約カードに'+(rlbl?'レンタカー':'代車')+'名があるのに、代車管理に貸出がありません'});
     };
     Object.keys(inspData||{}).forEach(dk=>((inspData[dk]||[]).forEach((row,i)=>rev(dk,String(i),row,'insp'))));
@@ -5714,7 +5715,14 @@ const LoanerView=({loanerResH,loanerResS,rentalResData,rentalCars,loanerCarsH,lo
                       </div>
                     )}
                     {/* ★スケジュールが基準（v3.138.0）。貸出を自動で作るのは PC の代車管理。スマホは知らせるだけ */}
-                    {it.type==='bar'&&(
+                    {/* ★納車日が無くて「いつまで貸すか」が分からない予約（整備・レンタカー）は、PC でも自動では作らない（v3.138.1）。
+                         1日だけの貸出にすると、翌日から空いている車に見えて次の予約が入ってしまうため。 */}
+                    {it.type==='bar'&&!it.del&&(it.rowKind==='sched'||it.kind==='rental')&&(
+                      <div data-autofixnoend style={{fontSize:10.5,color:'#991b1b',marginTop:5,lineHeight:1.7,fontWeight:700}}>
+                        予約カードに納車日が入っていないので、自動では貸出が作られません（いつまで貸すかが分からないため）。<span style={{fontWeight:500}}><b>予約カードに納車日を入れる</b>か、PC の代車管理で貸出を作って返却日まで伸ばしてください。</span>
+                      </div>
+                    )}
+                    {it.type==='bar'&&!(!it.del&&(it.rowKind==='sched'||it.kind==='rental'))&&(
                       <div data-autofixpc style={{fontSize:10.5,color:'#065f46',marginTop:5,lineHeight:1.7}}>
                         スケジュールが基準です。<b>PC の代車管理を開くと、自動で貸出が作られます</b>（車がふさがっている時は作られません）。代車が要らない予約なら、下のボタンで代車名を消せます。
                       </div>

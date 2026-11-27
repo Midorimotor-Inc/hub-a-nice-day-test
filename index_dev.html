@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795753733290';
+    window.__APP_BUILD='build-1795763672568';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.138.0';
+const APP_VERSION = '3.138.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -13892,7 +13892,18 @@ const hubLoanerFixNote=async(entry)=>{
       back=>Array.isArray(back),2);
   }catch(e){}
 };
-const LOANER_AUTOFIX_WHY={clash:'その車がこの期間ふさがっています',nocar:'予約カードの車が、いまの名簿に見つかりません',nospan:'貸す期間が分かりません'};
+const LOANER_AUTOFIX_WHY={clash:'その車がこの期間ふさがっています',nocar:'予約カードの車が、いまの名簿に見つかりません',nospan:'貸す期間が分かりません',
+  noend:'予約カードに納車日が入っていないので、いつまで貸すかが分かりません'};
+// ★いつまで貸すかがスケジュールから分からない予約には、自動で貸出を作らない（v3.138.1・2026-11-27 ユーザー指摘）
+//   ユーザーの言葉：「納車日がない代車・レンタカーを1日だけにしてしまうと、空いているものと勘違いされ、
+//   そこに予定を入れられる。実際はお客さんに貸している状態で、次のお客さんにも貸すことになる。すごくまずい」。
+//   schedSpan は納車日が無いと「当日返し」で返す＝鈑金のように半月〜1か月かかる貸出が【1日だけの帯】になる。
+//   しかも帯ができるとズレの知らせが消えるので、誰も気づけない。
+//   ・整備（タイムスケジュール）の予約 … 納車日が無ければ期間は分からない → 作らない
+//   ・レンタカー … 車検・整備を問わず、納車日が無ければ作らない（本番のレンタカーの帯はすべて長期だった）
+//   ・車検の代車 … コースで決まる（当日返し／レギュラーは翌日返し）ので、納車日が無くても作る
+//   ★「とりあえず1日で作る」に戻さないこと。作らずに知らせを残すほうが安全。
+const loanerSpanUnknown=(rowKind,kind,del)=>!_normDkStr(del)&&(rowKind==='sched'||kind==='rental');
 
 // ============================================
 //  代車管理グリッド（閲覧専用 + モーダル編集）
@@ -14167,7 +14178,7 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
   //   ・1件ずつ。作る前の確かめは本体の autoMakeLoanerBand がサーバーを読んで行う
   //   ・作れなかった時は黙ってやめ、ズレの知らせを残す（理由は一覧に出す）
   //   ★代車を選ぶ途中（pickMode）では動かさない。
-  const afKey=it=>it.kind+'|'+it.bk+'|'+it.have;
+  const afKey=it=>it.kind+'|'+it.bk+'|'+it.have+'|'+(it.del||'');   // 納車日が入ったら別の鍵＝見回りをやり直す
   const afSeen=useRef({}), afBusy=useRef(false);
   const afIssues=useRef(syncIssues); afIssues.current=syncIssues;
   const afCall=useRef(onAutoMakeSync); afCall.current=onAutoMakeSync;
@@ -14181,7 +14192,8 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
       bars.forEach(it=>{ const k=afKey(it); live[k]=1; if(!afSeen.current[k])afSeen.current[k]={t:now,next:0}; });
       Object.keys(afSeen.current).forEach(k=>{ if(!live[k])delete afSeen.current[k]; });
       if(afBusy.current||typeof afCall.current!=='function')return;
-      const it=bars.find(x=>{ const s=afSeen.current[afKey(x)]; return s&&now-s.t>=LOANER_AUTOFIX_SEEN&&now>=s.next; });
+      const it=bars.find(x=>{ if(loanerSpanUnknown(x.rowKind,x.kind,x.del))return false;   // ★いつまで貸すか分からない＝作らない（v3.138.1）
+        const s=afSeen.current[afKey(x)]; return s&&now-s.t>=LOANER_AUTOFIX_SEEN&&now>=s.next; });
       if(!it)return;
       const k=afKey(it);
       afBusy.current=true;
@@ -15008,7 +15020,13 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
                       </div>
                     )}
                     {/* ★自動で作る（v3.138.0）：しばらく待てば貸出ができる。作れない時は理由を出す */}
-                    {it.type==='bar'&&onAutoMakeSync&&(afNo[afKey(it)]
+                    {it.type==='bar'&&onAutoMakeSync&&((loanerSpanUnknown(it.rowKind,it.kind,it.del)||afNo[afKey(it)]==='noend')
+                      ?<div data-autofixno data-autofixnoend style={{fontSize:11.5,color:'#991b1b',marginTop:6,lineHeight:1.7,fontWeight:700}}>
+                          自動では貸出を作りません：{LOANER_AUTOFIX_WHY.noend}。<br/>
+                          <span style={{fontWeight:500}}>1日だけの貸出にすると、翌日から空いている車に見えて、次の予約が入ってしまうためです。
+                          <b>予約カードに納車日を入れると、自動で作ります。</b>すぐ作る時は下のボタンで作り、代車管理の表で帯の右端を引いて返却日まで伸ばしてください。</span>
+                        </div>
+                      :afNo[afKey(it)]
                       ?<div data-autofixno style={{fontSize:11.5,color:'#991b1b',marginTop:6,lineHeight:1.7,fontWeight:700}}>
                           自動では貸出を作れませんでした：{LOANER_AUTOFIX_WHY[afNo[afKey(it)]]}。代車管理の表で空いている車を選び直してください。
                         </div>
@@ -19204,6 +19222,17 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
       }
       return 'clash';
     }
+    // ★納車日が無くて「いつまで貸すか」が分からない予約（v3.138.1）：
+    //   自動では作らない。手で押した時は、1日だけの貸出になることを先に伝えて、作るかどうかを選んでもらう。
+    if(loanerSpanUnknown(it.rowKind,it.kind,it.del)){
+      if(auto)return 'noend';
+      if(!window.confirm('⚠ 1日だけの貸出になります'+B+B
+        +'予約カードに納車日が入っていないので、'+(f.m0+1)+'/'+f.d+' の1日だけで作ります。'+B
+        +'このままだと翌日から空いている車に見えて、次の予約が入ってしまいます。'+B+B
+        +'作ったあと、代車管理の表で帯の右端を引いて、返却日まで伸ばしてください。'+B
+        +'（先に予約カードへ納車日を入れておくと、その日までの貸出になります）'+B+B
+        +'1日だけで作りますか？'))return 'skip';
+    }
     const rec={id:Date.now(),fy:f.y,fm:f.m0,fd:f.d,ty:e.y,tm:e.m0,td:e.d,
       user:it.user,color:resColorOf({user:it.user}),bookingKey:it.bk,carName:car.name,carNum:car.num};
     // ★自動の時は、書く直前に【サーバーの最新の表】をもう一度見る（v3.138.0）。
@@ -19237,8 +19266,9 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
   //   ★作る前に3つ確かめる：① サーバーの予約カードに、いまもその代車名がある（手元の写しを信じない）
   //     ② その予約は保存してから LOANER_AUTOFIX_WAIT たっている（カード→帯の順に書く保存の途中を拾わない）
   //     ③ サーバーの代車の表に、同じ予約の帯がまだ無い・その車が空いている（makeLoanerBand の _stop）
-  const autoMakeLoanerBand=useCallback(async(it)=>{
-    if(!it||it.type!=='bar')return {r:'skip'};
+  const autoMakeLoanerBand=useCallback(async(it0)=>{
+    if(!it0||it0.type!=='bar')return {r:'skip'};
+    let it=it0;
     try{
       const srv=await sGet(it.rowKind==='insp'?(STOR+'insp'):storKey('sched',vsId));
       if(!srv||typeof srv!=='object')return {r:'wait'};
@@ -19254,6 +19284,9 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
       }
       if(!row||row.bookingStatus==='cancelled')return {r:'gone'};
       if(!sameCarLabel(it.kind==='rental'?(row.rentalLabel||''):(row.loaner||''),it.have))return {r:'gone'};
+      // ★期間はサーバーの予約カードの日付で決める。納車日が無くて期間が分からない予約には作らない（v3.138.1）
+      if(loanerSpanUnknown(it.rowKind,it.kind,row.deliveryDate))return {r:'noend'};
+      it={...it,ent:(row.entryDate||''),del:(row.deliveryDate||''),course:(row.course==null?'':row.course)};
       const last=hubRowStamp(row);
       if(last&&Date.now()-last<LOANER_AUTOFIX_WAIT)return {r:'wait'};
     }catch(e){ return {r:'wait'}; }
