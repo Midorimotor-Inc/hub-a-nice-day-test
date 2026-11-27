@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795744760228';
+    window.__APP_BUILD='build-1795745648699';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.137.0';
+const APP_VERSION = '3.137.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -16350,8 +16350,11 @@ function AppInner() {
   // ★スタッフカレンダーを開いた時は、まずログインしている人だけを出す（「全員」ボタンでいつでも切替・2026-09-30 ユーザー要望）
   useEffect(()=>{
     if(calView!=='staff'){ _calStaffInit.current=false; return; }
-    if(_calStaffInit.current)return;
-    _calStaffInit.current=true;
+    // ★店を切り替えた時も選び直す（v3.137.1・2026-11-27）。それまでは前の店の人の名前が選ばれたまま残り、
+    //   その人のカレンダーが【別の店のデータ】で開いていた。ここから休日を入れられるようになったので、
+    //   管理者がそのまま押すと、別の店の休日にその人の名前が入ってしまう。
+    if(_calStaffInit.current===vsId)return;
+    _calStaffInit.current=vsId;
     const me=currentUser&&currentUser.name;
     const list=(vsId==='honten'?dynStaffH:dynStaffS)||[];
     setCalStaffFilter(me&&list.some(x=>x&&x.name===me)?me:null);
@@ -20056,7 +20059,10 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 //   ★ここはログイン判定より後ろ＝フックを足さないこと（ふつうの関数で書く）。
                 const meNameV=currentUser&&currentUser.name;
                 const off1IsMe=!!calStaffFilter&&calStaffFilter===meNameV;
-                const off1CanEdit=!!calStaffFilter&&(canRestore(currentUser)||off1IsMe);
+                // ★休日を入れられるのは【いま見ている店の名簿に居る人】のカレンダーだけ（v3.137.1）。
+                //   名簿に居ない名前（前の店の人・名前を変える前の人）のカレンダーでは、管理者でも入れさせない。
+                const off1InRoster=!!calStaffFilter&&staffList.some(s=>s.name===calStaffFilter);
+                const off1CanEdit=off1InRoster&&(canRestore(currentUser)||off1IsMe);
                 const setOffCur=vsId==='honten'?setDayOffDataH:setDayOffDataS;
                 const setPlCur =vsId==='honten'?setPaidLeaveDataH:setPaidLeaveDataS;
                 const setTrnCur=vsId==='honten'?setTrainingDataH:setTrainingDataS;

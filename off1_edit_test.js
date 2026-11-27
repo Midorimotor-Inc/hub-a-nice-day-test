@@ -326,6 +326,16 @@ const ADM = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: 
   t('★人を変えると「押していない」に戻る（うっかりほかの人に付けない）', S.pick && S.hol === '0', S);
   await D.day(26);
   t('★そのまま日を押しても付かない', !(await D.has('honten-dayoff', 26, OTHER)));
+  // ★店を切り替えた時（v3.137.1）：前の店の人の名前を選んだまま、別の店のデータで開かない
+  await D.pick('全員'); await D.pick(ME); await D.kind('hol');
+  await pd.evaluate(() => { const b = [...document.querySelectorAll('header button')].find(e => e.innerText.replace(/s/g, '').indexOf('三田店') === 0 && e.offsetParent !== null); if (b) b.click(); });
+  await pd.waitForTimeout(1500);
+  const sw = await pd.evaluate(() => ({ view: (document.querySelector('[data-offview]') || { getAttribute: () => '' }).getAttribute('data-offview'), who: (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho'), hol: !!document.querySelector('[data-off1kind="hol"]') }));
+  t('★店を切り替えると、前の店の人のカレンダーは開いたままにならない（全員の表に戻る）', sw.view === 'all' && sw.who === '' && !sw.hol, sw);
+  t('★別の店の休日に、前の店の人の名前は入らない', !(await D.has('sanda-dayoff', 26, ME)) && !(await D.has('sanda-dayoff', 25, ME)));
+  await pd.evaluate(() => { const b = [...document.querySelectorAll('header button')].find(e => e.innerText.replace(/s/g, '').indexOf('本店') === 0 && e.offsetParent !== null); if (b) b.click(); });
+  await pd.waitForTimeout(1500);
+  t('本店に戻すと、自分のカレンダーに戻る（休日設定は押していない状態）', await pd.evaluate(() => (document.querySelector('[data-offprint]') || { getAttribute: () => '' }).getAttribute('data-offprintwho')) === ADMIN && (await D.st()).hol === '0');
   t('画面のエラーなし（管理者）', D.errs.length === 0, D.errs.slice(0, 2));
 
   head('⑭ スケジュールの 🏖（休日スタッフ）から、カレンダーの 🏖 休日 へ移れる');
@@ -345,6 +355,7 @@ const ADM = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: 
   t('★StaffCalendarModal（設定のモーダル）が無い', src.indexOf('const StaffCalendarModal') < 0 && src.indexOf('<StaffCalendarModal') < 0 && src.indexOf('setShowStaffCal') < 0);
   t('★「🏖 スタッフ休日設定」のボタンが無い', !/>\s*🏖 スタッフ休日設定\s*</.test(src));
   t('★休みを付ける・外す決まりは staffOffApply の1か所', src.split('const staffOffApply=').length - 1 === 1 && src.split('refillOffFromLeave(').length - 1 === 1, src.split('refillOffFromLeave(').length - 1);
+  t('★休日を入れられるのは、いま見ている店の名簿に居る人のカレンダーだけ（off1InRoster）', src.indexOf('const off1CanEdit=off1InRoster&&(canRestore(currentUser)||off1IsMe);') > 0 && src.indexOf('if(_calStaffInit.current===vsId)return;') > 0);
   t('★研修を休日の枠に入れない（staffOffApply の研修の枝は calcHolidayCarry を呼ばない）', (() => { const a = src.indexOf("if(kind==='training'){", src.indexOf('const staffOffApply=')), b = src.indexOf('return true;', a); return a > 0 && b > a && src.slice(a, b).indexOf('calcHolidayCarry') < 0; })());
 
   await browser.close(); server.close();
