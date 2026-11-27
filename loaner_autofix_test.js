@@ -11,6 +11,7 @@
 //     ⑦ ★納車日が無くて「いつまで貸すか」が分からない予約（整備・レンタカー）には作らない（v3.138.1）
 //        ユーザーの言葉：「1日だけにしてしまうと、空いているものと勘違いされ、そこに予定を入れられる。すごくまずい」。
 //        手で押した時は「1日だけになる」と先にたずねる／納車日を入れたら自動で作る
+//     ⑧ 他店の代車に作ったあと、ズレの一覧が古いまま残らない（v3.138.1）
 //   ★名前はすべて架空。実行: node loaner_autofix_test.js
 const path = require('path'), fs = require('fs'), http = require('http');
 let chromium;
@@ -45,11 +46,11 @@ const DD = (day) => ({ y: NX.getFullYear(), m: NX.getMonth(), d: day });
 const dk = (o) => o.y + '-' + (o.m + 1) + '-' + o.d;
 const inp = (o) => o.y + '-' + String(o.m + 1).padStart(2, '0') + '-' + String(o.d).padStart(2, '0');
 const Z = DD(3), A = DD(5), A2 = DD(7), B = DD(9), C = DD(12), E = DD(16), F = DD(19), G0 = DD(22), G = DD(23), H = DD(26);
-const O = DD(14), F2 = DD(21), G2 = DD(24), P = DD(27), P2 = DD(28);   // v3.138.1：納車日なし（O・P）／納車日（F2・G2・P2）
+const O = DD(14), F2 = DD(21), G2 = DD(24), P = DD(27), P2 = DD(28), Q = DD(2);   // v3.138.1：納車日なし（O・P）／納車日（F2・G2・P2）
 const CARS = [{ id: 1, name: 'ハスラーオフブルー', num: '8178' }, { id: 2, name: 'スペーシア', num: '4750' }, { id: 3, name: 'アルト', num: '5555' }];
 const RCARS = [{ id: 101, name: 'ノマド', num: '3101' }];
 const bar = (id, user, from, to, car, bk) => ({ id, user, fy: from.y, fm: from.m, fd: from.d, ty: to.y, tm: to.m, td: to.d, carName: car.name, carNum: car.num, bookingKey: bk });
-const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二郎', first: '先客　三郎', fresh: '直後　三子', rev: '逆向き　四郎', rent: 'レンタ　五郎', ghost: '幽霊　六郎', sched: '整備　七郎', quiet: '静か　八郎', open: '期限なし　十郎', ropen: '長期　十一郎' };
+const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二郎', first: '先客　三郎', fresh: '直後　三子', rev: '逆向き　四郎', rent: 'レンタ　五郎', ghost: '幽霊　六郎', sched: '整備　七郎', quiet: '静か　八郎', open: '期限なし　十郎', ropen: '長期　十一郎', other: '他店　十二郎' };
 
 (async () => {
   const insp0 = {
@@ -90,7 +91,7 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
     [STOR + 'honten-memo']: {}, [STOR + 'sanda-memo']: {},
     [STOR + 'honten-staff-v2']: [{ uid: 'h7', name: '江川京志', myNumber: 7, store: 'honten' }],
     [STOR + 'sanda-staff-v2']: [],
-    [STOR + 'honten-cars']: CARS, [STOR + 'sanda-cars']: [], [STOR + 'rentalcars']: RCARS,
+    [STOR + 'honten-cars']: CARS, [STOR + 'sanda-cars']: [{ id: 7, name: 'ワゴンR', num: '7007' }], [STOR + 'rentalcars']: RCARS,
     [STOR + 'honten-lres']: lres0,
     [STOR + 'sanda-lres']: {}, [STOR + 'rres']: {},
     [STOR + 'honten-cdow']: [], [STOR + 'honten-cdate']: [], [STOR + 'sanda-cdow-v2']: [], [STOR + 'sanda-cdate']: [],
@@ -276,6 +277,29 @@ const N = { dup: '二重　九郎', auto: '自動　一郎', busy: '塞ぎ　二
   const mP = barsFor(await get(STOR + 'rres'), N.ropen);
   t('★納車日を入れたら貸出ができた（入庫日〜納車日）', mP.length === 1 && mP[0]._car === '101' && mP[0].fd === P.d && mP[0].td === P2.d, mP);
   t('この間に alert・確認は増えていない', dialogs.length === 2, dialogs);
+
+  // ────────────────────────────────────────────────────────
+  head('⑪ 他店の代車に自動で作ったあと、ズレの一覧がその場で消える（v3.138.1）');
+  //   本番の実データで見つけた：三田店の代車に作った直後、本店の画面のズレの一覧が古いまま残り、
+  //   もう一度作ろうとして「ふさがっています」と出ていた（一覧の計算が他店の表の変化を見ていなかった）。
+  const cnt = async () => { const m = ((await syncBtn()) || '').match(/ズレ(\d+)件/); return m ? Number(m[1]) : 0; };
+  const c0 = await cnt();
+  await page.evaluate(([k, d, who]) => {
+    const v = JSON.parse(JSON.stringify(window.__fakeFb.get(k) || {}));
+    v[d] = [{ name: who, carType: 'ムーヴ', no: '8181', time: '09:00', course: 2, store: 'sanda', seq: 120, id: 120, loaner: 'ワゴンR (7007)', loanerId: 7 }];
+    window.__fakeFb.set(k, v);
+  }, [STOR + 'insp', dk(Q), N.other]);
+  await page.waitForTimeout(900);
+  const c1 = await cnt();
+  t('他店の代車を付けた予約がズレに出る', c1 === c0 + 1, [c0, c1]);
+  await page.waitForTimeout(6000);
+  const mQ = barsFor(await get(STOR + 'sanda-lres'), N.other);
+  t('★他店（三田店）の代車の表に貸出ができた', mQ.length === 1 && mQ[0]._car === '7' && mQ[0].fd === Q.d, mQ);
+  const c2 = await cnt();
+  t('★★作った直後に、ズレの件数が元に戻る（古い一覧が残らない）', c2 === c0, [c0, c1, c2]);
+  await clickText(page, 'スケジュールとズレ'); await page.waitForTimeout(800);
+  const list2 = await page.evaluate(() => { const e = document.querySelector('[data-synclist]'); return e ? { txt: e.innerText, no: [...e.querySelectorAll('[data-autofixno]')].map(x => x.innerText) } : null; });
+  t('★★作った人は一覧に残らない／「ふさがっています」が増えていない', !!list2 && list2.txt.indexOf(N.other) < 0 && list2.no.filter(x => /ふさがっています/.test(x)).length === 1, list2 && list2.no);
   t('画面のエラーは最後まで出ていない', errs.length === 0, errs.slice(0, 3));
 
   await browser.close(); server.close();

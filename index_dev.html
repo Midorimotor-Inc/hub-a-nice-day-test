@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795763672568';
+    window.__APP_BUILD='build-1795765694062';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.138.1';
+const APP_VERSION = '3.138.2';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -14170,7 +14170,11 @@ const LoanerGrid=memo(({loanerRes,loanerMonth,setLoanerMonth,onDeleteRes,onRepla
     Object.keys(schedData||{}).forEach(dk=>Object.keys(schedData[dk]||{}).forEach(sk=>rev(dk,sk,schedData[dk][sk],'sched')));
     // 日が分からないものは「本日以降」に入れる（黙って隠さない）
     return {now:out.filter(x=>!x.endNum||x.endNum>=TD), past:out.filter(x=>x.endNum&&x.endNum<TD)};
-  },[loanerRes,rentalRes,inspData,schedData,LOANERS_LOCAL,RENTAL_LOCAL]);
+  // ★他店の代車の表・他店の整備・見ている店も、変わったら計算し直す（v3.138.1）。
+  //   2026-10-14 に「両店を見る」ようにした時に、ここへ足し忘れていた。そのため他店の表だけが変わった時
+  //   （例：三田店入庫の予約に、本店の画面から貸出を作った）は、ズレの一覧が古いまま残っていた。
+  //   自動で貸出を作った直後に「まだ貸出が無い」と出続け、もう一度作ろうとして「ふさがっています」になる。
+  },[loanerRes,rentalRes,inspData,schedData,LOANERS_LOCAL,RENTAL_LOCAL,loanerResOther,loanersOther,schedOther,vsId]);
   const syncIssues=syncAll.now, syncPast=syncAll.past;
   // ── 自動で貸出を作る見回り（v3.138.0・2026-11-27 ユーザー決定「基準は予約カード」）──
   //   type:'bar'（スケジュールに代車があるのに貸出が無い）だけが相手。label・row には自動で触らない。
@@ -19212,6 +19216,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
     const nF=dnum(f), nT=dnum(e);
     const cur=isR?(rresRef.current||{}):((store==='honten'?lresHRef.current:lresSRef.current)||{});
     const clash=Object.values(cur[car.id]||{}).filter(r=>r&&resFromDays(r)!=null&&nF<=resToDays(r)&&nT>=resFromDays(r));
+    if(auto&&clash.some(r=>r&&r.bookingKey===it.bk&&r.user===it.user))return 'skip';   // この予約の帯がもうある（v3.138.1）
     if(clash.length){
       if(!auto){
         const who=clash.map(r=>(r.user||'(名前なし)')+'（'+(r.fm+1)+'/'+r.fd+'〜'+((r.tm==null?r.fm:r.tm)+1)+'/'+(r.td==null?r.fd:r.td)+'）').join('、');
