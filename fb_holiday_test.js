@@ -18,6 +18,21 @@ let pass = 0, fail = 0;
 const t = (label, ok, extra) => { if (ok) { pass++; console.log('  ✔ ' + label); } else { fail++; console.log('  ✖ ' + label, extra === undefined ? '' : JSON.stringify(extra).slice(0, 400)); } };
 const seeText = async (page, s, ms = 8000) => { try { await page.waitForFunction(x => document.body.innerText.includes(x), s, { timeout: ms }); return true; } catch (e) { return false; } };
 const clickText = (page, s) => page.evaluate(x => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.includes(x)); if (b) { b.click(); return true; } return false; }, s);
+// ★v3.135.0（2026-11-27）：設定の「スタッフ休日・有給カレンダー」はなくした。
+//   入れる所＝カレンダー → 🏖 休日 →（開いた時点で自分が選ばれている）→ 右の箱の「🏖 休日設定」→ 日を押す。
+const pcOpenOff = async (page) => {
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('カレンダー') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 16); if (b) b.click(); });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
+  await page.waitForTimeout(900);
+  const ok = await page.waitForSelector('[data-offview="one"] [data-off1kind="hol"]', { timeout: 5000 }).then(() => true).catch(() => false);
+  if (ok) { await page.click('[data-off1kind="hol"]'); await page.waitForTimeout(300); }
+  return ok && await page.evaluate(() => (document.querySelector('[data-off1kind="hol"]') || { getAttribute: () => '' }).getAttribute('data-on') === '1');
+};
+const pcDay = async (page, d) => { await page.click('[data-off1day="' + d + '"]', { position: { x: 30, y: 12 } }); return true; };
+// 右の集計（休日・有給の数と、繰り越しの札）
+const pcSum = (page) => page.evaluate(() => { const num = s => { const e = document.querySelector(s); return e ? Number((e.innerText.match(/(\d+)\s*日/) || [])[1]) : null; };
+  const cy = document.querySelector('[data-off1sumcarry]'); return { off: num('[data-off1sumoff]'), lv: num('[data-off1sumleave]'), carry: cy ? cy.innerText.replace(/\s+/g, '') : '' }; });
 const now = new Date();
 const Y = now.getFullYear(), M = now.getMonth();
 // 今月の中で店休日（水曜・第2火曜・年末年始など）に当たらない平日を2つ選ぶ（月〜金・かつ 5日以降）
@@ -182,19 +197,19 @@ const signedInInit = ([k, me, stor]) => {
     // ★v3.134.2（2026-11-26 ユーザー指示）：「うち店休いくらとかの表示は不必要。店休を含めた休日の合計を休日として表示」
     //   → 個人の集計に（うち店休日○＋繰り越し休日○）の内訳は出さない。繰り越しのバッジは今までどおり出す。
     t('PC：個人の集計に繰り越しのバッジが出る（内訳「うち…」は出さない）', await seeText(page, '月の集計', 5000) && await page.evaluate(() => { const e = document.querySelector('[data-off1sum]'); const tx = e ? e.innerText : ''; return /繰り越し\d+日 →翌月へ/.test(tx) && !/うち|繰り越し休日|店休日/.test(tx) && !/枠 \d+日/.test(document.body.innerText); }), await page.evaluate(() => (document.body.innerText.match(/月の集計[^]{0,200}/) || [''])[0]));
-    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('設定') && el.textContent.length < 6 && el.offsetParent !== null); if (b) b.click(); });
-    await page.waitForTimeout(500);
-    await clickText(page, 'スタッフ休日設定');
-    t('PC：スタッフ休日カレンダーが開く', await seeText(page, 'スタッフ休日・有給カレンダー', 5000));
-    t('PC：休みの日に ✎ が出る', await page.evaluate(() => [...document.querySelectorAll('span')].some(el => el.textContent === '✎' && el.offsetParent !== null)));
-    await page.evaluate(d => { const pens = [...document.querySelectorAll('span')].filter(el => el.textContent === '✎' && el.offsetParent !== null); const pen = pens.find(el => { let c = el; for (let i = 0; i < 4 && c; i++) c = c.parentElement; return c && c.textContent.trim().startsWith(String(d)); }) || pens[0]; if (pen) pen.click(); }, D1);
-    t('PC：メモの入力欄が出る', await seeText(page, 'のメモ', 3000));
+    t('PC：設定のモーダルは無い（「⚙ 設定」も 🏖 休日 では出さない）', await page.evaluate(() => !document.querySelector('[data-calgear]') && !/スタッフ休日設定/.test(document.body.innerText)));
+    t('PC：休日設定を押す前は ✎ メモ を出さない', !(await page.$('[data-off1pen]')));
+    await page.click('[data-off1kind="hol"]'); await page.waitForTimeout(400);
+    t('PC：「🏖 休日設定」を押すと、休みの日に ✎ メモ が出る', !!(await page.$('[data-off1pen="' + D1 + '"]')));
+    await page.click('[data-off1pen="' + D1 + '"]');
+    t('PC：メモの入力欄が出る', await seeText(page, 'のメモ', 3000) && !!(await page.$('[data-off1memoinput]')));
     await page.fill('input[placeholder*="午後休"]', '前月分');
-    await clickText(page, '保存');
+    await page.click('[data-off1memosave]');
     t('PC：メモが {店}-offnote に保存される', await page.waitForFunction(([k, dk]) => (window.__fakeFb.get(k + 'honten-offnote') || {})[dk + '::江川京志'] === '前月分', [STOR, DK1], { timeout: 8000 }).then(() => true).catch(() => false), await offnote(page));
-    t('PC：セルにメモが出る', await seeText(page, '📝 前月分', 3000));
+    t('PC：セルにメモが出る', await page.waitForFunction(d => { const e = document.querySelector('[data-off1day="' + d + '"]'); return !!e && /📝\s*前月分/.test(e.innerText); }, D1, { timeout: 3000 }).then(() => true).catch(() => false));
+    t('PC：メモを書いても休日は外れない', await page.evaluate(([k, dk]) => ((window.__fakeFb.get(k + 'honten-dayoff') || {})[dk] || []).includes('江川京志'), [STOR, DK1]), await dayoff(page));
     await page.screenshot({ path: path.join(DIR, 'smoke-holiday-pc.png') });
-    t('PC：月次集計に繰越バッジが出る', await page.evaluate(() => /繰越\d+日/.test(document.body.innerText)));
+    t('PC：集計に繰り越しの札が出たまま', /繰り越し\d+日/.test((await pcSum(page)).carry), await pcSum(page));
     t('PC：JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
     await ctx.close();
   }
@@ -212,25 +227,20 @@ const signedInInit = ([k, me, stor]) => {
     await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
     await seeText(page, '江川京志', 20000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
     await seeText(page, 'スケジュール', 20000);
-    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('カレンダー') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 16); if (b) b.click(); });
-    await page.waitForTimeout(1200);
-    await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('設定') && el.textContent.length < 6 && el.offsetParent !== null); if (b) b.click(); });
-    await page.waitForTimeout(400);
-    await clickText(page, 'スタッフ休日設定');
-    t('自動有給：スタッフ休日カレンダーが開く', await seeText(page, 'スタッフ休日・有給カレンダー', 5000));
-    const summary = () => page.evaluate(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el ? el.textContent : ''; });   // 月次集計の江川のチップ
-    const clickDay = d => page.evaluate(d => { const sp = [...document.querySelectorAll('span')].find(el => el.textContent.trim() === String(d) && el.offsetParent !== null && el.closest('.modal-box')); let c = sp; for (let i = 0; i < 6 && c; i++) { if (c.onclick || (c.getAttribute && c.style && c.style.cursor === 'pointer')) break; c = c.parentElement; } if (c) c.click(); return !!c; }, d);
-    t(`自動有給：最初は「繰越1日」（会社${closedN + 2}・取得${closedN + 1}）`, await page.waitForFunction(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el && /繰越1日/.test(el.textContent); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await summary());
+    t('自動有給：🏖 休日 の自分のカレンダーで「休日設定」を押せる', await pcOpenOff(page));
+    const summary = () => pcSum(page);   // 右の集計
+    const clickDay = d => pcDay(page, d);
+    t(`自動有給：最初は「繰り越し1日」（会社${closedN + 2}・取得${closedN + 1}）`, await page.waitForFunction(() => { const e = document.querySelector('[data-off1sumcarry]'); return !!e && /繰り越し1日/.test(e.innerText.replace(/\s+/g, '')); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await summary());
     await clickDay(D2); await page.waitForTimeout(400);
-    t('自動有給：D2 を押した瞬間にバッジが消える（使い切り）', await page.waitForFunction(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el && !/繰越\d+日/.test(el.textContent) && /休\d+日/.test(el.textContent);}, null, { timeout: 3000 }).then(() => true).catch(() => false), await summary());
+    t('自動有給：D2 を押した瞬間に繰り越しの札が消える（使い切り）', await page.waitForFunction(() => { const e = document.querySelector('[data-off1sumcarry]'); return !e || !/繰り越し\d+日/.test(e.innerText.replace(/\s+/g, '')); }, null, { timeout: 3000 }).then(() => true).catch(() => false), await summary());
     await clickDay(D3); await page.waitForTimeout(400);
     t('自動有給：枠を使い切った後の D3 は休日ではなく有給に入る', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return (p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
     t('自動有給：「有給として入れました」のお知らせが出る', await seeText(page, '有給として入れました', 3000));
-    t('自動有給：集計に 有1日 が出て、超過にならない', await page.evaluate(() => /有1日/.test(document.body.innerText) && !/超過/.test(document.body.innerText)), await summary());
+    t('自動有給：集計の有給が 1日 になり、超過にならない', (await summary()).lv === 1 && await page.evaluate(() => !/超過/.test(document.body.innerText)), await summary());
     // 2026-09-28：自動で有給になった日も「🏖 休日」のままもう一度押して解除できる（有給ボタンに切り替えなくてよい）
     await clickDay(D3); await page.waitForTimeout(500);
     t('自動有給：もう一度押すと（休日のまま）有給から外れる', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; return !(p[dk] || []).includes('江川京志') && !(o[dk] || []).includes('江川京志'); }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
-    t('自動有給：外したあとは集計から 有 が消える', await page.waitForFunction(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el && !/有\d+日/.test(el.textContent); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await summary());
+    t('自動有給：外したあとは集計の有給が 0日 に戻る', await page.waitForFunction(() => { const e = document.querySelector('[data-off1sumleave]'); return !!e && /(^|\D)0\s*日/.test(e.innerText); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await summary());
     await clickDay(D3); await page.waitForTimeout(500);
     t('自動有給：もう一度押すとまた有給として入る（行ったり来たりできる）', await page.waitForFunction(([k, dk]) => { const p = window.__fakeFb.get(k + 'honten-pleave') || {}; return (p[dk] || []).filter(n => n === '江川京志').length === 1; }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), await pleave(page));
     t('自動有給：JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
@@ -273,15 +283,10 @@ const signedInInit = ([k, me, stor]) => {
     const openCal = async (page) => {
       await seeText(page, '江川京志', 20000); await clickText(page, '江川京志'); await clickText(page, 'でログイン');
       await seeText(page, 'スケジュール', 20000);
-      await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('カレンダー') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 16); if (b) b.click(); });
-      await page.waitForTimeout(1200);
-      await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('設定') && el.textContent.length < 6 && el.offsetParent !== null); if (b) b.click(); });
-      await page.waitForTimeout(400);
-      await clickText(page, 'スタッフ休日設定');
-      return await seeText(page, 'スタッフ休日・有給カレンダー', 5000);
+      return await pcOpenOff(page);
     };
-    const clickDay = (page, d) => page.evaluate(d => { const sp = [...document.querySelectorAll('span')].find(el => el.textContent.trim() === String(d) && el.offsetParent !== null && el.closest('.modal-box')); let c = sp; for (let i = 0; i < 6 && c; i++) { if (c.onclick || (c.getAttribute && c.style && c.style.cursor === 'pointer')) break; c = c.parentElement; } if (c) c.click(); return !!c; }, d);
-    const chip = page => page.evaluate(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el ? el.textContent : ''; });
+    const clickDay = (page, d) => pcDay(page, d);
+    const chip = page => pcSum(page);
 
     // ── 6-A（本件）：枠ちょうど（休日2日＋店休日）＋あふれた有給1日 → 休日を1日外すと有給が休日に戻る
     {
@@ -297,14 +302,14 @@ const signedInInit = ([k, me, stor]) => {
       const errs = []; page.on('pageerror', e => errs.push(String(e)));
       page.on('dialog', async d => { errs.push('dialog:' + d.message()); await d.accept().catch(() => {}); });
       await page.goto('http://localhost:' + PORT + '/index_dev.html', { waitUntil: 'domcontentloaded' });
-      t('繰越の直し：スタッフ休日カレンダーが開く', await openCal(page));
-      t('繰越の直し：外す前は使い切りなので繰越バッジが出ない', await page.evaluate(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return !!el && !/繰越\d+日/.test(el.textContent); }), await chip(page));
+      t('繰越の直し：🏖 休日 の自分のカレンダーで「休日設定」を押せる', await openCal(page));
+      t('繰越の直し：外す前は使い切りなので繰り越しの札が出ない', !/繰り越し\d+日/.test((await chip(page)).carry) && (await chip(page)).lv === 1, await chip(page));
       await clickDay(page, D2); await page.waitForTimeout(600);
       t('繰越の直し：★あふれていた有給が休日に戻る', await page.waitForFunction(([k, dk]) => { const o = window.__fakeFb.get(k + 'honten-dayoff') || {}; const p = window.__fakeFb.get(k + 'honten-pleave') || {}; return (o[dk] || []).includes('江川京志') && !(p[dk] || []).includes('江川京志'); }, [STOR, DK3], { timeout: 8000 }).then(() => true).catch(() => false), [await dayoff(page), await pleave(page)]);
       t('繰越の直し：外した日は休日から消えている', await page.evaluate(([k, dk]) => !((window.__fakeFb.get(k + 'honten-dayoff') || {})[dk] || []).includes('江川京志'), [STOR, DK2]), await dayoff(page));
-      t('繰越の直し：★「繰越1日」が出ない（合計は変わっていないため）', await page.waitForFunction(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return el && !/繰越\d+日/.test(el.textContent) && !/繰り越し\d+日 →翌月へ/.test(document.body.innerText); }, null, { timeout: 5000 }).then(() => true).catch(() => false), await chip(page));
+      t('繰越の直し：★「繰り越し1日」が出ない（合計は変わっていないため）', await page.waitForFunction(() => !/繰り越し\d+日\s*→翌月へ/.test(document.body.innerText) && !document.querySelector('[data-off1sumcarry]'), null, { timeout: 5000 }).then(() => true).catch(() => false), await chip(page));
       t('繰越の直し：戻したことを画面で知らせる', await seeText(page, '有給を休日に戻しました', 3000));
-      t('繰越の直し：集計から 有 が消える', await page.evaluate(() => { const el = [...document.querySelectorAll('span')].find(e => e.firstElementChild && e.firstElementChild.textContent === '江川京志' && e.textContent.includes('休')); return !!el && !/有\d+日/.test(el.textContent); }), await chip(page));
+      t('繰越の直し：集計の有給が 0日 になる', (await chip(page)).lv === 0, await chip(page));
       t('繰越の直し：JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
       await ctx.close();
     }
@@ -367,7 +372,8 @@ const signedInInit = ([k, me, stor]) => {
       t('見張り：★PC は「前が枠いっぱい」を見てから戻す（wasFull）', pc.indexOf('const wasFull=') > 0 && pc.indexOf('const back=wasFull?refillOffFromLeave(') > 0);
       t('見張り：★スマホも「前が枠いっぱい」と「休日を外した」の両方を見る', mb.indexOf('if(!I.offCleared||!I.wasFull)continue;') > 0);
       t('見張り：日付の遅い有給から戻す（reverse）', pc.indexOf('return days.reverse().slice(') > 0 && mb.indexOf('return days.reverse().slice(') > 0);
-      const cut = x => { const i = x.indexOf('const refillOffFromLeave='); const j = x.indexOf('\n};', i); return x.slice(i, j); };
+      // ★改行の種類（index_dev は LF・mobile は CRLF）の違いは見ない。中身だけを比べる（2026-11-27：それまで改行の差で落ちていた）
+      const cut = x => { x = x.replace(/\r/g, ''); const i = x.indexOf('const refillOffFromLeave='); const j = x.indexOf('\n};', i); return x.slice(i, j); };
       t('見張り：PC とスマホで中身が1文字も違わない', cut(pc) === cut(mb));
     }
   }

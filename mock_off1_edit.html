@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>[モック] 休日の画面から 休日・予定を入れる</title>
+<!--
+  モック：🏖 休日 → 個人のカレンダー から、休日・有給・予定を入れる（2026-11-26 ユーザー要望）
+    「設定 → スタッフ休日設定 に画面が飛ぶのをやめて、休日のボタンで出る個人のカレンダーを見ながら 休日・有給を付けたい」
+    「この画面から予定も入れたい（個人の予定も会社の予定も一度に見える）」
+    「予定の内容が多い時は、なぞったらポップが出るように」
+  ★名前・予定は架空。本物のデータは使っていない。押すと本当に動く（このページの中だけ。保存はされない）。
+  ★「自分」は 山田太郎 さん（一般スタッフ）の想定。ほかの人を選ぶと見るだけになる。
+  アドレスの後ろに ?m=a&p=item&o=1&hide=1&open=18&pop=12 と付けると、その状態で開く（撮影用）。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic UI','Meiryo',sans-serif;color:#1b2129;background:#f3f4f6;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;cursor:pointer}
+/* ── モックの切替（本物には無い） ── */
+#ctl{flex-shrink:0;background:#111827;color:#fff;padding:6px 12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px}
+#ctl b{color:#fde68a}
+#ctl .g{display:flex;gap:4px;align-items:center}
+#ctl button{font-weight:700;padding:4px 10px;border-radius:14px;border:1.5px solid #6b7280;background:#1f2937;color:#e5e7eb}
+#ctl button.on{background:#fde68a;color:#111827;border-color:#fde68a}
+#ctl .note{margin-left:auto;color:#9ca3af;font-size:11px}
+body.hide #ctl{display:none}
+/* ── Hub の上の帯（まね） ── */
+#hd{flex-shrink:0;background:#EA580C;color:#fff}
+#hd .r1{display:flex;align-items:center;gap:10px;padding:7px 14px;font-weight:800;font-size:15px}
+#hd .r1 small{font-weight:600;font-size:11px;opacity:.85}
+#hd .r2{display:flex;gap:6px;padding:0 14px 8px}
+#hd .r2 span{background:rgba(255,255,255,.2);border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:700}
+#hd .r2 span.on{background:#fff;color:#c2410c}
+/* ── カレンダー画面の見出しの行 ── */
+#cal{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;margin:8px 10px 10px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#bar{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 18px 10px}
+#bar .l{flex:1;display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:11px}
+#bar .l b{font-size:11px;color:#374151}
+#bar .l span.w{padding:3px 9px;border-radius:6px;border:2px solid #d1d5db;background:#fff;font-weight:500;color:#374151;cursor:pointer}
+#bar .l span.w.on{border-color:#c2410c;background:#eef2ff;color:#c2410c;font-weight:700}
+#bar .l .lg{display:flex;align-items:center;gap:4px;font-size:10px;color:#6b7280;margin-left:4px}
+#bar .l .lg i{width:11px;height:11px;border-radius:2px;display:inline-block}
+#bar .c{display:flex;align-items:center;gap:6px}
+#bar .c button{border:1.5px solid #d1d5db;background:#fff;border-radius:8px;padding:4px 10px;font-weight:700}
+#bar .c .mon{font-size:20px;font-weight:800;padding:0 8px;white-space:nowrap}
+#bar .r{flex:1;display:flex;gap:6px;justify-content:flex-end;align-items:center}
+#bar .r span{font-size:11px;font-weight:600;padding:5px 9px;border-radius:7px;border:2px solid #e5e7eb;color:#6b7280;white-space:nowrap}
+#bar .r span.on{background:#fff7ed;border-color:#f97316;color:#ea580c;font-weight:800}
+#bar .r span.pr{background:#1f2937;border-color:#1f2937;color:#fff;font-weight:800}
+#bar .r span.gone{text-decoration:line-through;opacity:.45}
+/* ── 個人のカレンダー ── */
+#area{flex:1;min-height:0;display:flex;justify-content:center;align-items:stretch;gap:12px;padding:0 18px 16px}
+#grid{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;border:2px solid #64748b;border-radius:9px;overflow:hidden;background:#fff}
+#dow{flex-shrink:0;height:40px;display:grid;grid-template-columns:repeat(7,1fr);background:linear-gradient(90deg,#fff7ed,#fef9f0);border-bottom:2px solid #64748b}
+#dow div{display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.wk{flex:1 1 0;min-height:66px;display:grid;grid-template-columns:repeat(7,1fr)}
+.c{padding:5px 4px;overflow:hidden;position:relative;background:#fff;cursor:pointer}
+.c.e{background:#f9fafb;cursor:default}
+.c:not(.e):not(.cl):hover{filter:brightness(.96)}
+.c .n{font-weight:800;font-size:14px;margin-bottom:3px;display:flex;align-items:center;gap:3px;height:20px}
+.c .n i{margin-left:auto;font-style:normal;font-size:13px}
+.c .n .pen{margin-left:2px;font-size:10px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fdba74;border-radius:4px;padding:0 4px;display:none}
+.c.off:hover .n .pen,.c.lv:hover .n .pen{display:inline}
+body.ro .c .n .pen{display:none !important}
+.c.cl{background:#fecaca;box-shadow:inset 4px 0 0 #b91c1c;cursor:not-allowed}
+.c.cl .n{color:#991b1b}
+.c.cl .mk{text-align:center;font-size:11px;font-weight:800;color:#991b1b;margin:-2px 0 3px}
+.c.off{background:#fdba74;outline:2px solid #ea580c;outline-offset:-2px}
+.c.lv{background:#86efac;outline:2px solid #15803d;outline-offset:-2px}
+.c.tr{background:#f9f0ff;outline:2px solid #7e22ce;outline-offset:-2px}
+.c.td{outline:4px solid #c2410c;outline-offset:-4px;border-radius:10px;z-index:3}
+.c.sel{box-shadow:inset 0 0 0 3px #2563eb;z-index:4}
+.chip{display:flex;align-items:center;gap:3px;padding:2px 5px;border-radius:4px;font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;background:#fff;margin-bottom:2px;height:19px}
+.chip em{font-style:normal;width:14px;height:14px;border-radius:3px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0}
+.chip.o{border:1px solid #ea580c;color:#92400e}.chip.o em{background:#f97316}
+.chip.l{border:1px solid #15803d;color:#065f46}.chip.l em{background:#10b981}
+.chip.t{border:1px solid #7e22ce;color:#581c87;background:#f9f0ff}.chip.t em{background:#7e22ce}
+.chip .memo{font-weight:600;font-size:9px;overflow:hidden;text-overflow:ellipsis}
+/* 予定の札（色は今の 📝 予定 と同じ：共有＝水色／マイ＝ピンク／他の人＝灰色） */
+.sc{font-size:10.5px;padding:2px 5px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;height:19px;line-height:14px;border:1px solid;cursor:pointer}
+.sc b{margin-right:3px}
+.sc.mine{background:#cffafe;border-color:#22d3ee;color:#155e75;font-weight:700}
+.sc.priv{background:#fce7f3;border-color:#f472b6;color:#9d174d;font-weight:700}
+.sc.other{background:#f3f4f6;border-color:#e5e7eb;color:#374151}
+.sc.other small{color:#9ca3af;margin-left:3px}
+.more{font-size:10px;font-weight:700;color:#475569;background:rgba(255,255,255,.85);border-radius:4px;padding:0 5px;display:inline-block;cursor:pointer}
+/* ── 右の列 ── */
+#side{flex:0 0 auto;width:236px;align-self:flex-start;max-height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+body.mc #side{width:310px;align-self:stretch}
+.mh{border:2px solid #22c55e;border-radius:9px;background:#f0fdf4;color:#14532d;padding:8px 12px;font-weight:800;font-size:12.5px;line-height:1.5}
+.mh big{font-size:20px;font-weight:900}
+.mh u{float:right;text-decoration:none;font-size:11px;color:#fff;background:#15803d;border-radius:6px;padding:2px 9px;margin-top:4px}
+.sum{border:2px solid #22c55e;border-radius:9px;background:#f0fdf4;overflow:hidden}
+.sum h4{margin:0;padding:8px 12px;background:#bbf7d0;color:#14532d;font-size:13px;font-weight:800;line-height:1.5;border-bottom:2px solid #22c55e}
+.sum .b{display:flex;flex-direction:column;gap:8px;padding:10px 10px 12px}
+body.mc .sum .b{flex-direction:row;flex-wrap:wrap;gap:6px}
+body.mc .sum .tile{flex:1 1 44%;padding:5px 9px}
+.tile{border-radius:9px;padding:7px 11px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;background:#fff}
+.tile big{font-size:20px;font-weight:900}
+.t1{background:#fdba74;border:2px solid #ea580c;color:#7c2d12}
+.t2{background:#86efac;border:2px solid #15803d;color:#14532d}
+.t3{background:#eef2ff;border:1px solid #a5b4fc;color:#c2410c}
+.t4{border:2px solid #93c5fd;color:#1d4ed8;font-size:12px}
+/* A案：入れるものを選ぶ箱 */
+.pick{border:2px solid #2563eb;border-radius:9px;background:#eff6ff;overflow:hidden}
+.pick h4{margin:0;padding:7px 12px;background:#dbeafe;color:#1e3a8a;font-size:12.5px;font-weight:800;border-bottom:2px solid #2563eb}
+.pick .b{display:flex;flex-direction:column;gap:6px;padding:9px 10px 10px}
+.pick button{display:flex;align-items:center;gap:7px;padding:11px 12px;border-radius:10px;border:2px solid #cbd5e1;background:#fff;color:#334155;font-weight:800;font-size:14.5px;text-align:left}
+.pick button small{margin-left:auto;font-size:10px;font-weight:600;opacity:.8}
+.pick button.on.k-sched{border-color:#0891b2;background:#cffafe;color:#155e75;font-weight:900}
+.pick button.on.k-hol{border-color:#ea580c;background:#fdba74;color:#7c2d12;font-weight:900}
+.pick .sub{display:flex;gap:4px;margin:-1px 0 0 0}
+.pick .sub button{flex:1;justify-content:center;gap:3px;padding:6px 2px;font-size:12px;font-weight:700;border-radius:8px;color:#6b7280}
+.pick .sub button.on.h-off{border-color:#ea580c;background:#fdba74;color:#7c2d12;font-weight:900}
+.pick .sub button.on.h-lv{border-color:#15803d;background:#86efac;color:#14532d;font-weight:900}
+.pick .sub button.on.h-tr{border-color:#7e22ce;background:#f5e8ff;color:#7e22ce;font-weight:900}
+body.k-hol .c:not(.e):not(.cl){cursor:cell}
+.pick p{margin:0;padding:0 11px 9px;font-size:10.5px;color:#475569;line-height:1.6}
+.ro{border:2px solid #cbd5e1;border-radius:9px;background:#f8fafc;color:#475569;font-size:11.5px;font-weight:700;line-height:1.7;padding:9px 12px}
+/* ── その日の箱（B＝マスのそばに浮く／C＝右の列／A＝真ん中の窓） ── */
+.day{background:#fff;border:2px solid #2563eb;border-radius:11px;overflow:hidden;font-size:12px}
+.day h4{margin:0;padding:8px 12px;background:#dbeafe;color:#1e3a8a;font-size:14px;font-weight:900;display:flex;align-items:center}
+.day h4 button{margin-left:auto;border:none;background:#fff;border-radius:50%;width:24px;height:24px;font-size:12px}
+.day .b{padding:10px 12px 12px}
+.day .lab{font-size:11px;font-weight:800;color:#374151;margin:0 0 5px}
+.day .kb{display:flex;gap:5px;margin-bottom:6px}
+.day .kb button{flex:1;padding:8px 2px;border-radius:8px;border:2px solid #d1d5db;background:#fff;color:#6b7280;font-weight:700;font-size:12px}
+.day .kb button.on.k-off{border-color:#ea580c;background:#fdba74;color:#7c2d12;font-weight:900}
+.day .kb button.on.k-lv{border-color:#15803d;background:#86efac;color:#14532d;font-weight:900}
+.day .kb button.on.k-tr{border-color:#7e22ce;background:#f5e8ff;color:#7e22ce;font-weight:900}
+.day .hint{font-size:10.5px;color:#64748b;margin:0 0 9px}
+.day input,.day textarea{font:inherit;font-size:14px;width:100%;padding:7px 10px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff}
+.day hr{border:none;border-top:1.5px dashed #cbd5e1;margin:10px 0}
+.it{display:flex;gap:7px;align-items:flex-start;padding:7px 9px;margin-bottom:4px;border-radius:9px;border:1.5px solid;border-left-width:4px}
+.it .tm{width:62px;flex-shrink:0;font-size:11px;font-weight:800;line-height:1.35}
+.it .tx{flex:1;min-width:0;font-weight:800;font-size:12.5px;word-break:break-all}
+.it .tx small{display:block;font-weight:500;font-size:11px;color:#4b5563;white-space:pre-wrap;margin-top:2px}
+.it .tx em{font-style:normal;font-size:10px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:5px;color:#fff}
+.it button{flex-shrink:0;padding:3px 8px;border-radius:6px;border:1px solid #d1d5db;background:#fff;font-size:11px}
+.it.mine{background:#cffafe;border-color:#22d3ee;border-left-color:#0e7490;color:#155e75}.it.mine em{background:#0891b2}
+.it.priv{background:#fce7f3;border-color:#f472b6;border-left-color:#be185d;color:#9d174d}.it.priv em{background:#db2777}
+.it.other{background:#fff;border-color:#e5e7eb;border-left-color:#9ca3af;color:#6b7280}.it.other em{background:#9ca3af}
+.add{width:100%;padding:9px 0;border-radius:9px;border:1.5px dashed #22d3ee;background:#cffafe;color:#155e75;font-weight:800;font-size:12px;margin-top:4px}
+.form{margin-top:6px;padding:10px;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;display:flex;flex-direction:column;gap:6px}
+.form .tmr{display:flex;gap:6px;align-items:center}
+.form .tmr input{width:78px;text-align:center}
+.form .two{display:flex;gap:6px}
+.form .two button{flex:1;padding:7px 4px;border-radius:8px;border:2px solid #e5e7eb;background:#fff;color:#6b7280;font-weight:700;font-size:12px}
+.form .two button.on.pub{border-color:#0e7490;background:#cffafe;color:#155e75}
+.form .two button.on.prv{border-color:#be185d;background:#fce7f3;color:#9d174d}
+.form .ok{display:flex;gap:6px}
+.form .ok button{padding:9px 12px;border-radius:8px;border:1px solid #d1d5db;background:#fff;font-size:12px}
+.form .ok button.go{flex:1;border:none;background:#0891b2;color:#fff;font-weight:800;font-size:13px}
+#float{position:fixed;z-index:50;width:330px;box-shadow:0 12px 40px rgba(0,0,0,.35);border-radius:11px;display:none}
+#dim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:none}
+#dim.clear{background:transparent}
+/* ── なぞった時のポップ ── */
+#pop{position:fixed;z-index:80;max-width:340px;min-width:220px;background:#1f2937;color:#fff;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6;box-shadow:0 10px 30px rgba(0,0,0,.4);display:none;pointer-events:none}
+#pop h5{margin:0 0 6px;font-size:12px;color:#fde68a}
+#pop .p{padding:5px 0;border-top:1px solid #374151}
+#pop .p:first-of-type{border-top:none;padding-top:0}
+#pop .p b{font-size:13px}
+#pop .p i{font-style:normal;font-size:10px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:5px;white-space:nowrap;display:inline-block}
+#pop .p i.mine{background:#0891b2}#pop .p i.priv{background:#db2777}#pop .p i.other{background:#6b7280}
+#pop .p div{color:#d1d5db;white-space:pre-wrap;font-size:11.5px}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1f2937;color:#fff;font-size:13px;font-weight:700;padding:9px 18px;border-radius:20px;z-index:90;display:none}
+</style>
+</head>
+<body>
+<div id="ctl">
+  <b>▼ モックの切替（本物には出ません）</b>
+  <div class="g">① なぞった時：
+    <button data-k="p" data-v="item">ア その予定だけ</button>
+    <button data-k="p" data-v="day">イ その日の全部</button>
+  </div>
+  <div class="g">② 他の人の共有予定：
+    <button data-k="o" data-v="1">出す</button>
+    <button data-k="o" data-v="0">出さない</button>
+  </div>
+  <span class="note">名前・予定は架空です／押すと動きます（保存はされません）</span>
+</div>
+<div id="hd">
+  <div class="r1">Hub a Nice Day <small>⚠ スケジュールシステム テスト版</small></div>
+  <div class="r2"><span class="on">カレンダー</span><span>週間カレンダー</span><span>スケジュール</span><span>代車管理</span><span>検索</span><span>顧客リスト</span><span>料金表</span></div>
+</div>
+<div id="cal">
+  <div id="bar">
+    <div class="l" id="who"></div>
+    <div class="c"><button id="pv">‹</button><span class="mon" id="mon"></span><button id="nx">›</button></div>
+    <div class="r"><span class="pr" id="prn"></span><span>🚗 車検</span><span class="on">🏖 休日</span><span>📝 予定</span><span>⚙ 設定</span></div>
+  </div>
+  <div id="area">
+    <div id="grid"></div>
+    <div id="side"></div>
+  </div>
+</div>
+<div id="dim"></div>
+<div id="float"></div>
+<div id="pop"></div>
+<div id="toast"></div>
+<script>
+var Q=new URLSearchParams(location.search);
+var S={m:'a',p:Q.get('p')||'item',o:Q.get('o')||'1'};
+if(Q.get('hide'))document.body.classList.add('hide');
+var now=new Date(), Y=2026, M=10;          // 2026年11月から
+var ME='山田太郎', PEOPLE=['山田太郎','佐藤花子','鈴木一郎','高橋次郎','田中三郎'];
+var who=ME, kind='', hk='off', selDay=null, form=null;   // kind：''＝どちらも押していない／'sched'＝予定／'hol'＝休日設定。hk＝休日設定で付けるもの
+var DOW=['日','月','火','水','木','金','土'];
+var QUOTA=9;
+// 休み（架空）。 OFF[氏名]['Y-M-D']='off'|'lv'|'tr'
+var OFF={}, NOTE={};
+PEOPLE.forEach(function(n,i){OFF[n]={};});
+[4,11,18,25,6,20].forEach(function(d){OFF[ME]['2026-11-'+d]='off';});
+OFF[ME]['2026-11-17']='lv'; OFF[ME]['2026-11-27']='tr'; NOTE[ME+'/2026-11-17']='病院';
+[5,12,19,26,9,23].forEach(function(d){OFF['佐藤花子']['2026-11-'+d]='off';});
+[2,9,16,30,13].forEach(function(d){OFF['鈴木一郎']['2026-11-'+d]='off';});
+// 予定（架空）
+var SC=[
+ {id:1,dk:'2026-11-5',time:'10:00',end:'11:30',title:'○○商事 来店 見積もりの説明',memo:'担当：営業の山本さん\n見積書を2部用意。前回の値引きの話の続き。',owner:ME},
+ {id:2,dk:'2026-11-5',time:'15:00',end:'',title:'陸運局 書類の提出',memo:'',owner:ME},
+ {id:3,dk:'2026-11-10',allday:true,title:'店長会議（本店2階）',memo:'議題：年末の営業日／代車の入れ替え／12月の車検の台数',owner:'佐藤花子'},
+ {id:4,dk:'2026-11-12',time:'9:00',end:'9:30',title:'朝礼 当番',memo:'',owner:ME},
+ {id:5,dk:'2026-11-12',time:'13:00',end:'14:00',title:'保険会社 立ち会い（事故車の確認）',memo:'アジャスターの方が来店。写真を先に送っておく。',owner:ME},
+ {id:6,dk:'2026-11-12',time:'16:30',end:'',title:'納車 軽バン',memo:'',owner:ME},
+ {id:7,dk:'2026-11-12',time:'18:30',end:'',title:'歯医者',memo:'診察券を忘れない',owner:ME,priv:true},
+ {id:8,dk:'2026-11-12',time:'11:00',end:'',title:'部品の引き取り',memo:'',owner:'鈴木一郎'},
+ {id:9,dk:'2026-11-19',time:'14:00',end:'16:00',title:'メーカー講習（オンライン）',memo:'事務所のPCで受ける。資料は共有フォルダ。',owner:ME},
+ {id:10,dk:'2026-11-21',time:'',end:'',title:'子どもの発表会',memo:'',owner:ME,priv:true},
+ {id:11,dk:'2026-11-24',time:'10:00',end:'',title:'レッカー業者と打合せ',memo:'',owner:'高橋次郎'},
+ {id:12,dk:'2026-11-26',time:'13:30',end:'14:30',title:'△△自動車 引き取り',memo:'鍵は事務所の2番',owner:ME},
+ {id:13,dk:'2026-11-30',allday:true,title:'月末 請求書の締め',memo:'',owner:ME},
+];
+var nextId=100;
+function dkOf(d){return Y+'-'+(M+1)+'-'+d;}
+function weeksOf(y,m){var f=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate(),w=[],r=[];for(var i=0;i<f;i++)r.push(0);for(var d=1;d<=n;d++){r.push(d);if(r.length===7){w.push(r);r=[];}}if(r.length){while(r.length<7)r.push(0);w.push(r);}return w;}
+function closed(d){var dow=new Date(Y,M,d).getDay();return dow===2&&d>=8&&d<=14;}   // 第2火曜＝休業日（架空の決まり）
+function canEdit(){return who===ME;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function tmOf(x){return x.allday?'終日':(x.time?(x.end?x.time+'〜'+x.end:x.time):'');}
+function clsOf(x){return x.priv?'priv':x.owner===who?'mine':'other';}
+function listOf(d){
+  var dk=dkOf(d);
+  return SC.filter(function(x){
+    if(x.dk!==dk)return false;
+    if(x.priv)return x.owner===ME&&who===ME;          // マイスケジュールは本人が自分のカレンダーを見ている時だけ
+    if(x.owner===who)return true;
+    return S.o==='1';
+  }).sort(function(a,b){var ka=a.allday?'':(a.time||'99:99'),kb=b.allday?'':(b.time||'99:99');ka=ka.length<5?'0'+ka:ka;kb=kb.length<5?'0'+kb:kb;return ka<kb?-1:ka>kb?1:a.id-b.id;});
+}
+function toast(t){var e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){e.style.display='none';},2600);}
+
+function draw(){
+  var b=document.body; b.className=(b.classList.contains('hide')?'hide ':'')+'m'+S.m+(canEdit()?'':' ro')+(kind==='hol'&&canEdit()?' k-hol':'');
+  document.querySelectorAll('#ctl button').forEach(function(x){x.classList.toggle('on',S[x.dataset.k]===x.dataset.v);});
+  document.getElementById('mon').textContent=Y+'年'+(M+1)+'月';
+  document.getElementById('prn').textContent='🖨 印刷（'+who+'）';
+  var h='<b>表示：</b><span class="w" data-who="">全員</span>';
+  PEOPLE.forEach(function(n){h+='<span class="w'+(n===who?' on':'')+'" data-who="'+n+'">'+n+'</span>';});
+  h+='<span class="lg"><i style="background:#f97316"></i>休日 <i style="background:#10b981;margin-left:4px"></i>有給 <i style="background:#22d3ee;margin-left:4px"></i>共有の予定 <i style="background:#f472b6;margin-left:4px"></i>マイ</span>';
+  document.getElementById('who').innerHTML=h;
+  // カレンダー
+  var wk=weeksOf(Y,M), L='#94a3b8', cnt={off:0,lv:0,cl:0};
+  h='<div id="dow">'; DOW.forEach(function(d,i){h+='<div style="color:'+(i===0?'#dc2626':i===6?'#1d4ed8':'#374151')+(i>0?';border-left:1px solid '+L:'')+'">'+d+'</div>';}); h+='</div>';
+  wk.forEach(function(r,wi){h+='<div class="wk">';
+    r.forEach(function(d,di){var st='border-top:'+(wi>0?'1px solid '+L:'none')+';'+(di>0?'border-left:1px solid '+L+';':'');
+      if(!d){h+='<div class="c e" style="'+st+'"></div>';return;}
+      var dk=dkOf(d), cl=closed(d), k=cl?'cl':(OFF[who][dk]||''), dow=new Date(Y,M,d).getDay();
+      var td=(Y===now.getFullYear()&&M===now.getMonth()&&d===now.getDate());
+      if(k==='off'||k==='lv'||k==='cl')cnt[k]++;
+      var nt=NOTE[who+'/'+dk]||'', f1=who.charAt(0);
+      h+='<div class="c '+k+(td?' td':'')+(selDay===d&&S.m!=='a'?' sel':'')+'" data-d="'+d+'" style="'+st+'">'
+        +'<div class="n" style="color:'+(cl?'#991b1b':dow===0?'#dc2626':dow===6?'#1d4ed8':'#111')+'"><span>'+d+'</span>'
+        +((k==='off'||k==='lv')&&kind==='hol'?'<span class="pen" data-pen="'+d+'">✎ メモ</span>':'')
+        +(k==='off'?'<i>🏖</i>':k==='lv'?'<i>📋</i>':k==='tr'?'<i>🎓</i>':'')+'</div>'
+        +(cl?'<div class="mk">休業日</div>':'')
+        +(k==='off'?'<div class="chip o"><em>'+f1+'</em>'+who+'<span style="font-size:8px">休</span>'+(nt?'<span class="memo">📝'+esc(nt)+'</span>':'')+'</div>':'')
+        +(k==='lv'?'<div class="chip l"><em>'+f1+'</em>'+who+'<span style="font-size:8px">有</span>'+(nt?'<span class="memo">📝'+esc(nt)+'</span>':'')+'</div>':'')
+        +(k==='tr'?'<div class="chip t"><em>'+f1+'</em>'+who+'<span style="font-size:8px">研</span></div>':'');
+      listOf(d).forEach(function(x){var c=clsOf(x),t=x.allday?'終日':x.time;
+        h+='<div class="sc '+c+'" data-sc="'+x.id+'">'+(x.priv?'🙋':'')+(t?'<b>'+t+'</b>':'')+esc(x.title)+(c==='other'?'<small>'+x.owner.slice(0,2)+'</small>':'')+'</div>';});
+      h+='</div>';});
+    h+='</div>';});
+  var g=document.getElementById('grid'); g.innerHTML=h;
+  // 右の列
+  var s='<div class="mh">'+(M+1)+'月 会社の休日数<br><big>'+QUOTA+'</big> 日</div>'
+    +'<div class="sum"><h4>📅 '+who+'さん'+(S.m==='c'?' ':'<br>')+Y+'年'+(M+1)+'月の集計</h4><div class="b">'
+    +'<div class="tile t1"><span>🏖 休日</span><span><big>'+(cnt.off+cnt.cl)+'</big> 日</span></div>'
+    +'<div class="tile t2"><span>📋 有給</span><span><big>'+cnt.lv+'</big> 日</span></div>'
+    +'<div class="tile t3"><span>合計</span><span><b style="font-size:16px">'+(cnt.off+cnt.cl+cnt.lv)+'</b> 日</span></div>'
+    +'<div class="tile t4">繰り越し '+(QUOTA-cnt.off-cnt.cl)+'日</div></div></div>';
+  if(!canEdit()){
+    s+='<div class="ro">👀 '+who+'さんのカレンダーは<b>見るだけ</b>です。<br>休日・有給を入れられるのは、ご自分のカレンダーだけです（管理者は全員ぶん入れられます）。</div>';
+  }else if(S.m==='a'){
+    s+='<div class="pick"><div class="b">'
+      +pk('sched','📝 予定',kind==='sched'?'入れたい日を押す':'')
+      +pk('hol','🏖 休日設定',kind==='hol'?'日を押すと付く・外れる':'')
+      +(kind==='hol'?'<div class="sub">'+hb('off','🏖 休日')+hb('lv','📋 有給')+hb('tr','🎓 研修')+'</div>':'')
+      +'</div><p>'+(kind==='sched'?'入れたい日を押すと、予定を足したり直したりできます。<br>もう一度「予定」を押すと終わります。'
+        :kind==='hol'?'日を押すたびに <b>'+({off:'休日',lv:'有給',tr:'研修'}[hk])+'</b> が付く・外れる。休みの日の「✎ メモ」でメモ。<br>もう一度「休日設定」を押すと終わります。'
+        :'ボタンを押してから、カレンダーの日を押します。')+'</p></div>';
+  }else if(S.m==='c'){
+    s+=selDay?('<div class="day" id="panel">'+dayHtml(selDay,true,false)+'</div>'):'<div class="ro">👆 カレンダーの日を押すと、ここに<br>・休日／有給／研修のボタン<br>・その日の予定（足す・直す）<br>が出ます。</div>';
+  }else{
+    s+='<div class="ro">👆 カレンダーの日を押すと、その日のそばに小さな窓が出ます。<br>休日・有給・研修と、予定を足す・直すがそこでできます。</div>';
+  }
+  document.getElementById('side').innerHTML=s;
+  fit(wk.length); trim();
+}
+function pk(k,l,sub){return '<button class="k-'+k+(kind===k?' on':'')+'" data-kind="'+k+'">'+l+(sub?'<small>'+sub+'</small>':'')+'</button>';}
+function hb(k,l){return '<button class="h-'+k+(hk===k?' on':'')+'" data-hk="'+k+'">'+l+'</button>';}
+// その日の箱の中身。withOff＝休日のボタンも出す（B・C）。closeBtn＝✕を出す
+function dayHtml(d,withOff,closeBtn){
+  var dk=dkOf(d), k=OFF[who][dk]||'', dow=DOW[new Date(Y,M,d).getDay()], cl=closed(d), ed=canEdit();
+  var h='<h4>'+(M+1)+'/'+d+'（'+dow+'）'+(closeBtn?'<button data-x="1">✕</button>':'')+'</h4><div class="b">';
+  if(withOff&&ed){
+    if(cl)h+='<p class="hint">この日は店の休業日です（休日に数えます）。</p>';
+    else{
+      h+='<p class="lab">この日の休み</p><div class="kb">'
+        +'<button class="k-off'+(k==='off'?' on':'')+'" data-set="off">🏖 休日</button>'
+        +'<button class="k-lv'+(k==='lv'?' on':'')+'" data-set="lv">📋 有給</button>'
+        +'<button class="k-tr'+(k==='tr'?' on':'')+'" data-set="tr">🎓 研修</button></div>'
+        +'<p class="hint">'+(k?'もう一度押すと外れます。':'押すと付きます。')+'</p>';
+      if(k==='off'||k==='lv')h+='<input data-note="1" maxlength="30" placeholder="メモ（例：午後休・病院）" value="'+esc(NOTE[who+'/'+dk]||'')+'" style="margin-bottom:2px">';
+    }
+    h+='<hr>';
+  }
+  h+='<p class="lab">📝 この日の予定</p>';
+  var L=listOf(d);
+  if(!L.length&&!form)h+='<p class="hint">予定はありません</p>';
+  L.forEach(function(x){var c=clsOf(x), mine=x.owner===ME;
+    h+='<div class="it '+c+'"><span class="tm">'+(tmOf(x)||'—').replace('〜','<br>〜')+'</span><span class="tx">'+esc(x.title)+'<em>'+(x.priv?'🙋 マイ':mine?'自分':x.owner)+'</em>'+(x.memo?'<small>'+esc(x.memo)+'</small>':'')+'</span>'+(mine?'<button data-edit="'+x.id+'">編集</button>':'')+'</div>';});
+  if(form&&form.d===d){
+    h+='<div class="form"><b style="font-size:12px;color:#334155">'+(form.id?'予定を編集':'予定を追加')+'</b>'
+      +'<input data-f="title" maxlength="40" placeholder="件名（例：○○社と打合せ）" value="'+esc(form.title)+'">'
+      +'<div class="tmr"><input data-f="time" placeholder="9:00" value="'+esc(form.time)+'"><span>〜</span><input data-f="end" placeholder="10:00" value="'+esc(form.end)+'"><span style="font-size:10.5px;color:#94a3b8">空なら時刻なし</span></div>'
+      +'<textarea data-f="memo" maxlength="200" placeholder="メモ（任意）" style="min-height:48px">'+esc(form.memo)+'</textarea>'
+      +'<div class="two"><button class="pub'+(form.priv?'':' on')+'" data-priv="0">👥 共有スケジュール</button><button class="prv'+(form.priv?' on':'')+'" data-priv="1">🙋 マイスケジュール</button></div>'
+      +'<div class="ok"><button class="go" data-save="1">'+(form.id?'保存':'追加')+'</button>'+(form.id?'<button data-del="1" style="color:#b91c1c;border-color:#fca5a5;background:#fef2f2">削除</button>':'')+'<button data-cancel="1">やめる</button></div></div>';
+  }else if(who===ME){
+    h+='<button class="add" data-add="1">＋ 予定を追加</button>';
+  }
+  return h+'</div>';
+}
+// カレンダーの横幅＝マスの 横÷縦 が 1.25 になる幅（本物と同じ考え方）
+function fit(rows){
+  var area=document.getElementById('area'), g=document.getElementById('grid'), s=document.getElementById('side');
+  var ch=Math.max(66,(area.clientHeight-16-44)/rows), avail=area.clientWidth-36-s.offsetWidth-12;
+  g.style.width=Math.min(avail,Math.max(720,Math.round(ch*1.25*7)))+'px';
+}
+// マスに入りきらない予定は「＋n件」にまとめる
+function trim(){
+  document.querySelectorAll('#grid .c[data-d]').forEach(function(c){
+    var n=0, scs=c.querySelectorAll('.sc');
+    if(!scs.length)return;
+    var i=scs.length-1;
+    while(c.scrollHeight>c.clientHeight+1&&i>=0){scs[i].remove();i--;n++;
+      var m=c.querySelector('.more'); if(!m){m=document.createElement('span');m.className='more';c.appendChild(m);}
+      m.textContent='＋'+n+'件';
+    }
+  });
+}
+// ── 休みを付ける・外す ──
+function setOff(d,k){
+  if(!canEdit()){toast('ほかの人の休日は入れられません（見るだけ）');return;}
+  if(closed(d)){toast('店の休業日には入れられません');return;}
+  var dk=dkOf(d);
+  if(OFF[who][dk]===k){delete OFF[who][dk];delete NOTE[who+'/'+dk];}
+  else{OFF[who][dk]=k;if(k==='tr')delete NOTE[who+'/'+dk];}
+}
+// ── その日の箱を開く（A＝真ん中の窓／B＝マスのそば） ──
+function openDay(d,cell){
+  selDay=d; form=null;
+  if(S.m==='c'){draw();return;}
+  var f=document.getElementById('float'), dim=document.getElementById('dim');
+  f.className='day'; f.innerHTML=dayHtml(d,S.m==='b',true); f.style.display='block';
+  dim.style.display='block'; dim.className=S.m==='b'?'clear':'';
+  if(S.m==='b'&&cell){
+    draw(); cell=document.querySelector('#grid .c[data-d="'+d+'"]');
+    place(f,cell.getBoundingClientRect());
+  }else{f.style.width='420px';f.style.left=Math.round((innerWidth-420)/2)+'px';f.style.top='90px';f.style.maxHeight=(innerHeight-120)+'px';f.style.overflowY='auto';}
+}
+function place(f,r){
+  f.style.width='330px';f.style.maxHeight=(innerHeight-20)+'px';f.style.overflowY='auto';
+  var w=330,h=f.offsetHeight, x=r.right+8; if(x+w>innerWidth-8)x=r.left-w-8;
+  var y=Math.min(Math.max(8,r.top-10),innerHeight-h-8);
+  f.style.left=x+'px';f.style.top=y+'px';
+}
+function closeDay(){document.getElementById('float').style.display='none';document.getElementById('dim').style.display='none';form=null;if(S.m!=='c')selDay=null;draw();}
+function refreshDay(){
+  if(S.m==='c'){draw();return;}
+  var f=document.getElementById('float'); if(f.style.display!=='block'||!selDay){draw();return;}
+  draw(); f.innerHTML=dayHtml(selDay,S.m==='b',true);
+  if(S.m==='b'){var c=document.querySelector('#grid .c[data-d="'+selDay+'"]');if(c)place(f,c.getBoundingClientRect());}
+}
+function readForm(root){root.querySelectorAll('[data-f]').forEach(function(e){form[e.dataset.f]=e.value;});}
+// ── その日の箱の中の操作（浮く窓・右の列 共通） ──
+function dayClick(e,root){
+  var t=e.target, d=selDay;
+  if(t.closest('[data-x]')){closeDay();return;}
+  var b=t.closest('[data-set]'); if(b){setOff(d,b.dataset.set);refreshDay();return;}
+  if(t.closest('[data-add]')){form={d:d,title:'',time:'',end:'',memo:'',priv:false};refreshDay();var i=document.querySelector('[data-f="title"]');if(i)i.focus();return;}
+  b=t.closest('[data-edit]'); if(b){var x=SC.find(function(s){return s.id==b.dataset.edit;});form={d:d,id:x.id,title:x.title,time:x.time||'',end:x.end||'',memo:x.memo||'',priv:!!x.priv};refreshDay();return;}
+  b=t.closest('[data-priv]'); if(b){readForm(root);form.priv=b.dataset.priv==='1';refreshDay();return;}
+  if(t.closest('[data-cancel]')){form=null;refreshDay();return;}
+  if(t.closest('[data-del]')){SC=SC.filter(function(s){return s.id!==form.id;});form=null;refreshDay();toast('予定を削除しました（モック）');return;}
+  if(t.closest('[data-save]')){readForm(root);
+    if(!form.title.trim()){toast('件名を入れてください');return;}
+    var rec={dk:dkOf(d),time:form.time.trim(),end:form.end.trim(),title:form.title.trim(),memo:form.memo.trim(),owner:ME,priv:form.priv};
+    if(form.id){var o=SC.find(function(s){return s.id===form.id;});Object.assign(o,rec);}else{rec.id=nextId++;SC.push(rec);}
+    form=null;refreshDay();toast('予定を保存しました（モック）');return;}
+}
+document.getElementById('float').addEventListener('click',function(e){dayClick(e,this);});
+document.getElementById('float').addEventListener('change',function(e){if(e.target.dataset.note){NOTE[who+'/'+dkOf(selDay)]=e.target.value.trim();draw();}});
+document.getElementById('side').addEventListener('change',function(e){if(e.target.dataset.note){NOTE[who+'/'+dkOf(selDay)]=e.target.value.trim();draw();}});
+document.getElementById('dim').addEventListener('click',closeDay);
+document.getElementById('side').addEventListener('click',function(e){
+  var b=e.target.closest('[data-hk]'); if(b){hk=b.dataset.hk;draw();return;}
+  b=e.target.closest('[data-kind]'); if(b){kind=(kind===b.dataset.kind?'':b.dataset.kind);draw();return;}
+  if(e.target.closest('#panel'))dayClick(e,this);
+});
+// ── カレンダーを押す ──
+document.getElementById('grid').addEventListener('click',function(e){
+  var c=e.target.closest('.c[data-d]'); if(!c)return; var d=Number(c.dataset.d);
+  hidePop();
+  var pen=e.target.closest('[data-pen]');
+  if(pen){var dk=dkOf(d),v=prompt((M+1)+'/'+d+' の休みのメモ（30字まで）',NOTE[who+'/'+dk]||'');if(v!==null){NOTE[who+'/'+dk]=v.trim().slice(0,30);draw();}return;}
+  var onSc=e.target.closest('.sc,.more');
+  if(kind==='hol'&&canEdit()){setOff(d,hk);draw();return;}          // 休日設定：付く・外れる（予定の札の上を押しても同じ）
+  if(kind==='sched'||onSc){openDay(d,c);return;}                    // 予定：その日を開く。予定の札は、何も押していなくても開く
+  toast('「予定」か「休日設定」を押してから、日を押してください');
+});
+// ── なぞった時のポップ ──
+var pop=document.getElementById('pop');
+function popHtml(list,title){
+  var h=title?'<h5>'+title+'</h5>':'';
+  list.forEach(function(x){var c=clsOf(x);h+='<div class="p"><b>'+(tmOf(x)?tmOf(x)+'　':'')+esc(x.title)+'</b><i class="'+c+'">'+(x.priv?'🙋 マイ':x.owner===ME?'自分・共有':x.owner)+'</i>'+(x.memo?'<div>'+esc(x.memo)+'</div>':'')+'</div>';});
+  return h;
+}
+function showPop(html,r){
+  pop.innerHTML=html;pop.style.display='block';
+  var w=pop.offsetWidth,h=pop.offsetHeight,x=r.right+8;if(x+w>innerWidth-8)x=r.left-w-8;if(x<8)x=8;
+  var y=Math.min(Math.max(8,r.top),innerHeight-h-8);
+  pop.style.left=x+'px';pop.style.top=y+'px';
+}
+function hidePop(){pop.style.display='none';}
+function hover(t){
+  var c=t.closest&&t.closest('.c[data-d]'); if(!c){hidePop();return;}
+  var d=Number(c.dataset.d), L=listOf(d); if(!L.length){hidePop();return;}
+  var ttl=(M+1)+'/'+d+'（'+DOW[new Date(Y,M,d).getDay()]+'）の予定　'+L.length+'件';
+  if(S.p==='day'){showPop(popHtml(L,ttl),c.getBoundingClientRect());return;}
+  var sc=t.closest('.sc'), more=t.closest('.more');
+  if(sc){var x=SC.find(function(s){return s.id==sc.dataset.sc;});showPop(popHtml([x],''),sc.getBoundingClientRect());return;}
+  if(more){showPop(popHtml(L,ttl),c.getBoundingClientRect());return;}
+  hidePop();
+}
+document.getElementById('grid').addEventListener('mouseover',function(e){hover(e.target);});
+document.getElementById('grid').addEventListener('mouseleave',hidePop);
+// ── 上の行 ──
+document.getElementById('who').addEventListener('click',function(e){var s=e.target.closest('[data-who]');if(!s)return;
+  if(!s.dataset.who){toast('「全員」は今と同じ表（見るだけ）です。このモックでは省いています');return;}
+  who=s.dataset.who;selDay=null;form=null;draw();});
+document.getElementById('ctl').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;S[b.dataset.k]=b.dataset.v;
+  document.getElementById('float').style.display='none';document.getElementById('dim').style.display='none';selDay=null;form=null;draw();});
+document.getElementById('pv').onclick=function(){M--;if(M<0){M=11;Y--;}selDay=null;draw();};
+document.getElementById('nx').onclick=function(){M++;if(M>11){M=0;Y++;}selDay=null;draw();};
+window.addEventListener('resize',draw);
+draw();
+// 撮影用：?kind=off ／ ?open=18（その日を開く）／ ?add=1（追加の欄も開く）／ ?pop=12（その日の1つ目の予定をなぞった状態）／ ?popmore=12（＋n件）
+if(Q.get('kind')){kind=Q.get('kind');if(Q.get('hk'))hk=Q.get('hk');draw();}
+if(Q.get('open')){var od=Number(Q.get('open'));openDay(od,document.querySelector('#grid .c[data-d="'+od+'"]'));
+  if(Q.get('add')){form={d:od,title:'',time:'',end:'',memo:'',priv:false};refreshDay();}}
+if(Q.get('pop')){var pc=document.querySelector('#grid .c[data-d="'+Q.get('pop')+'"] .sc');if(pc)hover(pc);}
+if(Q.get('popmore')){var pm=document.querySelector('#grid .c[data-d="'+Q.get('popmore')+'"] .more')||document.querySelector('#grid .c[data-d="'+Q.get('popmore')+'"] .sc');if(pm)hover(pm);}
+</script>
+</body>
+</html>

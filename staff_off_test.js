@@ -111,27 +111,21 @@ const seed = {
   await page.waitForTimeout(900);
   t('🏖 の欄から休日スタッフの画面が開く', openQuick && await see('休日スタッフ', 5000));
   t('★どこまで直せるかの説明が出る（この店・この日の休日だけ）', await page.evaluate(() => /ここで直せるのは/.test(document.body.innerText)));
-  const goCal = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('button')].find(e => /スタッフ休日・有給カレンダーを開く/.test(e.innerText));
-    if (b) { b.click(); return true; } return false;
-  });
+  // ★v3.135.0（2026-11-27）：設定の「スタッフ休日・有給カレンダー」はなくした。
+  //   ここからは カレンダーの「🏖 休日」（いま見ている店）へ移る。休日・有給・研修はそこで名前を選んで入れる。
+  const goCal = await page.evaluate(() => { const b = document.querySelector('[data-opencal]'); if (b) { b.click(); return true; } return false; });
   await page.waitForTimeout(1700);
-  t('★そこからフルのカレンダーを開ける（設定の奥に入らなくてよい）', goCal && await see('スタッフ休日・有給カレンダー', 5000));
-  const hdBg = await page.evaluate(() => { const hd = [...document.querySelectorAll('div')].find(d => /スタッフ休日・有給カレンダー/.test(d.innerText) && d.innerText.length < 200); return hd ? getComputedStyle(hd).backgroundImage : ''; });
-  t('★三田店を見ている時は三田店で開く（見出しが赤）', /220, 38, 38/.test(hdBg), hdBg.slice(0, 70));
-  const selBg = await page.evaluate(() => {
-    const hd = [...document.querySelectorAll('div')].find(d => /スタッフ休日・有給カレンダー/.test(d.innerText) && d.innerText.length < 200);
-    const b = hd && [...hd.querySelectorAll('button')].find(x => x.innerText.trim() === '三田店');
-    return b ? getComputedStyle(b).backgroundColor : '';
-  });
-  t('★三田店のボタンが選ばれている', !!selBg && selBg !== 'rgba(0, 0, 0, 0)', selBg);
+  t('★そこからカレンダーの「🏖 休日」へ移れる（設定の奥に入らなくてよい）', goCal && await page.evaluate(() => !!document.querySelector('[data-offview]')));
+  t('★設定のモーダルは出ない', await page.evaluate(() => !/スタッフ休日・有給カレンダー/.test(document.body.innerText)));
   const inside = await page.evaluate(() => {
-    const hd = [...document.querySelectorAll('div')].find(d => /スタッフ休日・有給カレンダー/.test(d.innerText) && d.innerText.length < 200);
-    const box = hd && hd.parentElement;
-    return box ? box.innerText.replace(/\s+/g, ' ') : '';
+    // 「表示：」の名前のボタン（全員＋その店の名簿）
+    const lab = [...document.querySelectorAll('span')].find(s => s.innerText.trim() === '表示：');
+    return lab ? [...lab.parentElement.querySelectorAll('button')].map(b => b.innerText.trim()).join(' ') : '';
   });
-  t('★中身も三田店の人（藤原・芦田・中井）', /藤原/.test(inside) && /芦田/.test(inside) && /中井/.test(inside), inside.slice(0, 120));
+  t('★三田店を見ている時は三田店で開く（名前のボタンが三田店の人：藤原・芦田・中井）', /藤原/.test(inside) && /芦田/.test(inside) && /中井/.test(inside), inside.slice(0, 120));
   t('★本店の人は出ていない（竹林・魚住）', !/竹林/.test(inside) && !/魚住/.test(inside), inside.slice(0, 120));
+  t('★有給の人（芦田昌則）は、全員の表で「有」と出る', await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '全員' && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); return true; })
+    && await page.waitForFunction(() => !!document.querySelector('[data-offtable] tr[data-offrow="芦田昌則"] [data-offkind="leave"]'), null, { timeout: 4000 }).then(() => true).catch(() => false));
 
   t('JSエラー・alert なし', errs.length === 0, errs.slice(0, 3));
   await page.screenshot({ path: path.join(DIR, 'smoke-staff-off.png') });

@@ -235,14 +235,13 @@ const readSheet = async (html, shot) => {
   t('JSエラーが出ていない（一般）', c.errs.length === 0, c.errs.slice(0, 3));
   await c.ctx.close();
 
-  head('⑥ 設定の「スタッフ休日・有給カレンダー」には印刷ボタンを置かない（ファイルの中身）');
+  head('⑥ 設定の「スタッフ休日・有給カレンダー」はなくした＝印刷は「🏖 休日」の1か所だけ（ファイルの中身）');
   {
+    // ★v3.135.0（2026-11-27）：設定のモーダル（StaffCalendarModal）そのものをなくした。
     const SRCTXT = fs.readFileSync(path.join(DIR, SRC), 'utf8');
-    const i = SRCTXT.indexOf('const StaffCalendarModal=memo('), j = SRCTXT.indexOf('車検台数制限モーダル', i);
-    const body = SRCTXT.slice(i, j);
-    t('★設定のカレンダーに 🖨 印刷のボタンが無い', i > 0 && j > i && body.indexOf('data-offprint') < 0 && body.indexOf('staffOffPrintOpen(') < 0);
+    t('★設定のモーダル（StaffCalendarModal）が無い', SRCTXT.indexOf('const StaffCalendarModal') < 0 && SRCTXT.indexOf('<StaffCalendarModal') < 0);
     t('★印刷は部品（staffOffPrintOpen）1つ・呼ぶのは「🏖 休日」の1か所だけ', SRCTXT.split('staffOffPrintOpen(').length - 1 === 1 && SRCTXT.indexOf('const staffOffPrintOpen=') > 0);
-    t('★数え方は部品（staffOffSum）を使う＝画面と用紙で同じ数字', body.indexOf('const sumOne=name=>staffOffSum(name,offCtx);') > 0 && SRCTXT.indexOf('const staffMonthStats=calStaffFilter?staffOffSum(calStaffFilter,offCtxV):null;') > 0);
+    t('★数え方は部品（staffOffSum）を使う＝画面と用紙で同じ数字', SRCTXT.indexOf('const staffMonthStats=calStaffFilter?staffOffSum(calStaffFilter,offCtxV):null;') > 0);
   }
 
   await browser.close(); server.close();

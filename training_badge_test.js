@@ -136,39 +136,47 @@ const initFor = ([me, stor, sd]) => {
   t('休日・有給は今までどおり休みの側（竹林・魚住）', !!b1 && /竹林直行/.test(b1.off) && /魚住圭/.test(b1.off), b1 && b1.off);
   t('休んでいない人は出勤の側（江川京志）', !!b1 && /江川京志/.test(b1.working), b1 && b1.working);
 
-  // ── ③ 休日設定（StaffCalendarModal）の 種類 の3つ目 ──
-  console.log('\n■ ③ 休日設定の 種類 の3つ目「🎓 研修」');
+  // ── ③ 研修の入れ方：カレンダーの 🏖 休日 → 名前を選ぶ → 右の「🏖 休日設定」→ 下に出る3つ目 ──
+  //   ★v3.135.0（2026-11-27）：設定の「スタッフ休日・有給カレンダー」（StaffCalendarModal）はなくした。
+  //     ユーザーの言葉：「研修は休みではないですが、この画面で、一緒に、入力していくんですね」→ そのとおり。
+  console.log('\n■ ③ 🏖 休日 の「休日設定」の3つ目「🎓 研修」');
   await page.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => (d.title || '').includes('クリックして休日スタッフを編集')); if (el) el.click(); });
   await page.waitForTimeout(800);
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /スタッフ休日・有給カレンダーを開く/.test(e.innerText)); if (b) b.click(); });
+  await page.evaluate(() => { const b = document.querySelector('[data-opencal]'); if (b) b.click(); });
   await page.waitForTimeout(1800);
-  t('休日設定が開いた', await see('スタッフ休日・有給カレンダー', 6000));
-  t('★種類の3つ目に「🎓 研修」のボタンがある', await page.evaluate(() => !!document.querySelector('[data-seltrn]')));
-  const ord = await page.evaluate(() => {
-    const b = document.querySelector('[data-seltrn]'); if (!b) return null;
-    return [...b.parentElement.querySelectorAll('button')].map(x => x.innerText.replace(/\s+/g, ''));
-  });
-  t('★並びは 休日 → 有給 → 研修（3つ目）', !!ord && ord.length >= 3 && /研修/.test(ord[2]), ord);
-  // 人を選んで「研修」に切り替える
+  t('カレンダーの「🏖 休日」が開いた', await page.evaluate(() => !!document.querySelector('[data-offview]')));
+  // 人を選んで「休日設定」→「研修」
   const pick = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('button')].find(e => e.innerText.replace(/\s+/g, '') === '岡本大地');
+    const b = [...document.querySelectorAll('button')].find(e => e.innerText.replace(/\s+/g, '') === '岡本大地' && e.offsetParent !== null && !e.closest('[data-offtable]'));
     if (b) { b.click(); return true; } return false;
   });
-  await page.waitForTimeout(600);
-  await page.evaluate(() => { const b = document.querySelector('[data-seltrn]'); if (b) b.click(); });
-  await page.waitForTimeout(600);
-  t('人（岡本大地）と「研修」を選べた', pick);
+  await page.waitForTimeout(700);
+  t('★休日設定を押す前は、休日／有給／研修 の切り替えを出さない', await page.evaluate(() => !!document.querySelector('[data-off1kind="hol"]') && !document.querySelector('[data-off1hk]')));
+  await page.click('[data-off1kind="hol"]'); await page.waitForTimeout(500);
+  const ord = await page.evaluate(() => [...document.querySelectorAll('[data-off1sub] [data-off1hk]')].map(x => x.getAttribute('data-off1hk') + ':' + x.innerText.replace(/\s+/g, '')));
+  t('★「休日設定」を押すと、下に3つ目「🎓 研修」が出る', ord.length === 3 && /^training:/.test(ord[2]) && /研修/.test(ord[2]), ord);
+  t('★並びは 休日 → 有給 → 研修（3つ目）', /^dayoff:/.test(ord[0]) && /^leave:/.test(ord[1]) && /^training:/.test(ord[2]), ord);
+  await page.click('[data-off1hk="training"]'); await page.waitForTimeout(500);
+  t('人（岡本大地）と「研修」を選べた', pick && await page.evaluate(() => document.querySelector('[data-off1hk="training"]').getAttribute('data-on') === '1'));
   t('★「研修は休みではありません」の注意が出る', await page.evaluate(() => /研修は休みではありません/.test(document.body.innerText)));
-  t('★研修の日に 🎓 の印が出る', await page.evaluate(() => document.querySelectorAll('[data-caltrn]').length) >= 1);
-  const sum0 = await page.evaluate(() => [...document.querySelectorAll('[data-sumtrn]')].map(x => x.getAttribute('data-sumtrn') + ':' + x.innerText.replace(/\s+/g, '')));
-  t('★月間集計に「研N日」の札が出る（休日・有給とは別）', sum0.some(x => /岡本大地:研1日/.test(x)), sum0);
+  t('★研修の日に 🎓 の印が出る', await page.evaluate(() => { const c = document.querySelector('[data-off1k="tr"]'); return !!c && /🎓/.test(c.innerText) && !!c.querySelector('[data-tabtrn]'); }));
+  {
+    // 空いている日を1つ研修にする → 別のキー（honten-training）に入り、休日の数は変わらない → もう一度押して外す
+    const num = () => page.evaluate(() => { const e = document.querySelector('[data-off1sumoff]'); return e ? Number((e.innerText.match(/(\d+)\s*日/) || [])[1]) : null; });
+    const free = await page.evaluate(() => { const c = [...document.querySelectorAll('[data-off1day]')].find(e => e.getAttribute('data-off1k') === ''); return c ? Number(c.getAttribute('data-off1day')) : 0; });
+    const off0 = await num();
+    await page.click('[data-off1day="' + free + '"]', { position: { x: 30, y: 12 } }); await page.waitForTimeout(900);
+    const st1 = await page.evaluate(([k, d]) => { const now = new Date(); const dk = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + d;
+      const g = n => ((window.__fakeFb.get(k + 'honten-' + n) || {})[dk] || []).includes('岡本大地');
+      return { trn: g('training'), off: g('dayoff'), lv: g('pleave'), k: document.querySelector('[data-off1day="' + d + '"]').getAttribute('data-off1k') }; }, [STOR, free]);
+    t('★日を押すと研修が入る（休日・有給とは別のキー）', !!free && st1.trn && !st1.off && !st1.lv && st1.k === 'tr', st1);
+    t('★研修を入れても、休日の数は変わらない（研修は休みではない）', (await num()) === off0, [off0, await num()]);
+    await page.click('[data-off1day="' + free + '"]', { position: { x: 30, y: 12 } }); await page.waitForTimeout(900);
+    t('もう一度押すと研修が外れる', await page.evaluate(d => document.querySelector('[data-off1day="' + d + '"]').getAttribute('data-off1k') === '', free));
+  }
 
   // ── ④ カレンダーの 🏖 休日タブ ──
   console.log('\n■ ④ カレンダーの 🏖 休日タブ（紫の「研」の札・月間合計バー）');
-  // ★休日設定を閉じるボタンは「✅ 確定して閉じる」（title は空）。右上の ✕（title=閉じる）は
-  //   アプリそのものを閉じるボタンなので、そちらを押さないこと。
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /確定して閉じる/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); });
-  await page.waitForTimeout(900);
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /わかりました/.test(e.innerText) && e.offsetParent !== null); if (b) b.click(); });
   await page.waitForTimeout(700);
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.replace(/\s+/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });

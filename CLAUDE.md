@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node off1_edit_test.js`（🏖 休日 の画面から休日・有給・研修・予定を入れる）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -4709,3 +4709,64 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   `node cust_sync_match_test.js`（59件）の ⑩＝純関数。どちらの検査も `HTML=<別のファイル>` で対象を差し替えられる。
 - **2026-11-26 に本番へ反映済み**（本番 commit `01c1b4a`・`port_to_main.js`・`smoke_main.js` PASS・配信 v3.134.4 を確認）。帯の復旧はまだ。本番の当該予約の帯は、カードでレンタカーを
   選び直して保存すれば入る（データの手直しはユーザーの承認が要る）。
+
+### 🏖 休日 の画面から 休日・有給・研修・予定を入れる／設定の「スタッフ休日・有給カレンダー」はなくした（v3.135.0・2026-11-27 ユーザー決定）
+- ユーザーの言葉：「スタッフの休日を入れるときは、右端の設定ボタンから、スタッフ休日設定を押して入るんですけども、
+  **休日のボタンで、この画面から、休日設定ができるように**。画面が飛んで…**スタッフ休日・有給カレンダーというカレンダーも
+  見にくいので、どちらかというと不要**」「**この画面から予定も入れれたらいい**。個人的な予定も会社の仕事の予定も一度に見れる」
+  「**予定の内容が多い場合は枠が小さくて見にくいので、なぞったらポップが出るように**」。
+- モック `mock_off1_edit.html`。1回目の3案（A/B/C）は「**どれもちょっといまいち**」→ ユーザーが形を指定：
+  「**休日、有給、合計の下あたりに、休日設定のボタン枠があって、その上に予定を。そこを押してから日付を押していくと、
+  休日になったり休日じゃなかったり切り替えができる。予定を押すと、入れたい日に押すと予定を入れれる**」。
+  → 2回目のモックで「**研修は休みではないですが、この画面で一緒に入力していくんですね。それでは進めてください**」。
+- **右の列（`data-off1side`）の並び**：会社の休日数（`data-off1mh`）→ 集計（`data-off1sum`）→ **入れる箱（`data-off1pick`）**。
+  箱の中は **上＝「📝 予定」（`data-off1kind="sched"`）／下＝「🏖 休日設定」（`data-off1kind="hol"`）**。
+  ★**並びを入れ替えないこと**（予定が上・休日設定が下）。★**集計の枠とは別の枠**（1つにまとめない）。色は `OFF1_PICK_BD`／`OFF1_PICK_BG`。
+- **動き**（状態は `off1Kind`＝`''`｜`'sched'`｜`'hol'`、`off1Hk`＝`'dayoff'`｜`'leave'`｜`'training'`）：
+  ・★**開いた直後はどちらも押していない＝日を押しても何も変わらない**（うっかり休日が付かない）。下に一言だけ出す（`data-off1msg`）。
+  ・**「休日設定」を押す → 日を押すたびに付く・外れる**。押している間だけ、すぐ下に **休日／有給／研修**（`data-off1hk`）が出る。最初は休日。
+  ・**「予定」を押す → 日を押すと、その日の予定の窓**（今までの `MySchedPanel`。`mySchedDay`）。足す・直す・消すはそこで。
+  ・**同じボタンをもう一度押すと終わる**（押していない状態に戻る）。
+  ・★**人・画面（車検／休日／予定）・店・カレンダー以外の画面へ移ったら、押していない状態へ戻す**（`useEffect`）。
+    管理者は全員ぶん入れられるので、押したまま他の人のカレンダーへ移って**うっかりその人に付けない**ため。
+    **月を送っても戻さない**（月をまたいで続けて入れる）。
+  ・**予定の札を押した時**：何も押していなくても、その日の予定が開く。**休日設定の最中は休日を付ける**（マスを押したのと同じ）。
+  ・**休みのメモ（30字）**：休日設定の最中だけ、休日・有給の日に「✎ メモ」（`data-off1pen`）。押すと箱の中に欄（`data-off1memo`）。
+- ★**誰の分を入れてよいか（なくしたモーダルと同じ決まり）**：休日＝**本人だけ／管理者（`canRestore`）は全員**。
+  **予定＝自分のカレンダーの時だけ**（予定は本人のもの）。
+  ・ほかの人のカレンダー（一般スタッフ）＝箱を出さず「👀 見るだけ」（`data-off1ro`）。日を押しても何も起きない。
+  ・ほかの人のカレンダー（管理者）＝「🏖 休日設定」だけ出す。誰の分を入れるかを箱に出す。
+- ★**休みを付ける・外す決まりは `staffOffApply`（BLOCK-D）の1か所**。なくしたモーダルの `handleDayClick` を**そのまま**移した＝決まりは変えていない：
+  店の休業日は不可／**休日の枠を使い切っていたら有給として入れる**／「休日」のままもう一度押すと外れる（自動で有給になった日も）／
+  **枠がいっぱいの時に休日を外したら、あふれていた有給を休日へ戻す**（`refillOffFromLeave`）／
+  **研修は別のキー・休日の枠を見ない・休みと研修を同じ日に両方持たせない**／休みを外したらメモも消す。
+  ★**同じ決まりをもう1つ書かないこと。** 一言（「有給として入れました」「有給を休日に戻しました」）は `data-auto-leave` 付きで6秒出す。
+- **予定の札（`Off1Sched`）**：個人のカレンダーのマスに、その月の予定を出す。
+  ・出すもの＝**共有スケジュール（全員ぶん）**＋**マイスケジュール（自分のカレンダーを自分専用の端末で見ている時だけ）**。
+  ・色は 📝 予定 と同じ `MS_COL`（共有＝水色／マイ＝ピンク／それ以外＝灰色）。**自分のカレンダー＝自分の共有が水色／
+    ほかの人のカレンダー＝その人の共有が水色**（`_k`）。
+  ・**入りきる数だけ出し、残りは「＋n件」**（`data-off1more`）。マスの高さは窓で変わるので、その場で測る（`ResizeObserver`）。
+    札の高さは `OFF1_SC_H`／`OFF1_SC_GAP` で決めてある（数えるのに使う）。★**マスは縦の flex**（日付／休みの札／残り＝予定）。
+  ・★**なぞるとポップ**（`data-off1pop`）：札＝**その予定だけ**（時刻・件名・メモ全文・誰の予定か）／「＋n件」＝**その日の全部**。
+    見た目は `NoteCell`・`EntryName` と同じ（白地・水色の枠）。★**`document.body` へ出す（`createPortal`）**＝
+    この画面の外枠は `containerType:'size'` を持つので、中に `position:fixed` で置くと基準がずれることがある。
+  ・休業日のマスに予定がある時は、大きな「休業日」（`ClosedMark`）をやめて日付の横に小さく出す（札と重ならないように）。
+- ★**なくしたもの**：`StaffCalendarModal`・`showStaffCal`・設定の「🏖 スタッフ休日設定」。
+  **「⚙ 設定」は 🚗 車検 の時だけ出す**（`data-calgear`。中身が「台数制限設定」だけになったため）。
+  スケジュールの 🏖（休日スタッフ・`DayOffModal`）の入口は **「📅 休日のカレンダーを開く（🏖 休日）」（`data-opencal`）**＝
+  いま見ている日の月で、カレンダーの 🏖 休日 へ移る。★**設定のモーダルを作り直さないこと**（入れる所は1か所）。
+  ★上の v3.131.0〜v3.134.3 の項にある「設定の『スタッフ休日・有給カレンダー』は今までどおり」は、**この版で全部なくなった**。
+  `MonthlyHolidayBadge` の `wide` でない形（小さい藤色の札）は、いま使う所が無い。
+- **「📝 予定」のボタンと画面は残してある**（月の予定だけを広く見る・絞り込む用）。スマホ（mobile.html）は変えていない。
+  全員の表（`StaffOffTable`）は今までどおり見るだけ。
+- ★**ここ（`calView==='staff'` の中）はログイン判定より後ろ＝フックを足さないこと。** 状態は本体の上（`off1Kind` ほか）、
+  測るフックは部品（`Off1Sched`）の中に置いてある。
+- 検査は **`node off1_edit_test.js`（78件・PORT 8546）**。`SHOT=<保存先のフォルダ>` で見た目も撮れる。
+  あわせて直した（設定のモーダルを前提にしていた分）：`staff_table_test.js`（85件）・`fb_holiday_test.js`（83件）・
+  `training_badge_test.js`（54件）・`staff_print_test.js`（54件）・`staff_off_test.js`（21件）。
+  ★`fb_holiday_test.js` の「PC とスマホで `refillOffFromLeave` が1文字も違わない」は、**改行の種類の差（index_dev＝LF・mobile＝CRLF）で
+  前から落ちていた**ので、改行を外して比べるように直した。
+- ★**本番へ入れる前に現場への申し送りが要る**（休日の入れ方が変わる：設定 → スタッフ休日設定 ではなく、
+  カレンダー → 🏖 休日 → 自分の名前 → 右の「🏖 休日設定」→ 日を押す）。**本番への反映は別途指示を待つ。**
+  ★**取扱説明書②③（`capture_manual2_shots.js`・`build_manual2_pptx.js`・`build_manual3_pptx.js`）と `render_holiday_real.js` は
+  「スタッフ休日設定」を押す作りのまま**。本番へ移したら、撮り直しと文章の直しが要る。

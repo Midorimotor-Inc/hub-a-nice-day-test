@@ -1,9 +1,10 @@
 // スタッフ休日：全員の表示は【表（スタッフ×日）】（v3.131.0 → v3.132.0・2026-11-25 ユーザー決定）
 //   ユーザーの言葉：「印刷の全体表示が良かったので、ウェブで見る表示も全体表示は表に。
 //   個人に切り替えた時は、カレンダーの中に休みを入れる今まで通りの方法で」。
-//   表が出る所は2つ（同じ部品 StaffOffTable）：
-//     ・カレンダー画面の「🏖 休日」（見るだけ）… 表示：全員＝表／名前を選ぶ＝今まで通りのカレンダー。🖨 印刷もここ
-//     ・設定の「スタッフ休日・有給カレンダー」（入れる所）… 全員表示＝表／名前を選ぶ＝今まで通りのカレンダー
+//   表が出る所は カレンダー画面の「🏖 休日」だけ（部品 StaffOffTable）：
+//     表示：全員＝表（見るだけ）／名前を選ぶ＝その人のカレンダー（ここから休日・予定を入れる）。🖨 印刷もここ
+//   ★v3.135.0（2026-11-27）：設定の「スタッフ休日・有給カレンダー」（StaffCalendarModal）はなくした。
+//     入れる方の検査は off1_edit_test.js。ここは表と見た目を見張る。
 //   ・表は見るだけ。氏名を押すとその人のカレンダーへ
 //   ・数字は印刷の表と同じ（同じ staffOffSum・staffOffMonth を使う）
 //   ★日付は「今月」から作る（決め打ちにしない）。第2火曜（8〜14日）は休業日なので使わない。
@@ -82,14 +83,12 @@ const start = async (me) => {
   await see(me.name); await click(me.name); await click('でログイン');
   await see('スケジュール');
   await page.waitForTimeout(2200);
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.includes('スケジュール') && e.offsetParent !== null && e.textContent.replace(/\s/g, '').length < 12); if (b) b.click(); });
-  await page.waitForTimeout(1500);
-  // 🏖 の欄 → 休日スタッフ → フルのカレンダー
-  await page.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => (d.title || '').includes('クリックして休日スタッフを編集') || (d.title || '').includes('店休日のため全員休み')); if (el) el.click(); });
-  await page.waitForTimeout(900);
-  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => /スタッフ休日・有給カレンダーを開く/.test(e.innerText)); if (b) b.click(); });
-  await page.waitForTimeout(1500);
-  const opened = await see('スタッフ休日・有給カレンダー', 6000);
+  // カレンダー → 🏖 休日（開いた直後は自分のカレンダー）
+  await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
+  await page.waitForTimeout(1200);
+  const opened = await page.evaluate(() => !!document.querySelector('[data-offview]'));
   return { ctx, page, errs, opened };
 };
 
@@ -107,14 +106,12 @@ const readTable = (page) => page.evaluate(() => {
   });
   const cnt = {}; [...tb.querySelectorAll('[data-offcnt]')].forEach(td => { cnt[td.getAttribute('data-offcnt')] = td.innerText.trim(); });
   const heads = [...tb.querySelectorAll('[data-offhead]')].map(th => th.innerText.trim());
-  const box = (tb.closest('.modal-box') || tb.closest('[data-offtablewrap]')).getBoundingClientRect();
+  const box = tb.closest('[data-offtablewrap]').getBoundingClientRect();
   return { rows, cnt, heads, fitW: wrap.scrollWidth <= wrap.clientWidth + 1, boxW: Math.round(box.width), inView: box.left >= 0 && box.right <= window.innerWidth + 1,
     rowH: [...tb.querySelectorAll('tr[data-offrow]')].map(tr => Math.round(tr.getBoundingClientRect().height)) };
 });
-const hasGrid = (page) => page.evaluate(() => {
-  // 個別のカレンダー＝曜日の見出し7つが grid で並ぶ
-  return [...document.querySelectorAll('.modal-box div')].some(d => getComputedStyle(d).display === 'grid' && d.children.length === 7 && d.innerText.replace(/\s/g, '') === '日月火水木金土');
-});
+const hasGrid = (page) => page.evaluate(() => !!document.querySelector('[data-offview="one"] [data-off1grid]'));
+const pickBtn = async (page, name) => { await page.evaluate(n => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === n && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); }, name); await page.waitForTimeout(700); };
 const DIM = new Date(Y, M + 1, 0).getDate();
 
 (async () => {
@@ -129,16 +126,15 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   const SHOT = process.env.SHOT || '';
 
   // ────────────────────────────────────────────────────────
-  head('① 管理者：開いた直後は自分のカレンダー（今まで通り）');
+  head('① 管理者：開いた直後は自分のカレンダー');
   const A = await start({ email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin', cert: { isAdmin: true } });
   const pa = A.page;
-  t('休日カレンダーが開く', A.opened);
-  t('★名前を選んでいる時は、今まで通りのカレンダー（表は出ない）', (await hasGrid(pa)) && !(await readTable(pa)));
-  t('名前を選んでいる時は、下に集計のバッジが出る（今まで通り）', await pa.evaluate(() => /集計/.test(document.querySelector('.modal-box').innerText)));
+  t('🏖 休日 が開く', A.opened);
+  t('★名前を選んでいる時は、その人のカレンダー（表は出ない）', (await hasGrid(pa)) && !(await readTable(pa)));
+  t('★設定のモーダル（スタッフ休日・有給カレンダー）は出ない', await pa.evaluate(() => !/スタッフ休日・有給カレンダー/.test(document.body.innerText) && !document.querySelector('.modal-box')));
 
-  head('② 「全員表示」＝表（スタッフ×日）');
-  await pa.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => e.innerText.trim() === '全員表示'); if (b) b.click(); });
-  await pa.waitForTimeout(700);
+  head('② 「全員」＝表（スタッフ×日）');
+  await pickBtn(pa, '全員');
   let T = await readTable(pa);
   t('★表が出る', !!T);
   t('★カレンダー（7列の升目）は出ない', !(await hasGrid(pa)));
@@ -160,36 +156,29 @@ const DIM = new Date(Y, M + 1, 0).getDate();
         tot: names.map(n => getComputedStyle(document.querySelector('tr[data-offrow="' + n + '"] [data-offtot="offs"]')).backgroundColor),
         cnt: [1, 2].map(d => getComputedStyle(document.querySelector('[data-offcnt="' + d + '"]')).backgroundColor) }; }, [CLOSED_DAY]);
     const W = 'rgb(255, 255, 255)';
-    t('★1行目・3行目は白／2行目・4行目は薄い網掛け（横のライン）', bg.rows[0].every(c => c === W) && bg.rows[2].every(c => c === W) && bg.rows[1].every(c => c !== W) && bg.rows[3].every(c => c !== W) && new Set(bg.rows[1].concat(bg.rows[3])).size === 1, bg.rows);
+    // ★自分の行（管理者＝江川）は色が付くので、網掛けは「自分以外」の行で見る
+    const others = bg.names.map((n, i) => [n, i]).filter(x => x[0] !== '江川京志').map(x => x[1]);
+    const odd = others.filter(i => i % 2 === 1), even = others.filter(i => i % 2 === 0);
+    t('★1つ飛びで薄い網掛け（横のライン）：2行目・4行目に色／3行目は白', odd.every(i => bg.rows[i].every(c => c !== W)) && even.every(i => bg.rows[i].every(c => c === W)) && odd.length >= 2 && even.length >= 1, bg.rows);
     t('★同じ行の中では、日が変わっても色が変わらない（縦には掛けない）', bg.rows.every(r => new Set(r).size === 1), bg.rows);
-    t('★右端の数字の欄も、同じ行は同じ網掛け', bg.tot[0] === bg.tot[2] && bg.tot[1] === bg.tot[3] && bg.tot[0] !== bg.tot[1], bg.tot);
     t('★「休みの人数」の行には掛けない', bg.cnt[0] === bg.cnt[1], bg.cnt);
     t('★休業日の赤は網掛けより優先（どの行でも赤のまま）', bg.closed.every(c => c === 'rgb(254, 202, 202)'), bg.closed);
   }
   t('★メモは、なぞると出る', /午後休/.test(row('竹林直行').cells['3'].title), row('竹林直行').cells['3'].title);
   t('★「休みの人数」＝休日＋有給（研修は数えない）', T.cnt['3'] === '2' && T.cnt['5'] === '1' && T.cnt['18'] === '' && T.cnt[String(CLOSED_DAY)] === '', [T.cnt['3'], T.cnt['5'], T.cnt['18']]);
   t('★横にはみ出さない（スクロールなしで1か月が見える）', T.fitW && T.inView, { fitW: T.fitW, boxW: T.boxW });
-  t('★表の時は窓が広がる', T.boxW > 1000, T.boxW);
-  t('全員表示の時、下の集計のバッジは出さない（右端に同じ数字がある）', await pa.evaluate(() => !/📊/.test(document.querySelector('.modal-box').innerText)));
+  t('研修は「計」に入らない（竹林＝休日だけの数）', Number(row('竹林直行').tot.sum) === Number(row('竹林直行').tot.offs) + Number(row('竹林直行').tot.leaves) && row('竹林直行').tot.trn === '1', row('竹林直行').tot);
   if (SHOT) await pa.screenshot({ path: path.join(SHOT, 'staff_table_all.png') });
 
-  head('③ 設定の画面には印刷ボタンを置かない');
-  t('★設定の「スタッフ休日・有給カレンダー」に 🖨 印刷が無い', !(await pa.$('.modal-box [data-offprint]')));
-  t('研修は「計」に入らない（竹林＝休日だけの数）', Number(row('竹林直行').tot.sum) === Number(row('竹林直行').tot.offs) + Number(row('竹林直行').tot.leaves) && row('竹林直行').tot.trn === '1', row('竹林直行').tot);
-
-  head('④ 表の氏名を押すと、その人のカレンダー（今まで通り）');
+  head('③ 表の氏名を押すと、その人のカレンダー → そこで入れた休みが表にすぐ出る');
   await pa.evaluate(() => { const td = document.querySelector('tr[data-offrow="竹林直行"] td'); if (td) td.click(); });
   await pa.waitForTimeout(700);
   t('★カレンダーに切り替わる（表は消える）', (await hasGrid(pa)) && !(await readTable(pa)));
-  t('★種類（休日・有給・研修）のボタンが出る＝今まで通り入れられる', await pa.evaluate(() => /🏖 休日/.test(document.querySelector('.modal-box').innerText) && /📋 有給/.test(document.querySelector('.modal-box').innerText)));
-  // カレンダーで 25日 に休日を入れる → 全員表示に戻ると表に出る
-  await pa.evaluate(() => {
-    const cells = [...document.querySelectorAll('.modal-box div')].filter(d => d.style && d.style.minHeight === '82px');
-    const c = cells.find(d => { const s = d.querySelector('span'); return s && s.innerText.trim() === '25'; }); if (c) c.click();
-  });
-  await pa.waitForTimeout(700);
-  await pa.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => e.innerText.trim() === '全員表示'); if (b) b.click(); });
-  await pa.waitForTimeout(700);
+  t('★右の箱に「🏖 休日設定」が出る（管理者は全員ぶん入れられる）', await pa.evaluate(() => !!document.querySelector('[data-off1pick] [data-off1kind="hol"]')));
+  // 休日設定 → 25日 を押す → 全員に戻ると表に出る
+  await pa.click('[data-off1kind="hol"]'); await pa.waitForTimeout(400);
+  await pa.click('[data-off1day="25"]', { position: { x: 30, y: 12 } }); await pa.waitForTimeout(900);
+  await pickBtn(pa, '全員');
   T = await readTable(pa);
   t('★カレンダーで入れた休みが、表にすぐ出る', T && (T.rows.find(r => r.name === '竹林直行') || { cells: {} }).cells['25'] && T.rows.find(r => r.name === '竹林直行').cells['25'].kind !== '', T && T.rows.find(r => r.name === '竹林直行').cells['25']);
   t('表のマスを押しても何も変わらない（見るだけ）', await (async () => {
@@ -199,48 +188,24 @@ const DIM = new Date(Y, M + 1, 0).getDate();
     return before === JSON.stringify(await readTable(pa));
   })());
 
-  head('⑤ 月を送る／店を切り替える');
-  await pa.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].filter(e => e.querySelector('svg') && !e.innerText.trim())[1]; if (b) b.click(); });
+  head('④ 月を送る／店を切り替える');
+  await pa.evaluate(() => { const b = document.querySelector('button[title="翌月"]'); if (b) b.click(); });
   await pa.waitForTimeout(700);
   T = await readTable(pa);
   const DIM2 = new Date(Y, M + 2, 0).getDate();
   t('★次の月でも表のまま・日数が変わる', T && T.heads.length === DIM2, T && T.heads.length);
-  await pa.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => e.innerText.trim() === '三田店'); if (b) b.click(); });
-  await pa.waitForTimeout(700);
+  await pa.evaluate(() => { const b = [...document.querySelectorAll('header button')].find(e => e.innerText.replace(/\s/g, '').indexOf('三田店') === 0 && e.offsetParent !== null); if (b) b.click(); });
+  await pa.waitForTimeout(1200);
+  await pickBtn(pa, '全員');
   T = await readTable(pa);
-  t('★三田店に切り替えると、三田店の人の表', T && T.rows.length === 1 && T.rows[0].name === '藤原昭人', T && T.rows.map(r => r.name));
+  t('★上の店の切り替えで三田店にすると、三田店の人の表', T && T.rows.length === 1 && T.rows[0].name === '藤原昭人', T && T.rows.map(r => r.name));
   t('画面のエラーなし（管理者）', A.errs.length === 0, A.errs.slice(0, 2));
   await A.ctx.close();
-
-  // ────────────────────────────────────────────────────────
-  head('⑥ 一般スタッフ：表は全員ぶん見られる／押せる氏名は自分だけ');
-  const B = await start({ email: 'tikurin@midori-m.com', fbuid: 'uid_tk', uid: 'h3', name: '竹林直行', store: 'honten', role: 'staff' });
-  const pb = B.page;
-  await pb.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => e.innerText.trim() === '全員表示'); if (b) b.click(); });
-  await pb.waitForTimeout(700);
-  T = await readTable(pb);
-  t('★表に全員が出る（ほかの人の休みも見られる）', T && T.rows.length === 4);
-  t('★押せるのは自分の氏名だけ', T && T.rows.find(r => r.name === '竹林直行').cursor === 'pointer' && T.rows.filter(r => r.name !== '竹林直行').every(r => r.cursor !== 'pointer'), T && T.rows.map(r => [r.name, r.cursor]));
-  await pb.evaluate(() => { const td = document.querySelector('tr[data-offrow="魚住圭"] td'); if (td) td.click(); });
-  await pb.waitForTimeout(500);
-  t('★ほかの人の氏名を押しても切り替わらない', !!(await readTable(pb)));
-  await pb.evaluate(() => { const td = document.querySelector('tr[data-offrow="竹林直行"] td'); if (td) td.click(); });
-  await pb.waitForTimeout(600);
-  t('★自分の氏名を押すと自分のカレンダー', (await hasGrid(pb)) && !(await readTable(pb)));
-  t('画面のエラーなし（一般スタッフ）', B.errs.length === 0, B.errs.slice(0, 2));
-  await B.ctx.close();
 
   // ────────────────────────────────────────────────────────
   head('⑦ カレンダー画面の「🏖 休日」：全員＝表／名前を選ぶ＝今まで通り／🖨 印刷と同じ数字');
   const V = await start({ email: 'tikurin@midori-m.com', fbuid: 'uid_tk', uid: 'h3', name: '竹林直行', store: 'honten', role: 'staff' });
   const pv = V.page;
-  // 設定の画面を閉じて、カレンダー画面 →「🏖 休日」
-  await pv.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => /確定して閉じる/.test(e.innerText)); if (b) b.click(); });
-  await pv.waitForTimeout(600);
-  await pv.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
-  await pv.waitForTimeout(1200);
-  await pv.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
-  await pv.waitForTimeout(1200);
   const vPick = async (name) => { await pv.evaluate(n => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === n && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); }, name); await pv.waitForTimeout(600); };
   t('開いた直後は自分のカレンダー（前からの動き・表は出ない）', await pv.evaluate(() => !!document.querySelector('[data-offview="one"]') && !document.querySelector('[data-offtable]')));
   await vPick('全員');
@@ -415,12 +380,6 @@ const DIM = new Date(Y, M + 1, 0).getDate();
   head('⑧ 管理者：表の上の札の「変更」で会社の休日数を直せる');
   const W = await start({ email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: '江川京志', store: 'honten', role: 'admin', cert: { isAdmin: true } });
   const pw = W.page;
-  await pw.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => /確定して閉じる/.test(e.innerText)); if (b) b.click(); });
-  await pw.waitForTimeout(600);
-  await pw.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
-  await pw.waitForTimeout(1200);
-  await pw.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
-  await pw.waitForTimeout(1200);
   await pw.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.innerText.trim() === '全員' && e.offsetParent !== null && !e.closest('[data-offtable]')); if (b) b.click(); });
   await pw.waitForTimeout(700);
   MH = await mhPos(pw);
