@@ -17,7 +17,7 @@
   // 画面復帰時と定期に自分自身をno-storeで取得し、__APP_BUILDが変わっていれば更新バナーを表示する。
   // タップ時は cache:'reload' で新HTMLをHTTPキャッシュへ焼き直してから reload するので、確実に新版になる
   // （アプリを消したりURLを打ち直す必要はない）。本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する。
-  window.__APP_BUILD='build-1795741326045';
+  window.__APP_BUILD='build-1795742928441';
   (function(){
     var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
     function runningVer(){
@@ -111,7 +111,7 @@ input,select,textarea{font-family:inherit;font-size:16px !important;}
 <script id="app-jsx" type="text/plain">
 const {useState,useEffect,useCallback,useMemo,useRef,memo}=React;
 // ★ バージョン管理：システム全体で1つ。変更のたびにindex_dev.htmlのAPP_VERSIONと同値で0.01上げる
-const MOBILE_VERSION='3.136.0';
+const MOBILE_VERSION='3.136.1';
 // ★画面の色（環境の見分け）：テスト版＝オレンジ／メイン＝青。PC（index）と同じ決まり。
 //   この4つだけを port_to_main.js が本番用に書き換えるので、色は必ずここを使うこと。
 const UI_BG='#FF9500';                                               // ログイン・登録・引き継ぎ画面の背景（べた塗り）
@@ -5970,6 +5970,11 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
         if(form.id&&form.wasPriv&&canPriv){ const next={...priv.items};delete next[form.id];await priv.save(next); }   // マイ→共有 に変えた
       }
       setForm(null);
+      // ★確定したら窓を閉じてカレンダーへ戻す（v3.136.1・2026-11-27 ユーザー指示：「確定したら、追加のボタンがまだ残っているので、
+      //   一旦カレンダーの画面に戻して。またその日付を選んだら、また窓が出るように」）。
+      //   onClose があるのは PC の窓だけ。スマホの日詳細（埋め込み）は閉じる先が無いので今までどおり。
+      //   保存できなかった時（上で return している）は閉じない＝打った中身と注意書きを残す。
+      if(onClose)onClose();
     }finally{setSaving(false);}
   };
   const remove=async it=>{
@@ -5979,6 +5984,11 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
       if(it.priv){if(!canPriv)return;const next={...priv.items};delete next[it.id];await priv.save(next);}
       else await savePub(b=>{const n={...(b||{})};if(!n[it.id]||(n[it.id].uid&&n[it.id].uid!==user.uid))return undefined;delete n[it.id];return n;});
       setForm(null);
+      // ★確定したら窓を閉じてカレンダーへ戻す（v3.136.1・2026-11-27 ユーザー指示：「確定したら、追加のボタンがまだ残っているので、
+      //   一旦カレンダーの画面に戻して。またその日付を選んだら、また窓が出るように」）。
+      //   onClose があるのは PC の窓だけ。スマホの日詳細（埋め込み）は閉じる先が無いので今までどおり。
+      //   保存できなかった時（上で return している）は閉じない＝打った中身と注意書きを残す。
+      if(onClose)onClose();
     }finally{setSaving(false);}
   };
   const Item=({it})=>{

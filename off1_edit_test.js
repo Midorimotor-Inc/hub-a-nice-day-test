@@ -258,6 +258,7 @@ const ADM = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: 
   await pa.waitForTimeout(1200);
   const ms = await A.kv('mysched'); const added = Object.values(ms).find(v => v && v.title === 'テストの予定');
   t('★追加した予定が保存される（共有スケジュール・その日・自分の名前）', !!added && added.dk === dk(25) && added.uid === 'h3' && added.owner === ME && added.memo === 'メモの本文', added);
+  t('★確定（追加）すると予定の窓が閉じて、カレンダーへ戻る（v3.136.1）', !(await A.st()).modal && (await A.st()).sched === '1');
   await pa.evaluate(() => { const b = [...document.querySelectorAll('.modal-box button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); }); await pa.waitForTimeout(500);
   t('★マスにその予定の札が出る', await pa.evaluate(() => /テストの予定/.test(document.querySelector('[data-off1day="25"]').innerText)));
   await A.kind('sched'); S = await A.st();

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795741326045';
+    window.__APP_BUILD='build-1795742928441';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.136.0';
+const APP_VERSION = '3.136.1';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -802,6 +802,11 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
         if(form.id&&form.wasPriv&&canPriv){ const next={...priv.items};delete next[form.id];await priv.save(next); }   // マイ→共有 に変えた
       }
       setForm(null);
+      // ★確定したら窓を閉じてカレンダーへ戻す（v3.136.1・2026-11-27 ユーザー指示：「確定したら、追加のボタンがまだ残っているので、
+      //   一旦カレンダーの画面に戻して。またその日付を選んだら、また窓が出るように」）。
+      //   onClose があるのは PC の窓だけ。スマホの日詳細（埋め込み）は閉じる先が無いので今までどおり。
+      //   保存できなかった時（上で return している）は閉じない＝打った中身と注意書きを残す。
+      if(onClose)onClose();
     }finally{setSaving(false);}
   };
   const remove=async it=>{
@@ -811,6 +816,11 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
       if(it.priv){if(!canPriv)return;const next={...priv.items};delete next[it.id];await priv.save(next);}
       else await savePub(b=>{const n={...(b||{})};if(!n[it.id]||(n[it.id].uid&&n[it.id].uid!==user.uid))return undefined;delete n[it.id];return n;});
       setForm(null);
+      // ★確定したら窓を閉じてカレンダーへ戻す（v3.136.1・2026-11-27 ユーザー指示：「確定したら、追加のボタンがまだ残っているので、
+      //   一旦カレンダーの画面に戻して。またその日付を選んだら、また窓が出るように」）。
+      //   onClose があるのは PC の窓だけ。スマホの日詳細（埋め込み）は閉じる先が無いので今までどおり。
+      //   保存できなかった時（上で return している）は閉じない＝打った中身と注意書きを残す。
+      if(onClose)onClose();
     }finally{setSaving(false);}
   };
   const Item=({it})=>{

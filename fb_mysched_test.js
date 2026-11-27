@@ -74,6 +74,10 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     return { ctx, page, errs };
   };
   const pickToday = page => page.evaluate(d => { const cells = [...document.querySelectorAll('div')].filter(el => el.style && el.style.cursor === 'pointer' && el.style.minHeight === '110px' && el.textContent.trim().startsWith(String(d))); const c = cells[0]; if (c) c.click(); return !!c; }, D);
+  // ★v3.136.1（2026-11-27 ユーザー指示）：PC は予定を確定（追加・保存・削除）すると、予定の窓を閉じてカレンダーへ戻る。
+  //   続けて一覧を見たり足したりする所では、もう一度その日を開く。
+  const panelOpen = (page) => page.evaluate(() => { const b = [...document.querySelectorAll('.modal-box')].find(x => /の予定/.test(x.innerText)); return !!b; });
+  const ensurePanel = async (page) => { await page.waitForTimeout(900); if (!(await panelOpen(page))) { await pickToday(page); await seeText(page, 'の予定', 5000); await page.waitForTimeout(200); } };
   const rawStore = page => page.evaluate(() => localStorage.getItem('__fakeFbStore') || '');
   const kv = (page, k) => page.evaluate(k => window.__fakeFb.get(k), k);
 
@@ -118,17 +122,21 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.fill('input[data-tmfld]', '10:00');
     await page.fill('textarea', '2階');
     await clickText(page, '追加');
+    t('★PC：確定（追加）すると、予定の窓が閉じてカレンダーへ戻る', await page.waitForFunction(() => ![...document.querySelectorAll('.modal-box')].some(x => /の予定/.test(x.innerText)), null, { timeout: 5000 }).then(() => true).catch(() => false));
+    t('★PC：カレンダーのマスに、いま足した予定が出ている', await seeText(page, '本店会議', 5000));
+    await ensurePanel(page);
+    t('★PC：もう一度その日を押すと、また予定の窓が開く', await panelOpen(page));
     t('PC：共有予定が mysched に本人の uid・氏名付きで入る', await page.waitForFunction(([k, dk]) => Object.values(window.__fakeFb.get(k + 'mysched') || {}).some(v => v.dk === dk && v.title === '本店会議' && v.uid === 'h7' && v.owner === '江川京志' && v.time === '10:00'), [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'mysched'));
     t('PC：一覧に「自分」の印で出る', await seeText(page, '本店会議', 3000) && (await page.evaluate(() => document.body.innerText)).includes('自分'));
     await clickText(page, '編集');
     await page.fill('input[placeholder*="件名"]', '本店会議（2階）');
-    await clickText(page, '保存');
+    await clickText(page, '保存'); await ensurePanel(page);
     t('PC：編集しても予定は1件のまま（件名が変わる）', await page.waitForFunction(() => { const m = document.querySelector('.modal-box'); const x = m ? m.innerText : ''; return x.includes('本店会議（2階）') && (x.match(/本店会議/g) || []).length === 1; }, null, { timeout: 8000 }).then(() => true).catch(() => false), await panelText(page));
-    await clickText(page, '編集'); await clickText(page, '削除');
+    await clickText(page, '編集'); await clickText(page, '削除'); await ensurePanel(page);
     t('PC：削除すると消えたまま（手元に復活しない）', await page.waitForFunction(() => !document.body.innerText.includes('本店会議'), null, { timeout: 8000 }).then(() => true).catch(() => false));
     await page.waitForTimeout(1500);
     t('PC：削除の3秒後も復活していない', !(await page.evaluate(() => document.body.innerText)).includes('本店会議') && Object.keys(await kv(page, STOR + 'mysched') || {}).length === 0);
-    await clickText(page, '＋ 予定を追加'); await page.fill('input[placeholder*="件名"]', '本店会議'); await page.fill('input[data-tmfld]', '10:00'); await page.fill('textarea', '2階'); await clickText(page, '追加');
+    await clickText(page, '＋ 予定を追加'); await page.fill('input[placeholder*="件名"]', '本店会議'); await page.fill('input[data-tmfld]', '10:00'); await page.fill('textarea', '2階'); await clickText(page, '追加'); await ensurePanel(page);
     await seeText(page, '本店会議', 8000);
     t('共有端末：マイスケジュールの入れ物を読みにいかない', await page.evaluate(k => window.__fakeFb.get(k + 'myprv-h7') === undefined || window.__fakeFb.get(k + 'myprv-h7') === null, STOR));
     t('PC：JSエラーなし', errs.length === 0, errs.slice(0, 3));
@@ -157,7 +165,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     t('自分専用：追加で「共有／マイ」を選べる', /🙋 マイスケジュール/.test(await panelText(page)));
     await page.fill('input[placeholder*="件名"]', '歯医者');
     t('自分専用：フォームで「マイ」を選べた', await clickIn(page, '🙋 マイスケジュール'));
-    await clickIn(page, '追加');
+    await clickIn(page, '追加'); await ensurePanel(page);
     t('自分専用：マイ予定が myprv-h7 に入る', await page.waitForFunction(([k, dk]) => { const v = window.__fakeFb.get(k + 'myprv-h7') || {}; return Object.values(v).some(x => x && x.dk === dk && x.title === '歯医者'); }, [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'myprv-h7'));
     t('自分専用：マイ予定は共有(mysched)には入らない', !Object.values(await kv(page, STOR + 'mysched') || {}).some(v => v.title === '歯医者'));
     t('自分専用：一覧に「🙋 マイ」の印で出る', /🙋 マイ/.test(await panelText(page)), await panelText(page));
@@ -192,7 +200,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     const tmVal = await page.evaluate(() => { const e = document.querySelector('.modal-box input[data-tmfld="start"]'); return e && e.value; });
     t('★「900」（全角でも）と打つと 09:00 に直る', tmVal === '09:00', tmVal);
     await tms[0].fill('10:00'); await tms[1].fill('11:30');
-    await clickIn(page, '追加');
+    await clickIn(page, '追加'); await ensurePanel(page);
     t('終わりの時刻が保存される', await page.waitForFunction(([k, dk]) => Object.values(window.__fakeFb.get(k + 'mysched') || {}).some(v => v.dk === dk && v.title === '打合せ' && v.time === '10:00' && v.end === '11:30' && v.allday === false), [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'mysched'));
     t('一覧に「10:00」と「〜11:30」が出る', /10:00/.test(await panelText(page)) && /〜11:30/.test(await panelText(page)), await panelText(page));
     // 終わりが始まりより前なら断る
@@ -200,9 +208,9 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.waitForTimeout(300);
     tms = await page.$$('.modal-box input[data-tmfld]');
     await tms[1].fill('09:00');
-    await clickIn(page, '保存');
+    await clickIn(page, '保存'); await ensurePanel(page);
     t('終わりが始まりより前だと断られる', await seeText(page, '終わりの時刻が始まりより前です', 5000));
-    await tms[1].fill('11:30'); await clickIn(page, '保存'); await page.waitForTimeout(800);
+    await tms[1].fill('11:30'); await clickIn(page, '保存'); await ensurePanel(page); await page.waitForTimeout(800);
     // 終日のマイ予定
     await clickIn(page, '＋ 予定を追加');
     await page.waitForTimeout(300);
@@ -211,7 +219,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.waitForTimeout(300);
     t('終日にすると時刻の欄が隠れる', (await page.$$('.modal-box input[data-tmfld]')).length === 0);
     await clickIn(page, '🙋 マイスケジュール');
-    await clickIn(page, '追加');
+    await clickIn(page, '追加'); await ensurePanel(page);
     t('終日のマイ予定が保存される', await page.waitForFunction(([k, dk]) => Object.values(window.__fakeFb.get(k + 'myprv-h7') || {}).some(v => v.dk === dk && v.title === '旅行' && v.allday === true && v.time === ''), [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'myprv-h7'));
     const p4 = await panelText(page);
     t('一覧に「終日」と出る', /終日/.test(p4), p4.slice(0, 400));
