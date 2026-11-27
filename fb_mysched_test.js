@@ -3,7 +3,9 @@
 //   ・店の共有の端末：マイスケジュールは出さない・読み込まない。追加は共有だけ
 //   ・時間は「開始〜終了」と「終日」。終日は一番上に並ぶ
 //   ・色は共有＝水色（#cffafe）／マイ＝ピンク（#fce7f3）（2026-10-01・B案）
-//   ・自分専用の端末：共有／マイを選んで追加でき、「すべて表示／共有／マイ」で切り替えられる
+//   ・自分専用の端末：共有／マイを選んで追加できる
+//   ★v3.137.0（2026-11-27）：カレンダー画面の「📝 予定」のボタンと画面はなくした。PC の予定は
+//     カレンダー → 🏖 休日 → 自分のカレンダー → 右の「📝 予定」→ 日を押す、で入れる（この検査もそこから入る）。
 //   ・別の人には、他人のマイスケジュールは一切見えない
 //   ・以前の🔒シークレット予定の「持ってくる」案内は廃止（2026-09-30）。古い書庫があっても何も出さない
 //   実行: node fb_mysched_test.js
@@ -73,7 +75,17 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await page.waitForTimeout(1200);
     return { ctx, page, errs };
   };
-  const pickToday = page => page.evaluate(d => { const cells = [...document.querySelectorAll('div')].filter(el => el.style && el.style.cursor === 'pointer' && el.style.minHeight === '110px' && el.textContent.trim().startsWith(String(d))); const c = cells[0]; if (c) c.click(); return !!c; }, D);
+  // 🏖 休日 の自分のカレンダーで「📝 予定」を押して（押してあればそのまま）、今日のマスを押す
+  const pickToday = async page => {
+    const ok = await page.evaluate(() => { const b = document.querySelector('[data-off1kind="sched"]'); if (!b) return false; if (b.getAttribute('data-on') !== '1') b.click(); return true; });
+    if (!ok) return false;
+    await page.waitForTimeout(250);
+    await page.click('[data-off1day="' + D + '"]', { position: { x: 30, y: 12 } });
+    return true;
+  };
+  const closePanel = async page => { await page.evaluate(() => { const m = [...document.querySelectorAll('.modal-box')].find(x => /の予定/.test(x.innerText)); const b = m && [...m.querySelectorAll('button')].find(e => e.innerText.trim() === '✕'); if (b) b.click(); }); await page.waitForTimeout(400); };
+  const goOff = async page => { await page.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); }); await page.waitForTimeout(1000); };
+  const todayChips = page => page.evaluate(d => [...document.querySelectorAll('[data-off1day="' + d + '"] [data-off1sc]')].map(e => e.getAttribute('data-off1sckind') + ':' + e.innerText), D);
   // ★v3.136.1（2026-11-27 ユーザー指示）：PC は予定を確定（追加・保存・削除）すると、予定の窓を閉じてカレンダーへ戻る。
   //   続けて一覧を見たり足したりする所では、もう一度その日を開く。
   const panelOpen = (page) => page.evaluate(() => { const b = [...document.querySelectorAll('.modal-box')].find(x => /の予定/.test(x.innerText)); return !!b; });
@@ -86,7 +98,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
   const goCal = async page => {
     await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(el => el.textContent.includes('カレンダー') && el.offsetParent !== null && el.textContent.replace(/\s/g, '').length < 16); if (b) b.click(); });
     await page.waitForTimeout(800);
-    await clickText(page, '予定');
+    await goOff(page);
     await page.waitForTimeout(600);
   };
   const panelText = page => page.evaluate(() => { const m = document.querySelector('.modal-box'); return m ? m.innerText : ''; });
@@ -106,12 +118,12 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
   {
     const { ctx, page, errs } = await openPc(EGAWA);
     console.log('\n■ 1. PC・店の共有の端末');
-    t('PC：カレンダーに「予定」の切替がある', await clickText(page, '予定'));
-    t('PC：予定ビューが出る', await seeText(page, 'マイスケジュール', 5000), await page.evaluate(() => document.body.innerText.slice(0, 300)));
-    t('PC：予定カレンダーに自分の休日・有給がスタッフ休日と同期して出る', await page.evaluate(() => { const cells = [...document.querySelectorAll('div')].filter(el => el.style && el.style.minHeight === '110px'); const has = (n, s2) => cells.some(el => el.textContent.startsWith(String(n)) && el.textContent.includes(s2)); return has(5, '🏖 休日') && has(6, '📋 有給'); }));
+    t('★PC：カレンダーに「📝 予定」の切替はもう無い（🚗 車検／🏖 休日 の2つ）', await page.evaluate(() => !document.querySelector('button[title="予定カレンダー"]') && !!document.querySelector('button[title="休日カレンダー"]') && !!document.querySelector('button[title="車検カレンダー"]')));
+    await goOff(page);
+    t('PC：🏖 休日 の自分のカレンダーに「📝 予定」の箱が出る', await page.evaluate(() => !!document.querySelector('[data-offview="one"] [data-off1kind="sched"]')), await page.evaluate(() => document.body.innerText.slice(0, 300)));
+    t('PC：同じカレンダーに自分の休日・有給が出る（5日＝休日／6日＝有給）', await page.evaluate(() => { const k = d => (document.querySelector('[data-off1day="' + d + '"]') || { getAttribute: () => '' }).getAttribute('data-off1k'); return k(5) === 'off' && k(6) === 'lv'; }));
     const top = await page.evaluate(() => document.body.innerText);
-    t('共有端末：切り替えの3つボタンは出ない', !/すべて表示/.test(top), top.slice(0, 300));
-    t('共有端末：共有だけを表示する案内が出る', /店の共有のため/.test(top), top.slice(0, 300));
+    t('共有端末：色の説明に「マイ」は出ない（共有の予定だけ）', await page.evaluate(() => { const l = document.querySelector('[data-offlegend]'); return !!l && /共有の予定/.test(l.innerText) && !/マイ/.test(l.innerText); }), top.slice(0, 300));
     t('PC：今日の日をクリックすると予定の画面が開く', await pickToday(page) && await seeText(page, 'の予定', 5000));
     await clickText(page, '＋ 予定を追加');
     await page.waitForTimeout(300);
@@ -158,7 +170,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await seeText(page, 'スケジュール', 20000);
     await goCal(page);
     const top2 = await page.evaluate(() => document.body.innerText);
-    t('自分専用：3つの切り替えボタンが出る', /すべて表示/.test(top2) && /👥 共有スケジュール/.test(top2) && /🙋 マイスケジュール/.test(top2), top2.slice(0, 400));
+    t('自分専用：色の説明に「マイ」も出る', await page.evaluate(() => { const l = document.querySelector('[data-offlegend]'); return !!l && /共有の予定/.test(l.innerText) && /マイ/.test(l.innerText); }), top2.slice(0, 400));
     await pickToday(page); await seeText(page, 'の予定', 5000);
     await clickText(page, '＋ 予定を追加');
     await page.waitForTimeout(300);
@@ -169,20 +181,10 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     t('自分専用：マイ予定が myprv-h7 に入る', await page.waitForFunction(([k, dk]) => { const v = window.__fakeFb.get(k + 'myprv-h7') || {}; return Object.values(v).some(x => x && x.dk === dk && x.title === '歯医者'); }, [STOR, DK], { timeout: 8000 }).then(() => true).catch(() => false), await kv(page, STOR + 'myprv-h7'));
     t('自分専用：マイ予定は共有(mysched)には入らない', !Object.values(await kv(page, STOR + 'mysched') || {}).some(v => v.title === '歯医者'));
     t('自分専用：一覧に「🙋 マイ」の印で出る', /🙋 マイ/.test(await panelText(page)), await panelText(page));
-    // 3つの切り替え
-    await page.keyboard.press('Escape'); await page.waitForTimeout(500);
-    await clickText(page, '👥 共有スケジュール'); await page.waitForTimeout(600);
-    await pickToday(page); await seeText(page, 'の予定', 5000);
-    let p2 = await panelText(page);
-    t('切り替え「共有」：共有だけ出る', /本店会議/.test(p2) && !/歯医者/.test(p2), p2.slice(0, 300));
-    await page.keyboard.press('Escape'); await page.waitForTimeout(400);
-    await clickText(page, '🙋 マイスケジュール'); await page.waitForTimeout(600);
-    await pickToday(page); await seeText(page, 'の予定', 5000);
-    p2 = await panelText(page);
-    t('切り替え「マイ」：マイだけ出る', /歯医者/.test(p2) && !/本店会議/.test(p2), p2.slice(0, 300));
-    await page.keyboard.press('Escape'); await page.waitForTimeout(400);
-    await clickText(page, 'すべて表示'); await page.waitForTimeout(600);
-    t('切り替え「すべて」：カレンダーのセルに両方出る', await page.evaluate(() => { const c = [...document.querySelectorAll('div')].find(el => el.style && el.style.minHeight === '110px' && el.textContent.includes('本店会議')); return !!c && c.textContent.includes('歯医者') && c.textContent.includes('🙋'); }));
+    // ★「すべて表示／共有／マイ」の切り替えは、📝 予定 の画面と一緒になくした（v3.137.0）。🏖 休日 のマスには両方が出る。
+    await closePanel(page);
+    { const ch = await todayChips(page);
+      t('自分専用：今日のマスに 共有（水色）とマイ（ピンク）の両方が出る', ch.some(x => /^mine:/.test(x) && /本店会議/.test(x)) && ch.some(x => /^priv:/.test(x) && /歯医者/.test(x) && /🙋/.test(x)), ch); }
 
     // ── 終了時刻・終日・色分け（2026-10-01 ユーザー指示・B案） ──
     console.log('\\n■ 2-3. 終了時刻・終日・色分け');
@@ -258,7 +260,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
   {
     const { ctx, page, errs } = await openPc(EGAWA, storeJson);
     console.log('\n■ 3. 共有の端末ではマイ予定を出さない');
-    await clickText(page, '予定'); await page.waitForTimeout(800);
+    await goOff(page);
     const txt = await page.evaluate(() => document.body.innerText);
     t('共有端末：マイ予定（歯医者）が画面に出ない', !/歯医者/.test(txt), txt.slice(0, 300));
     t('共有端末：共有予定（本店会議）は出る', /本店会議/.test(txt));
@@ -282,7 +284,7 @@ const TIKU = { email: 'tikurin@midori-m.com', fbuid: 'uid_tiku', uid: 'h3', name
     await seeText(page, TIKU.name, 20000); await clickText(page, TIKU.name); await clickText(page, 'でログイン');
     await seeText(page, 'スケジュール', 20000);
     await goCal(page);
-    t('竹林：江川の共有予定がセルに出る', await page.evaluate(() => [...document.querySelectorAll('div')].some(el => el.style && el.style.minHeight === '110px' && el.textContent.includes('本店会議'))));
+    t('竹林：江川の共有予定がマスに出る（ほかの人の予定＝灰色）', (await todayChips(page)).some(x => /^other:/.test(x) && /本店会議/.test(x)), await todayChips(page));
     t('竹林：江川のマイ予定は画面のどこにも出ない', !(await page.evaluate(() => document.body.innerText)).includes('歯医者'));
     await pickToday(page); await seeText(page, 'の予定', 5000);
     t('竹林：江川の共有予定に名前が付き、編集ボタンが無い', (await page.evaluate(() => document.body.innerText)).includes('江川京志') && !(await page.evaluate(() => [...document.querySelectorAll('button')].some(b => b.innerText === '編集'))));

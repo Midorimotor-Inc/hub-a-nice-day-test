@@ -2,7 +2,7 @@
 //   ユーザーの言葉：「日をまたぐような予定がもしあったとしたら、日にちまで伸ばせれるように、
 //   時刻設定と他に日にち設定も、何日から何日までできるように」。
 //   ・予定の1件に dkEnd（終わりの日）を足した。1日だけの予定は空。昔の予定（dkEnd なし）はそのまま1日だけ
-//   ・掛かっている日ぜんぶに出す：🏖 休日 の個人のカレンダー／📝 予定 のカレンダー／その日の予定の窓／スマホ
+//   ・掛かっている日ぜんぶに出す：🏖 休日 の個人のカレンダー／その日の予定の窓／スマホ（📝 予定 の画面は v3.137.0 でなくした）
 //   ・時刻：始まりの日＝「10:00〜」／あいだの日＝「〜」／終わりの日＝「〜15:00」。ポップと窓には全体（11/16 10:00 〜 11/18 15:00）
 //   ★名前・予定は架空。日付は「今月」から作る（決め打ちにしない）。
 //   実行: node sched_multiday_test.js      見た目も撮る: SHOT=<保存先のフォルダ> node sched_multiday_test.js
@@ -95,20 +95,11 @@ const start = async (file, vp, mobile) => {
   const SHOT = process.env.SHOT || '';
 
   // ────────────────────────────────────────────────────────
-  head('① PC・📝 予定 のカレンダー：日をまたぐ予定は、掛かっている日ぜんぶに出る');
   const A = await start('index_dev.html', { width: 1500, height: 950 }); const pa = A.page;
   await pa.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.replace(/\s/g, '') === 'カレンダー' && e.offsetParent !== null); if (b) b.click(); });
   await pa.waitForTimeout(1200);
-  await pa.evaluate(() => { const b = document.querySelector('button[title="予定カレンダー"]'); if (b) b.click(); });
-  await pa.waitForTimeout(1200);
-  const cnt = (ttl) => pa.evaluate(s => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { if (w.currentNode.nodeValue.indexOf(s) >= 0) n++; } return n; }, ttl);
-  t('★3日間の予定（16〜18日）が3つのマスに出る', (await cnt(TRIP)) === 3, await cnt(TRIP));
-  t('★2日間の終日の予定（22〜23日）が2つのマスに出る', (await cnt(CAMP)) === 2, await cnt(CAMP));
-  t('★昔の形の予定（終わりの日なし）は今までどおり1日だけ', (await cnt(OLD)) === 1, await cnt(OLD));
-  t('★月末から来月へまたぐ予定は、今月は月末の1日だけ', (await cnt(CROSS)) === 1, await cnt(CROSS));
-  if (SHOT) await pa.screenshot({ path: path.join(SHOT, 'span_1_mycal.png') });
 
-  head('② PC・🏖 休日 の個人のカレンダー：札の時刻は 始まり「10:00〜」／あいだ「〜」／終わり「〜15:00」');
+  head('① PC・🏖 休日 の個人のカレンダー：掛かっている日ぜんぶに出る／札の時刻は 始まり「10:00〜」・あいだ「〜」・終わり「〜15:00」');
   await pa.evaluate(() => { const b = document.querySelector('button[title="休日カレンダー"]'); if (b) b.click(); });
   await pa.waitForTimeout(1300);
   const chipOf = (d, id) => pa.evaluate(([d, id]) => { const e = document.querySelector('[data-off1day="' + d + '"] [data-off1sc="' + id + '"]'); return e ? e.innerText.replace(/\s+/g, '') : null; }, [d, id]);
@@ -119,6 +110,7 @@ const start = async (file, vp, mobile) => {
   t('★終わりの日は「〜15:00」', /^〜15:00出張/.test(c18 || ''), c18);
   t('★終日の予定は、どの日も「終日」', /^終日/.test((await chipOf(22, 'x2')) || '') && /^終日/.test((await chipOf(23, 'x2')) || ''), [await chipOf(22, 'x2'), await chipOf(23, 'x2')]);
   t('昔の形の予定は今までどおり（6日だけ・時刻つき）', /^09:00/.test((await chipOf(6, 'x3')) || '') && !(await chipOf(7, 'x3')));
+  t('★月末から来月へまたぐ予定は、今月は月末の日に出る', /^13:00〜/.test((await chipOf(DIM, 'x4')) || ''), await chipOf(DIM, 'x4'));
   await pa.hover('[data-off1day="17"] [data-off1sc="x1"]'); await pa.waitForTimeout(300);
   let pop = await pa.evaluate(() => { const p = document.querySelector('[data-off1pop]'); return p ? p.innerText.replace(/\s+/g, ' ') : ''; });
   t('★なぞると、全体の期間が出る（11/16 10:00 〜 11/18 15:00 の形）', pop.indexOf(md(16) + ' 10:00 〜 ' + md(18) + ' 15:00') >= 0 && /新幹線/.test(pop), pop);

@@ -148,6 +148,7 @@ const ADM = { email: 'egawa@midori-m.com', fbuid: 'uid_egawa', uid: 'h7', name: 
   t('★箱の中は 上＝「📝 予定」／下＝「🏖 休日設定」', lay.schedAbove && /予定/.test(lay.txt[0]) && /休日設定/.test(lay.txt[1]), lay);
   t('★開いた直後はどちらも押していない・休日／有給／研修 の切り替えも出ていない', S.sched === '0' && S.hol === '0' && S.sub.length === 0, S);
   t('★「⚙ 設定」は 🏖 休日 では出さない（スタッフ休日設定はなくした）', await pa.evaluate(() => !document.querySelector('[data-calgear]') && !/スタッフ休日設定/.test(document.body.innerText)));
+  t('★「📝 予定」の切り替えボタンはもう無い（🚗 車検／🏖 休日 の2つだけ・v3.137.0）', await pa.evaluate(() => !document.querySelector('button[title="予定カレンダー"]') && !!document.querySelector('button[title="休日カレンダー"]') && !!document.querySelector('button[title="車検カレンダー"]')));
   await shot(pa, 'off1_1_open.png', { width: 1920, height: 900 });
 
   head('② 何も押していない時：日を押しても何も変わらない');

@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795742928441';
+    window.__APP_BUILD='build-1795744760228';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.136.1';
+const APP_VERSION = '3.137.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -932,6 +932,8 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
 };
 
 // ── PC：月のカレンダー（予定ビュー）──
+// ★v3.137.0（2026-11-27）：PC の「📝 予定」の画面はなくした＝この部品を描く所は今は無い（スマホ側の写しとそろえるために残してある）。
+//   予定は 🏖 休日 の個人のカレンダー（Off1Sched）に出す。
 const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,myOff,view})=>{
   const canPriv=!!(priv&&priv.enabled);
   const vw=canPriv?(view||'all'):'pub';   // myOff(day) → {kind:'dayoff'|'leave', note, carried}｜null（自分の休日。スタッフ休日と同期）
@@ -15910,7 +15912,6 @@ function AppInner() {
   const mySched=useHubKv(STOR+'mysched',k=>sGet(k));   // useShared のマージ規則は {id:予定} に合わない（下の useHubKv の注記）
   const saveMySched=useCallback(m=>writeVerified(STOR+'mysched',m),[]);
   const myPriv=useHubPrivate(currentUser?currentUser.uid:null,k=>sGet(k),(k,m)=>writeVerified(k,m));
-  const [myView,setMyView]=useState('all');   // 'all'｜'pub'｜'priv'（自分専用の端末だけ切り替えられる）
   const [mySchedDay,setMySchedDay]=useState(null);   // 予定ビューで開いている日（dk）
   // -- 動的スタッフリスト --
   const [staffListH,setStaffListH]=useShared(storKey('staff-v2','honten'),DEFAULT_STAFF_HONTEN,60000);
@@ -19790,27 +19791,6 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                       <span style={{fontSize:12,fontWeight:800,color:'#dc2626'}}>三田店 {byStore.sanda}台</span>
                     </span>
                   </>
-                ):calView==='my'?(
-                  <>
-                    <span style={{fontSize:11,fontWeight:700,color:'#374151'}}>📝 マイスケジュール</span>
-                    {/* ★自分専用の端末だけ、見え方を3つから選べる（2026-09-30 ユーザー指示）。
-                        共有の端末ではマイスケジュールを読み込まないので、ボタンも出さない。 */}
-                    {myPriv.enabled?(
-                      <span style={{display:'flex',alignItems:'center',gap:5}}>
-                        {[['all','すべて表示'],['pub','👥 共有スケジュール'],['priv','🙋 マイスケジュール']].map(([k,l])=>{
-                          const on=myView===k;
-                          return <button key={k} onClick={()=>setMyView(k)}
-                            style={{padding:'3px 10px',borderRadius:6,border:'2px solid '+(on?(k==='priv'?'#7c3aed':'#2563eb'):'#d1d5db'),background:on?(k==='priv'?'#f5f3ff':'#eff6ff'):'white',color:on?(k==='priv'?'#5b21b6':'#1e40af'):'#6b7280',fontWeight:on?800:500,fontSize:11,cursor:'pointer'}}>{l}</button>;
-                        })}
-                      </span>
-                    ):(
-                      <span style={{fontSize:11,color:'#6b7280'}}>この端末は店の共有のため、共有スケジュールだけを表示します</span>
-                    )}
-                    <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#1e40af'}}><span style={{width:12,height:12,borderRadius:2,background:'#eff6ff',border:'1px solid #93c5fd',display:'inline-block'}}/>自分の共有予定</span>
-                    <span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#374151'}}><span style={{width:12,height:12,borderRadius:2,background:'#f3f4f6',border:'1px solid #e5e7eb',display:'inline-block'}}/>他の人の共有予定</span>
-                    {myPriv.enabled&&<span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#5b21b6'}}><span style={{width:12,height:12,borderRadius:2,background:'#f5f3ff',border:'1px solid #c4b5fd',display:'inline-block'}}/>🙋 マイスケジュール（自分だけ）</span>}
-                    <span style={{fontSize:10.5,color:'#9ca3af'}}>日をクリックで追加・編集</span>
-                  </>
                 ):(
                   /* スタッフカレンダー：個人フィルター */
                   <>
@@ -19886,8 +19866,11 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                       <span style={{fontSize:13}}>🖨</span>印刷（{calStaffFilter?calStaffFilter:'全員'}）
                     </button>
                   )}
-                  {/* カレンダー切替（車検／休日／予定）。2026-09-20 に「📝 予定」（マイスケジュール）を追加 */}
-                  {[['insp','🚗','車検','#10b981','#f0fdf4','#059669'],['staff','🏖','休日','#f97316','#fff7ed','#ea580c'],['my','📝','予定','#7c3aed','#f5f3ff','#5b21b6']].map(([id,ic,l,bd,bg,fg])=>(
+                  {/* カレンダー切替（車検／休日）。
+                      ★「📝 予定」のボタンと画面は v3.137.0（2026-11-27）でなくした。ユーザーの言葉：「カレンダー画面に予定ボタンが
+                        残っていて、もうこれは不要ではないですか？」→ 予定は 🏖 休日 の個人のカレンダーで全部見えて、そこから入れる。
+                        ★ボタンを戻さないこと（入れる所が2つになる）。 */}
+                  {[['insp','🚗','車検','#10b981','#f0fdf4','#059669'],['staff','🏖','休日','#f97316','#fff7ed','#ea580c']].map(([id,ic,l,bd,bg,fg])=>(
                     <button key={id} onClick={()=>{setCalView(id);setCalStaffFilter(null);}} title={l+'カレンダー'}
                       style={{display:'flex',alignItems:'center',gap:4,padding:'5px 9px',
                         background:calView===id?bg:'white',border:`2px solid ${calView===id?bd:'#e5e7eb'}`,
@@ -20042,21 +20025,6 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 ))}
                 </div>{/* scroll container end */}
               </div>
-              ):calView==='my'?(
-                <MySchedCalendar cy={cy} cm={cm} user={{uid:currentUser?currentUser.uid:'',name:currentUser?currentUser.name:''}}
-                  pub={mySched} priv={myPriv} view={myView} onPickDay={dkk=>setMySchedDay(dkk)}
-                  isClosedDay={(y,m,d)=>isClosed(new Date(y,m,d))}
-                  myOff={(()=>{   // 自分の休日（スタッフ休日カレンダーと同じデータ・同じ繰り越しの充て方）
-                    const me=currentUser&&currentUser.name; if(!me)return null;
-                    const sid=(currentUser.store&&currentUser.store.id)||'honten';
-                    const off=sid==='honten'?dayOffDataH:dayOffDataS, pl=sid==='honten'?paidLeaveDataH:paidLeaveDataS, notes=(sid==='honten'?offNoteH:offNoteS)||{};
-                    const isClSid=(y,m,d)=>{const cd=sid==='honten'?closedDaysH:closedDaysS, cdt=sid==='honten'?closedDatesH:closedDatesS; const dt=new Date(y,m,d); return (Array.isArray(cd)&&cd.includes(dt.getDay()))||(Array.isArray(cdt)&&cdt.includes(fmt(y,m,d)))||isSecondTuesdayHoliday(y,m,d,Array.isArray(overrideOpenDates)?overrideOpenDates:[]);};
-                    const carry=calcHolidayCarry(me,cy,cm,off,isClSid,monthlyHolidays);
-                    return d=>{const dkk=`${cy}-${cm+1}-${d}`; const n=notes[dkk+'::'+me]; const note=typeof n==='string'?n:(n&&n.memo)||'';
-                      if(Array.isArray(off&&off[dkk])&&off[dkk].includes(me))return{kind:'dayoff',note,carried:carry&&carry.carried.includes(d)?carriedLabel(carry):''};
-                      if(Array.isArray(pl&&pl[dkk])&&pl[dkk].includes(me))return{kind:'leave',note,carried:''};
-                      return null;};
-                  })()}/>
               ):(
               /* --- スタッフ休日カレンダー（閲覧専用） --- */
               (()=>{
@@ -21292,8 +21260,8 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setMySchedDay(null)}>
           <div onClick={e=>e.stopPropagation()} className="modal-box"
             style={{background:'white',borderRadius:16,padding:'20px 24px',width:'min(560px,94vw)',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',overflowY:'auto'}}>
-            {/* ★🏖 休日 の画面から開いた時は、いつも「すべて表示」（📝 予定 の画面で選んだ絞り込みを持ち込まない・v3.135.0） */}
-            <MySchedPanel dk={mySchedDay} user={{uid:currentUser.uid,name:currentUser.name}} pub={mySched} savePub={saveMySched} priv={myPriv} view={calView==='staff'?'all':myView} onClose={()=>setMySchedDay(null)}/>
+            {/* ★いつも「すべて表示」（共有＋マイ）。絞り込みのあった 📝 予定 の画面は v3.137.0 でなくした */}
+            <MySchedPanel dk={mySchedDay} user={{uid:currentUser.uid,name:currentUser.name}} pub={mySched} savePub={saveMySched} priv={myPriv} view="all" onClose={()=>setMySchedDay(null)}/>
           </div>
         </div>
       )}
