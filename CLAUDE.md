@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ビルド・テスト・実行
 
 - **ビルド/lint は存在しない。** 静的HTMLをGitHub Pagesが直接配信する。
-- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node off1_edit_test.js`（🏖 休日 の画面から休日・有給・研修・予定を入れる）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
+- **検査は Playwright の `*_test.js`**（`%LOCALAPPDATA%/Temp/hub-verify/node_modules` の playwright を使う）。Firebase には繋がず `fake_firebase.js`（にせの firebase）を差し込む：`node fb_auth_test.js`（本人認証）・`node auth_crossenv_test.js`（テスト版と本番でサインインが分かれているか）・`node fb_mode_test.js`（Firestore 経路）・`node fb_holiday_test.js`（休日タブ・休日メモ・繰り越し）・`node fb_mysched_test.js`（マイスケジュール・シークレット暗号化）・`node fb_contact_test.js`（住所・電話）・`node cust_delete_test.js`（顧客ファイルの削除）・`node off1_edit_test.js`（🏖 休日 の画面から休日・有給・研修・予定を入れる）・`node sched_span_test.js`（日をまたぐ予定）・`node staff_input_test.js`（予約カードの担当欄）・`node vehicle_loaner_test.js`（車両管理→代車管理の登録）・`node shaken_qr_test.js`（スマホの「🛠 機能」→車検証QR→車両管理）・`node qr_small_scan_test.js`（小さいQR・文字コード。CDNに実接続）・`node shaken_pdf_test.js`（記録事項のPDF取り込み。CDNに実接続）・`node week_view_test.js`（週表示：コース順のバッジ・同時刻の積み上げ・出勤／休みの左右分け・週送り）・`node week_find_test.js`（週表示の空き探し・最大化）・`node mobile_delivery_test.js`（スマホ：納車を納車時間の枠に出す）・`node mobile_phone_test.js`（スマホ予約カードの電話番号）・`node close_button_test.js`（PC右上の✕）・`node offline_sheet_test.js`（オフライン予定表の控え）・`node loaner_dnd_test.js`（代車のドラッグ入れ替え・スケジュールとのズレ）・`node loaner_delete_test.js`（帯を消した時にカードの代車名を正しく消すか）・`node loaner_dnd_stress_test.js`（入れ替えを何度も繰り返しても壊れないか）・`node fb_sync_screen.js`（本番の実データ×本番の画面でズレの件数を読む・書き込みなし）・`node mobile_loaner_dnd_test.js`（スマホの長押しドラッグ入れ替え）・`node merge_scalar_test.js`（共有データのマージ）・`node bugfix_1006_test.js`（幽霊の行・スタッフ名の変更・納車チェック）・`node loaner_edit_overflow_test.js`（代車の編集画面が履歴で埋まらない）・`node stale_snapshot_test.js`（古い写しで表示が消えない）・`node diff_write_test.js`（保存が他の予定を巻き添えにしない）・`node mobile_cust_test.js`（スマホの検索・顧客リスト・リストからの予約）・`node mobile_move_test.js`（スマホ：整備の日時変更・代車ボタン3つ・＋追加の置き場所）・`node mobile_store_test.js`（スマホ：店舗切替・入庫店舗）・`node pc_card_store_test.js`（PC：入庫店舗）・`node sched_scroll_test.js`（タイムスケジュールの自動追従スクロール）・`node delivery_dup_test.js`（納車の派生行から開いた予約が二重にならない）・`node rental_period_test.js`（レンタカーの期間ズレを知らせる）・`node delivery_note2_test.js`（納車メモ・代車の長期ドラッグ）・`node search_same_test.js`（PCとスマホの検索結果が同じ数）・`node restriction_multi_test.js`（入庫制限の複数時間帯）・`node memo_tip_test.js`（制限ポップアップのチラつき・スマホの備考編集）・`node insp_move_test.js`（車検の日にち変更）・`node insp_double_test.js`（二重予約にならない）・`node carno_test.js`（ナンバー4桁）・`node cust_open_mode_test.js`（顧客リストを同じタブで開き画面の大きさを揃える）・`node batch_poll_test.js` ほか（GAS 模擬・`BACKEND='gas'` に固定して動かす）。構文だけなら `node smoke_dev_check.js <file>`。
 - 動作確認はブラウザでHTMLを開く（PWA。**Service Workerは使っていない**ので、ブラウザの通常キャッシュだけ。念のため確認時は**強制リロード Ctrl+Shift+R**）。
 - デプロイ = `git push`。GitHub Pages反映に1〜3分。
 - Babelのin-browser変換のため、構文エラーは実行時まで出ない（上の検査で拾う）。
@@ -4770,3 +4770,28 @@ GASサーバーコードはリポジトリ内の `GAS_server_v14_auth.gs`（`bui
   カレンダー → 🏖 休日 → 自分の名前 → 右の「🏖 休日設定」→ 日を押す）。**本番への反映は別途指示を待つ。**
   ★**取扱説明書②③（`capture_manual2_shots.js`・`build_manual2_pptx.js`・`build_manual3_pptx.js`）と `render_holiday_real.js` は
   「スタッフ休日設定」を押す作りのまま**。本番へ移したら、撮り直しと文章の直しが要る。
+
+### 日をまたぐ予定：日にちを「何日から何日まで」で入れる（v3.136.0・2026-11-27 ユーザー要望）
+- ユーザーの言葉（v3.135.0 を見て）：「おおむね OK。**日をまたぐような予定がもしあったとしたら、日にちまで伸ばせれるように、
+  時刻設定と他に日にち設定も、何日から何日までできるように**」。
+- **データ**：予定の1件（共有 `mysched`・マイ `myprv-{uid}` とも）に **`dkEnd`（終わりの日）** を足した。形は `dk` と同じ「YYYY-M-D」（ゼロ詰めなし）。
+  ★**1日だけの予定は `dkEnd` が空（`''`）か、無い**。昔の予定はそのまま1日だけとして読める（入れ直しは要らない）。
+  ★時刻の意味：**`time`＝始まりの日の時刻／`end`＝終わりの日の時刻**。日をまたぐ時は `end < time` でもよい（別の日の時刻）。
+  1日だけの時は今までどおり「終わりの時刻が始まりより前」は保存しない。長さの上限は `HUB_SCHED_MAXDAYS=93`（約3か月）。
+- ★**その日に掛かっているかは必ず `hubSchedOn(x,dk)` を通すこと。** `v.dk===dk` と書くと、2日目から先に出なくなる。
+  道具（`hubDkNum`／`hubSchedMulti`／`hubSchedEndDk`／`hubSchedOn`／`hubSchedAt`／`hubSchedDks`／`hubSchedDaysIn`／
+  `hubSchedSpan`／`hubSchedChipTime`）は **index_dev.html と mobile.html に1文字も違わない同じものを置く**（検査が見張る）。
+  日ごとに並べる時は `hubSchedAt(x,dk)` でその日ぶんの写しを作る（`_pos`＝`first`｜`mid`｜`last`。1日だけの予定には付かない）。
+  並び（`hubSchedKey`）は、終日と「前の日から続いている予定」を一番上に。
+- **出る所（掛かっている日ぜんぶ）**：PC＝その日の予定の窓（`MySchedPanel`）／📝 予定 のカレンダー（`MySchedCalendar`）／
+  🏖 休日 の個人のカレンダー（`scPut`→`Off1Sched`）。スマホ＝日詳細の `MySchedPanel`／カレンダーの 📝 の件数（`msCnt`）。月をまたいでも出る。
+- **見せ方**：マスの小さな札＝**始まりの日「10:00〜」／あいだの日「〜」／終わりの日「〜15:00」**（終日は毎日「終日」）。
+  なぞった時のポップと予定の窓には**全体の期間**（`11/16 10:00 〜 11/18 15:00`／終日は `11/22〜11/23（終日）`。`data-msspan`）。
+- **入れ方**：予定の追加・編集の欄に **「📅 日にち [始まりの日] 〜 [終わりの日]」**（`data-msdates`・`HubSchedDate`・`data-msdate="from|to"`）。
+  始まりの日＝開いた日が入っている／終わりの日＝**1日だけなら空のまま**。日をまたぐと「日をまたぐ予定（N日間）」と出る。
+  ★**あいだの日から開いて直しても、始まりの日は変わらない**（`form.dk` に元の `dk` を持つ。窓の日を使わない）。
+  ★**PC は `type="date"` を使わない**（日本語入力が英数に落ちる）＝`HubDatePick`。**スマホは端末の日付欄**（16px以上）。
+  `HubSchedDate` は同じ名前でファイルごとに中身が違う（PC／スマホ）。終わりの日が始まりより前なら保存せずに知らせる。
+- 時点復旧（`fb_restore.js` の `entrydk`）は今までどおり**始まりの日（`dk`）**で日を見る。紙の控え・オフライン予定表には予定を出していない。
+- 検査は **`node sched_span_test.js`（38件・PORT 8547）**。PC（📝 予定・🏖 休日・予定の窓）とスマホの両方を見る。
+  `fb_mysched_test.js`（60件）・`off1_edit_test.js`（78件）も PASS を維持。**本番への反映は別途指示を待つ**（v3.135.0 と一緒）。

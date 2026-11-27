@@ -22,7 +22,7 @@
     // 開きっぱなしのタブが旧コードのまま動き続けるのを防ぐ。画面復帰時と定期に自分自身を
     // no-store+クエリ付きで取得し、__APP_BUILD が変わっていれば「更新」バナーを表示する。
     // 本番デプロイ時は port_to_main.js が __APP_BUILD を自動更新する（手動更新不要）。
-    window.__APP_BUILD='build-1795740251257';
+    window.__APP_BUILD='build-1795741326045';
     (function(){
       var RUNNING=window.__APP_BUILD, shown=false, checking=false, vretry=0;
       function runningVer(){
@@ -137,7 +137,7 @@
 const { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } = React;
 
 // ★ バージョン管理：アップデートのたびにここだけ変更する
-const APP_VERSION = '3.135.0';
+const APP_VERSION = '3.136.0';
 // 本人認証を必須にするか。false の間は従来どおり名前を選ぶだけで入れる（移行期間）。
 //   false … 全員が今までどおり使える。端末の登録（＋スタッフを追加）は先にできる。
 //   true  … その端末で本人確認を済ませた人しかログイン画面に出ない。
@@ -655,10 +655,44 @@ const HubKvSub={
 };
 // 予定の並び（時刻→作成順）
 // 予定の並び（終日を一番上に、あとは開始時刻→作った順）
-const hubSchedKey=x=>(x&&x.allday)?'':((x&&x.time)||'99:99');
+// ── 日をまたぐ予定（v3.136.0・2026-11-27 ユーザー要望）──
+//   ユーザーの言葉：「日をまたぐような予定がもしあったとしたら、日にちまで伸ばせれるように、
+//   時刻設定と他に日にち設定も、何日から何日までできるように」。
+//   ・予定の1件に dkEnd（終わりの日・dk と同じ「YYYY-M-D」ゼロ詰めなし）を足した。★1日だけの予定は空（''）か、無い。
+//     昔の予定には dkEnd が無い＝そのまま1日だけの予定として読める（入れ直しは要らない）。
+//   ・時刻の意味：time＝【始まりの日】の時刻／end＝【終わりの日】の時刻。
+//   ・★その日に掛かっているかは必ず hubSchedOn を通すこと（v.dk===dk と書くと、2日目から先に出なくなる）。
+//   ・日ごとに並べる時は hubSchedAt でその日ぶんの写しを作る（_pos：'first'｜'mid'｜'last'。1日だけの予定には付かない）。
+//   ・★index_dev.html と mobile.html に同じものを置く。片方だけ直さないこと。
+const HUB_SCHED_MAXDAYS=93;   // 1件の長さの上限（約3か月）。これより長い期間は入れさせない
+const hubDkNum=dk=>{const p=String(dk||'').split('-').map(Number);return (p.length===3&&p[0])?p[0]*10000+p[1]*100+p[2]:0;};
+const hubSchedMulti=x=>!!(x&&x.dkEnd&&hubDkNum(x.dkEnd)>hubDkNum(x.dk));
+const hubSchedEndDk=x=>hubSchedMulti(x)?x.dkEnd:((x&&x.dk)||'');
+const hubSchedOn=(x,dk)=>{const n=hubDkNum(dk),a=hubDkNum(x&&x.dk);return !!a&&n>=a&&n<=hubDkNum(hubSchedEndDk(x));};
+const hubSchedAt=(x,dk)=>{if(!hubSchedMulti(x))return x;const n=hubDkNum(dk);return {...x,_pos:n===hubDkNum(x.dk)?'first':n===hubDkNum(x.dkEnd)?'last':'mid'};};
+// その予定が掛かっている日（dk の並び）。上限 HUB_SCHED_MAXDAYS
+const hubSchedDks=x=>{const out=[];const p=String((x&&x.dk)||'').split('-').map(Number);if(p.length!==3||!p[0])return out;
+  const e=hubDkNum(hubSchedEndDk(x));const t=new Date(p[0],p[1]-1,p[2]);
+  for(let i=0;i<HUB_SCHED_MAXDAYS;i++){const n=t.getFullYear()*10000+(t.getMonth()+1)*100+t.getDate();if(n>e)break;out.push(t.getFullYear()+'-'+(t.getMonth()+1)+'-'+t.getDate());t.setDate(t.getDate()+1);}
+  return out;};
+// その月（cy年・cm＝0始まり）の中で、その予定が掛かっている「日」の並び
+const hubSchedDaysIn=(x,cy,cm)=>{const out=[];if(!x||!hubDkNum(x.dk))return out;const dim=new Date(cy,cm+1,0).getDate();
+  for(let d=1;d<=dim;d++){if(hubSchedOn(x,cy+'-'+(cm+1)+'-'+d))out.push(d);}return out;};
+const hubDkMD=dk=>{const p=String(dk||'').split('-');return p.length===3?(Number(p[1])+'/'+Number(p[2])):'';};
+// 日をまたぐ予定の全体の書き方：11/25 10:00 〜 11/27 15:00 ／ 11/25〜11/27（終日）
+const hubSchedSpan=x=>{const a=hubDkMD(x&&x.dk),b=hubDkMD(hubSchedEndDk(x));if(x&&x.allday)return a+'〜'+b+'（終日）';
+  return a+(x&&x.time?' '+x.time:'')+' 〜 '+b+(x&&x.end?' '+x.end:'');};
+// マスの小さな札に出す時刻：始まりの日＝「10:00〜」／あいだの日＝「〜」／終わりの日＝「〜15:00」
+const hubSchedChipTime=x=>!x?'':x.allday?'終日':x._pos==='first'?((x.time||'')+'〜'):x._pos==='mid'?'〜':x._pos==='last'?('〜'+(x.end||'')):(x.time||'');
+// 並び：終日と、前の日から続いている予定を一番上に
+const hubSchedKey=x=>(x&&(x.allday||x._pos==='mid'||x._pos==='last'))?'':((x&&x.time)||'99:99');
 const hubSchedSort=(a,b)=>(hubSchedKey(a)<hubSchedKey(b)?-1:hubSchedKey(a)>hubSchedKey(b)?1:(a.at||0)-(b.at||0));
 // 予定の時間の書き方：終日／10:00〜11:30／10:00／—
-const hubSchedTime=x=>(x&&x.allday)?'終日':(x&&x.time?(x.end?(x.time+'〜'+x.end):x.time):'—');
+const hubSchedTime=x=>{if(!x)return '—';if(x.allday)return '終日';
+  if(x._pos==='first')return x.time?(x.time+'〜'):'—';
+  if(x._pos==='mid')return '〜';
+  if(x._pos==='last')return x.end?('〜'+x.end):'〜';
+  return x.time?(x.end?(x.time+'〜'+x.end):x.time):'—';};
 // 色（2026-10-01 ユーザー決定・B案）：共有＝水色／マイ＝ピンク／他の人の共有＝灰色
 const MS_COL={
   priv:{bg:'#fce7f3',bd:'#f472b6',lf:'#be185d',tx:'#9d174d',chipBg:'#db2777',chipTx:'#ffffff'},
@@ -710,6 +744,19 @@ function useHubKv(key,sGetFn){
 
 // ── 1日分の予定パネル（共有＋マイ、追加・編集）。PC のモーダルと mobile の日詳細で共用 ──
 //   view: 'all' | 'pub' | 'priv'（自分専用の端末だけ切り替えられる。共有端末では常に 'pub' 相当）
+// 予定の「日にち」の欄。★PC は type="date" を使わない（Windows の日本語入力が英数に落ちるため）＝HubDatePick。
+//   値は dk（YYYY-M-D・ゼロ詰めなし）で受けて、dk で返す。スマホ（mobile.html）は同じ名前で端末の日付欄。
+const HubSchedDate=({dk,onChange,clearable,which})=>{
+  const p=String(dk||'').split('-');
+  const iso=(p.length===3&&p[0])?(p[0]+'-'+String(p[1]).padStart(2,'0')+'-'+String(p[2]).padStart(2,'0')):'';
+  return(
+    <span data-msdate={which} data-msdateval={dk||''}>
+      <HubDatePick value={iso} clearable={!!clearable} placeholder={which==='to'?'終わりの日':'日付を選ぶ'} color="#0e7490"
+        onChange={v=>{const q=String(v||'').split('-').map(Number);onChange((q.length===3&&q[0])?(q[0]+'-'+q[1]+'-'+q[2]):'');}}
+        style={{padding:'7px 10px',border:'1.5px solid #d1d5db',borderRadius:8,fontSize:13,background:'white',minWidth:118,boxSizing:'border-box'}}/>
+    </span>
+  );
+};
 const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
   const canPriv=!!(priv&&priv.enabled);
   const vw=canPriv?(view||'all'):'pub';
@@ -717,8 +764,9 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
   const [msg,setMsg]=useState('');
   const [saving,setSaving]=useState(false);
   useEffect(()=>{setForm(null);setMsg('');},[dk]);
-  const pubList=(vw==='priv')?[]:Object.entries(pub||{}).filter(([,v])=>v&&v.dk===dk).map(([id,v])=>({...v,id})).sort(hubSchedSort);
-  const prvList=(!canPriv||vw==='pub')?[]:Object.entries(priv.items||{}).filter(([,v])=>v&&v.dk===dk).map(([id,v])=>({...v,id,priv:true})).sort(hubSchedSort);
+  // ★その日に【掛かっている】予定を出す（日をまたぐ予定は、始まりの日から終わりの日まで毎日出る・v3.136.0）
+  const pubList=(vw==='priv')?[]:Object.entries(pub||{}).filter(([,v])=>v&&hubSchedOn(v,dk)).map(([id,v])=>hubSchedAt({...v,id},dk)).sort(hubSchedSort);
+  const prvList=(!canPriv||vw==='pub')?[]:Object.entries(priv.items||{}).filter(([,v])=>v&&hubSchedOn(v,dk)).map(([id,v])=>hubSchedAt({...v,id,priv:true},dk)).sort(hubSchedSort);
   const mine=v=>v.uid===user.uid;
   const p=dk.split('-');
   const label=`${p[1]}/${p[2]}（${['日','月','火','水','木','金','土'][new Date(Number(p[0]),Number(p[1])-1,Number(p[2])).getDay()]}）`;
@@ -731,8 +779,14 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
     const allday=!!form.allday;
     const st=allday?'':(form.time||'');
     const en=(allday||!st)?'':(form.end||'');
-    if(!allday&&st&&en&&en<st){setMsg('終わりの時刻が始まりより前です');return;}
-    const rec={dk,time:st,end:en,allday,title,memo:String(form.memo||'').trim().slice(0,200)};
+    // ★日にち：何日から何日まで（v3.136.0）。終わりの日が空・同じ日なら1日だけの予定（dkEnd は空）
+    const sdk=form.dk||dk;
+    let edk=form.dkEnd||'';
+    if(edk&&hubDkNum(edk)<hubDkNum(sdk)){setMsg('終わりの日が、始まりの日より前です');return;}
+    if(edk&&hubDkNum(edk)===hubDkNum(sdk))edk='';
+    if(edk&&hubSchedDks({dk:sdk,dkEnd:edk}).length>=HUB_SCHED_MAXDAYS){setMsg('期間が長すぎます（3か月までにしてください）');return;}
+    if(!edk&&!allday&&st&&en&&en<st){setMsg('終わりの時刻が始まりより前です');return;}
+    const rec={dk:sdk,dkEnd:edk,time:st,end:en,allday,title,memo:String(form.memo||'').trim().slice(0,200)};
     setSaving(true);setMsg('');
     try{
       if(form.priv&&canPriv){
@@ -767,6 +821,7 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
       <span style={{fontSize:11,fontWeight:800,color:c.tx,width:76,flexShrink:0,marginTop:1,lineHeight:1.35}}>
         {it.allday
           ?<span style={{display:'inline-block',borderRadius:4,padding:'0 5px',lineHeight:'16px',background:c.chipBg,color:c.chipTx,fontSize:10,fontWeight:800}}>終日</span>
+          :it._pos?<>{hubSchedTime(it)}</>
           :<>{it.time||'—'}{it.end&&<><br/>〜{it.end}</>}</>}
       </span>
       <div style={{flex:1,minWidth:0}}>
@@ -774,10 +829,11 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
           <span style={{wordBreak:'break-all'}}>{it.title}</span>
           <span style={{fontSize:10,fontWeight:700,color:c.chipTx,background:c.chipBg,borderRadius:10,padding:'1px 7px'}}>{it.priv?'🙋 マイ':mine(it)?'自分':it.owner}</span>
         </div>
+        {hubSchedMulti(it)&&<div data-msspan="1" style={{fontSize:11,fontWeight:700,color:c.tx,marginTop:2}}>📅 {hubSchedSpan(it)}</div>}
         {it.memo&&<div style={{fontSize:11,color:'#4b5563',marginTop:2,whiteSpace:'pre-wrap',wordBreak:'break-all'}}>{it.memo}</div>}
       </div>
       {(it.priv||mine(it))&&(
-        <button onClick={()=>{setForm({id:it.id,title:it.title,time:it.time||'',end:it.end||'',allday:!!it.allday,memo:it.memo||'',priv:!!it.priv,wasPriv:!!it.priv,wasPublic:!it.priv});setMsg('');}}
+        <button onClick={()=>{setForm({id:it.id,dk:it.dk,dkEnd:hubSchedMulti(it)?it.dkEnd:'',title:it.title,time:it.time||'',end:it.end||'',allday:!!it.allday,memo:it.memo||'',priv:!!it.priv,wasPriv:!!it.priv,wasPublic:!it.priv});setMsg('');}}
           style={{flexShrink:0,padding:'3px 8px',borderRadius:6,border:'1px solid #d1d5db',background:'white',fontSize:11,cursor:'pointer',color:'#374151'}}>編集</button>
       )}
     </div>
@@ -800,6 +856,16 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
           <div style={{fontWeight:800,fontSize:12,color:'#334155',marginBottom:6}}>{form.id?'予定を編集':'予定を追加'}</div>
           <input style={{...inputS,marginBottom:6}} placeholder="件名（例：○○社と打合せ）" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} maxLength={40} autoFocus/>
           {/* ★時間：開始〜終了。終わりは空でもよい。「終日にする」を押すと時刻の欄は隠れる（2026-10-01） */}
+          {/* ★日にち：何日から何日まで（v3.136.0・2026-11-27 ユーザー要望）。終わりの日は、1日だけなら空のまま。
+              時刻は 始まりの日の時刻 〜 終わりの日の時刻 になる。 */}
+          <div data-msdates="1" style={{display:'flex',gap:6,marginBottom:6,alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:12,fontWeight:700,color:'#334155',flexBasis:compact?'100%':'auto'}}>📅 日にち</span>
+            <HubSchedDate which="from" dk={form.dk||dk} onChange={v=>{setMsg('');setForm(p=>({...p,dk:v||p.dk||dk}));}}/>
+            <span style={{fontSize:13,color:'#64748b',fontWeight:700}}>〜</span>
+            <HubSchedDate which="to" dk={form.dkEnd||''} clearable onChange={v=>{setMsg('');setForm(p=>({...p,dkEnd:v}));}}/>
+            <span data-msdatehint="1" style={{fontSize:11,color:hubSchedMulti({dk:form.dk||dk,dkEnd:form.dkEnd})?'#0e7490':'#94a3b8',fontWeight:hubSchedMulti({dk:form.dk||dk,dkEnd:form.dkEnd})?700:400}}>
+              {hubSchedMulti({dk:form.dk||dk,dkEnd:form.dkEnd})?('日をまたぐ予定（'+hubSchedDks({dk:form.dk||dk,dkEnd:form.dkEnd}).length+'日間）'):'終わりの日は、1日だけなら空のまま'}</span>
+          </div>
           <div style={{display:'flex',gap:6,marginBottom:6,alignItems:'center',flexWrap:'wrap'}}>
             <button onClick={()=>setForm({...form,allday:!form.allday})}
               style={{padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',
@@ -848,7 +914,7 @@ const MySchedPanel=({dk,user,pub,savePub,priv,compact,onClose,view})=>{
           </div>
         </div>
       ):(
-        <button onClick={()=>{setForm({title:'',time:'',end:'',allday:false,memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
+        <button onClick={()=>{setForm({dk,dkEnd:'',title:'',time:'',end:'',allday:false,memo:'',priv:canPriv&&vw==='priv'});setMsg('');}}
           style={{marginTop:6,width:'100%',padding:'9px 0',borderRadius:9,border:`1.5px dashed ${MS_COL.mine.bd}`,background:MS_COL.mine.bg,color:MS_COL.mine.tx,fontWeight:800,fontSize:12,cursor:'pointer'}}>＋ 予定を追加</button>
       )}
     </div>
@@ -863,7 +929,8 @@ const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,m
   const dim=new Date(cy,cm+1,0).getDate();
   const first=new Date(cy,cm,1).getDay();
   const byDay={};
-  const add=(it)=>{const p=String(it.dk||'').split('-').map(Number);if(p[0]!==cy||p[1]!==cm+1)return;(byDay[p[2]]=byDay[p[2]]||[]).push(it);};
+  // ★日をまたぐ予定は、掛かっている日ぜんぶに出す（v3.136.0）
+  const add=(it)=>{hubSchedDaysIn(it,cy,cm).forEach(d=>{(byDay[d]=byDay[d]||[]).push(hubSchedAt(it,cy+'-'+(cm+1)+'-'+d));});};
   if(vw!=='priv')Object.entries(pub||{}).forEach(([id,v])=>{if(v&&v.dk)add({...v,id});});
   if(canPriv&&vw!=='pub')Object.entries(priv.items||{}).forEach(([id,v])=>{if(v&&v.dk)add({...v,id,priv:true});});
   const weeks=[];let wk=Array(7).fill(null);
@@ -900,12 +967,12 @@ const MySchedCalendar=({cy,cm,user,pub,priv,isClosedDay,onPickDay,storeLabelOf,m
                     {list.slice(0,4).map(it=>{
                       const mine=it.priv||it.uid===user.uid;
                       const c=msCol(!!it.priv,mine);
-                      const tl=hubSchedTime(it);
+                      const tl=hubSchedMulti(it)?hubSchedSpan(it):hubSchedTime(it);
                       return(
                         <div key={it.id} title={`${tl!=='—'?tl+' ':''}${it.title}${it.priv?'（マイスケジュール）':'（'+(it.owner||'')+'）'}${it.memo?'\n'+it.memo:''}`}
                           style={{fontSize:10.5,padding:'2px 5px',borderRadius:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
                             background:it.priv?c.bg:mine?c.bg:'#f3f4f6',border:`1px solid ${c.bd}`,color:it.priv||mine?c.tx:'#374151',fontWeight:mine?700:500}}>
-                          {it.priv?'🙋':''}{tl!=='—'&&<span style={{fontWeight:800,marginRight:3}}>{it.allday?'終日':it.time}</span>}{it.title}{!it.priv&&!mine&&<span style={{color:'#9ca3af',marginLeft:3}}>{String(it.owner||'').slice(0,2)}</span>}
+                          {it.priv?'🙋':''}{hubSchedChipTime(it)&&<span style={{fontWeight:800,marginRight:3}}>{hubSchedChipTime(it)}</span>}{it.title}{!it.priv&&!mine&&<span style={{color:'#9ca3af',marginLeft:3}}>{String(it.owner||'').slice(0,2)}</span>}
                         </div>
                       );
                     })}
@@ -9181,7 +9248,7 @@ const Off1Sched=({items,label,onPick})=>{
     <div ref={ref} data-off1sclist="1" style={{flex:'1 1 0',minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',gap:OFF1_SC_GAP}}>
       {items.slice(0,show).map(it=>{
         const c=MS_COL[it._k]||MS_COL.other;
-        const tl=it.allday?'終日':(it.time||'');
+        const tl=hubSchedChipTime(it);
         return(
           <div key={(it.priv?'p':'s')+it.id} data-off1sc={it.id} data-off1sckind={it._k}
             onMouseEnter={e=>openPop(e,[it],'')} onMouseLeave={()=>setPop(null)}
@@ -9205,7 +9272,7 @@ const Off1Sched=({items,label,onPick})=>{
           {pop.title&&<div style={{fontSize:11.5,fontWeight:800,color:'#0e7490',marginBottom:5}}>📝 {pop.title}</div>}
           {pop.list.map((it,i)=>{
             const c=MS_COL[it._k]||MS_COL.other;
-            const tm=hubSchedTime(it);
+            const tm=hubSchedMulti(it)?hubSchedSpan(it):hubSchedTime(it);   // 日をまたぐ予定は「11/25 10:00 〜 11/27 15:00」
             return(
               <div key={(it.priv?'p':'s')+it.id} style={{padding:i>0?'6px 0 0':0,marginTop:i>0?6:0,borderTop:i>0?'1px solid #e5e7eb':'none'}}>
                 <div style={{display:'flex',alignItems:'baseline',gap:6,flexWrap:'wrap'}}>
@@ -20040,7 +20107,7 @@ ${_lbl} は ${_nf.m0+1}/${_nf.d}〜${_nt.m0+1}/${_nt.d} に ${_who} が使いま
                 // その月の予定を日ごとに（共有＝全員ぶん／マイ＝自分のカレンダーを自分専用の端末で見ている時だけ）
                 //   色：自分のカレンダー＝自分の共有が水色／ほかの人のカレンダー＝その人の共有が水色。それ以外の共有は灰色。
                 const scByDay={};
-                const scPut=(v,it)=>{const p=String(v.dk||'').split('-').map(Number);if(p[0]!==cy||p[1]!==cm+1)return;(scByDay[p[2]]=scByDay[p[2]]||[]).push(it);};
+                const scPut=(v,it)=>{hubSchedDaysIn(v,cy,cm).forEach(d=>{(scByDay[d]=scByDay[d]||[]).push(hubSchedAt(it,cy+'-'+(cm+1)+'-'+d));});};   // 日をまたぐ予定は掛かっている日ぜんぶに
                 if(calStaffFilter){
                   Object.entries(mySched||{}).forEach(([id,v])=>{ if(!v||!v.dk)return;
                     const mine=!!(currentUser&&v.uid&&v.uid===currentUser.uid);
